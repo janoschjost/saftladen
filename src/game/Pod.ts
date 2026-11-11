@@ -109,7 +109,7 @@ export class Pod {
     this.timer -= dt;
     if (this.timer > 0) return;
     this.timer = 10;
-    const free = people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob);
+    const free = people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob && !p.snackLeft);
     if (free.length < 2) return;
     const pair = free.sort(() => Math.random() - 0.5).slice(0, 2);
     if (this.start(pair, nav)) this.timer = 0;

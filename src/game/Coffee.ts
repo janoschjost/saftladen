@@ -2,6 +2,7 @@ import type { OfficeModel } from '../render/officeModel';
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { MeetSeat } from './Meeting';
 import type { Person } from './Person';
+import { Chat } from './Chatter';
 import { nextSpeaker, type ConversationKind, type Talk } from './Social';
 
 /** Where one person stands in the kitchen coffee circle. */
@@ -30,7 +31,6 @@ const TABLE_FIRST = { min: 20, max: 50 };
 const TABLE_PAUSE = { min: 40, max: 100 };
 const TABLE_STAY = { min: 25, max: 55 }; // seconds the sitters stay once all of them sit
 const TABLE_GATHER = 50;
-const BUBBLES = ['…', '…', '!', '?'];
 
 const between = ({ min, max }: { min: number; max: number }) => min + Math.random() * (max - min);
 
@@ -41,6 +41,7 @@ export class CoffeeBreak implements Talk {
   speaker: Person;
   text = '…';
   private time = 0;
+  private chat: Chat | null = null;
   private speakerTimer = 0;
   private previous: Person | null = null;
   private readonly stay = between(STAY);
@@ -76,7 +77,8 @@ export class CoffeeBreak implements Talk {
         this.previous = this.speaker;
         this.speaker = next;
         this.speakerTimer = 2 + Math.random() * 3;
-        this.text = BUBBLES[Math.floor(Math.random() * BUBBLES.length)];
+        this.chat ??= new Chat();
+        this.text = this.chat.next(this.speaker, this.members, this.kind);
         for (const m of this.members) m.speaking = m === this.speaker;
       }
       if (this.time >= this.stay || this.members.length < 2) this.end();
@@ -241,7 +243,7 @@ export class Kitchen {
     if (this.timer > 0) return;
     this.timer = 10;
     if (this.users.some(Boolean)) return;
-    const free = people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob && !p.phoneJob && !p.run && !p.playerChat);
+    const free = people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob && !p.snackLeft && !p.phoneJob && !p.run && !p.playerChat);
     const n = Math.min(free.length, Math.round(GROUP.min + Math.random() * (GROUP.max - GROUP.min)));
     if (n < GROUP.min) return;
     if (this.start(free.sort(() => Math.random() - 0.5).slice(0, n), nav)) this.timer = 0;
@@ -258,7 +260,7 @@ export class Kitchen {
     this.tableTimer -= dt;
     if (this.tableTimer > 0) return;
     this.tableTimer = 10;
-    const free = people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob && !p.phoneJob && !p.run && !p.playerChat && !p.coffeeJob);
+    const free = people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob && !p.snackLeft && !p.phoneJob && !p.run && !p.playerChat && !p.coffeeJob);
     if (!free.length) return;
     const n = Math.min(free.length, 1 + Math.floor(Math.random() * 3));
     if (this.startTable(free.sort(() => Math.random() - 0.5).slice(0, n), nav)) this.tableTimer = 0;

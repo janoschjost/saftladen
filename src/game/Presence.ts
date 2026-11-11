@@ -16,6 +16,8 @@ const RAIN = { share: 0.75, homeShare: 0.6, errandStretch: 1.4 };
 /** Closing time: from this hour on the team trickles out for the day (the night shift stays). */
 const CLOSING = 17.25;
 const CLOSING_CHECK = [1.2, 3.2];
+/** At most this many people are in the office by day; the surplus works from home (errand if all home rooms are taken). */
+const MAX_OFFICE = 15;
 const MAX_HOME = HOME_COUNT; // one live feed per home office variant
 const CHECK = [2, 6]; // seconds between departure decisions
 const ERRAND = [25, 70]; // seconds out for a coffee / lunch / parcel
@@ -150,6 +152,35 @@ export class Presence {
       }
       p.startAway(kind, Math.random() * (kind === 'home' ? HOME[1] : ERRAND[1]) + 6);
     }
+    // too many left in the office: the rest starts in the home office
+    const staying = this.people.filter((p) => p.presence === 'in').sort(() => Math.random() - 0.5);
+    for (const p of staying.slice(MAX_OFFICE)) {
+      const home = this.homeCount < MAX_HOME || p.member.homebody;
+      if (home) p.homeVariant = this.freeVariant(p);
+      p.startAway(home ? 'home' : 'errand', Math.random() * (home ? HOME[1] : ERRAND[1]) + 6);
+    }
+  }
+
+  /** People in the office or on their way back in. */
+  private get present(): number {
+    return this.people.filter((p) => p.presence === 'in' || p.presence === 'returning').length;
+  }
+
+  /** Office over capacity: sends one person to the home office, holds back those about to return from there. Returns true if somebody left. */
+  private capOffice(nav: NavGrid): boolean {
+    const present = this.present;
+    if (present < MAX_OFFICE) return false;
+    // nobody walks back in while the office is full
+    for (const p of this.people) if (p.presence === 'out' && p.awayKind === 'home' && p.awayLeft < 5 && present >= MAX_OFFICE) p.awayLeft = 5 + Math.random() * 15;
+    if (present === MAX_OFFICE) return false;
+    if (this.people.some((p) => p.presence === 'leaving')) return false;
+    const candidates = this.people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.task && !p.printJob && !p.foosJob && !p.vapeJob);
+    if (!candidates.length) return false;
+    const p = candidates[Math.floor(Math.random() * candidates.length)];
+    const home = this.homeCount < MAX_HOME || p.member.homebody;
+    if (home) p.homeVariant = this.freeVariant(p);
+    p.leaveOffice(nav, home ? 'home' : 'errand', home ? between(HOME) : between(ERRAND));
+    return true;
   }
 
   get homeFull(): boolean {
@@ -252,6 +283,7 @@ export class Presence {
       return;
     }
     this.recall(dt);
+    this.capOffice(nav);
     this.timer -= dt;
     if (this.timer > 0) return;
     const lunch = this.lunch;

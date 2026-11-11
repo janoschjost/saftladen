@@ -1,3 +1,4 @@
+import { REACTION_TIME, type Reaction } from './Chatter';
 import type * as THREE from 'three';
 import { screenKindOf, screenSeed } from '../data/screens';
 import type { TeamMember } from '../data/types';
@@ -17,7 +18,7 @@ const WORK_TIME = { min: 90, max: 240 }; // seconds a person stays at the desk
 const PRINT_CHANCE = 0.12; // chance per decision to walk to the printer
 const PRINT_TIME = { min: 4, max: 9 }; // seconds spent at the printer
 const STEER_WALK = 2.2; // m/s while steered with the keyboard
-const STEER_RUN = 4.2;
+const STEER_RUN = 5.4;
 const VAPE_CHANCE = 0.15; // chance per decision (vapers only) to take a drag instead
 const VAPE_RAISE = 0.6; // timeline of one drag, seconds: raise the hand, inhale, hold, exhale (arm drops during it)
 const VAPE_DRAW = 2.0;
@@ -37,8 +38,14 @@ const TRANSITION = 1.1; // seconds to sit down / stand up
 const RUN_RATE = 0.012; // per second at the desk without a coffee: chance to get up and fetch one (a lot less with a mug still on the desk)
 const RUN_CHANCE = 0.1; // per decision while wandering: fetch a coffee from the machine
 const BREW = 4.2; // seconds at the machine
+const SNACK_GRAB = 2.2; // seconds in the kitchen taking a bag of chips
+const SNACK_TIME = { min: 45, max: 90 }; // seconds the chips last while strolling around
+const SNACK_CHANCE = 0.12; // per decision while wandering (snackers only): go and get chips
+const SNACK_RATE = 0.006; // per second at the desk (snackers only): chance to get up for chips
+const BITE_GAP = 5.5; // seconds between two chips
+const BITE_TIME = 2.0; // seconds one chip takes from the bag to the mouth and down again
 const CUP_LIFE = 70; // seconds a carried cup lasts when it never makes it to a desk
-const SEAT_DRINK_RATE = 0.035; // per second at the desk with coffee on it: chance to take a sip
+const SEAT_DRINK_RATE = 0.14; // per second at the desk with coffee on it: chance to take a sip
 /** timeline of a sip at the desk (seconds): hand out to the mug, back to the body, sip, down to the desk, mug set down, hand back to the keys */
 const DRINK = { grab: 0.6, up: 1.1, sipEnd: 3.1, put: 3.6, end: 4.1 };
 const EMOTE_GAP = { min: 12, max: 38 }; // seconds between two little gestures (yawn, stretch, ...)
@@ -68,7 +75,7 @@ interface DeskTask {
   retries: number;
   retryIn: number;
   /** about to leave the desk for a coffee: where at the machine, and how much work was left */
-  errand?: { spot: MachineSpot; left: number };
+  errand?: { spot: MachineSpot; left: number; snack?: boolean };
 }
 
 /** On the way to the espresso machine, brewing, then back to the desk with the cup (the desk stays reserved meanwhile). */
@@ -78,6 +85,8 @@ interface CoffeeRun {
   desk: Desk | null;
   left: number;
   spot: MachineSpot;
+  /** a bag of chips instead of a coffee */
+  snack?: boolean;
   t: number;
   age: number;
   retries: number;
@@ -184,6 +193,12 @@ export class Person extends Walker {
   controlled = false;
   /** steering input in world space (direction on the floor, not normalised) */
   readonly steer = { x: 0, z: 0, run: false };
+  /** a day task pins this person: they stand (or sit) exactly there and turn to `yaw`; they are `controlled` meanwhile, so nothing else picks them up */
+  scripted: { at: Vec2; yaw: number; sit: boolean; turn: number; arrived: boolean; tries: number } | null = null;
+  /** a day task has the handheld console out (see `gameboy` for the eased amount) */
+  gameboyOn = false;
+  /** 0..1 eased: both hands hold a handheld console in front of the chest */
+  gameboy = 0;
   /** the player (walk mode) is talking to this person: they stop and face `at` until `t` runs out */
   playerChat: { t: number; total: number; at: Vec2 } | null = null;
   /** stroking a pet (reuses the stop-and-turn of `playerChat`, but without the talking gestures) */
@@ -201,6 +216,8 @@ export class Person extends Walker {
   vapeJob: VapeJob | null = null;
   /** on a phone call, walking around with the phone at the ear */
   phoneJob: PhoneJob | null = null;
+  /** seconds the player's person still holds a picked-up phone to the ear (see `takeCall`) */
+  playerCall = 0;
   /** 0 = phone down .. 1 = at the ear (eased, kept after the call ends until the hand is down) */
   phoneAmt = 0;
   /** on a call, sitting in the phone box (phone at the ear while seated) */
@@ -218,6 +235,13 @@ export class Person extends Walker {
   /** how full the carried cup is, 0..1 */
   cupFill = 1;
   private cupLeft = 0;
+  /** seconds the bag of chips in the left hand still lasts (0 = no chips) */
+  snackLeft = 0;
+  /** 0..1 eased: a bag of chips in the left hand */
+  snackAmt = 0;
+  private snackClock = 0;
+  /** the chips stay in the hand although the player steers this person (set by `grabSnack`) */
+  private snackSteered = false;
   /** taking a sip from the mug on the desk */
   drink: Drink | null = null;
   /** 0..1 eased: the left arm is busy with the mug */
@@ -229,6 +253,8 @@ export class Person extends Walker {
   emoteP = 0;
   emoteAmt = 0;
   emoteDir: 1 | -1 = 1;
+  /** body language during a talk (laugh, shrug, point, ...); `t` runs from a small negative delay up to `dur` */
+  reaction: { kind: Reaction; t: number; dur: number } | null = null;
   private emoteIn = EMOTE_GAP.min + Math.random() * (EMOTE_GAP.max - EMOTE_GAP.min);
   /** walking to / sitting in the meeting room */
   meetJob: MeetJob | null = null;
@@ -261,7 +287,7 @@ export class Person extends Walker {
   }
 
   override get fixed(): boolean {
-    if (this.presence === 'out' || this.script) return true;
+    if (this.presence === 'out' || this.script || this.scripted?.arrived) return true;
     if (this.printJob?.phase === 'print') return true;
     if (this.run?.phase === 'brew') return true;
     if (this.foosJob?.phase === 'play') return true;
@@ -547,13 +573,18 @@ export class Person extends Walker {
   }
 
   override update(dt: number, nav: NavGrid, others: readonly Walker[] = []): void {
+    this.gameboy += ((this.gameboyOn && this.presence === 'in' ? 1 : 0) - this.gameboy) * Math.min(1, dt * 10);
+    if (this.gameboy < 0.005) this.gameboy = 0;
     this.updatePhone(dt);
     if (this.cupHeld && ((this.cupLeft -= dt) <= 0 || this.presence !== 'in' || this.meetJob || this.held)) this.cupHeld = false;
+    this.updateSnack(dt);
     this.cupAmt += ((this.coffeeJob?.phase === 'drink' || this.cupHeld ? 1 : 0) - this.cupAmt) * Math.min(1, dt * 4);
     if (this.cupAmt < 0.005) this.cupAmt = 0;
     this.drinkAmt += ((this.drink ? 1 : 0) - this.drinkAmt) * Math.min(1, dt * 6);
     if (this.drinkAmt < 0.005) this.drinkAmt = 0;
     this.updateEmote(dt);
+    const rc = this.reaction;
+    if (rc && ((rc.t += dt) >= rc.dur || !this.talk || this.moving > 0.3)) this.reaction = null;
     super.update(dt, nav, others);
     this.clock += dt;
     if (this.rig.setMood && (this.moodTimer -= dt) <= 0) {
@@ -561,6 +592,46 @@ export class Person extends Walker {
       this.happy = !this.happy;
       this.rig.setMood(this.happy);
     }
+  }
+
+  /** Chips in the hand: they run out, or get binned as soon as something else (desk, meeting, call, being picked up) takes over. */
+  private updateSnack(dt: number): void {
+    if (this.snackLeft > 0) {
+      this.snackLeft -= dt;
+      this.snackClock += dt;
+      const busy = this.presence !== 'in' || this.held || (this.controlled && !this.snackSteered) || this.task || this.run || this.meetJob || this.coffeeJob || this.printJob || this.foosJob || this.phoneJob || this.vapeJob || this.cupHeld;
+      if (busy) this.snackLeft = 0;
+    }
+    if (this.snackLeft <= 0) this.snackSteered = false;
+    this.snackAmt += ((this.snackLeft > 0 ? 1 : 0) - this.snackAmt) * Math.min(1, dt * 4);
+    if (this.snackAmt < 0.005) this.snackAmt = 0;
+  }
+
+  /** The player picked up a snack: a bag of chips in the hand and a chip to the mouth right away, also while steered. */
+  grabSnack(): void {
+    if (this.snackLeft <= 0 || this.snackBite === 0) this.snackClock = BITE_GAP * 3 - 0.6 - this.homeVariant * 1.3;
+    this.snackLeft = Math.max(this.snackLeft, SNACK_TIME.min * 0.2);
+    this.snackSteered = true;
+  }
+
+  /** 0 = hand down .. 1 = chip at the mouth (one every few seconds). */
+  get snackBite(): number {
+    if (this.snackLeft <= 0) return 0;
+    const k = (this.snackClock + this.homeVariant * 1.3) % BITE_GAP;
+    return k < BITE_TIME ? Math.sin((k / BITE_TIME) * Math.PI) : 0;
+  }
+
+  /** The chip is still in the fingers (on its way up), not yet eaten. */
+  get snackChipInHand(): boolean {
+    if (this.snackLeft <= 0) return false;
+    const k = (this.snackClock + this.homeVariant * 1.3) % BITE_GAP;
+    return k > 0.15 && k < BITE_TIME * 0.5;
+  }
+
+  /** Play a bit of body language during a talk, after `delay` seconds. */
+  react(kind: Reaction, delay = 0): void {
+    if (!this.talk || this.held || this.controlled) return;
+    this.reaction = { kind, t: -delay, dur: REACTION_TIME[kind] };
   }
 
   /** Free to do a little gesture: sitting at the desk working, or standing around doing nothing. */
@@ -603,8 +674,14 @@ export class Person extends Walker {
         this.endPhone();
       }
     }
-    this.phoneAmt += ((this.phoneJob || (this.boothCall && this.meetSeated) ? 1 : 0) - this.phoneAmt) * Math.min(1, dt * 5);
+    if (this.playerCall > 0) this.playerCall -= dt;
+    this.phoneAmt += ((this.phoneJob || this.playerCall > 0 || (this.boothCall && this.meetSeated) ? 1 : 0) - this.phoneAmt) * Math.min(1, dt * 5);
     if (this.phoneAmt < 0.005) this.phoneAmt = 0;
+  }
+
+  /** The player picked up a ringing phone: the phone goes to the ear for a few seconds, also while steered. */
+  takeCall(seconds = 3): void {
+    this.playerCall = Math.max(this.playerCall, seconds);
   }
 
   /** Starts a phone call: walks around with the phone at the ear, either up and down one path or from spot to spot. */
@@ -646,15 +723,16 @@ export class Person extends Walker {
       const d = task.desk;
       const coffee = d.mugFill !== null && d.mugFill > 0.06;
       if (coffee && Math.random() < SEAT_DRINK_RATE * dt) this.drink = { t: 0, held: false, sipped: false, desk: d };
+      else if (this.member.snacker && task.remaining > 18 && !task.errand && Math.random() < SNACK_RATE * dt) this.startRun(task, nav, true);
       else if (!this.member.hatesCoffee && task.remaining > 18 && !task.errand && Math.random() < RUN_RATE * (coffee ? 0.15 : 1) * dt) this.startRun(task, nav);
     }
   }
 
   /** Gets up for a coffee: the desk stays theirs while they are at the machine. */
-  private startRun(task: DeskTask, nav: NavGrid): void {
+  private startRun(task: DeskTask, nav: NavGrid, snack = false): void {
     const spot = this.kitchen?.claimMachine(this, nav);
     if (!spot) return;
-    task.errand = { spot, left: task.remaining };
+    task.errand = { spot, left: task.remaining, snack };
     task.remaining = 0; // the usual stand-up follows; `beginRun` takes over at the end of it
   }
 
@@ -672,15 +750,15 @@ export class Person extends Walker {
     this.sit = 0;
     this.state = 'idle';
     this.path = [];
-    this.run = { phase: 'out', desk: task.desk, left: e.left, spot: e.spot, t: 0, age: 0, retries: 0, retryIn: 0.5 };
+    this.run = { phase: 'out', desk: task.desk, left: e.left, spot: e.spot, snack: e.snack, t: 0, age: 0, retries: 0, retryIn: 0.5 };
     this.goTo(nav, e.spot.stand);
   }
 
   /** Walks over from wherever they are (no desk to go back to; they pick one on the way back). */
-  private startWanderRun(nav: NavGrid): boolean {
+  private startWanderRun(nav: NavGrid, snack = false): boolean {
     const spot = this.kitchen?.claimMachine(this, nav);
     if (!spot) return false;
-    this.run = { phase: 'out', desk: null, left: 0, spot, t: 0, age: 0, retries: 0, retryIn: 0.5 };
+    this.run = { phase: 'out', desk: null, left: 0, spot, snack, t: 0, age: 0, retries: 0, retryIn: 0.5 };
     this.goTo(nav, spot.stand);
     return true;
   }
@@ -703,6 +781,7 @@ export class Person extends Walker {
       if (Math.hypot(j.spot.stand.x - this.pos.x, j.spot.stand.z - this.pos.z) < 0.6) {
         j.phase = 'brew';
         j.t = 0;
+        if (j.snack) return true; // reaches into the cupboard for chips
         this.cupHeld = true; // takes a cup from the shelf
         this.cupFill = 0;
         this.cupLeft = CUP_LIFE + BREW;
@@ -726,9 +805,26 @@ export class Person extends Walker {
     this.pos.x += (j.spot.stand.x - this.pos.x) * k;
     this.pos.z += (j.spot.stand.z - this.pos.z) * k;
     j.t += dt;
+    if (j.snack) {
+      if (j.t >= SNACK_GRAB) this.finishSnackGrab();
+      return true;
+    }
     this.cupFill = Math.min(1, j.t / (BREW - 0.8));
     if (j.t >= BREW) this.finishBrew(nav);
     return true;
+  }
+
+  /** Got the chips: the desk (if the run started there) is given up, now strolling around the office eating them. */
+  private finishSnackGrab(): void {
+    const j = this.run!;
+    this.kitchen?.releaseMachine(this);
+    this.run = null;
+    if (j.desk) this.office?.release(j.desk, this);
+    this.snackLeft = SNACK_TIME.min + Math.random() * (SNACK_TIME.max - SNACK_TIME.min);
+    this.snackClock = BITE_GAP - 0.6; // first chip right away
+    this.state = 'idle';
+    this.path = [];
+    this.timer = 0.2;
   }
 
   /** Coffee is ready: back to the desk with it (or to any free one). */
@@ -769,7 +865,8 @@ export class Person extends Walker {
     if (!dr) {
       if (!this.cupHeld) return;
       this.cupLeft = CUP_LIFE;
-      this.drink = dr = { t: DRINK.up, held: true, sipped: false, desk: d };
+      // arrived with the cup: it goes down on the desk first, the sips follow from there
+      this.drink = dr = { t: DRINK.sipEnd, held: true, sipped: true, desk: d };
     }
     dr.t += dt;
     if (!dr.held && dr.t >= DRINK.grab && dr.t < DRINK.put) {
@@ -870,18 +967,19 @@ export class Person extends Walker {
     }
     const seek = this.displaced;
     this.displaced = false;
-    if (this.member.look.phone && !seek && !this.talk && Math.random() < PHONE_CHANCE) {
+    if (this.member.look.phone && !seek && !this.talk && !this.snackLeft && Math.random() < PHONE_CHANCE) {
       this.startPhone(nav);
       return;
     }
-    if (this.member.look.vape && !seek && Math.random() < VAPE_CHANCE) {
+    if (this.member.look.vape && !seek && !this.snackLeft && Math.random() < VAPE_CHANCE) {
       this.startVape(Math.random() < 0.35 ? 2 : 1);
       return;
     }
-    if (!seek && Math.random() < PRINT_CHANCE && this.startPrint(nav)) return;
-    if (!seek && Math.random() < FOOS_CHANCE && this.office?.challenge(this, nav)) return;
-    if (!seek && !this.cupHeld && !this.member.hatesCoffee && !this.talk && Math.random() < RUN_CHANCE && this.startWanderRun(nav)) return;
-    if (this.office && (seek || Math.random() < (this.adhd ? WORK_CHANCE * 0.6 : WORK_CHANCE))) {
+    if (!seek && !this.snackLeft && Math.random() < PRINT_CHANCE && this.startPrint(nav)) return;
+    if (!seek && !this.snackLeft && Math.random() < FOOS_CHANCE && this.office?.challenge(this, nav)) return;
+    if (!seek && this.member.snacker && !this.cupHeld && !this.snackLeft && !this.talk && Math.random() < SNACK_CHANCE && this.startWanderRun(nav, true)) return;
+    if (!seek && !this.cupHeld && !this.snackLeft && !this.member.hatesCoffee && !this.talk && Math.random() < RUN_CHANCE && this.startWanderRun(nav)) return;
+    if (this.office && !this.snackLeft && (seek || Math.random() < (this.adhd ? WORK_CHANCE * 0.6 : WORK_CHANCE))) {
       const desk = this.office.claim(this);
       if (desk) {
         this.task = { desk, phase: 'approach', t: 0, from: { ...this.pos }, remaining: (WORK_TIME.min + Math.random() * (WORK_TIME.max - WORK_TIME.min)) * (this.adhd ? 0.3 : 1), retries: 0, retryIn: 0.5 };
@@ -926,6 +1024,7 @@ export class Person extends Walker {
       this.petting = false;
       return this.controlPresence(dt, nav);
     }
+    if (this.scripted) return this.controlScripted(dt, nav);
     const chat = this.playerChat;
     if (!chat) this.petting = false;
     if (chat) {
@@ -1069,6 +1168,58 @@ export class Person extends Walker {
     }
   }
 
+  /** Pins this person for a day task: they walk to `at` first when `walk` is set (else they are there at once), then stay and turn to `yaw`. */
+  pinTo(s: { at: Vec2; yaw: number; sit?: boolean; turn?: number; walk?: boolean }): void {
+    this.scripted = { at: { ...s.at }, yaw: s.yaw, sit: !!s.sit, turn: s.turn ?? 1, arrived: !s.walk, tries: 0 };
+    this.controlled = true;
+    this.steer.x = this.steer.z = 0;
+    this.playerChat = null;
+    this.petting = false;
+    this.speaking = false;
+    if (!s.walk) {
+      this.pos.x = this.prev.x = s.at.x;
+      this.pos.z = this.prev.z = s.at.z;
+      this.path = [];
+      this.state = 'idle';
+    }
+  }
+
+  /** Turns the pinned person to face `yaw`. */
+  faceTo(yaw: number): void {
+    if (this.scripted) this.scripted.yaw = yaw;
+  }
+
+  /** Back to normal life (a pinned person at a desk simply keeps working). */
+  unpin(): void {
+    if (!this.scripted) return;
+    this.scripted = null;
+    this.controlled = false;
+    this.gameboyOn = false;
+    this.timer = 0.5;
+  }
+
+  private controlScripted(dt: number, nav: NavGrid): boolean {
+    const s = this.scripted!;
+    this.speaking = false;
+    this.timer = 1;
+    if (!s.arrived) {
+      if (Math.hypot(s.at.x - this.pos.x, s.at.z - this.pos.z) < 0.3) s.arrived = true;
+      else if (!this.isWalking()) {
+        this.walkTo(nav, s.at);
+        if (!this.isWalking() && ++s.tries > 6) s.arrived = true; // no way there: appears on the spot
+      } else return false; // normal walking
+      if (!s.arrived) return false;
+    }
+    this.state = 'idle';
+    this.path = [];
+    this.pos.x = s.at.x;
+    this.pos.z = s.at.z;
+    this.sit += ((s.sit ? 1 : 0) - this.sit) * Math.min(1, dt * 8);
+    this.moving += (0 - this.moving) * Math.min(1, dt * 8);
+    this.turnTo(s.yaw, dt * s.turn);
+    return true;
+  }
+
   /** Keyboard-steered movement; wall and furniture collisions are resolved by the game's separation pass. */
   private steerStep(dt: number): boolean {
     if (this.held) return false;
@@ -1148,7 +1299,7 @@ export class Person extends Walker {
         }
         if (this.isWalking()) return false;
         this.moving += (0 - this.moving) * ease;
-        if (Math.hypot(s.approach.x - this.pos.x, s.approach.z - this.pos.z) < 0.6) {
+        if (Math.hypot(s.approach.x - this.pos.x, s.approach.z - this.pos.z) < 0.6 && nav.lineClear(this.pos, s.approach)) {
           j.phase = 'enter';
           j.t = 0;
           j.from = { ...this.pos };

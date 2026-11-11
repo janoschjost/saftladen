@@ -6,7 +6,8 @@ import { IsoCamera } from './IsoCamera';
 import { ax, az } from './officeModel';
 import { WORLD } from './World';
 
-export type ViewMode = 'iso' | 'orbit' | 'plan' | 'walk';
+/** `third` is the behind-the-shoulder camera of the day-in-the-life mode; it has no button in the view bar. */
+export type ViewMode = 'iso' | 'orbit' | 'plan' | 'walk' | 'third';
 
 /** Everything needed to put the camera back where it was (saved between visits). */
 export interface ViewSnapshot {
@@ -84,6 +85,11 @@ const HINTS: Record<ViewMode, HintGroup[]> = {
     { title: 'Maus', items: [{ icon: 'look', text: 'Umschauen (Klick fängt die Maus, Esc löst sie)', how: 'Maus bewegen' }, { icon: 'click', text: 'Tür öffnen, Person ansprechen', how: 'Klick' }] },
     { title: 'Ansicht', items: [{ keys: ['E'], text: 'Tür öffnen, Person ansprechen' }, { keys: ['N'], text: 'Namen' }] },
   ],
+  third: [
+    { title: 'Bewegen', items: [...wasd(true), { keys: ['Shift'], text: 'Rennen' }] },
+    { title: 'Maus', items: [{ icon: 'look', text: 'Kamera drehen (Klick fängt die Maus, Esc löst sie)', how: 'Maus bewegen' }, { icon: 'wheel', text: 'Zoomen', how: 'Scrollen' }] },
+    { title: 'Tag', items: [{ keys: ['Esc'], text: 'Beenden' }, { keys: ['N'], text: 'Namen' }] },
+  ],
 };
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] =>
@@ -124,6 +130,10 @@ const ACCEL = 14; // m/s²: how fast the walk speed follows the keys (start and 
 const FOV_WALK = 60;
 const FOV_RUN = 68;
 const LOOK_SMOOTH = 22; // higher = the view follows the mouse more tightly
+const FOV_THIRD = 52;
+const FOV_THIRD_RUN = 62; // widens while sprinting
+const THIRD_DIST = [2.2, 9] as const; // zoom range of the behind-the-shoulder camera (metres)
+const THIRD_FOCUS = 1.25; // height of the point the third-person camera looks at (shoulders)
 
 /** Camera modes: isometric (default), free orbit, top-down floor plan and first-person walk-through. */
 export class Views {
@@ -150,6 +160,17 @@ export class Views {
   private fov = FOV_WALK;
   private walkPos = new THREE.Vector3(ax(-4.2), EYE, az(1.1));
   private look: { id: number } | null = null;
+  /** third-person camera: where it looks (smoothed), the mouse targets, the smoothed angles and the distance */
+  private thirdGoal = new THREE.Vector3();
+  private thirdAt = new THREE.Vector3();
+  private thirdYaw = 0;
+  private thirdElev = 0.5;
+  private thirdViewYaw = 0;
+  private thirdViewElev = 0.5;
+  private thirdDist = 4.6;
+  /** 0..1 eased: the player is sprinting (wider view, camera drops back a little) */
+  private sprint = 0;
+  private sprintGoal = 0;
   private moved = 0;
   private buttons: HTMLButtonElement[];
   private hint: HTMLElement | null;
@@ -259,9 +280,13 @@ export class Views {
     this.orbit.enabled = mode === 'orbit';
     this.planCtl.enabled = mode === 'plan';
     this.persp.rotation.order = mode === 'walk' ? 'YXZ' : 'XYZ';
-    if (mode !== 'walk') {
+    if (mode !== 'walk' && mode !== 'third') {
       if (this.locked) document.exitPointerLock();
       this.fov = this.persp.fov = FOV_WALK;
+      this.persp.updateProjectionMatrix();
+    }
+    if (mode === 'third') {
+      this.fov = this.persp.fov = FOV_THIRD;
       this.persp.updateProjectionMatrix();
     }
     if (mode === 'orbit' && !keepCamera) this.resetOrbit();
@@ -289,7 +314,51 @@ export class Views {
     if (this.mode === 'iso') this.iso.update(dt);
     else if (this.mode === 'orbit') this.orbit.update();
     else if (this.mode === 'plan') this.planCtl.update();
+    else if (this.mode === 'third') this.third(dt);
     else this.walk(dt);
+  }
+
+  /** Switches to the third-person camera, right behind somebody at (x, z) who faces `facing` (radians, the walker's yaw). */
+  enterThird(x: number, z: number, facing: number): void {
+    this.sprint = this.sprintGoal = 0;
+    this.thirdYaw = this.thirdViewYaw = facing + Math.PI;
+    this.thirdElev = this.thirdViewElev = 0.5;
+    this.thirdGoal.set(x, THIRD_FOCUS, z);
+    this.thirdAt.copy(this.thirdGoal);
+    this.setMode('third');
+    this.third(0);
+  }
+
+  /** Sprinting in third person: the view widens and the camera trails further back. */
+  setSprint(on: boolean): void {
+    this.sprintGoal = on ? 1 : 0;
+  }
+
+  /** Where the third-person camera looks (floor metres); it eases there. */
+  setThirdTarget(x: number, z: number): void {
+    this.thirdGoal.set(x, THIRD_FOCUS, z);
+  }
+
+  /** Eases the camera behind the target; the mouse sets the angles, the wheel the distance. */
+  private third(dt: number): void {
+    const lk = 1 - Math.exp(-LOOK_SMOOTH * dt);
+    this.thirdViewYaw += (this.thirdYaw - this.thirdViewYaw) * lk;
+    this.thirdViewElev += (this.thirdElev - this.thirdViewElev) * lk;
+    this.thirdAt.lerp(this.thirdGoal, Math.min(1, dt * 12));
+    this.sprint += (this.sprintGoal - this.sprint) * Math.min(1, dt * 5);
+    const fov = FOV_THIRD + (FOV_THIRD_RUN - FOV_THIRD) * this.sprint;
+    if (Math.abs(this.persp.fov - fov) > 0.01) {
+      this.persp.fov = fov;
+      this.persp.updateProjectionMatrix();
+    }
+    const dist = this.thirdDist * (1 + 0.12 * this.sprint);
+    const flat = Math.cos(this.thirdViewElev) * dist;
+    this.persp.position.set(
+      this.thirdAt.x + Math.sin(this.thirdViewYaw) * flat,
+      this.thirdAt.y + Math.sin(this.thirdViewElev) * dist,
+      this.thirdAt.z + Math.cos(this.thirdViewYaw) * flat,
+    );
+    this.persp.lookAt(this.thirdAt);
   }
 
   /** Camera tracks a steered person: iso moves its centre, orbit shifts camera and target together. */
@@ -400,20 +469,34 @@ export class Views {
     // click-vs-drag tracking for every mode, and mouse-look for the walk mode
     this.stage.addEventListener('pointerdown', (e) => {
       this.moved = 0;
-      if (this.mode === 'walk') {
+      if (this.mode === 'walk' || this.mode === 'third') {
         this.look = { id: e.pointerId };
         this.stage.setPointerCapture(e.pointerId);
       }
     });
     this.stage.addEventListener('pointermove', (e) => {
       if (e.buttons) this.moved += Math.abs(e.movementX) + Math.abs(e.movementY);
-      if (this.mode !== 'walk' || !(this.look || this.locked)) return;
-      this.yaw -= e.movementX * 0.004;
-      this.pitch = THREE.MathUtils.clamp(this.pitch - e.movementY * 0.004, -1.3, 1.3);
+      if (!(this.look || this.locked)) return;
+      if (this.mode === 'third') {
+        this.thirdYaw -= e.movementX * 0.004;
+        this.thirdElev = THREE.MathUtils.clamp(this.thirdElev + e.movementY * 0.004, 0.08, 1.35);
+      } else if (this.mode === 'walk') {
+        this.yaw -= e.movementX * 0.004;
+        this.pitch = THREE.MathUtils.clamp(this.pitch - e.movementY * 0.004, -1.3, 1.3);
+      }
     });
+    this.stage.addEventListener(
+      'wheel',
+      (e) => {
+        if (this.mode !== 'third') return;
+        e.preventDefault();
+        this.thirdDist = THREE.MathUtils.clamp(this.thirdDist * Math.exp(e.deltaY * 0.001), THIRD_DIST[0], THIRD_DIST[1]);
+      },
+      { passive: false },
+    );
     // first plain click captures the mouse (look without holding a button); Esc releases it
     this.stage.addEventListener('click', () => {
-      if (this.mode === 'walk' && !this.locked && !this.wasDrag && this.stage.requestPointerLock) {
+      if ((this.mode === 'walk' || this.mode === 'third') && !this.locked && !this.wasDrag && this.stage.requestPointerLock) {
         try {
           void (this.stage.requestPointerLock() as unknown as Promise<void> | undefined)?.catch?.(() => {});
         } catch {

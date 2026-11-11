@@ -7,7 +7,10 @@ import { buildDog } from '../render/dogBuilder';
 import { petPortrait } from '../render/petPortrait';
 import { HOME_COUNT, HOME_LABELS, HomeOffice, ROOM_COUNT, heldPoses, type ArmPose } from '../render/homeOffice';
 import { SIT_DROP } from '../render/officeBuilder';
-import { Views } from '../render/Views';
+import { Views, type ViewMode } from '../render/Views';
+import { DayHud } from '../ui/DayHud';
+import { DAY_STORIES } from '../data/dayStories';
+import { formatTime, type DayCtx, type DayTask } from './Day';
 import { buildOffice, CORRIDOR_POINT, type OfficeModel } from '../render/officeModel';
 import { buildWorld, NAV_CELL, WORLD } from '../render/World';
 import { Actions } from '../ui/Actions';
@@ -20,6 +23,7 @@ import { Settings } from '../ui/Settings';
 import { TimeControl } from '../ui/TimeControl';
 import { devEvents } from './DevEvents';
 import { DeskLights } from './DeskLights';
+import { Easter } from './Easter';
 import { Dog } from './Dog';
 import { PetCare } from './PetCare';
 import { Weather } from './Weather';
@@ -78,6 +82,7 @@ export class Game {
   private persistTimer = 2;
   private sky!: SkyRig;
   private deskLights!: DeskLights;
+  private easter!: Easter;
   private timeControl!: TimeControl;
   private feeds = new Feeds();
   private roster: Roster;
@@ -104,11 +109,29 @@ export class Game {
   private dragStart = { x: 0, y: 0 };
   private dragged: Walker | null = null;
   private steered: Person | null = null;
+  /** "Ein Tag im Leben": the person the player plays; `waiting` until they are (back) in the office */
+  private day: {
+    person: Person;
+    state: 'waiting' | 'playing' | 'done' | 'failed';
+    /** other people the tasks need in the office */
+    needs: Person[];
+    /** the current task is walked around by the player (else the person sits / stays put) */
+    walking: boolean;
+    time: number;
+    prevMode: ViewMode;
+    tasks: DayTask[];
+    current: number;
+    /** seconds of the day at which each finished task was done */
+    splits: number[];
+  } | null = null;
+  private dayHud!: DayHud;
   /** what the walk-mode crosshair points at right now */
   private aim: { text: string; act: () => void } | null = null;
   /** reply bubble above the person the player talked to */
   private reply: { who: Person; text: string; t: number } | null = null;
   private keys = new Set<string>();
+  /** Shift is down (fallback when the Shift keydown went missing, e.g. pressed before the window had focus) */
+  private shift = false;
   private dragOffset = new THREE.Vector2();
   private dragMoved = false;
   private fwd = new THREE.Vector3();
@@ -144,6 +167,7 @@ export class Game {
     this.blockNav();
     this.office = new Office(model, this.nav);
     this.deskLights = new DeskLights(this.scene, this.office, this.tod);
+    this.easter = new Easter(this.scene);
     this.roof = model.roof;
     this.entrance = model.entrance;
     this.doors = new Doors(model.doors);
@@ -154,8 +178,10 @@ export class Game {
     this.phoneBooth.onClosed = (closed) => this.doors.setLocked(this.phoneBooth.doorPos, closed);
     this.meetingRoom.onClosed = (closed) => this.doors.setLocked(this.meetingRoom.doorPos, closed);
     this.views = new Views(stage, this.renderer.domElement, this.nav, (mode) => {
-      this.roof.visible = mode === 'walk' ? true : mode === 'plan' ? false : this.roofWanted;
+      this.roof.visible = mode === 'walk' ? true : mode === 'plan' || mode === 'third' ? false : this.roofWanted;
+      if (mode !== 'third' && this.day && this.day.state !== 'waiting') this.endDay(false); // the player switched the camera away
     });
+    this.dayHud = new DayHud(() => this.endDay());
     this.views.setDoorways(model.doors.map((d) => ({ x: d.center.x, z: d.center.z, r: d.width / 2 })));
     this.overlay = new Overlay();
     this.roster = new Roster(
@@ -336,7 +362,7 @@ export class Game {
     this.stage.addEventListener(
       'pointerdown',
       (e) => {
-        if (this.views.mode === 'walk') return; // dragging looks around instead
+        if (this.views.mode === 'walk' || this.views.mode === 'third') return; // dragging looks around instead
         if (this.editor.active) {
           // furniture instead of people; a click on anything else still moves the camera
           const g = this.groundAt(this.toNdc(e));
@@ -362,7 +388,7 @@ export class Game {
     this.stage.addEventListener('pointermove', (e) => {
       this.pointerInside = true;
       this.toNdc(e, this.pointer);
-      if (this.editor.active && this.views.mode !== 'walk') this.editor.pointerMove(this.raycaster, this.groundAt(this.pointer), e.altKey);
+      if (this.editor.active && this.views.mode !== 'walk' && this.views.mode !== 'third') this.editor.pointerMove(this.raycaster, this.groundAt(this.pointer), e.altKey);
       if (!this.dragged) return;
       const g = this.groundAt(this.pointer);
       if (!g) return;
@@ -468,17 +494,22 @@ export class Game {
       }
       // pick at the click itself: the hover state may be a frame behind (or empty on touch)
       if (this.views.mode === 'walk') return this.interact();
+      if (this.views.mode === 'third') return;
       const hit = this.pick(this.toNdc(e));
+      if (hit) this.easter.click(hit);
       this.selected = hit && hit !== this.selected ? hit : null;
       this.followed = this.selected && !this.selected.away ? this.selected : null; // selecting starts follow mode right away
     });
     window.addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLElement && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
-      if (this.views.mode !== 'walk' && this.editor.key(e)) {
+      this.easter.key(e);
+      if (this.day && e.code === 'Space') e.preventDefault(); // held to play in the day tasks, must not scroll or press a button
+      if (this.views.mode !== 'walk' && this.views.mode !== 'third' && this.editor.key(e)) {
         if (this.editor.active) this.selected = null;
         return;
       }
       this.keys.add(e.code);
+      this.shift = e.shiftKey;
       if (this.steered && STEER_KEYS.includes(e.code)) e.preventDefault();
       if (e.key.toLowerCase() === 'c' && this.selected instanceof Person) this.toggleSteer(this.selected);
       if (e.key.toLowerCase() === 'e' && this.views.mode === 'walk') this.interact();
@@ -487,13 +518,24 @@ export class Game {
       if (e.key.toLowerCase() === 'r' && (this.views.mode === 'iso' || this.views.mode === 'orbit')) this.roof.visible = this.roofWanted = !this.roofWanted;
       if (e.key.toLowerCase() === 'h' && this.selected instanceof Person) this.presence.toggleHome(this.selected, this.nav);
       if (e.key === 'Escape') {
+        if (this.day) this.endDay();
         this.selected = null;
         this.followed = null;
         this.release(this.steered);
       }
     });
-    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
-    window.addEventListener('blur', () => this.keys.clear());
+    window.addEventListener('keyup', (e) => {
+      this.keys.delete(e.code);
+      this.shift = e.shiftKey;
+    });
+    window.addEventListener('blur', () => {
+      this.keys.clear();
+      this.shift = false;
+    });
+    // every mouse event carries the modifier state too: Shift is still noticed when its key event got lost (focus change, pointer lock)
+    for (const type of ['pointermove', 'pointerdown', 'mousemove', 'wheel'] as const) {
+      window.addEventListener(type, (e) => (this.shift = e.shiftKey), { passive: true, capture: true });
+    }
   }
 
   private resize(): void {
@@ -507,6 +549,7 @@ export class Game {
     const dt = Math.min(MAX_FRAME, (now - this.last) / 1000);
     this.last = now;
     this.acc += dt;
+    this.updateDay(dt);
     this.updateSteer(dt);
     this.updateFollow(dt);
     while (this.acc >= STEP) {
@@ -515,6 +558,7 @@ export class Game {
     }
     this.tod.update(dt);
     applySky(this.tod, this.sky);
+    this.updateEaster(dt);
     this.updateWeather(dt);
     this.updateArrivals();
     if ((this.persistTimer -= dt) <= 0) {
@@ -530,6 +574,16 @@ export class Game {
     if (this.reply && (this.reply.t -= dt) <= 0) this.reply = null;
     this.render(this.acc / STEP);
     this.renderFeeds();
+  }
+
+  /** Hidden gags: disco lights, a person who has had enough of the clicking. */
+  private updateEaster(dt: number): void {
+    const gone = this.easter.update(dt);
+    this.easter.dim(this.sky);
+    if (gone) {
+      this.release(gone);
+      this.presence.send(gone, 'errand', this.nav);
+    }
   }
 
   /** Remembers time of day, camera and selection for the next visit. */
@@ -834,6 +888,180 @@ export class Game {
     this.reply = { who: p, text: lines[Math.floor(Math.random() * lines.length)], t: 3.5 };
   }
 
+  /** Starts a day as this person: they come to the office if they are away, then the camera moves behind them. */
+  startDay(id: string): void {
+    const person = this.people.find((p) => p.id === id);
+    if (!person) return;
+    this.endDay();
+    this.editor.setActive(false);
+    this.selected = this.followed = null;
+    const tasks = (DAY_STORIES[id] ?? []).map((make) => make());
+    const needs = [...new Set(tasks.flatMap((t) => t.needs ?? []))].flatMap((nid) => this.people.find((p) => p.id === nid) ?? []);
+    this.day = { person, state: 'waiting', needs, walking: true, time: 0, prevMode: this.views.mode === 'third' ? 'orbit' : this.views.mode, tasks, current: 0, splits: [] };
+    (document.activeElement as HTMLElement | null)?.blur?.(); // space must not press a button
+    this.dayHud.show(person.member.name);
+    this.dayHud.setClock(0);
+    this.dayHud.setTasks([]);
+    this.dayHud.setMeter(null);
+    const absent = [person, ...needs].filter((p) => !p.inOffice);
+    if (absent.length) {
+      this.dayHud.setStatus(`${absent.map((p) => p.member.name.split(' ')[0]).join(' und ')} kommt gleich ins Büro …`);
+      absent.forEach((p) => this.presence.callBack(p));
+    }
+  }
+
+  /** Leaves the day: the person is free again and the camera goes back to the view it came from. */
+  endDay(restoreView = true): void {
+    const d = this.day;
+    if (!d) return;
+    this.day = null;
+    d.tasks.forEach((t) => t.dispose());
+    this.release(d.person);
+    this.dayHud.hide();
+    if (restoreView && this.views.mode === 'third') this.views.setMode(d.prevMode);
+  }
+
+  /** The player's day: waits for the person to be in the office, then steers them from behind the shoulder. */
+  private updateDay(dt: number): void {
+    const d = this.day;
+    if (!d) return;
+    const p = d.person;
+    if (d.state === 'waiting') {
+      if (!p.inOffice || p.held || d.needs.some((q) => !q.inOffice || q.held)) return;
+      if (!this.beginTask(d)) return;
+      d.state = 'playing';
+      this.dayHud.setStatus('');
+      this.views.enterThird(p.pos.x, p.pos.z, p.yaw);
+      this.updateDayHud();
+      return;
+    }
+    // taken away (editor, Easter egg gone wrong, ...)
+    if (!p.inOffice || (d.walking && this.steered !== p) || d.needs.some((q) => !q.inOffice)) return this.endDay();
+    this.views.setThirdTarget(p.pos.x, p.pos.z);
+    if (d.state !== 'playing') return;
+    const task = d.tasks[d.current];
+    if (!task) return;
+    if (task.ready !== false) {
+      d.time += dt;
+      this.dayHud.setClock(d.time);
+    }
+    task.update(dt, this.dayCtx(p));
+    if (task.failed) return this.failDay(d, task.failed);
+    if (task.done) {
+      d.splits.push(d.time);
+      task.dispose();
+      d.current++;
+      if (d.current < d.tasks.length) this.beginTask(d);
+      else this.finishDay(d);
+    }
+    this.updateDayHud();
+  }
+
+  /** Hands the person to the current task: the player walks them around, or the task sits / pins them itself. False when steering is not possible yet. */
+  private beginTask(d: NonNullable<Game['day']>): boolean {
+    const task = d.tasks[d.current];
+    if (!task) return true;
+    d.walking = task.walk !== false;
+    if (!d.walking) this.release(d.person);
+    else if (this.steered !== d.person) {
+      this.toggleSteer(d.person);
+      if (this.steered !== d.person) return false;
+    }
+    task.start(this.dayCtx(d.person));
+    return true;
+  }
+
+  /** The player lost a task: everything freezes where it is and the card offers another try. */
+  private failDay(d: NonNullable<Game['day']>, reason: string): void {
+    d.state = 'failed';
+    document.exitPointerLock?.();
+    this.dayHud.setMeter(null);
+    this.dayHud.showFail(reason, () => this.startDay(d.person.id), () => this.endDay());
+  }
+
+  private dayCtx(person: Person): DayCtx {
+    return {
+      scene: this.scene,
+      nav: this.nav,
+      person,
+      say: (text, who = person) => (this.reply = { who, text, t: 1.8 }),
+      keys: this.keys,
+      other: (id) => this.people.find((p) => p.id === id) ?? null,
+      seat: (p) => this.daySeat(p),
+      pin: (p, spot) => {
+        this.social.leave(p);
+        p.interrupt();
+        p.pinTo(spot);
+      },
+      release: (p) => p.unpin(),
+    };
+  }
+
+  /** Sits the person at their own desk (somebody sitting there is asked to move) and pins them there. */
+  private daySeat(p: Person): boolean {
+    const desk = p.homeDesk ?? this.office.desks.find((k) => !k.occupant) ?? null;
+    if (!desk) return false;
+    this.social.leave(p);
+    const sitting = p.task?.desk === desk && p.task.phase === 'work';
+    if (!sitting) {
+      p.interrupt();
+      if (desk.occupant && desk.occupant !== p) desk.occupant.evictFromDesk(desk);
+      if (desk.pending === p) desk.pending = null;
+      p.sitDownAt(desk);
+    }
+    p.pinTo({ at: desk.seat, yaw: desk.yaw, sit: true });
+    return true;
+  }
+
+  /** Task list and the pointer towards the nearest target. */
+  private updateDayHud(): void {
+    const d = this.day;
+    if (!d) return;
+    this.dayHud.setTasks(d.tasks.map((t, i) => ({ text: i < d.current || (d.state === 'done') ? t.title : `${t.title} ${t.progress}`, done: i < d.current })));
+    const task = d.tasks[d.current];
+    this.dayHud.setMeter(task && d.state === 'playing' ? task.meter ?? null : null);
+    const me = d.person.pos;
+    let best: { x: number; z: number } | null = null;
+    let bestD = Infinity;
+    for (const t of task && d.state === 'playing' ? task.targets : []) {
+      const dist = Math.hypot(t.x - me.x, t.z - me.z);
+      if (dist < bestD) {
+        bestD = dist;
+        best = t;
+      }
+    }
+    if (!best) return this.dayHud.setPointer(null);
+    const v = new THREE.Vector3(best.x, 0.8, best.z).project(this.views.camera);
+    const behind = v.z > 1;
+    let x = (v.x * 0.5 + 0.5) * window.innerWidth;
+    let y = (-v.y * 0.5 + 0.5) * window.innerHeight;
+    if (behind) {
+      x = window.innerWidth - x;
+      y = window.innerHeight - y;
+    }
+    this.dayHud.setPointer({ x, y }, Math.round(bestD));
+  }
+
+  /** All tasks done: the clock stops and the result card shows the splits and the best time. */
+  private finishDay(d: NonNullable<Game['day']>): void {
+    d.state = 'done';
+    document.exitPointerLock?.();
+    const key = `saftladen.day.best.${d.person.id}`;
+    let best = Infinity;
+    try {
+      best = Number(localStorage.getItem(key)) || Infinity;
+      if (d.time < best) localStorage.setItem(key, String(d.time));
+    } catch {
+      /* storage blocked: no best time */
+    }
+    const rows = d.tasks.map((t, i) => ({ title: t.title, time: formatTime(d.splits[i] - (d.splits[i - 1] ?? 0)) }));
+    this.dayHud.showResult(
+      { name: d.person.member.name.split(' ')[0], total: formatTime(d.time), best: d.time < best ? null : formatTime(best), record: d.time < best, rows },
+      () => this.startDay(d.person.id),
+      () => this.endDay(),
+    );
+  }
+
   private toggleFollow(): void {
     if (this.followed) this.followed = null;
     else if (this.selected && !this.selected.away) this.followed = this.selected;
@@ -878,6 +1106,7 @@ export class Game {
     // walk mode already uses WASD for the camera itself
     if (this.views.mode === 'walk' || (!f && !s)) {
       p.steer.x = p.steer.z = 0;
+      this.views.setSprint(false);
       return;
     }
     // "up" on screen, flattened to the floor; falls back to the camera's up vector when looking straight down
@@ -895,7 +1124,8 @@ export class Game {
     fz /= l;
     p.steer.x = fx * f + -fz * s;
     p.steer.z = fz * f + fx * s;
-    p.steer.run = k.has('ShiftLeft') || k.has('ShiftRight');
+    p.steer.run = k.has('ShiftLeft') || k.has('ShiftRight') || this.shift;
+    this.views.setSprint(p.steer.run && this.views.mode === 'third');
     this.views.follow(p.pos.x, p.pos.z, dt);
   }
 
@@ -904,6 +1134,11 @@ export class Game {
     this.traffic.update(dt, this.walkers);
     for (const w of this.walkers) {
       w.traffic ??= this.traffic;
+      // disco: everybody who is up stops and dances on the spot; an angry person stands and fumes
+      if ((this.easter.disco > 0.3 && w instanceof Person && w.inOffice && w.sit < 0.05 && !w.held && !w.controlled) || this.easter.angry?.who === w) {
+        w.moving += (0 - w.moving) * 0.25;
+        continue;
+      }
       w.update(dt, this.nav, this.walkers);
     }
     this.social.update(dt, this.people, this.nav, this.traffic);
@@ -1036,8 +1271,12 @@ export class Game {
       } else {
         r.body.rotation.y = 0;
       }
+      this.poseReaction(w, r);
       this.poseCup(w, r);
+      this.poseSnack(w, r);
       this.poseEmote(w, r);
+      this.poseEaster(w, r);
+      this.poseGameboy(w, r);
       w.petAmt += ((w.petting && w.moving < 0.2 ? 1 : 0) - w.petAmt) * 0.12;
       if (w.petAmt > 0.01) {
         // bent forward, one hand stroking
@@ -1085,6 +1324,12 @@ export class Game {
       });
       r.tail.rotation.y = Math.sin(performance.now() / 90 + w.phase) * (0.35 + 0.4 * w.moving + 0.5 * w.happy) * (1 - 0.7 * lie) * (1 - z);
       this.poseZzz(w, z, r.face, -r.face.y * sn + bx, r.face.y * cs + by);
+      // easter eggs: backflip after five clicks, hopping to the beat of the disco
+      w.root.rotation.order = 'YXZ';
+      const fl = this.easter.flip(w);
+      w.root.rotation.x = fl ? fl.angle : 0;
+      if (fl) w.root.position.y += fl.jump;
+      if (this.easter.disco > 0.01) r.body.position.y += Math.abs(Math.sin(this.easter.beat * Math.PI)) * 0.1 * this.easter.disco * (1 - w.sleep);
     }
   }
 
@@ -1148,19 +1393,147 @@ export class Game {
   private poseCup(w: Person, r: Person['rig']): void {
     const a = w.cupAmt;
     r.cup.visible = a > 0.02;
-    // the arm is also busy while reaching for (or setting down) the mug on the desk, with an empty hand
-    const arm = Math.max(a, w.drinkAmt);
+    r.chips.visible = w.snackAmt > 0.02;
+    // the arm is also busy while reaching for (or setting down) the mug on the desk, with an empty hand, or holding a bag of chips
+    const arm = Math.max(a, w.drinkAmt, w.snackAmt);
     if (arm < 0.02) return;
     const sip = w.cupSip;
     const reach = w.cupReach; // out and down to the mug on the desk
     r.armL.rotation.x = THREE.MathUtils.lerp(r.armL.rotation.x, THREE.MathUtils.lerp(THREE.MathUtils.lerp(-1.25, -1.95, sip), -1.12, reach), arm);
     r.armL.rotation.z = (0.12 + 0.25 * sip - 0.42 * reach) * arm;
+    if (r.chips.visible) r.chips.quaternion.copy(r.armL.quaternion).invert();
     if (!r.cup.visible) return;
     r.cup.quaternion.copy(r.armL.quaternion).invert();
     r.cup.rotateX(-0.7 * sip);
   }
 
+  /** Handheld console in both hands in front of the chest, head bowed over it, thumbs twitching; the screen flickers. */
+  private poseGameboy(w: Person, r: Person['rig']): void {
+    const a = w.gameboy;
+    r.gameboy.visible = a > 0.02;
+    if (a < 0.02) return;
+    const lerp = THREE.MathUtils.lerp;
+    const t = performance.now() / 1000 + w.phase;
+    r.armL.rotation.x = lerp(r.armL.rotation.x, -1.05, a);
+    r.armR.rotation.x = lerp(r.armR.rotation.x, -1.05, a);
+    r.armL.rotation.z = lerp(r.armL.rotation.z, 0.3, a);
+    r.armR.rotation.z = lerp(r.armR.rotation.z, -0.3, a);
+    r.elbowL.rotation.x = -1.35 * a + Math.sin(t * 23) * 0.04 * a;
+    r.elbowR.rotation.x = -1.35 * a + Math.sin(t * 19 + 1) * 0.04 * a;
+    r.body.rotation.x += 0.14 * a;
+    r.gameboy.position.y = lerp(0.7, 1.0, a);
+    r.gameboy.rotation.x = 0.5; // screen towards his face
+    r.gameboyScreen.color.setHex(Math.sin(t * 9) > 0.85 ? 0x8bac0f : 0x9bbc0f);
+  }
+
+  /** Eating chips: the left hand holds the bag (see `poseCup`), the right hand fetches a chip and takes it to the mouth now and then. */
+  private poseSnack(w: Person, r: Person['rig']): void {
+    const k = w.snackBite * w.snackAmt;
+    r.chip.visible = w.snackAmt > 0.5 && w.snackChipInHand;
+    if (k <= 0) return;
+    const lerp = THREE.MathUtils.lerp;
+    r.armR.rotation.x = lerp(r.armR.rotation.x, -0.64, k);
+    r.armR.rotation.z = lerp(r.armR.rotation.z, -0.39, k);
+    r.elbowR.rotation.x = -2.15 * k;
+    r.body.rotation.x -= 0.03 * k;
+  }
+
   /** Little gestures: a yawn behind the hand, a stretch, scratching the head, a look to the side. Blends over whatever the arms were doing. */
+  /** Disco dance (Konami code) and the shaking fists of somebody who has been clicked on too often. */
+  private poseEaster(w: Person, r: Person['rig']): void {
+    const lerp = THREE.MathUtils.lerp;
+    const a = this.easter.disco;
+    if (a > 0.01) {
+      const b = this.easter.beat * Math.PI * 2;
+      const up = 1 - w.sit;
+      r.body.position.y += Math.abs(Math.sin(b / 2)) * 0.09 * a * up;
+      r.body.rotation.z = Math.sin(b / 2) * 0.14 * a;
+      r.armL.rotation.x = lerp(r.armL.rotation.x, -2.7 + Math.sin(b) * 0.45, a);
+      r.armR.rotation.x = lerp(r.armR.rotation.x, -2.7 - Math.sin(b) * 0.45, a);
+      r.armL.rotation.z = lerp(r.armL.rotation.z, -0.25 + Math.sin(b / 2) * 0.2, a);
+      r.armR.rotation.z = lerp(r.armR.rotation.z, 0.25 + Math.sin(b / 2) * 0.2, a);
+      r.elbowL.rotation.x = lerp(r.elbowL.rotation.x, 0, a);
+      r.elbowR.rotation.x = lerp(r.elbowR.rotation.x, 0, a);
+      r.legL.rotation.x = lerp(r.legL.rotation.x, Math.sin(b / 2) * 0.5, a * up);
+      r.legR.rotation.x = lerp(r.legR.rotation.x, -Math.sin(b / 2) * 0.5, a * up);
+      r.kneeL.rotation.x = lerp(r.kneeL.rotation.x, Math.max(0, -Math.sin(b / 2)) * 0.9, a * up);
+      r.kneeR.rotation.x = lerp(r.kneeR.rotation.x, Math.max(0, Math.sin(b / 2)) * 0.9, a * up);
+    }
+    if (this.easter.angry?.who === w) {
+      const t = performance.now() / 1000;
+      r.armL.rotation.x = -0.9 + Math.sin(t * 22) * 0.35;
+      r.armR.rotation.x = -0.9 + Math.sin(t * 22 + Math.PI) * 0.35;
+      r.elbowL.rotation.x = r.elbowR.rotation.x = -1.2;
+      r.body.rotation.y = Math.sin(t * 30) * 0.18;
+      r.body.position.y += Math.abs(Math.sin(t * 15)) * 0.04;
+    }
+  }
+
+  /** Body language during a talk: laughing, pointing, shrugging, startled, nodding, thinking, waving, cheering. Blends over the usual talking pose. */
+  private poseReaction(w: Person, r: Person['rig']): void {
+    const rc = w.reaction;
+    if (!rc || rc.t < 0) return;
+    const p = rc.t / rc.dur;
+    const a = Math.min(1, p * 6, (1 - p) * 6); // quick in, quick out
+    if (a <= 0) return;
+    const held = heldPoses(r);
+    const t = rc.t;
+    const hop = 1 - w.sit * 0.8;
+    const lerp = THREE.MathUtils.lerp;
+    const arm = (right: boolean, q: ArmPose) => {
+      const shoulder = right ? r.armR : r.armL;
+      const elbow = right ? r.elbowR : r.elbowL;
+      const sign = right ? 1 : -1;
+      shoulder.rotation.x = lerp(shoulder.rotation.x, q.x, a);
+      shoulder.rotation.z = lerp(shoulder.rotation.z, sign * q.z, a);
+      elbow.rotation.x = lerp(elbow.rotation.x, q.e, a);
+      elbow.rotation.z = lerp(elbow.rotation.z, sign * q.ez, a);
+    };
+    switch (rc.kind) {
+      case 'laugh':
+        // holds the belly, head thrown back, shoulders shaking
+        arm(false, { x: -0.7, z: 0.1, e: -1.3, ez: 0 });
+        arm(true, { x: -0.3, z: 0.25, e: -0.4, ez: 0 });
+        r.body.rotation.x -= 0.2 * a;
+        r.body.rotation.z += Math.sin(t * 24) * 0.04 * a;
+        r.body.position.y += Math.abs(Math.sin(t * 16)) * 0.03 * a * hop;
+        break;
+      case 'point':
+        arm(true, { x: -1.55 + Math.sin(t * 11) * 0.18, z: 0.08, e: 0, ez: 0 });
+        r.body.rotation.x += 0.08 * a;
+        r.body.rotation.y += 0.1 * a;
+        break;
+      case 'shrug':
+        arm(true, { x: -0.55, z: 0.5, e: -1.1, ez: 0 });
+        arm(false, { x: -0.55, z: 0.5, e: -1.1, ez: 0 });
+        r.body.position.y += 0.02 * a * hop;
+        r.body.rotation.z += 0.09 * a * Math.sin(t * 5);
+        break;
+      case 'surprise':
+        arm(true, { x: -0.5, z: 0.5, e: -0.7, ez: 0 });
+        arm(false, { x: -0.5, z: 0.5, e: -0.7, ez: 0 });
+        r.body.rotation.x -= 0.2 * a;
+        r.body.position.y += Math.max(0, Math.sin(Math.min(1, p * 3) * Math.PI)) * 0.07 * hop;
+        break;
+      case 'nod':
+        r.body.rotation.x += Math.sin(p * Math.PI * 4) * 0.12 * a;
+        break;
+      case 'think':
+        arm(true, held.think);
+        r.body.rotation.y += 0.12 * a * Math.sin(t * 2);
+        r.body.rotation.x += 0.04 * a;
+        break;
+      case 'wave':
+        arm(true, { x: -2.6, z: 0.35 + Math.sin(t * 13) * 0.25, e: -0.3, ez: 0 });
+        break;
+      case 'cheer':
+        arm(true, { x: -2.9 + Math.sin(t * 9) * 0.15, z: 0.3, e: 0, ez: 0 });
+        arm(false, { x: -2.9 - Math.sin(t * 9) * 0.15, z: 0.3, e: 0, ez: 0 });
+        r.body.position.y += Math.abs(Math.sin(t * 8)) * 0.06 * a * hop;
+        break;
+    }
+  }
+
   private poseEmote(w: Person, r: Person['rig']): void {
     const a = w.emoteAmt;
     if (a <= 0) return;
@@ -1269,7 +1642,7 @@ export class Game {
   }
 
   private updateHover(): void {
-    this.hovered = this.dragged ?? (this.pointerInside ? this.pick(this.pointer) : null);
+    this.hovered = this.dragged ?? (this.pointerInside && this.views.mode !== 'third' ? this.pick(this.pointer) : null);
     this.stage.classList.toggle('is-hovering', (!!this.hovered && !this.dragged) || (this.editor.hovering && !this.editor.dragging));
     this.stage.classList.toggle('is-holding', !!this.dragged || this.editor.dragging);
   }
@@ -1317,6 +1690,7 @@ export class Game {
     const coffee = this.kitchen.current;
     const rep = this.reply;
     this.overlay.setBubbles([
+      ...(this.easter.angry && !this.easter.angry.who.away ? [{ id: `angry-${this.easter.angry.who.id}`, text: this.easter.angry.text, ...this.project(this.easter.angry.who, 0.55) }] : []),
       ...(rep && !rep.who.away ? [{ id: `reply-${rep.who.id}`, text: rep.text, ...this.project(rep.who, 0.55) }] : []),
       ...this.social.active.filter((c) => c.phase !== 'gather' && c.text).map((c) => ({ id: c.speaker.id, text: c.text, ...this.project(c.speaker, 0.55) })),
       ...(coffee?.phase === 'chat' ? [{ id: coffee.speaker.id, text: coffee.text, ...this.project(coffee.speaker, 0.55) }] : []),

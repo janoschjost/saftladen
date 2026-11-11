@@ -23,7 +23,7 @@ export class PetCare {
 
   private free(p: Person): boolean {
     return (
-      p.inOffice && !p.task && !p.held && !p.controlled && !p.talk && !p.playerChat && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob && !p.phoneJob && !p.run && !p.coffeeJob && !p.inMeeting
+      p.inOffice && !p.task && !p.held && !p.controlled && !p.talk && !p.playerChat && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob && !p.snackLeft && !p.phoneJob && !p.run && !p.coffeeJob && !p.inMeeting
     );
   }
 

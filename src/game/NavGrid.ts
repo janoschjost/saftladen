@@ -68,6 +68,19 @@ export class NavGrid {
     return sealed;
   }
 
+  /** True if the straight segment a→b crosses no blocked cell (the last `skipEnd` metres before b are ignored, e.g. a chair). */
+  lineClear(a: Vec2, b: Vec2, skipEnd = 0): boolean {
+    const len = Math.hypot(b.x - a.x, b.z - a.z);
+    const n = Math.max(1, Math.ceil(len / (this.cell / 4)));
+    for (let i = 0; i <= n; i++) {
+      if (len - (i / n) * len < skipEnd) break;
+      const t = i / n;
+      const c = this.toCell({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t });
+      if (!this.walkable(c.cx, c.cz)) return false;
+    }
+    return true;
+  }
+
   inside(cx: number, cz: number): boolean {
     return cx >= 0 && cz >= 0 && cx < this.cols && cz < this.rows;
   }

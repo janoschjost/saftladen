@@ -1,6 +1,7 @@
 import type { OfficeModel } from '../render/officeModel';
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { Person } from './Person';
+import { Chat } from './Chatter';
 import { nextSpeaker, type ConversationKind, type Talk } from './Social';
 
 /** A chair at the meeting table. */
@@ -21,7 +22,6 @@ const SESSION = { min: 45, max: 90 }; // seconds the door stays shut
 const FIRST_MEETING = { min: 25, max: 50 }; // seconds after game start
 const PAUSE = { min: 70, max: 140 }; // seconds between two meetings
 const GROUP = { min: 3, max: 6 };
-const BUBBLES = ['…', '!', '?', '…', '!?'];
 
 const between = ({ min, max }: { min: number; max: number }) => min + Math.random() * (max - min);
 
@@ -32,6 +32,7 @@ export class Meeting implements Talk {
   speaker: Person;
   text = '…';
   private time = 0;
+  private chat: Chat | null = null;
   private speakerTimer = 0;
   private previous: Person | null = null;
   private duration = between(SESSION);
@@ -73,7 +74,8 @@ export class Meeting implements Talk {
         this.previous = this.speaker;
         this.speaker = next;
         this.speakerTimer = 1.5 + Math.random() * 2.8;
-        this.text = BUBBLES[Math.floor(Math.random() * BUBBLES.length)];
+        this.chat ??= new Chat();
+        this.text = this.chat.next(this.speaker, this.members, this.kind);
         for (const m of this.members) m.speaking = m === this.speaker;
       }
       if (this.time >= this.duration || this.members.length < 2 || this.members.some((m) => !m.meetSeated)) {
@@ -112,6 +114,7 @@ export class CasualChat implements Talk {
   readonly kind: ConversationKind = 'chat';
   speaker: Person;
   text = '…';
+  private chat: Chat | null = null;
   private speakerTimer = 0;
 
   constructor(
@@ -128,7 +131,8 @@ export class CasualChat implements Talk {
     const others = this.members.filter((m) => m !== this.speaker);
     this.speaker = others[Math.floor(Math.random() * others.length)] ?? this.speaker;
     this.speakerTimer = 1.5 + Math.random() * 2.8;
-    this.text = BUBBLES[Math.floor(Math.random() * BUBBLES.length)];
+    this.chat ??= new Chat();
+    this.text = this.chat.next(this.speaker, this.members, this.kind);
     for (const m of this.members) m.speaking = m === this.speaker;
   }
 }
@@ -161,11 +165,14 @@ export class MeetingRoom {
   /** First free cell behind the chair. */
   private approachFor(s: ModelSeat, nav: NavGrid): Vec2 | null {
     const front = { x: Math.sin(s.yaw), z: Math.cos(s.yaw) };
+    // never a spot behind glass: it has to be reachable from the chair in a straight line
+    const ok = (p: Vec2) => nav.lineClear(p, s, 0.5);
     for (const dist of [0.9, 1.1, 1.4]) {
       const c = nav.toCell({ x: s.x - front.x * dist, z: s.z - front.z * dist });
-      if (nav.walkable(c.cx, c.cz)) return nav.center(c.cx, c.cz);
+      if (nav.walkable(c.cx, c.cz) && ok(nav.center(c.cx, c.cz))) return nav.center(c.cx, c.cz);
     }
-    return nav.nearestWalkable({ x: s.x - front.x * 1.1, z: s.z - front.z * 1.1 }, 4);
+    const near = nav.nearestWalkable({ x: s.x - front.x * 1.1, z: s.z - front.z * 1.1 }, 4);
+    return near && ok(near) ? near : null;
   }
 
   /** Chairs were moved (room editor) and the nav grid rebuilt: the seats follow in place, a running meeting keeps its door shut. */

@@ -28,6 +28,13 @@ export interface CharacterRig {
   handset: THREE.Object3D;
   /** coffee cup in the left hand (hidden until a coffee break), kept upright by the game while the arm moves */
   cup: THREE.Object3D;
+  /** bag of chips in the left hand (hidden until a snack run), kept upright like the cup */
+  chips: THREE.Object3D;
+  /** the chip on its way from the bag to the mouth (right hand) */
+  chip: THREE.Object3D;
+  /** handheld console held in both hands in front of the chest (hidden until a day task plays it); `screen` is its lit display */
+  gameboy: THREE.Object3D;
+  gameboyScreen: THREE.MeshBasicMaterial;
 }
 
 /** A scale of 1 is this tall; `heightM` on a Look is converted relative to it. */
@@ -380,6 +387,18 @@ export function buildCharacter(look: Look): CharacterRig {
     ]),
   );
   armL.add(cup);
+  // bag of chips in the left hand (hidden until a snack run)
+  const chips = new THREE.Group();
+  chips.position.y = -0.56;
+  chips.visible = false;
+  chips.add(
+    mesh([
+      box(0.13, 0.19, 0.05, 0, 0, 0, '#d9342b'), // bag
+      box(0.134, 0.07, 0.052, 0, -0.01, 0, '#f5c518'), // yellow label band
+      box(0.138, 0.025, 0.04, 0, 0.105, 0, '#f2d37a'), // crimped top
+    ]),
+  );
+  armL.add(chips);
   const { pivot: armR, elbow: elbowR } = mkArm(1);
   // the right hand may hold a vape or a phone (posed by bending the right elbow)
   let vape: CharacterRig['vape'];
@@ -415,6 +434,32 @@ export function buildCharacter(look: Look): CharacterRig {
   handset.visible = false;
   elbowR.add(handset);
   if (look.phone) phone = { elbow: elbowR, device: handset };
+  // a chip between the fingers on the way to the mouth
+  const chip = mesh([box(0.05, 0.015, 0.05, -0.03, -0.34, 0.01, '#f0c64a')]);
+  chip.visible = false;
+  elbowR.add(chip);
+
+  // handheld console in both hands, screen towards the player's own face (hidden until a day task plays it)
+  const gameboy = new THREE.Group();
+  gameboy.visible = false;
+  gameboy.add(
+    mesh([
+      box(0.22, 0.34, 0.07, 0, 0, 0, '#d4d2c8'), // case
+      box(0.18, 0.15, 0.012, 0, 0.07, -0.036, '#5a5d6a'), // dark bezel
+      box(0.05, 0.016, 0.012, -0.055, -0.07, -0.038, '#2b2d33'), // d-pad
+      box(0.016, 0.05, 0.012, -0.055, -0.07, -0.038, '#2b2d33'),
+      box(0.032, 0.032, 0.014, 0.075, -0.06, -0.038, '#8a1f4a'), // A / B
+      box(0.032, 0.032, 0.014, 0.035, -0.09, -0.038, '#8a1f4a'),
+      box(0.04, 0.012, 0.01, -0.03, -0.14, -0.037, '#8f8d84'), // select / start
+      box(0.04, 0.012, 0.01, 0.03, -0.14, -0.037, '#8f8d84'),
+    ]),
+  );
+  const gameboyScreen = new THREE.MeshBasicMaterial({ color: 0x9bbc0f });
+  const lcd = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.1, 0.006), gameboyScreen);
+  lcd.position.set(0, 0.075, -0.044);
+  gameboy.add(lcd);
+  gameboy.position.set(0, 1.0, 0.3);
+  body.add(gameboy);
 
   // ---- legs (pivot at hip)
   const shoe = new THREE.Color(look.bottom).getHSL({ h: 0, s: 0, l: 0 }).l > 0.6 ? SHOE_DARK : SHOE_LIGHT;
@@ -454,5 +499,5 @@ export function buildCharacter(look: Look): CharacterRig {
   const h = look.heightM ? look.heightM / REF_HEIGHT_M : look.height ?? 1;
   root.scale.setScalar(h);
 
-  return { root, body, legL, legR, kneeL, kneeR, armL, armR, elbowL, elbowR, handset, headHeight: 1.95 * h, setTired, setMood, vape, phone, cup };
+  return { root, body, legL, legR, kneeL, kneeR, armL, armR, elbowL, elbowR, handset, headHeight: 1.95 * h, setTired, setMood, vape, phone, cup, chips, chip, gameboy, gameboyScreen };
 }
