@@ -1,5 +1,5 @@
 import raw from './team.raw.json';
-import type { Look, TeamMember } from './types';
+import type { HomeBreak, HomeRoom, Look, SignatureMove, TeamMember } from './types';
 
 // skin tones
 const FAIR = '#f2d0b8';
@@ -82,6 +82,39 @@ const speeds: Record<string, number> = {
   'delya-kohler': 1.8,
 };
 
+// what changes when they work from home
+const homeLooks: Record<string, Partial<Look>> = {
+  'sandro-hagen': { tank: true, top: '#ffffff', print: { text: 'Sparklys', color: '#111111' } },
+};
+
+// what they change into for a swim (only the deck chair room has the sea)
+const swimLooks: Record<string, Partial<Look>> = {
+  'marco-hefti': { top: LIGHT, tank: true, bottom: '#e8645a' }, // just bathing shorts
+};
+
+// whose home office is which room (beach = Marco's own room in Thailand)
+const homeRooms: Record<string, HomeRoom> = {
+  'marco-hefti': 'beach',
+};
+
+// signature moves in the home office (optional, happen now and then)
+const signatures: Record<string, SignatureMove> = {
+  'marco-hefti': 'swim',
+  'donata-manser': 'catwalk',
+  'devin-frei': 'curl',
+};
+
+// home office breaks they never take
+const skipBreaks: Record<string, HomeBreak[]> = {
+  'marco-hefti': ['game'], // no video games on the beach
+};
+
+// can't stand coffee
+const coffeeHaters = new Set(['janosch-jost']);
+
+// in the home office a lot, never out on errands
+const homebodies = new Set(['marco-hefti']);
+
 // people with ADHD: restless, short attention span (see Person.ts)
 const adhd = new Set(['delya-kohler', 'sandro-hagen']);
 
@@ -91,9 +124,16 @@ export const team: TeamMember[] = raw.map((p) => ({
   role: p.role,
   portrait: p.portrait,
   look: looks[p.id] ?? fallback,
+  homeLook: homeLooks[p.id],
+  signature: signatures[p.id],
+  homeRoom: homeRooms[p.id],
+  skipBreaks: skipBreaks[p.id],
+  hatesCoffee: coffeeHaters.has(p.id),
+  swimLook: swimLooks[p.id],
   dog: dogs[p.id],
   dogName: dogNames[p.id],
   cats: cats[p.id],
   speed: speeds[p.id],
   adhd: adhd.has(p.id),
+  homebody: homebodies.has(p.id),
 }));

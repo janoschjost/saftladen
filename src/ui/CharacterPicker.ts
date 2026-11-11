@@ -3,8 +3,8 @@ import { team } from '../data/team';
 import { buildCharacter } from '../render/characterBuilder';
 import { buildCat } from '../render/catBuilder';
 import { buildDog } from '../render/dogBuilder';
-import { HOME_COUNT, HOME_LABELS, HomeOffice, SPECIAL_HOME } from '../render/homeOffice';
-import { assignHomeRoom, homeOwnerOf, homeRoomOf, reservedRooms } from '../data/homeAssignments';
+import { HOME_COUNT, HOME_LABELS, HomeOffice } from '../render/homeOffice';
+import { assignHomeRoom, hasOwnRoom, homeOwnerOf, homeRoomOf, reservedRooms } from '../data/homeAssignments';
 
 const TURN_STEP = Math.PI / 4;
 const AUTO_SPEED = 0.6; // rad/s
@@ -247,8 +247,8 @@ export class CharacterPicker {
   private updateHomeSelect(): void {
     const m = team[this.index];
     const sel = this.homeSelect;
-    if (m.id in SPECIAL_HOME) {
-      sel.replaceChildren(new Option(`${HOME_LABELS[SPECIAL_HOME[m.id]]} (eigener Raum)`, ''));
+    if (hasOwnRoom(m.id)) {
+      sel.replaceChildren(new Option(`${HOME_LABELS[homeRoomOf(m.id)!]} (eigener Raum)`, ''));
       sel.disabled = true;
       return;
     }
