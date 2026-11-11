@@ -31,6 +31,21 @@ export class Desk {
   setScreen(on: boolean, show?: { kind: ScreenKind; variant: number }): void {
     this.rig.screen.material = on && show ? screenMaterial(show.kind, show.variant) : screenOffMaterial();
   }
+
+  /** How full the mug on the desk is (0 = empty); null = no mug here. */
+  mugFill: number | null = null;
+
+  /** Puts a mug on the desk (or takes it away with null). */
+  putMug(fill: number | null): void {
+    this.mugFill = fill;
+    this.rig.mug.visible = fill !== null;
+    this.rig.coffee.visible = fill !== null && fill > 0.03;
+  }
+
+  /** The mug is in somebody's hand: gone from the desk, but still theirs. */
+  holdMug(): void {
+    this.rig.mug.visible = false;
+  }
 }
 
 /** The printer in the archive: one person at a time stands here while a job runs. */
@@ -203,5 +218,6 @@ export class Office {
     d.occupant = d.pending;
     d.pending = null;
     d.setScreen(false);
+    d.putMug(null); // whoever leaves takes their mug along
   }
 }

@@ -78,14 +78,14 @@ export interface OfficeModel {
   rowLabels: THREE.Group;
   /** numbered sprites above every room (blue), toggled in the settings */
   roomLabels: THREE.Group;
-  /** glass meeting room: doorway centre, table centre and the 6 side chairs (game coordinates, yaw = facing the table) */
+  /** glass meeting room: doorway centre, table centre and the 8 chairs (game coordinates, yaw = facing the table) */
   meeting: { doorPos: Vec2; center: Vec2; seats: Array<{ x: number; z: number; yaw: number }> };
   /** the two bench seats in the wooden pod (game coordinates, yaw = facing out of the pod) */
   pod: { center: Vec2; seats: Array<{ x: number; z: number; yaw: number }> };
-  /** kitchen: where the coffee group gathers (game coordinates, in front of the espresso machine) */
-  kitchen: { center: Vec2 };
+  /** kitchen: where the coffee group gathers (game coordinates, in front of the espresso machine), the machine itself and the two spots to stand at it */
+  kitchen: { center: Vec2; machine: Vec2; stands: Vec2[]; table: Array<{ x: number; z: number; yaw: number }> };
   /** the stool in the phone box (game coordinates, yaw = facing the door) */
-  phoneBooth: { seat: { x: number; z: number; yaw: number } };
+  phoneBooth: { seat: { x: number; z: number; yaw: number }; doorPos: Vec2 };
 }
 
 type Mat = THREE.Material;
@@ -136,9 +136,15 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   const meetSeats: Array<{ x: number; z: number; yaw: number }> = [];
   const podSeats: Array<{ x: number; z: number; yaw: number }> = [];
   const podCenter: Vec2 = { x: 0, z: 0 };
-  const boothSeat = { x: 0, z: 0, yaw: 0 };
+  const boothSeat = { x: 0, z: 0, yaw: -Math.PI / 2 }; // faces west (the table on the west wall)
   const meetCenter: Vec2 = { x: 0, z: 0 };
   const kitchenCenter: Vec2 = { x: 0, z: 0 };
+  const kitchenMachine: Vec2 = { x: 0, z: 0 };
+  const tableSeats: Array<{ x: number; z: number; yaw: number }> = [];
+  const kitchenStands: Vec2[] = [
+    { x: 0, z: 0 },
+    { x: 0, z: 0 },
+  ];
   const deskSpecs: Array<{ id: string; x: number; z: number; rot: number; white: boolean; w: number; stand: boolean }> = [];
 
   /* ---------- movable items (room editor) ---------- */
@@ -892,6 +898,15 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     kitchenCenter.x = gx(5.5);
     kitchenCenter.z = gz(-2.8);
     track(kitchenCenter);
+    // the espresso machine and the two spots in front of it where one fetches a coffee
+    kitchenMachine.x = gx(4.42);
+    kitchenMachine.z = gz(-2.4);
+    track(kitchenMachine);
+    [-2.0, -2.8].forEach((z, i) => {
+      kitchenStands[i].x = gx(5.1);
+      kitchenStands[i].z = gz(z);
+      track(kitchenStands[i]);
+    });
   }, 'Küchenzeile');
   within(8.57, -3.6, () => {
     // table runs from x 6.7 all the way to the east wall (inner face ~10.45)
@@ -905,6 +920,15 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       for (const sx of [-LX, LX]) box(0.07, 0.42, 0.3, TX + sx, 0, -3.6 + sz, mat.lightgrey);
     }
     for (const x of [7.3, 8.57, 9.85]) pendant(x, -3.6, 'black', 1.55, 2.9);
+    // sitting spots on both benches, facing the table (game coordinates)
+    const mid = { x: gx(TX), z: gz(-3.6) };
+    for (const sz of [-0.85, 0.85]) {
+      for (const x of [7.5, 8.57, 9.65]) {
+        const seat = track({ x: gx(x), z: gz(-3.6 + sz), yaw: 0 });
+        seat.yaw = Math.atan2(mid.x - seat.x, mid.z - seat.z);
+        tableSeats.push(seat);
+      }
+    }
   }, 'Esstisch');
   within(7.6, 0, () => {
     for (const x of [7.2, 8.0]) {
@@ -1450,7 +1474,6 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     rbox(0.02, 2.2, az(CZ) - bz - 0.06, ax(24.5) - 0.07, 0, (bz + az(CZ)) / 2 + 0.03, f); // east felt
     rbox(bw - 0.14, 2.2, 0.02, bx, 0, bz + 0.07, f); // back felt
     rbox(bw - 0.12, 0.03, az(CZ) - bz - 0.1, bx, 0.0, (bz + az(CZ)) / 2, L(0x3a3c40)); // carpet
-    rbox(bw, 0.06, az(CZ) - bz, bx, 2.2, (bz + az(CZ)) / 2, mat.wall); // lid
     const rig = doors.find((d) => Math.abs(d.center.x - ax(23.75)) < 0.05 && Math.abs(d.center.z - az(CZ)) < 0.05);
     if (rig) {
       rig.pivot.position.z += 0.045; // leaf flush with the south face of the wall
@@ -1745,13 +1768,14 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   const V = (x: number, y: number, z: number) => new THREE.Vector3(ax(x), y, az(z));
   const blues = [0x6f8ea3, 0x9fb7c4, 0x55707f, 0xb9c9cf];
   const warm = [0xe58b4e, 0xf0b9a8, 0xe9d27a, 0x7fc0b0];
-  bunting(V(-4.8, 3.5, 3.0), V(4.4, 3.3, 9.0), blues);
-  bunting(V(-0.6, 3.6, 2.4), V(4.4, 3.2, 8.2), blues);
-  bunting(V(-4.8, 3.6, 8.8), V(4.4, 3.4, 3.0), warm);
-  bunting(V(-4.8, 3.3, 6.0), V(4.4, 3.5, 6.2), blues);
-  stringLights(V(-4.8, 3.7, 9.0), V(4.4, 3.4, 2.6));
-  stringLights(V(-4.8, 3.6, 4.0), V(4.4, 3.5, 7.4));
-  stringLights(V(-2.0, 3.8, 2.4), V(1.0, 3.6, 9.2));
+  // keep all garlands under the high sawtooth (z < BAND); the low band beyond has a 2.8 ceiling and they would poke through it
+  bunting(V(-4.8, 3.5, 3.0), V(4.4, 3.3, 6.4), blues);
+  bunting(V(-0.6, 3.6, 2.4), V(4.4, 3.2, 6.0), blues);
+  bunting(V(-4.8, 3.6, 6.4), V(4.4, 3.4, 3.0), warm);
+  bunting(V(-4.8, 3.3, 4.6), V(4.4, 3.5, 4.8), blues);
+  stringLights(V(-4.8, 3.7, 6.4), V(4.4, 3.4, 2.6));
+  stringLights(V(-4.8, 3.6, 4.0), V(4.4, 3.5, 6.2));
+  stringLights(V(-2.0, 3.8, 2.4), V(1.0, 3.6, 6.4));
 
   /* =================================================================
      OPEN OFFICE: three desk clusters between corridor and long window wall
@@ -1950,7 +1974,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       const chair = new THREE.Group();
       chair.position.set(gx(cx), 0, gz(cz));
       chair.rotation.y = ry;
-      if (Math.abs(Math.sin(ry)) < 0.5) meetSeats.push(track({ x: gx(cx), z: gz(cz), yaw: Math.atan2(Math.cos(ry), -Math.sin(ry)) })); // side chairs only; local +x = seat front
+      meetSeats.push(track({ x: gx(cx), z: gz(cz), yaw: Math.atan2(Math.cos(ry), -Math.sin(ry)) })); // every chair incl. the heads; local +x = seat front
       chair.add(new THREE.Mesh(shellGeo, shellMat));
       for (const [fx, tx] of [[0.14, 0.27], [-0.1, -0.26]]) {
         for (const sz of [-1, 1]) {
@@ -2098,8 +2122,24 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       deskPlant(pl, Math.floor(rnd(6) * 4), 0, 0, 0, POTS[Math.floor(rnd(7) * 3)]);
       root.add(mergeStatic(pg, false));
     }
+    // the coffee mug that comes and goes with whoever works here (right of the mouse, where the sitter's hand ends up)
+    const mug = new THREE.Group();
+    mug.position.set(0.47, 0.75, 0.22);
+    mug.visible = false;
+    const mugMat = L([0xf4f1ea, 0x3b6ea5, 0xc2453a, 0x2f2f33, 0xe3b23c, 0x4f8a5b][Math.floor(rnd(8) * 6)]);
+    const mugBody = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.09, 0.075), mugMat);
+    mugBody.position.y = 0.045;
+    mugBody.castShadow = true;
+    const mugHandle = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.05, 0.03), mugMat);
+    mugHandle.position.set(0.045, 0.05, 0);
+    const coffee = new THREE.Mesh(new THREE.BoxGeometry(0.062, 0.004, 0.062), L(0x3b2415));
+    coffee.position.y = 0.0915;
+    coffee.visible = false;
+    mug.add(mugBody, mugHandle, coffee);
+    mug.traverse((o) => (o.userData.nonav = true));
+    root.add(mug);
     scene.add(root);
-    const placement: DeskPlacement = { rig: { root, screen }, seat: { x: 0, z: 0 }, yaw: 0, back: { x: 0, z: 0 } };
+    const placement: DeskPlacement = { rig: { root, screen, mug, coffee }, seat: { x: 0, z: 0 }, yaw: 0, back: { x: 0, z: 0 } };
     desks.push(placement);
     const turn = new THREE.Matrix4().makeRotationY(s.rot);
     const deskItem = new RoomItem(s.id, 'desk', `Tisch ${i + 1}`, root, { x: s.x, z: s.z, yaw: s.rot }, [tpl.box.clone().applyMatrix4(turn)], tpl.box.clone().applyMatrix4(turn), [], false);
@@ -2189,7 +2229,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     roomLabels.add(sp);
   });
 
-  return { desks, items, blockers: allBlockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter }, phoneBooth: { seat: boothSeat } };
+  return { desks, items, blockers: allBlockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter, machine: kitchenMachine, stands: kitchenStands, table: tableSeats }, phoneBooth: { seat: boothSeat, doorPos: { x: ax(23.75), z: az(CZ) } } };
 }
 
 /**

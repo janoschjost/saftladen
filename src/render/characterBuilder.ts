@@ -371,9 +371,12 @@ export function buildCharacter(look: Look): CharacterRig {
   cup.visible = false;
   cup.add(
     mesh([
-      box(0.075, 0.09, 0.075, 0, 0, 0, '#f4f1ea'), // mug
-      box(0.062, 0.006, 0.062, 0, 0.046, 0, '#3b2415'), // coffee
-      box(0.016, 0.05, 0.03, -0.045, 0, 0, '#f4f1ea'), // handle
+      box(0.13, 0.14, 0.13, 0, 0, 0, '#e8553d'), // mug, bold colour so it reads against skin and sleeves
+      box(0.138, 0.02, 0.138, 0, 0.07, 0, '#fff6e8'), // pale rim
+      box(0.1, 0.008, 0.1, 0, 0.078, 0, '#3b2415'), // coffee
+      box(0.03, 0.09, 0.06, -0.085, 0, 0, '#e8553d'), // handle
+      box(0.012, 0.05, 0.012, 0.02, 0.12, 0, '#ffffff'), // steam
+      box(0.012, 0.05, 0.012, -0.02, 0.15, 0.02, '#ffffff'),
     ]),
   );
   armL.add(cup);

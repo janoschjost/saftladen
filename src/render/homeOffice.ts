@@ -977,7 +977,7 @@ function headset(): THREE.Object3D {
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 
 /** Shoulder swing / spread and elbow bend of one arm (see HomeOffice.update). */
-interface ArmPose {
+export interface ArmPose {
   x: number;
   z: number;
   e: number;
@@ -996,7 +996,7 @@ const tmpQ = new THREE.Quaternion();
  * differs per person (build, strong arms), so they are solved per rig when somebody moves in, not hand-tuned.
  * Coordinates are in the body group (head centre at y 1.58, face front at z 0.18).
  */
-interface HeldPoses {
+export interface HeldPoses {
   sip: ArmPose; // left hand: cup in front of the mouth
   think: ArmPose; // right hand on the crown
   vape: ArmPose; // right hand: mouthpiece at the corner of the mouth
@@ -1055,7 +1055,7 @@ function solveArm(shoulder: THREE.Vector3, local: THREE.Vector3, target: THREE.V
 const heldCache = new Map<string, HeldPoses>();
 
 /** Solved once per shoulder position (most people share a build). */
-function heldPoses(rig: CharacterRig): HeldPoses {
+export function heldPoses(rig: CharacterRig): HeldPoses {
   const sl = rig.armL.position.clone();
   const sr = rig.armR.position.clone();
   const key = `${sl.x.toFixed(3)}|${sr.x.toFixed(3)}|${sl.y.toFixed(3)}`;

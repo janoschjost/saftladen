@@ -151,8 +151,7 @@ export class MeetingRoom {
   ) {
     this.doorCell = nav.toCell(model.doorPos);
     for (const s of model.seats) {
-      const approach = this.approachFor(s, nav);
-      if (!approach) continue;
+      const approach = this.approachFor(s, nav) ?? { x: s.x, z: s.z }; // boxed-in chair stays usable for dropping people on it
       const seat: MeetSeat = { seat: { x: s.x, z: s.z }, approach, yaw: s.yaw, occupant: null };
       this.seats.push(seat);
       this.sources.set(seat, s);
@@ -185,6 +184,14 @@ export class MeetingRoom {
     if (this.current?.closed) nav.block(this.doorCell.cx, this.doorCell.cz);
   }
 
+  /** Is this floor point inside the glass room (the table seats plus a margin)? */
+  contains(p: Vec2): boolean {
+    const m = 1.4;
+    const xs = this.model.seats.map((s) => s.x);
+    const zs = this.model.seats.map((s) => s.z);
+    return p.x >= Math.min(...xs) - m && p.x <= Math.max(...xs) + m && p.z >= Math.min(...zs) - m && p.z <= Math.max(...zs) + m;
+  }
+
   get doorPos(): Vec2 {
     return this.model.doorPos;
   }
@@ -203,7 +210,9 @@ export class MeetingRoom {
   /** Calls `people` to the room (first free seats, north to south). Returns the meeting, or null if there is no room for a meeting. */
   start(people: Person[], nav: NavGrid): Meeting | null {
     if (this.current) return null;
-    const seats = this.seats.filter((s) => !s.occupant).sort((a, b) => a.seat.z - b.seat.z || a.seat.x - b.seat.x);
+    // side chairs first (north to south), the two head chairs only when the group is big
+    const isHead = (s: MeetSeat) => Math.abs(Math.cos(s.yaw)) > 0.5; // heads face north / south
+    const seats = this.seats.filter((s) => !s.occupant).sort((a, b) => Number(isHead(a)) - Number(isHead(b)) || a.seat.z - b.seat.z || a.seat.x - b.seat.x);
     const group = people.slice(0, seats.length);
     if (group.length < 2) return null;
     const m = new Meeting(group, this.model.center, this);

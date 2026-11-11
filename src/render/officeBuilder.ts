@@ -6,6 +6,9 @@ export const SIT_DROP = 0.4;
 export interface DeskRig {
   root: THREE.Group;
   screen: THREE.Mesh;
+  /** coffee mug standing on the desk (hidden while nobody has a coffee) and its dark coffee surface */
+  mug: THREE.Object3D;
+  coffee: THREE.Object3D;
 }
 
 let screenOff: THREE.MeshBasicMaterial | null = null;
