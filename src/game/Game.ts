@@ -348,6 +348,14 @@ export class Game {
           w.pos.x = w.snapDesk.seat.x;
           w.pos.z = w.snapDesk.seat.z;
         }
+        w.snapMeetSeat = null;
+        if (!w.snapDesk) {
+          w.snapMeetSeat = this.meetingRoom.seats.find((k) => w.canSitMeet(k) && Math.min(Math.hypot(k.seat.x - w.pos.x, k.seat.z - w.pos.z), Math.hypot(k.approach.x - w.pos.x, k.approach.z - w.pos.z)) < 1) ?? null;
+          if (w.snapMeetSeat) {
+            w.pos.x = w.snapMeetSeat.seat.x;
+            w.pos.z = w.snapMeetSeat.seat.z;
+          }
+        }
       }
       w.prev.x = w.pos.x; // no interpolation while held, follow the cursor exactly
       w.prev.z = w.pos.z;
@@ -365,6 +373,13 @@ export class Game {
         const desk = d.snapDesk;
         d.snapDesk = null;
         if (desk && d.sitDownAt(desk)) {
+          this.dragged = null;
+          if (this.stage.hasPointerCapture(e.pointerId)) this.stage.releasePointerCapture(e.pointerId);
+          return;
+        }
+        const chair = d.snapMeetSeat;
+        d.snapMeetSeat = null;
+        if (chair && d.sitDownAtMeeting(chair)) {
           this.dragged = null;
           if (this.stage.hasPointerCapture(e.pointerId)) this.stage.releasePointerCapture(e.pointerId);
           return;

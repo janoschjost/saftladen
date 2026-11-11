@@ -82,6 +82,8 @@ interface MeetJob {
   retryIn: number;
   /** the meeting is over: stand up and leave */
   dismissed: boolean;
+  /** set when the player dropped the person on the chair: seconds left sitting there alone */
+  solo?: number;
 }
 
 interface CoffeeJob {
@@ -403,6 +405,30 @@ export class Person extends Walker {
   /** Can this person be put on `desk` by the player (free chair, nothing else keeping them busy)? */
   canSit(desk: Desk): boolean {
     return this.presence === 'in' && !this.controlled && !this.talk && !this.inMeeting && !this.pendingMeet && !desk.pending && (!desk.occupant || desk.occupant === this);
+  }
+
+  /** Meeting-room chair the held person is currently snapped to (set by the game while dragging). */
+  snapMeetSeat: MeetSeat | null = null;
+
+  /** Can this person be put on this meeting chair by the player? */
+  canSitMeet(seat: MeetSeat): boolean {
+    return this.presence === 'in' && !this.controlled && !this.talk && !this.inMeeting && !this.pendingMeet && (!seat.occupant || seat.occupant === this);
+  }
+
+  /** Dropped on a meeting chair by the player: sit there for a while. */
+  sitDownAtMeeting(seat: MeetSeat): boolean {
+    if (!this.canSitMeet(seat)) return false;
+    this.cancelTask();
+    seat.occupant = this;
+    const talk: Talk = { kind: 'chat', center: { ...seat.seat }, members: [this] };
+    this.meetJob = { seat, talk, phase: 'sit', t: 0, from: { ...seat.seat }, age: 0, retries: 0, retryIn: 0, dismissed: false, solo: 20 + Math.random() * 25 };
+    this.pos.x = this.prev.x = seat.seat.x;
+    this.pos.z = this.prev.z = seat.seat.z;
+    this.yaw = this.prevYaw = seat.yaw;
+    this.sit = 1;
+    this.path = [];
+    this.state = 'idle';
+    return true;
   }
 
   /** Dropped on a chair by the player: sit there and start working. */
@@ -806,6 +832,7 @@ export class Person extends Walker {
         this.sit = 1;
         this.turnTo(s.yaw, dt);
         this.moving += (0 - this.moving) * ease;
+        if (j.solo !== undefined && (j.solo -= dt) <= 0) j.dismissed = true;
         if (j.dismissed) {
           j.phase = 'leave';
           j.t = 0;
