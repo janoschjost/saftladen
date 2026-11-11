@@ -12,15 +12,20 @@ export interface CharacterRig {
   kneeR: THREE.Object3D;
   armL: THREE.Object3D;
   armR: THREE.Object3D;
+  /** elbow pivots (children of the arm pivots), bend with negative x */
+  elbowL: THREE.Object3D;
+  elbowR: THREE.Object3D;
   headHeight: number;
   /** 0 = fresh .. 1 = exhausted: heavy eyelids and dark eye bags */
   setTired: (amount: number) => void;
   /** only on `moody` looks: true = very happy face, false = very serious */
   setMood?: (happy: boolean) => void;
   /** only on `vape` looks: the bendable forearm of the right arm, the glowing tip and the vapour puffs */
-  vape?: { elbow: THREE.Object3D; led: THREE.MeshBasicMaterial; puffs: THREE.Mesh[] };
-  /** only on `phone` looks: the bendable forearm of the right arm, which holds the phone */
-  phone?: { elbow: THREE.Object3D };
+  vape?: { elbow: THREE.Object3D; device: THREE.Object3D; led: THREE.MeshBasicMaterial; puffs: THREE.Mesh[] };
+  /** only on `phone` looks: the bendable forearm of the right arm and the phone in its hand (shown during calls) */
+  phone?: { elbow: THREE.Object3D; device: THREE.Object3D };
+  /** everybody's phone, in the right fist (hidden until they take a call); `phone` looks use the same one */
+  handset: THREE.Object3D;
   /** coffee cup in the left hand (hidden until a coffee break), kept upright by the game while the arm moves */
   cup: THREE.Object3D;
 }
@@ -111,6 +116,28 @@ function hairParts(look: Look): THREE.BufferGeometry[] {
   return p;
 }
 
+/** Lettering on the shirt front: a canvas texture on a thin plane just in front of the chest. */
+function chestPrint(text: string, color: string, build: number): THREE.Mesh {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 128;
+  const g = c.getContext('2d')!;
+  g.fillStyle = color;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  let size = 96;
+  do g.font = `800 ${size}px "Avenir Next", "Helvetica Neue", Arial, sans-serif`;
+  while (g.measureText(text).width > c.width * 0.92 && (size -= 4) > 20);
+  g.fillText(text, c.width / 2, c.height / 2 + 4);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  const w = 0.36 * build;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w / 4), new THREE.MeshLambertMaterial({ map: tex, transparent: true }));
+  m.position.set(0, 1.2, 0.132);
+  return m;
+}
+
 export function buildCharacter(look: Look): CharacterRig {
   const root = new THREE.Group();
   const body = new THREE.Group();
@@ -124,6 +151,11 @@ export function buildCharacter(look: Look): CharacterRig {
   // ---- torso + head + hair + face (one merged mesh)
   const torso: THREE.BufferGeometry[] = [];
   torso.push(box(0.46 * build, 0.6, 0.26, 0, 1.1, 0, look.top));
+  if (look.tank) {
+    // bare shoulders either side of the straps, scoop neckline front and back
+    for (const sx of [-1, 1]) torso.push(box(0.12 * build, 0.035, 0.265, sx * 0.17 * build, 1.385, 0, skin));
+    torso.push(box(0.14, 0.09, 0.265, 0, 1.36, 0, skin));
+  }
   if (look.blazer) {
     const lapel = mix(look.blazer, '#000000', 0.25);
     torso.push(box(0.5 * build, 0.64, 0.29, 0, 1.09, 0, look.blazer));
@@ -234,6 +266,7 @@ export function buildCharacter(look: Look): CharacterRig {
   }
   const torsoMesh = mesh(torso);
   body.add(torsoMesh);
+  if (look.print) body.add(chestPrint(look.print.text, look.print.color, build));
 
   // tired face: dark bags under the eyes, eyelids that sag over the top of the eyes
   const skinDark = mix(skin, '#4a3040', 0.28);
@@ -295,34 +328,44 @@ export function buildCharacter(look: Look): CharacterRig {
     setMood(true);
   }
 
-  // ---- arms (pivot at shoulder)
-  const armLen = look.tee ? 0.26 : 0.46;
+  // ---- arms: upper arm on a shoulder pivot, forearm on an elbow pivot 0.3 below (bends forward with negative x)
+  const armLen = look.tank ? 0 : look.tee ? 0.26 : 0.46; // sleeve length, the rest down to 0.6 is skin
+  const ELBOW = 0.3;
   const mkArm = (side: 1 | -1) => {
     const pivot = new THREE.Group();
     pivot.position.set(side * (0.23 * build + 0.085 + (ar - 1) * 0.07), 1.4, 0);
-    const foreLen = 0.6 - armLen;
-    const parts = [
-      box(0.14 * ar, armLen, 0.16 * ar, 0, -armLen / 2, 0, sleeveColor),
-      box(0.115 * ar, foreLen, 0.13 * ar, 0, -armLen - foreLen / 2, 0, skin),
-    ];
+    const upper: THREE.BufferGeometry[] = [];
+    const fore: THREE.BufferGeometry[] = []; // origin = elbow
+    /** A box spanning d0..d1 below the shoulder, split at the elbow. */
+    const span = (d0: number, d1: number, w: number, d: number, c: string) => {
+      if (d1 <= d0) return;
+      if (d0 < ELBOW) upper.push(box(w, Math.min(d1, ELBOW) - d0, d, 0, -(d0 + Math.min(d1, ELBOW)) / 2, 0, c));
+      if (d1 > ELBOW) fore.push(box(w, d1 - Math.max(d0, ELBOW), d, 0, -((Math.max(d0, ELBOW) + d1) / 2 - ELBOW), 0, c));
+    };
+    span(0, armLen, 0.14 * ar, 0.16 * ar, sleeveColor);
+    span(armLen, 0.6, 0.115 * ar, 0.13 * ar, skin);
     // anatomical left arm is +x because the character faces +z
     let tattoo: TattooKind | null = null;
     if (look.tattoo === 'both' || (look.tattoo === 'left' && side === 1) || (look.tattoo === 'right' && side === -1)) {
       tattoo = look.tattooDark ? 'dark' : look.tattoo === 'both' ? 'script' : 'vine';
     }
-    if (look.wristbands && side === -1) {
-      look.wristbands.forEach((col, i) => parts.push(box(0.125 * ar, 0.024, 0.14 * ar, 0, -0.575 + i * 0.03, 0, col)));
-    }
-    pivot.add(mesh(parts));
+    if (look.wristbands && side === -1) look.wristbands.forEach((col, i) => span(0.563 - i * 0.03, 0.587 - i * 0.03, 0.125 * ar, 0.14 * ar, col));
+    pivot.add(mesh(upper));
+    const elbow = new THREE.Group();
+    elbow.position.y = -ELBOW;
+    elbow.add(mesh(fore));
     if (tattoo) {
-      const ov = tattooOverlay(0.115 * ar, foreLen, 0.13 * ar, side, tattoo);
-      ov.position.y = -armLen - foreLen / 2;
-      pivot.add(ov);
+      // on the bare forearm below the elbow, so it bends along
+      const len = 0.6 - Math.max(armLen, ELBOW);
+      const ov = tattooOverlay(0.115 * ar, len, 0.13 * ar, side, tattoo);
+      ov.position.y = -(0.6 - len / 2 - ELBOW);
+      elbow.add(ov);
     }
+    pivot.add(elbow);
     body.add(pivot);
-    return pivot;
+    return { pivot, elbow };
   };
-  const armL = mkArm(-1);
+  const { pivot: armL, elbow: elbowL } = mkArm(-1);
   const cup = new THREE.Group();
   cup.position.y = -0.58;
   cup.visible = false;
@@ -334,61 +377,41 @@ export function buildCharacter(look: Look): CharacterRig {
     ]),
   );
   armL.add(cup);
-  let armR: THREE.Object3D;
+  const { pivot: armR, elbow: elbowR } = mkArm(1);
+  // the right hand may hold a vape or a phone (posed by bending the right elbow)
   let vape: CharacterRig['vape'];
   let phone: CharacterRig['phone'];
-  if (look.vape || look.phone) {
-    // right arm in two parts (upper arm + forearm on an elbow pivot) so the hand can go to the mouth / ear
-    const pivot = new THREE.Group();
-    pivot.position.set(0.23 * build + 0.085 + (ar - 1) * 0.07, 1.4, 0);
-    const seg = (d0: number, d1: number, origin: number): THREE.BufferGeometry[] => {
-      const out: THREE.BufferGeometry[] = [];
-      const sleeve = [d0, Math.min(d1, armLen)];
-      if (sleeve[1] > sleeve[0]) out.push(box(0.14 * ar, sleeve[1] - sleeve[0], 0.16 * ar, 0, -((sleeve[0] + sleeve[1]) / 2 - origin), 0, sleeveColor));
-      const arm = [Math.max(d0, armLen), d1];
-      if (arm[1] > arm[0]) out.push(box(0.115 * ar, arm[1] - arm[0], 0.13 * ar, 0, -((arm[0] + arm[1]) / 2 - origin), 0, skin));
-      return out;
-    };
-    pivot.add(mesh(seg(0, 0.3, 0)));
-    const elbow = new THREE.Group();
-    elbow.position.y = -0.3;
-    pivot.add(elbow);
-    body.add(pivot);
-    armR = pivot;
-    if (look.vape) {
-      const device: THREE.BufferGeometry[] = [
-        ...seg(0.3, 0.6, 0.3),
-        box(0.04, 0.13, 0.04, 0, -0.32, 0, '#23262b'), // body
-        box(0.042, 0.03, 0.042, 0, -0.285, 0, '#c9a24a'), // gold ring
-        box(0.025, 0.04, 0.025, 0, -0.395, 0, '#d8d8d4'), // mouthpiece
-      ];
-      elbow.add(mesh(device));
-      const led = new THREE.MeshBasicMaterial({ color: 0x3a1a10 });
-      const tip = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.02), led);
-      tip.position.set(0, -0.345, 0.023);
-      elbow.add(tip);
-      const puffs: THREE.Mesh[] = [];
-      for (let i = 0; i < 5; i++) {
-        const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0xf2f2f4, transparent: true, opacity: 0, depthWrite: false }));
-        m.visible = false;
-        m.userData.nonav = true;
-        root.add(m);
-        puffs.push(m);
-      }
-      vape = { elbow, led, puffs };
-    } else {
-      elbow.add(
-        mesh([
-          ...seg(0.3, 0.6, 0.3),
-          box(0.03, 0.15, 0.075, -0.045, -0.3, 0, '#1d1f24'), // phone, held in the fist
-          box(0.006, 0.13, 0.06, -0.062, -0.3, 0, '#7fb2e0'), // lit screen on the side facing the head
-        ]),
-      );
-      phone = { elbow };
+  if (look.vape) {
+    // the vape (with its glowing tip) only shows while it is in use
+    const device = mesh([
+      box(0.04, 0.13, 0.04, 0, -0.32, 0, '#23262b'), // body
+      box(0.042, 0.03, 0.042, 0, -0.285, 0, '#c9a24a'), // gold ring
+      box(0.025, 0.04, 0.025, 0, -0.395, 0, '#d8d8d4'), // mouthpiece
+    ]);
+    const led = new THREE.MeshBasicMaterial({ color: 0x3a1a10 });
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.02), led);
+    tip.position.set(0, -0.345, 0.023);
+    device.add(tip);
+    device.visible = false;
+    elbowR.add(device);
+    const puffs: THREE.Mesh[] = [];
+    for (let i = 0; i < 5; i++) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0xf2f2f4, transparent: true, opacity: 0, depthWrite: false }));
+      m.visible = false;
+      m.userData.nonav = true;
+      root.add(m);
+      puffs.push(m);
     }
-  } else {
-    armR = mkArm(1);
+    vape = { elbow: elbowR, device, led, puffs };
   }
+  // everybody has a phone; the people who are often on a call in the office (`phone` looks) get posed with it there
+  const handset = mesh([
+    box(0.03, 0.15, 0.075, -0.045, -0.3, 0, '#1d1f24'), // phone, held in the fist
+    box(0.006, 0.13, 0.06, -0.062, -0.3, 0, '#7fb2e0'), // lit screen on the side facing the head
+  ]);
+  handset.visible = false;
+  elbowR.add(handset);
+  if (look.phone) phone = { elbow: elbowR, device: handset };
 
   // ---- legs (pivot at hip)
   const shoe = new THREE.Color(look.bottom).getHSL({ h: 0, s: 0, l: 0 }).l > 0.6 ? SHOE_DARK : SHOE_LIGHT;
@@ -428,5 +451,5 @@ export function buildCharacter(look: Look): CharacterRig {
   const h = look.heightM ? look.heightM / REF_HEIGHT_M : look.height ?? 1;
   root.scale.setScalar(h);
 
-  return { root, body, legL, legR, kneeL, kneeR, armL, armR, headHeight: 1.95 * h, setTired, setMood, vape, phone, cup };
+  return { root, body, legL, legR, kneeL, kneeR, armL, armR, elbowL, elbowR, handset, headHeight: 1.95 * h, setTired, setMood, vape, phone, cup };
 }
