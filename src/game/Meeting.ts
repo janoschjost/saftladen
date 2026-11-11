@@ -14,6 +14,8 @@ export interface MeetSeat {
   occupant: Person | null;
 }
 
+type ModelSeat = OfficeModel['meeting']['seats'][number];
+
 const GATHER_TIMEOUT = 60; // seconds the others wait for latecomers
 const SESSION = { min: 45, max: 90 }; // seconds the door stays shut
 const FIRST_MEETING = { min: 25, max: 50 }; // seconds after game start
@@ -109,6 +111,7 @@ export class MeetingRoom {
   current: Meeting | null = null;
   private timer = between(FIRST_MEETING);
   private doorCell: { cx: number; cz: number };
+  private sources = new Map<MeetSeat, ModelSeat>();
   /** called when the door should be locked shut (true) or released (false) */
   onClosed: (closed: boolean) => void = () => {};
 
@@ -118,18 +121,38 @@ export class MeetingRoom {
   ) {
     this.doorCell = nav.toCell(model.doorPos);
     for (const s of model.seats) {
-      const front = { x: Math.sin(s.yaw), z: Math.cos(s.yaw) };
-      let approach: Vec2 | null = null;
-      for (const dist of [0.9, 1.1, 1.4]) {
-        const c = nav.toCell({ x: s.x - front.x * dist, z: s.z - front.z * dist });
-        if (nav.walkable(c.cx, c.cz)) {
-          approach = nav.center(c.cx, c.cz);
-          break;
-        }
-      }
-      approach ??= nav.nearestWalkable({ x: s.x - front.x * 1.1, z: s.z - front.z * 1.1 }, 4);
-      if (approach) this.seats.push({ seat: { x: s.x, z: s.z }, approach, yaw: s.yaw, occupant: null });
+      const approach = this.approachFor(s, nav);
+      if (!approach) continue;
+      const seat: MeetSeat = { seat: { x: s.x, z: s.z }, approach, yaw: s.yaw, occupant: null };
+      this.seats.push(seat);
+      this.sources.set(seat, s);
     }
+  }
+
+  /** First free cell behind the chair. */
+  private approachFor(s: ModelSeat, nav: NavGrid): Vec2 | null {
+    const front = { x: Math.sin(s.yaw), z: Math.cos(s.yaw) };
+    for (const dist of [0.9, 1.1, 1.4]) {
+      const c = nav.toCell({ x: s.x - front.x * dist, z: s.z - front.z * dist });
+      if (nav.walkable(c.cx, c.cz)) return nav.center(c.cx, c.cz);
+    }
+    return nav.nearestWalkable({ x: s.x - front.x * 1.1, z: s.z - front.z * 1.1 }, 4);
+  }
+
+  /** Chairs were moved (room editor) and the nav grid rebuilt: the seats follow in place, a running meeting keeps its door shut. */
+  relayout(nav: NavGrid): void {
+    for (const seat of this.seats) {
+      const s = this.sources.get(seat)!;
+      seat.seat.x = s.x;
+      seat.seat.z = s.z;
+      seat.yaw = s.yaw;
+      const approach = this.approachFor(s, nav);
+      if (approach) {
+        seat.approach.x = approach.x;
+        seat.approach.z = approach.z;
+      }
+    }
+    if (this.current?.closed) nav.block(this.doorCell.cx, this.doorCell.cz);
   }
 
   get doorPos(): Vec2 {

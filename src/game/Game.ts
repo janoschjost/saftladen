@@ -7,7 +7,7 @@ import { petPortrait } from '../render/petPortrait';
 import { HOME_COUNT, HOME_LABELS, HomeOffice, ROOM_COUNT } from '../render/homeOffice';
 import { SIT_DROP } from '../render/officeBuilder';
 import { Views } from '../render/Views';
-import { buildOffice, CORRIDOR_POINT } from '../render/officeModel';
+import { buildOffice, CORRIDOR_POINT, type OfficeModel } from '../render/officeModel';
 import { buildWorld, NAV_CELL, WORLD } from '../render/World';
 import { Actions } from '../ui/Actions';
 import { Feeds } from '../ui/Feeds';
@@ -26,7 +26,9 @@ import { NavGrid } from './NavGrid';
 import { Office } from './Office';
 import { Person } from './Person';
 import { Presence } from './Presence';
+import { RoomEditor } from './RoomEditor';
 import { Social } from './Social';
+import { Traffic } from './Traffic';
 import type { Walker } from './Walker';
 
 const STEP = 1 / 60; // fixed simulation step
@@ -43,10 +45,13 @@ export class Game {
   private roof!: THREE.Object3D;
   private roofWanted = false;
   private office!: Office;
+  private model!: OfficeModel;
+  private editor!: RoomEditor;
   private walkers: Walker[] = [];
   private people: Person[] = [];
   private overlay: Overlay;
   private social = new Social();
+  private traffic = new Traffic(this.nav);
   private presence!: Presence;
   private feeds = new Feeds();
   private roster: Roster;
@@ -67,6 +72,7 @@ export class Game {
   private selected: Walker | null = null;
   /** the camera trails this walker (follow mode) */
   private followed: Walker | null = null;
+  private dragStart = { x: 0, y: 0 };
   private dragged: Walker | null = null;
   private steered: Person | null = null;
   private keys = new Set<string>();
@@ -90,9 +96,10 @@ export class Game {
     this.scene.background = new THREE.Color(stageColor);
 
     buildWorld(this.scene);
-    const model = buildOffice(this.scene);
-    for (const b of model.blockers) this.nav.blockWorld(b.min.x, b.min.z, b.max.x, b.max.z);
-    this.nav.sealUnreachable(CORRIDOR_POINT);
+    const model = (this.model = buildOffice(this.scene));
+    // the editor puts the furniture where the saved layout wants it, before anything is derived from its position
+    this.editor = new RoomEditor(this.scene, model.items, WORLD, () => this.relayout());
+    this.blockNav();
     this.office = new Office(model, this.nav);
     this.roof = model.roof;
     this.entrance = model.entrance;
@@ -161,6 +168,20 @@ export class Game {
     this.seats.setOwners(this.seatOwners());
 
     this.renderer.setAnimationLoop((t) => this.frame(t));
+  }
+
+  private blockNav(): void {
+    this.nav.clear();
+    for (const b of this.model.blockers()) this.nav.blockWorld(b.min.x, b.min.z, b.max.x, b.max.z);
+    this.nav.sealUnreachable(CORRIDOR_POINT);
+  }
+
+  /** The room editor moved furniture: new nav grid, then desks, seats and standing spots follow. */
+  private relayout(): void {
+    this.blockNav();
+    this.office.relayout(this.nav);
+    this.meetingRoom.relayout(this.nav);
+    this.pod.relayout(this.nav);
   }
 
   private restoreSeats(): void {
@@ -242,6 +263,14 @@ export class Game {
       'pointerdown',
       (e) => {
         if (this.views.mode === 'walk') return; // dragging looks around instead
+        if (this.editor.active) {
+          // furniture instead of people; a click on anything else still moves the camera
+          const g = this.groundAt(this.toNdc(e));
+          if (!this.editor.pointerDown(this.raycaster, g)) return;
+          e.stopImmediatePropagation();
+          this.stage.setPointerCapture(e.pointerId);
+          return;
+        }
         const hit = this.pick(this.toNdc(e));
         if (!hit) return;
         const g = this.groundAt(this.toNdc(e));
@@ -249,6 +278,7 @@ export class Game {
         e.stopImmediatePropagation();
         this.dragged = hit;
         this.dragMoved = false;
+        this.dragStart = { x: e.clientX, y: e.clientY };
         hit.held = true;
         this.dragOffset.set(hit.pos.x - g.x, hit.pos.z - g.z);
         this.stage.setPointerCapture(e.pointerId);
@@ -258,9 +288,12 @@ export class Game {
     this.stage.addEventListener('pointermove', (e) => {
       this.pointerInside = true;
       this.toNdc(e, this.pointer);
+      if (this.editor.active && this.views.mode !== 'walk') this.editor.pointerMove(this.raycaster, this.groundAt(this.pointer), e.altKey);
       if (!this.dragged) return;
       const g = this.groundAt(this.pointer);
       if (!g) return;
+      // a few pixels of hand jitter still count as a click, not a drag
+      if (!this.dragMoved && Math.hypot(e.clientX - this.dragStart.x, e.clientY - this.dragStart.y) < 5) return;
       this.dragMoved = true;
       const w = this.dragged;
       w.pos.x = THREE.MathUtils.clamp(g.x + this.dragOffset.x, 0.4, WORLD.width - 0.4);
@@ -269,6 +302,10 @@ export class Game {
       w.prev.z = w.pos.z;
     });
     const drop = (e: PointerEvent) => {
+      if (this.editor.dragging) {
+        this.editor.pointerUp();
+        if (this.stage.hasPointerCapture(e.pointerId)) this.stage.releasePointerCapture(e.pointerId);
+      }
       if (!this.dragged) return;
       const d = this.dragged;
       d.held = false;
@@ -293,15 +330,27 @@ export class Game {
       this.pointerInside = false;
       this.hovered = null;
     });
-    this.stage.addEventListener('click', () => {
+    this.stage.addEventListener('click', (e) => {
+      if (this.editor.active) {
+        // a click on the floor (not a camera drag) drops the selection
+        if (!this.editor.takeClick() && !this.views.wasDrag) this.editor.deselect();
+        return;
+      }
       if (this.views.wasDrag || this.dragMoved) {
         this.dragMoved = false;
         return;
       }
-      this.selected = this.hovered && this.hovered !== this.selected ? this.hovered : null;
+      // pick at the click itself: the hover state may be a frame behind (or empty on touch)
+      const hit = this.views.mode === 'walk' ? null : this.pick(this.toNdc(e));
+      this.selected = hit && hit !== this.selected ? hit : null;
+      this.followed = this.selected && !this.selected.away ? this.selected : null; // selecting starts follow mode right away
     });
     window.addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLElement && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+      if (this.views.mode !== 'walk' && this.editor.key(e)) {
+        if (this.editor.active) this.selected = null;
+        return;
+      }
       this.keys.add(e.code);
       if (this.steered && STEER_KEYS.includes(e.code)) e.preventDefault();
       if (e.key.toLowerCase() === 'c' && this.selected instanceof Person) this.toggleSteer(this.selected);
@@ -451,6 +500,25 @@ export class Game {
         },
       });
     }
+    for (const p of this.people.filter((o) => o.member.look.phone)) {
+      const first = p.member.name.split(' ')[0];
+      devEvents.register({
+        id: `phone-${p.id}`,
+        group: 'Aktionen',
+        label: `${first} telefoniert`,
+        run: () => {
+          if (!p.inOffice) {
+            this.presence.callBack(p);
+            return `${first} war nicht im Büro, wurde zurückgerufen: nochmal klicken, sobald er da ist`;
+          }
+          if (p.held) return null;
+          drop(p);
+          p.startPhone(this.nav);
+          if (this.selected !== p) this.selected = p;
+          return `${first} telefoniert`;
+        },
+      });
+    }
     devEvents.register({
       id: 'printer',
       group: 'Aktionen',
@@ -564,8 +632,12 @@ export class Game {
 
   private simulate(dt: number): void {
     this.presence.update(dt, this.nav);
-    for (const w of this.walkers) w.update(dt, this.nav, this.walkers);
-    this.social.update(dt, this.people, this.nav);
+    this.traffic.update(dt, this.walkers);
+    for (const w of this.walkers) {
+      w.traffic ??= this.traffic;
+      w.update(dt, this.nav, this.walkers);
+    }
+    this.social.update(dt, this.people, this.nav, this.traffic);
     this.meetingRoom.update(dt, this.people, this.nav);
     this.pod.update(dt, this.people, this.nav);
     this.separate();
@@ -662,6 +734,7 @@ export class Game {
         r.armL.rotation.z = r.armR.rotation.z = 0;
       }
       if (r.vape) this.poseVape(w, r.vape, ph);
+      if (r.phone) this.posePhone(w, r.phone);
       if (w.talk && w.moving < 0.2 && !(w.sit > 0.5 && !w.speaking)) {
         const t = performance.now() / 1000 + w.phase;
         const lively = w.talk.kind === 'discussion' ? 1 : 0.6;
@@ -686,6 +759,20 @@ export class Game {
       r.legs[3].rotation.x = s;
       r.body.position.y = bob * 1.2 + breathe;
       r.tail.rotation.y = Math.sin(performance.now() / 90 + w.phase) * (0.35 + 0.4 * w.moving);
+    }
+  }
+
+  /** Phone at the ear during a call: upper arm lifted, forearm folded up, a little nod while walking. */
+  private posePhone(w: Person, ph: NonNullable<Person['rig']['phone']>): void {
+    const a = w.phoneAmt;
+    const r = w.rig;
+    if (a > 0) {
+      r.armR.rotation.x = THREE.MathUtils.lerp(r.armR.rotation.x, -0.35, a);
+      r.armR.rotation.z = -0.3 * a;
+      ph.elbow.rotation.x = -2.4 * a;
+    } else {
+      r.armR.rotation.z = 0;
+      ph.elbow.rotation.x = 0;
     }
   }
 
@@ -717,6 +804,7 @@ export class Game {
   }
 
   private pick(ndc: THREE.Vector2): Walker | null {
+    if (this.editor.active) return null; // the room editor owns the pointer
     this.raycaster.setFromCamera(ndc, this.views.camera);
     const hits = this.raycaster.intersectObjects(
       this.walkers.filter((w) => !w.away).map((w) => w.root),
@@ -740,8 +828,8 @@ export class Game {
 
   private updateHover(): void {
     this.hovered = this.dragged ?? (this.pointerInside ? this.pick(this.pointer) : null);
-    this.stage.classList.toggle('is-hovering', !!this.hovered && !this.dragged);
-    this.stage.classList.toggle('is-holding', !!this.dragged);
+    this.stage.classList.toggle('is-hovering', (!!this.hovered && !this.dragged) || (this.editor.hovering && !this.editor.dragging));
+    this.stage.classList.toggle('is-holding', !!this.dragged || this.editor.dragging);
   }
 
   private projectPoint(x: number, y: number, z: number): { x: number; y: number } {

@@ -1,7 +1,9 @@
 import type * as THREE from 'three';
+import { screenKindOf, screenSeed } from '../data/screens';
 import type { TeamMember } from '../data/types';
 import type { CharacterRig } from '../render/characterBuilder';
 import { SIT_DROP } from '../render/officeBuilder';
+import { screenVariants, type ScreenKind } from '../render/screens';
 import { DOOR_IN, DOOR_OUT } from './Door';
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { MeetSeat } from './Meeting';
@@ -23,6 +25,10 @@ const VAPE_LOWER = 3.0;
 const VAPE_END = 5.2;
 const FOOS_CHANCE = 0.03; // chance per decision to challenge somebody to foosball
 const FOOS_TIME = { min: 25, max: 50 }; // seconds of one game
+const PHONE_CHANCE = 0.4; // chance per decision (phone people only) to take a call while walking around
+const PHONE_TIME = { min: 30, max: 80 }; // seconds of one call
+const PHONE_PACE_CHANCE = 0.5; // chance that a call is spent pacing up and down one path instead of wandering
+const PHONE_PACE_LEN = { min: 3.5, max: 9 }; // metres between the two ends of a pacing path
 const TRANSITION = 1.1; // seconds to sit down / stand up
 
 type Phase = 'approach' | 'enter' | 'work' | 'leave';
@@ -73,6 +79,16 @@ interface MeetJob {
   dismissed: boolean;
 }
 
+interface PhoneJob {
+  remaining: number;
+  /** pace = walks back and forth between `a` and `b`, wander = strolls from spot to spot */
+  mode: 'pace' | 'wander';
+  a: Vec2;
+  b: Vec2;
+  /** pacing: the end walked to next */
+  toB: boolean;
+}
+
 interface VapeJob {
   t: number;
   drags: number;
@@ -116,6 +132,10 @@ export class Person extends Walker {
   preferredHome = 0;
   /** taking a drag on the vape */
   vapeJob: VapeJob | null = null;
+  /** on a phone call, walking around with the phone at the ear */
+  phoneJob: PhoneJob | null = null;
+  /** 0 = phone down .. 1 = at the ear (eased, kept after the call ends until the hand is down) */
+  phoneAmt = 0;
   /** walking to / sitting in the meeting room */
   meetJob: MeetJob | null = null;
   /** called to a meeting while still at a desk: goes once they have stood up */
@@ -340,10 +360,11 @@ export class Person extends Walker {
     this.yaw = this.prevYaw = desk.yaw;
     this.sit = 1;
     this.state = 'idle';
-    desk.setScreen(true);
+    desk.setScreen(true, this.pickScreen());
   }
 
   override update(dt: number, nav: NavGrid, others: readonly Walker[] = []): void {
+    this.updatePhone(dt);
     super.update(dt, nav, others);
     this.clock += dt;
     if (this.rig.setMood && (this.moodTimer -= dt) <= 0) {
@@ -353,17 +374,88 @@ export class Person extends Walker {
     }
   }
 
+  /** Counts the call down, ends it when something else takes over, and raises / lowers the hand. */
+  private updatePhone(dt: number): void {
+    const j = this.phoneJob;
+    if (j) {
+      j.remaining -= dt;
+      if (j.remaining <= 0 || this.held || this.controlled || this.presence !== 'in' || this.talk || this.meetJob || this.pendingMeet || this.task || this.printJob || this.foosJob || this.vapeJob) {
+        this.endPhone();
+      }
+    }
+    this.phoneAmt += ((this.phoneJob ? 1 : 0) - this.phoneAmt) * Math.min(1, dt * 5);
+    if (this.phoneAmt < 0.005) this.phoneAmt = 0;
+  }
+
+  /** Starts a phone call: walks around with the phone at the ear, either up and down one path or from spot to spot. */
+  startPhone(nav: NavGrid): void {
+    const pace = Math.random() < PHONE_PACE_CHANCE;
+    const a = { ...this.pos };
+    let b = a;
+    if (pace) {
+      // the far end of the path: a free spot a few metres away
+      let best = Infinity;
+      for (let i = 0; i < 16; i++) {
+        const { cx, cz } = nav.randomWalkable();
+        const c = nav.center(cx, cz);
+        const d = Math.hypot(c.x - a.x, c.z - a.z);
+        const miss = d < PHONE_PACE_LEN.min ? PHONE_PACE_LEN.min - d : d > PHONE_PACE_LEN.max ? d - PHONE_PACE_LEN.max : 0;
+        if (miss < best) {
+          best = miss;
+          b = c;
+        }
+        if (miss === 0) break;
+      }
+    }
+    this.phoneJob = { remaining: PHONE_TIME.min + Math.random() * (PHONE_TIME.max - PHONE_TIME.min), mode: pace ? 'pace' : 'wander', a, b, toB: true };
+    this.phoneStep(nav);
+  }
+
+  /** Hangs up (the hand comes down on its own). */
+  endPhone(): void {
+    this.phoneJob = null;
+    this.timer = 0.3 + Math.random();
+  }
+
+  /** Next leg of the call: the other end of the path, or a new spot. */
+  private phoneStep(nav: NavGrid): void {
+    const j = this.phoneJob!;
+    if (j.mode === 'pace') {
+      this.goTo(nav, j.toB ? j.b : j.a);
+      if (this.state === 'walk') j.toB = !j.toB;
+      else this.timer = 0.5;
+    } else {
+      this.wanderTo(nav);
+    }
+  }
+
+  /** What this person's monitor shows: their kind of work, mostly their usual picture, now and then another. */
+  private pickScreen(): { kind: ScreenKind; variant: number } {
+    const kind = screenKindOf(this.member.role);
+    const own = screenSeed(this.member);
+    return { kind, variant: Math.random() < 0.7 ? own : Math.floor(Math.random() * screenVariants(kind)) };
+  }
+
   private get adhd(): boolean {
     return !!this.member.adhd;
   }
 
   protected override idleTime(): number {
+    if (this.phoneJob) return this.phoneJob.mode === 'pace' ? 0.2 + Math.random() * 0.8 : 0.3 + Math.random() * 2;
     return this.adhd ? 0.3 + Math.random() * 1.5 : super.idleTime();
   }
 
   protected decide(nav: NavGrid): void {
+    if (this.phoneJob) {
+      this.phoneStep(nav);
+      return;
+    }
     const seek = this.displaced;
     this.displaced = false;
+    if (this.member.look.phone && !seek && !this.talk && Math.random() < PHONE_CHANCE) {
+      this.startPhone(nav);
+      return;
+    }
     if (this.member.look.vape && !seek && Math.random() < VAPE_CHANCE) {
       this.startVape(Math.random() < 0.35 ? 2 : 1);
       return;
@@ -451,7 +543,7 @@ export class Person extends Walker {
         this.step(dt, task.t < 0.65 ? 0.7 : 0);
         if (task.t >= 1) {
           task.phase = 'work';
-          d.setScreen(true);
+          d.setScreen(true, this.pickScreen());
         }
         return true;
       }
@@ -754,6 +846,7 @@ export class Person extends Walker {
 
   /** Drops whatever they were doing (desk, printer, vape) so a new activity can start. */
   interrupt(): void {
+    this.phoneJob = null;
     if (this.inMeeting) this.dismissMeeting();
     const t = this.task;
     if (t && t.phase !== 'approach') {
@@ -782,6 +875,7 @@ export class Person extends Walker {
     this.cancelPrint();
     this.cancelFoos();
     this.vapeJob = null;
+    this.phoneJob = null;
     if (!this.task) return;
     this.office?.release(this.task.desk, this);
     this.task = null;

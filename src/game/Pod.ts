@@ -8,6 +8,7 @@ const FIRST = { min: 20, max: 45 }; // seconds after game start
 const PAUSE = { min: 50, max: 110 }; // seconds between two visits
 const STAY = { min: 25, max: 55 }; // seconds the two sit together
 const GATHER_TIMEOUT = 45;
+type ModelSeat = OfficeModel['pod']['seats'][number];
 const between = ({ min, max }: { min: number; max: number }) => min + Math.random() * (max - min);
 
 /** Two people sitting together in the wooden pod. Reuses the meeting-room seat logic (walk, sit down, stand up). */
@@ -47,23 +48,43 @@ export class Pod {
   readonly seats: MeetSeat[] = [];
   current: PodSession | null = null;
   private timer = between(FIRST);
+  private sources = new Map<MeetSeat, ModelSeat>();
 
   constructor(
     private model: OfficeModel['pod'],
     nav: NavGrid,
   ) {
     for (const s of model.seats) {
-      const front = { x: Math.sin(s.yaw), z: Math.cos(s.yaw) };
-      let approach: Vec2 | null = null;
-      for (const dist of [1.7, 2.0, 2.3]) {
-        const c = nav.toCell({ x: s.x + front.x * dist, z: s.z + front.z * dist });
-        if (nav.walkable(c.cx, c.cz)) {
-          approach = nav.center(c.cx, c.cz);
-          break;
-        }
+      const approach = this.approachFor(s, nav);
+      if (!approach) continue;
+      const seat: MeetSeat = { seat: { x: s.x, z: s.z }, approach, yaw: s.yaw, occupant: null };
+      this.seats.push(seat);
+      this.sources.set(seat, s);
+    }
+  }
+
+  /** First free cell in front of the pod, where people walk to before sitting down. */
+  private approachFor(s: ModelSeat, nav: NavGrid): Vec2 | null {
+    const front = { x: Math.sin(s.yaw), z: Math.cos(s.yaw) };
+    for (const dist of [1.7, 2.0, 2.3]) {
+      const c = nav.toCell({ x: s.x + front.x * dist, z: s.z + front.z * dist });
+      if (nav.walkable(c.cx, c.cz)) return nav.center(c.cx, c.cz);
+    }
+    return nav.nearestWalkable({ x: s.x + front.x * 1.9, z: s.z + front.z * 1.9 }, 4);
+  }
+
+  /** The pod was moved (room editor) and the nav grid rebuilt: the seats follow in place. */
+  relayout(nav: NavGrid): void {
+    for (const seat of this.seats) {
+      const s = this.sources.get(seat)!;
+      seat.seat.x = s.x;
+      seat.seat.z = s.z;
+      seat.yaw = s.yaw;
+      const approach = this.approachFor(s, nav);
+      if (approach) {
+        seat.approach.x = approach.x;
+        seat.approach.z = approach.z;
       }
-      approach ??= nav.nearestWalkable({ x: s.x + front.x * 1.9, z: s.z + front.z * 1.9 }, 4);
-      if (approach) this.seats.push({ seat: { x: s.x, z: s.z }, approach, yaw: s.yaw, occupant: null });
     }
   }
 

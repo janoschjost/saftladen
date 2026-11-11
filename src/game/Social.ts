@@ -1,5 +1,6 @@
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { Person } from './Person';
+import type { Traffic } from './Traffic';
 
 export type ConversationKind = 'chat' | 'discussion';
 
@@ -21,6 +22,10 @@ const GATHER_TIMEOUT = 6;
  */
 const START_CHANCE = [0, 0, 0.04, 0.18, 0.35, 0.5, 0.6];
 const JOIN_CHANCE = 0.15;
+const CROWD_RADIUS = 2.2; // a talk is only started or joined if no more than CROWD_LIMIT bodies stand this close
+const CROWD_LIMIT = 5;
+const CLEAR_DISTANCE = 4; // how far people walk off when they make room instead of talking
+const MIN_GROUP_SPACING = 3.2; // new conversations keep this far from running ones (no blobs of 10+ people)
 
 const BUBBLES_DISCUSSION = ['!', '?', '…', '!?', '…'];
 
@@ -119,6 +124,18 @@ export class Social {
   active: Conversation[] = [];
   private checkTimer = 3; // grace period after spawn
   
+  private centroid(group: readonly Person[]): Vec2 {
+    return { x: group.reduce((t, m) => t + m.pos.x, 0) / group.length, z: group.reduce((t, m) => t + m.pos.z, 0) / group.length };
+  }
+
+  /** Everybody walks off to a quiet spot elsewhere and sits out of conversations for a while. */
+  private clearOut(group: readonly Person[], nav: NavGrid, traffic: Traffic): void {
+    for (const m of group) {
+      m.socialCooldown = 6 + Math.random() * 6;
+      m.walkTo(nav, traffic.wanderSpot(m, 10, CLEAR_DISTANCE));
+    }
+  }
+
   get chattingCount(): number {
     return this.active.reduce((n, c) => n + c.members.length, 0);
   }
@@ -142,7 +159,7 @@ export class Social {
     return c;
   }
 
-  update(dt: number, people: readonly Person[], nav: NavGrid): void {
+  update(dt: number, people: readonly Person[], nav: NavGrid, traffic?: Traffic): void {
     this.active = this.active.filter((c) => {
       if (c.update(dt)) return true;
       c.end();
@@ -153,7 +170,7 @@ export class Social {
     if (this.checkTimer > 0) return;
     this.checkTimer = CHECK_INTERVAL;
 
-    const free = people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.task && !p.printJob && !p.foosJob && !p.vapeJob && p.socialCooldown <= 0);
+    const free = people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.task && !p.printJob && !p.foosJob && !p.vapeJob && !p.phoneJob && p.socialCooldown <= 0);
 
     // others may join a running conversation
     for (const c of this.active) {
@@ -161,6 +178,10 @@ export class Social {
       for (const p of free) {
         if (p.talk) continue;
         if (Math.hypot(p.pos.x - c.center.x, p.pos.z - c.center.z) < LINK_DISTANCE + 0.8 && Math.random() < JOIN_CHANCE) {
+          if (traffic && traffic.bodiesNear(c.center, CROWD_RADIUS) > CROWD_LIMIT) {
+            this.clearOut([p], nav, traffic); // too packed already: make room instead
+            continue;
+          }
           c.join(p, nav);
           if (c.members.length >= MAX_GROUP) break;
         }
@@ -184,10 +205,20 @@ export class Social {
         }
       }
       if (group.length < 2) continue;
+      if (traffic && traffic.bodiesNear(this.centroid(group), CROWD_RADIUS) > CROWD_LIMIT) {
+        // too many people in one spot: nobody starts a chat, they clear the way
+        this.clearOut(group, nav, traffic);
+        continue;
+      }
+      const gx = group.reduce((t, m) => t + m.pos.x, 0) / group.length;
+      const gz = group.reduce((t, m) => t + m.pos.z, 0) / group.length;
+      if (this.active.some((c) => Math.hypot(c.center.x - gx, c.center.z - gz) < MIN_GROUP_SPACING)) continue;
       if (Math.random() >= START_CHANCE[Math.min(group.length, MAX_GROUP)]) continue;
       const cx = group.reduce((s, m) => s + m.pos.x, 0) / group.length;
       const cz = group.reduce((s, m) => s + m.pos.z, 0) / group.length;
-      const center = { x: Math.min(Math.max(cx, 2), nav.cols * nav.cell - 2), z: Math.min(Math.max(cz, 2), nav.rows * nav.cell - 2) };
+      let center = { x: Math.min(Math.max(cx, 2), nav.cols * nav.cell - 2), z: Math.min(Math.max(cz, 2), nav.rows * nav.cell - 2) };
+      // gather where it is quiet, not in the middle of a crowd
+      if (traffic) center = traffic.openSpotNear(center, 1.5, group);
       this.active.push(new Conversation(group, center, nav));
     }
   }

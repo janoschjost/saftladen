@@ -1,6 +1,7 @@
 import type * as THREE from 'three';
-import { screenOffMaterial, screenOnMaterial, type DeskRig } from '../render/officeBuilder';
-import type { OfficeModel } from '../render/officeModel';
+import { screenOffMaterial, type DeskRig } from '../render/officeBuilder';
+import { screenMaterial, type ScreenKind } from '../render/screens';
+import type { DeskPlacement, OfficeModel } from '../render/officeModel';
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { Person } from './Person';
 
@@ -19,7 +20,7 @@ export class Desk {
     /** free cell behind the chair, where people walk to before sitting down */
     readonly approach: Vec2,
     /** direction the sitter faces (yaw, 0 = +z) */
-    readonly yaw: number,
+    public yaw: number,
     private rig: DeskRig,
   ) {}
 
@@ -27,8 +28,8 @@ export class Desk {
     return this.rig.root;
   }
 
-  setScreen(on: boolean): void {
-    this.rig.screen.material = on ? screenOnMaterial() : screenOffMaterial();
+  setScreen(on: boolean, show?: { kind: ScreenKind; variant: number }): void {
+    this.rig.screen.material = on && show ? screenMaterial(show.kind, show.variant) : screenOffMaterial();
   }
 }
 
@@ -40,7 +41,7 @@ export class Printer {
     /** free floor cell in front of the printer */
     readonly stand: Vec2,
     /** direction the user faces (yaw, 0 = +z) */
-    readonly yaw: number,
+    public yaw: number,
     private paper: THREE.Mesh,
   ) {}
 
@@ -55,7 +56,7 @@ export class FoosSpot {
   constructor(
     readonly stand: Vec2,
     /** direction the player faces (yaw, 0 = +z) */
-    readonly yaw: number,
+    public yaw: number,
   ) {}
 }
 
@@ -82,26 +83,62 @@ export class Office {
   /** everybody who works here (filled by the game), used to find a foosball opponent */
   readonly people: Person[] = [];
 
-  constructor(model: OfficeModel, nav: NavGrid) {
+  /** desk -> where the model puts it (the room editor moves the placement, `relayout` follows) */
+  private placements = new Map<Desk, DeskPlacement>();
+
+  constructor(
+    private model: OfficeModel,
+    nav: NavGrid,
+  ) {
     const stand = nav.nearestWalkable(model.printer.stand, 6);
-    this.printer = stand ? new Printer(stand, model.printer.yaw, model.printer.paper) : null;
+    this.printer = stand ? new Printer({ x: stand.x, z: stand.z }, model.printer.stand.yaw, model.printer.paper) : null;
     const spots = model.foosball.map((f) => {
       const stand = nav.nearestWalkable({ x: f.x, z: f.z }, 3);
-      return stand ? new FoosSpot(stand, f.yaw) : null;
+      return stand ? new FoosSpot({ x: stand.x, z: stand.z }, f.yaw) : null;
     });
     this.foosball = spots[0] && spots[1] ? new Foosball([spots[0], spots[1]]) : null;
     for (const d of model.desks) {
-      let approach: Vec2 | null = null;
-      for (const dist of [1.0, 1.25, 1.5, 1.8, 2.2]) {
-        const c = nav.toCell({ x: d.seat.x + d.back.x * dist, z: d.seat.z + d.back.z * dist });
-        if (nav.walkable(c.cx, c.cz)) {
-          approach = nav.center(c.cx, c.cz);
-          break;
-        }
-      }
-      approach ??= nav.nearestWalkable({ x: d.seat.x + d.back.x * 1.2, z: d.seat.z + d.back.z * 1.2 }, 6);
-      if (approach) this.desks.push(new Desk(this.desks.length + 1, d.seat, approach, d.yaw, d.rig));
+      const approach = this.approachFor(d, nav);
+      if (!approach) continue;
+      const desk = new Desk(this.desks.length + 1, d.seat, approach, d.yaw, d.rig);
+      this.desks.push(desk);
+      this.placements.set(desk, d);
     }
+  }
+
+  /** First free cell behind the chair. */
+  private approachFor(d: DeskPlacement, nav: NavGrid): Vec2 | null {
+    for (const dist of [1.0, 1.25, 1.5, 1.8, 2.2]) {
+      const c = nav.toCell({ x: d.seat.x + d.back.x * dist, z: d.seat.z + d.back.z * dist });
+      if (nav.walkable(c.cx, c.cz)) return nav.center(c.cx, c.cz);
+    }
+    return nav.nearestWalkable({ x: d.seat.x + d.back.x * 1.2, z: d.seat.z + d.back.z * 1.2 }, 6);
+  }
+
+  /**
+   * Furniture was moved (room editor) and the nav grid rebuilt: desks, printer and foosball spots follow their model
+   * positions. Existing objects are updated in place, so people who sit / stand there move along.
+   */
+  relayout(nav: NavGrid): void {
+    const move = (to: Vec2, from: Vec2 | null) => {
+      if (!from) return;
+      to.x = from.x;
+      to.z = from.z;
+    };
+    for (const desk of this.desks) {
+      const d = this.placements.get(desk)!;
+      desk.yaw = d.yaw; // `desk.seat` is the placement's own seat object
+      move(desk.approach, this.approachFor(d, nav));
+    }
+    if (this.printer) {
+      move(this.printer.stand, nav.nearestWalkable(this.model.printer.stand, 6));
+      this.printer.yaw = this.model.printer.stand.yaw;
+    }
+    this.foosball?.spots.forEach((spot, i) => {
+      const f = this.model.foosball[i];
+      move(spot.stand, nav.nearestWalkable({ x: f.x, z: f.z }, 3));
+      spot.yaw = f.yaw;
+    });
   }
 
   /** `p` asks somebody who is free to play foosball; false when the table is busy or nobody is around. */

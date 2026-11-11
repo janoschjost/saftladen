@@ -21,7 +21,7 @@ const looks: Record<string, Look> = {
   'milica-rakic': { skin: FAIR, hair: '#d6b072', style: 'long', top: '#1b1b1f', bottom: '#2c2f36', heightM: 1.6 },
   'alyosha-krajnc': { skin: '#e6c3a0', hair: '#14100e', style: 'short', bangs: true, eyes: 'narrow', tee: true, top: '#1f2a55', bottom: '#c9bfaa', heightM: 1.6 },
   'michael-eberle': { skin: MEDIUM, hair: '#1c1a1a', style: 'short', beard: 'full', top: '#e6dfd0', bottom: JEANS, sleeve: '#e6dfd0' },
-  'jan-hasler': { skin: FAIR, hair: '#d9a98a', style: 'none', glasses: true, thinGlasses: true, moody: true, beard: 'stubble', tee: true, top: '#263a63', bottom: '#2b2e36', heightM: 1.7 },
+  'jan-hasler': { skin: FAIR, hair: '#d9a98a', style: 'none', glasses: true, thinGlasses: true, moody: true, phone: true, beard: 'stubble', tee: true, top: '#263a63', bottom: '#2b2e36', heightM: 1.7 },
   'marco-hefti': { skin: LIGHT, hair: '#2e2420', style: 'pony', glasses: true, beard: 'goatee', tee: true, shorts: true, top: '#d8cfc4', bottom: '#7b7a78', heightM: 1.9, flipflops: true, necklace: ['#3b2a22', '#5f8a8a', '#8a6a3c', '#2a2a2e'], wristbands: ['#2fbf71', '#f2d230', '#e04ca0', '#1c1c22'] },
   'rene-kappeler': { skin: FAIR, hair: '#c9c4bd', style: 'none', beard: 'stubble', top: '#f1efeb', vest: '#5d6068', tee: true, bottom: BLACK, heightM: 1.8 },
   'martin-fuchs': { skin: LIGHT, hair: '#5c5a58', style: 'short', glasses: true, beard: 'stubble', beardColor: '#8d8a86', top: BLACK, bottom: JEANS_DARK, heightM: 1.85 },

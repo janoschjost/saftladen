@@ -16,6 +16,8 @@ export interface CharacterRig {
   setMood?: (happy: boolean) => void;
   /** only on `vape` looks: the bendable forearm of the right arm, the glowing tip and the vapour puffs */
   vape?: { elbow: THREE.Object3D; led: THREE.MeshBasicMaterial; puffs: THREE.Mesh[] };
+  /** only on `phone` looks: the bendable forearm of the right arm, which holds the phone */
+  phone?: { elbow: THREE.Object3D };
 }
 
 /** A scale of 1 is this tall; `heightM` on a Look is converted relative to it. */
@@ -282,8 +284,9 @@ export function buildCharacter(look: Look): CharacterRig {
   const armL = mkArm(-1);
   let armR: THREE.Object3D;
   let vape: CharacterRig['vape'];
-  if (look.vape) {
-    // right arm in two parts (upper arm + forearm on an elbow pivot) so the hand can go to the mouth
+  let phone: CharacterRig['phone'];
+  if (look.vape || look.phone) {
+    // right arm in two parts (upper arm + forearm on an elbow pivot) so the hand can go to the mouth / ear
     const pivot = new THREE.Group();
     pivot.position.set(0.23 * build + 0.085 + (ar - 1) * 0.07, 1.4, 0);
     const seg = (d0: number, d1: number, origin: number): THREE.BufferGeometry[] => {
@@ -297,29 +300,40 @@ export function buildCharacter(look: Look): CharacterRig {
     pivot.add(mesh(seg(0, 0.3, 0)));
     const elbow = new THREE.Group();
     elbow.position.y = -0.3;
-    const device: THREE.BufferGeometry[] = [
-      ...seg(0.3, 0.6, 0.3),
-      box(0.04, 0.13, 0.04, 0, -0.32, 0, '#23262b'), // body
-      box(0.042, 0.03, 0.042, 0, -0.285, 0, '#c9a24a'), // gold ring
-      box(0.025, 0.04, 0.025, 0, -0.395, 0, '#d8d8d4'), // mouthpiece
-    ];
-    elbow.add(mesh(device));
-    const led = new THREE.MeshBasicMaterial({ color: 0x3a1a10 });
-    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.02), led);
-    tip.position.set(0, -0.345, 0.023);
-    elbow.add(tip);
     pivot.add(elbow);
     body.add(pivot);
     armR = pivot;
-    const puffs: THREE.Mesh[] = [];
-    for (let i = 0; i < 5; i++) {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0xf2f2f4, transparent: true, opacity: 0, depthWrite: false }));
-      m.visible = false;
-      m.userData.nonav = true;
-      root.add(m);
-      puffs.push(m);
+    if (look.vape) {
+      const device: THREE.BufferGeometry[] = [
+        ...seg(0.3, 0.6, 0.3),
+        box(0.04, 0.13, 0.04, 0, -0.32, 0, '#23262b'), // body
+        box(0.042, 0.03, 0.042, 0, -0.285, 0, '#c9a24a'), // gold ring
+        box(0.025, 0.04, 0.025, 0, -0.395, 0, '#d8d8d4'), // mouthpiece
+      ];
+      elbow.add(mesh(device));
+      const led = new THREE.MeshBasicMaterial({ color: 0x3a1a10 });
+      const tip = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.02), led);
+      tip.position.set(0, -0.345, 0.023);
+      elbow.add(tip);
+      const puffs: THREE.Mesh[] = [];
+      for (let i = 0; i < 5; i++) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0xf2f2f4, transparent: true, opacity: 0, depthWrite: false }));
+        m.visible = false;
+        m.userData.nonav = true;
+        root.add(m);
+        puffs.push(m);
+      }
+      vape = { elbow, led, puffs };
+    } else {
+      elbow.add(
+        mesh([
+          ...seg(0.3, 0.6, 0.3),
+          box(0.03, 0.15, 0.075, -0.045, -0.3, 0, '#1d1f24'), // phone, held in the fist
+          box(0.006, 0.13, 0.06, -0.062, -0.3, 0, '#7fb2e0'), // lit screen on the side facing the head
+        ]),
+      );
+      phone = { elbow };
     }
-    vape = { elbow, led, puffs };
   } else {
     armR = mkArm(1);
   }
@@ -362,5 +376,5 @@ export function buildCharacter(look: Look): CharacterRig {
   const h = look.heightM ? look.heightM / REF_HEIGHT_M : look.height ?? 1;
   root.scale.setScalar(h);
 
-  return { root, body, legL, legR, kneeL, kneeR, armL, armR, headHeight: 1.95 * h, setMood, vape };
+  return { root, body, legL, legR, kneeL, kneeR, armL, armR, headHeight: 1.95 * h, setMood, vape, phone };
 }

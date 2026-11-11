@@ -19,6 +19,11 @@ export class NavGrid {
     for (let z = cz; z < cz + d; z++) for (let x = cx; x < cx + w; x++) if (this.inside(x, z)) this.blocked[z * this.cols + x] = 1;
   }
 
+  /** Everything walkable again (the room editor rebuilds the grid after furniture moved). */
+  clear(): void {
+    this.blocked.fill(0);
+  }
+
   unblock(cx: number, cz: number): void {
     if (this.inside(cx, cz)) this.blocked[cz * this.cols + cx] = 0;
   }
@@ -154,8 +159,11 @@ export class NavGrid {
     return best;
   }
 
-  /** Returns waypoints (cell centres) from the start cell to the goal cell, excluding the start. */
-  findPath(from: Vec2, to: Vec2): Vec2[] {
+  /**
+   * Returns waypoints (cell centres) from the start cell to the goal cell, excluding the start.
+   * `cost` (cols*rows, optional) adds a penalty for entering each cell, so routes bend around crowds.
+   */
+  findPath(from: Vec2, to: Vec2, cost?: Float32Array): Vec2[] {
     const s = this.toCell(from);
     const g = this.toCell(to);
     if (!this.walkable(g.cx, g.cz)) return [];
@@ -191,7 +199,7 @@ export class NavGrid {
           // no corner cutting
           if (dx && dz && (!this.walkable(cx + dx, cz) || !this.walkable(cx, cz + dz))) continue;
           const ni = idx(nx, nz);
-          const ng = gScore[cur] + (dx && dz ? Math.SQRT2 : 1);
+          const ng = gScore[cur] + (dx && dz ? Math.SQRT2 : 1) + (cost ? cost[ni] : 0);
           if (ng < gScore[ni]) {
             gScore[ni] = ng;
             came[ni] = cur;

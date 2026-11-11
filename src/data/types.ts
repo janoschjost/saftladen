@@ -35,6 +35,7 @@ export interface Look {
   sleeve?: string; // sleeve colour override
   shorts?: boolean;
   vape?: boolean; // carries a vape and takes a drag now and then
+  phone?: boolean; // often walks around the office on a phone call
   height?: number; // 1 = default
   build?: number; // 1 = default width
 }

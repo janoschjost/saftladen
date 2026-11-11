@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Vec2 } from '../game/NavGrid';
 import { screenOffMaterial, type DeskRig } from './officeBuilder';
+import { RoomItem, type ItemAnchor } from './roomItem';
 
 /**
  * The agency office, reconstructed from the walkthrough photos (see office-model/index.html for the standalone viewer).
@@ -59,8 +60,10 @@ export interface DeskPlacement {
 
 export interface OfficeModel {
   desks: DeskPlacement[];
-  /** footprints (game space) that block walking, for the nav grid */
-  blockers: THREE.Box3[];
+  /** every piece of furniture the room editor can move (desks included) */
+  items: RoomItem[];
+  /** footprints (game space) that block walking, for the nav grid: architecture + the items where they stand right now */
+  blockers(): THREE.Box3[];
   /** ceiling, beams, clerestory, bunting, string lights (hidden by default) */
   roof: THREE.Group;
   /** front door leaf, hinged at its pivot; rotation.y = 0 is closed, negative swings it outwards */
@@ -70,7 +73,7 @@ export interface OfficeModel {
   /** the two spots where people stand to play foosball (game coordinates, yaw = facing the table) */
   foosball: Array<{ x: number; z: number; yaw: number }>;
   /** printer in the archive: where people stand (game coordinates), facing yaw, and the paper that shows while printing */
-  printer: { stand: Vec2; yaw: number; paper: THREE.Mesh };
+  printer: { stand: { x: number; z: number; yaw: number }; paper: THREE.Mesh };
   /** numbered sprites above every desk row (the tables) */
   rowLabels: THREE.Group;
   /** numbered sprites above every room (blue), toggled in the settings */
@@ -124,7 +127,49 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   const doors: DoorRig[] = [];
   const meetSeats: Array<{ x: number; z: number; yaw: number }> = [];
   const podSeats: Array<{ x: number; z: number; yaw: number }> = [];
-  const deskSpecs: Array<{ x: number; z: number; rot: number; white: boolean; w: number; stand: boolean }> = [];
+  const podCenter: Vec2 = { x: 0, z: 0 };
+  const meetCenter: Vec2 = { x: 0, z: 0 };
+  const deskSpecs: Array<{ id: string; x: number; z: number; rot: number; white: boolean; w: number; stand: boolean }> = [];
+
+  /* ---------- movable items (room editor) ---------- */
+  interface ItemDraft {
+    id: string;
+    kind: string;
+    label: string;
+    objs: THREE.Object3D[];
+    anchors: ItemAnchor[];
+  }
+  const drafts: ItemDraft[] = [];
+  const draftStack: ItemDraft[] = [];
+  const usedIds = new Set<string>();
+  const uniqueId = (id: string): string => {
+    let out = id;
+    for (let n = 2; usedIds.has(out); n++) out = `${id}#${n}`;
+    usedIds.add(out);
+    return out;
+  };
+  /** Stable id from the model coordinates in the source, e.g. `shelf@26.28,-1.1`. */
+  const at = (kind: string, x: number, z: number) => `${kind}@${+x.toFixed(3)},${+z.toFixed(3)}`;
+  /**
+   * Everything `fn` adds to the world becomes one movable item (the room editor moves / turns / hides it as a whole).
+   * Items nest: an inner item takes its own parts, the outer one keeps the rest.
+   */
+  function item<T>(kind: string, id: string, label: string, fn: () => T): T {
+    const start = world.children.length;
+    const d: ItemDraft = { id: uniqueId(id), kind, label, objs: [], anchors: [] };
+    draftStack.push(d);
+    const out = fn();
+    draftStack.pop();
+    d.objs = world.children.slice(start);
+    for (const o of d.objs) world.remove(o);
+    if (d.objs.length) drafts.push(d);
+    return out;
+  }
+  /** Ties a point (seat, standing spot; game coordinates) to the item being built, so it moves with it. */
+  const track = <T extends ItemAnchor>(p: T): T => {
+    draftStack[draftStack.length - 1]?.anchors.push(p);
+    return p;
+  };
 
   /* ---------- placement: anchors scale, groups stay rigid ---------- */
   let cluster: { x: number; z: number } | null = null;
@@ -132,10 +177,10 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   const gx = (x: number) => (cluster ? ax(cluster.x) + (x - cluster.x) : ax(x));
   const gz = (z: number) => (cluster ? az(cluster.z) + (z - cluster.z) : az(z));
   /** Place a group of furniture rigidly: the anchor (cx, cz) is scaled with the plan, the rest keeps its offsets. */
-  const within = (cx: number, cz: number, fn: () => void): void => {
+  const within = (cx: number, cz: number, fn: () => void, label = 'Möbelgruppe'): void => {
     const prev = cluster;
     cluster = { x: cx, z: cz };
-    fn();
+    item('group', at('group', cx, cz), label, fn);
     cluster = prev;
   };
 
@@ -465,10 +510,13 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   }
 
   function desk(x: number, z: number, rot = 0, o: { white?: boolean; w?: number; stand?: boolean } = {}): void {
-    deskSpecs.push({ x: gx(x), z: gz(z), rot, white: !!o.white, w: o.w ?? 1.6, stand: !!o.stand });
+    deskSpecs.push({ id: uniqueId(at('desk', x, z)), x: gx(x), z: gz(z), rot, white: !!o.white, w: o.w ?? 1.6, stand: !!o.stand });
   }
   /** Open shelf unit (white boards): w along local X. */
   function shelf(x: number, z: number, w: number, h: number, d = 0.4, rot = 0, fill = true): void {
+    item('shelf', at('shelf', x, z), 'Regal', () => shelfParts(x, z, w, h, d, rot, fill));
+  }
+  function shelfParts(x: number, z: number, w: number, h: number, d = 0.4, rot = 0, fill = true): void {
     const g = new THREE.Group();
     g.position.set(gx(x), 0, gz(z));
     g.rotation.y = rot;
@@ -490,6 +538,9 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     }
   }
   function plant(x: number, z: number, h = 1.6, base = 0, spiky = false, lim: { x0?: number; x1?: number; z0?: number; z1?: number } = {}): void {
+    item('plant', at('plant', x, z), 'Pflanze', () => plantParts(x, z, h, base, spiky, lim));
+  }
+  function plantParts(x: number, z: number, h = 1.6, base = 0, spiky = false, lim: { x0?: number; x1?: number; z0?: number; z1?: number } = {}): void {
     // keep the foliage inside the walls: default = inner faces of the exterior walls, `lim` adds nearer partitions
     const pad = spiky ? 0.15 : 0.33;
     const cl = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo + pad), hi - pad);
@@ -513,6 +564,9 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     }
   }
   function pendant(x: number, z: number, type: 'steel' | 'black' | 'cage' = 'steel', bottom = 2.0, ceil = 3.6): void {
+    item('pendant', at('pendant', x, z), 'Hängelampe', () => pendantParts(x, z, type, bottom, ceil));
+  }
+  function pendantParts(x: number, z: number, type: 'steel' | 'black' | 'cage' = 'steel', bottom = 2.0, ceil = 3.6): void {
     cyl(0.008, 0.008, EXACT ? ceil - bottom - 0.3 : Math.min(ceil - bottom - 0.3, 0.8), x, bottom + 0.3, z, mat.black, world, 4);
     if (type === 'steel') cyl(0.06, 0.2, 0.3, x, bottom, z, mat.steel);
     if (type === 'black') cyl(0.05, 0.28, 0.3, x, bottom, z, mat.black);
@@ -522,6 +576,9 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     world.add(bulb);
   }
   function coatRack(x: number, z: number, dark = true): void {
+    item('coat-rack', at('coat-rack', x, z), 'Garderobe', () => coatRackParts(x, z, dark));
+  }
+  function coatRackParts(x: number, z: number, dark = true): void {
     cyl(0.2, 0.2, 0.04, x, 0, z, dark ? mat.black : mat.white);
     cyl(0.025, 0.025, 1.75, x, 0, z, dark ? mat.black : mat.plyLight, world, 8);
     box(0.45, 0.9, 0.3, x, 0.75, z, L(dark ? 0x2b2523 : 0xb9b3ab));
@@ -666,7 +723,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   // storage room (dark, boxes)
   within(-3.7, -2.7, () => {
     for (let i = 0; i < 9; i++) box(0.6, 0.4 + (i % 3) * 0.25, 0.5, -4.4 + (i % 3) * 0.75, 0, -1.2 - Math.floor(i / 3) * 1.3, i % 2 ? mat.cardboard : mat.dark);
-  });
+  }, 'Lagerkisten');
   // kitchen (x 4..10.5): fridge + counter line on the west wall, dining table east
   within(4.0, B.z0, () => {
     box(0.62, 2.0, 0.65, 4.4, 0, -1.5, mat.white);
@@ -677,7 +734,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     box(0.12, EXACT ? 2.6 : CUT, 4.2, 4.07, 0, -3.1, mat.black); // dark splash wall
     cyl(0.18, 0.18, 0.55, 5.3, 0, -5.1, mat.steel);
     cyl(0.2, 0.18, 0.5, 5.8, 0, -5.1, mat.grey);
-  });
+  }, 'Küchenzeile');
   within(8.1, -3.6, () => {
     box(2.8, 0.05, 0.9, 8.1, 0.72, -3.6, mat.black);
     for (const sx of [-1.3, 1.3]) for (const sz of [-0.38, 0.38]) box(0.07, 0.72, 0.07, 8.1 + sx, 0, -3.6 + sz, mat.lightgrey);
@@ -686,14 +743,14 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       for (const sx of [-1.3, 1.3]) box(0.07, 0.42, 0.3, 8.1 + sx, 0, -3.6 + sz, mat.lightgrey);
     }
     for (const x of [7.2, 8.1, 9.0]) pendant(x, -3.6, 'black', 1.55, 2.9);
-  });
+  }, 'Esstisch');
   within(7.6, 0, () => {
     for (const x of [7.2, 8.0]) {
       cyl(0.17, 0.17, 0.05, x, 0.7, -1.55, mat.white);
       cyl(0.025, 0.025, 0.7, x, 0, -1.55, mat.steel, world, 8);
     }
     box(2.6, 0.05, 0.35, 7.8, 1.0, -1.25, mat.white);
-  });
+  }, 'Stehbar');
   // washroom (x 0..4, left of the kitchen): purple walls, black floor, trough sink with mirror on the south wall next to the door, shower + 3 colored WC cabins on the north wall
   {
     const purple = L(0x3b1f5e);
@@ -782,31 +839,37 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       box(1.6, 2.0, 0.5, x, 0, -5.0, mat.grey);
       for (let i = 0; i < 3; i++) box(0.45, 0.28, 0.4, x - 0.5 + i * 0.5, 2.0, -5.0, mat.crate);
     }
-  });
-  within(18.5, -2.4, () => box(0.5, 2.0, 2.4, 17.9, 0, -2.8, mat.grey));
-  within(10.5, -2.6, () => box(0.5, 2.0, 2.4, 10.9, 0, -2.6, mat.grey));
+  }, 'Archivregale');
+  within(18.5, -2.4, () => box(0.5, 2.0, 2.4, 17.9, 0, -2.8, mat.grey), 'Archivschrank');
+  within(10.5, -2.6, () => box(0.5, 2.0, 2.4, 10.9, 0, -2.6, mat.grey), 'Archivschrank');
   // printer corner (south wall of the archive) + server rack (east wall)
+  const printerStand = { x: ax(12.4), z: az(CZ - 1.25), yaw: 0 }; // where people stand, facing the printer
   {
     const ledG = new THREE.MeshBasicMaterial({ color: 0x3cff7a });
     const ledA = new THREE.MeshBasicMaterial({ color: 0xffb02e });
     const PX = 12.4;
     const PZ = CZ - 0.45;
-    box(1.0, 0.75, 0.6, PX, 0, PZ, mat.plyLight); // table
-    box(0.62, 0.36, 0.5, PX, 0.75, PZ, mat.white); // printer body
-    box(0.6, 0.04, 0.3, PX, 1.11, PZ, mat.dark); // scanner lid
-    box(0.4, 0.02, 0.22, PX, 0.82, PZ - 0.33, mat.lightgrey); // output tray
-    box(0.05, 0.02, 0.02, PX + 0.22, 1.0, PZ - 0.26, ledG);
-    box(0.25, 0.4, 0.2, PX + 0.65, 0, PZ + 0.05, mat.cardboard); // paper stack on the floor
+    item('printer', 'printer', 'Drucker', () => {
+      box(1.0, 0.75, 0.6, PX, 0, PZ, mat.plyLight); // table
+      box(0.62, 0.36, 0.5, PX, 0.75, PZ, mat.white); // printer body
+      box(0.6, 0.04, 0.3, PX, 1.11, PZ, mat.dark); // scanner lid
+      box(0.4, 0.02, 0.22, PX, 0.82, PZ - 0.33, mat.lightgrey); // output tray
+      box(0.05, 0.02, 0.02, PX + 0.22, 1.0, PZ - 0.26, ledG);
+      box(0.25, 0.4, 0.2, PX + 0.65, 0, PZ + 0.05, mat.cardboard); // paper stack on the floor
+      track(printerStand);
+    });
     const RX = 18.1;
     const RZ = -4.0;
-    box(0.7, 2.0, 0.6, RX, 0, RZ, mat.black);
-    for (let i = 0; i < 8; i++) {
-      const y = 0.15 + i * 0.22;
-      box(0.02, 0.16, 0.52, RX - 0.36, y, RZ, mat.dark);
-      box(0.02, 0.025, 0.025, RX - 0.375, y + 0.07, RZ - 0.2, i % 3 === 2 ? ledA : ledG);
-      box(0.02, 0.025, 0.025, RX - 0.375, y + 0.07, RZ - 0.15, ledG);
-    }
-    box(0.8, 0.02, 0.62, RX, 2.0, RZ, mat.grey);
+    item('server-rack', 'server-rack', 'Serverschrank', () => {
+      box(0.7, 2.0, 0.6, RX, 0, RZ, mat.black);
+      for (let i = 0; i < 8; i++) {
+        const y = 0.15 + i * 0.22;
+        box(0.02, 0.16, 0.52, RX - 0.36, y, RZ, mat.dark);
+        box(0.02, 0.025, 0.025, RX - 0.375, y + 0.07, RZ - 0.2, i % 3 === 2 ? ledA : ledG);
+        box(0.02, 0.025, 0.025, RX - 0.375, y + 0.07, RZ - 0.15, ledG);
+      }
+      box(0.8, 0.02, 0.62, RX, 2.0, RZ, mat.grey);
+    });
   }
   // dark room behind the curtain
   slab(18.6, 25.9, B.z0, B.z0, 0, 3.2, mat.black, 0.05).position.z = az(B.z0) + 0.2;
@@ -814,21 +877,21 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   slab(25.9, 25.9, B.z0 + 0.15, -2.25, 0, EXACT ? 3.2 : CUT, mat.black, 0.05);
   slab(18.6, 22.9, B.z0 + 0.15, CZ - 0.15, 0.005, 0.025, L(0x1a1a1a));
   slab(22.9, 25.9, B.z0 + 0.15, -2.25, 0.005, 0.025, L(0x1a1a1a)); // floor of the extension
-  within(19.4, 0, () => box(1.6, EXACT ? 2.45 : CUT, 0.12, 19.4, 0, CZ - 0.15, L(0x0c0c0d))); // curtain (drawn part)
+  within(19.4, 0, () => box(1.6, EXACT ? 2.45 : CUT, 0.12, 19.4, 0, CZ - 0.15, L(0x0c0c0d)), 'Vorhang'); // curtain (drawn part)
   within(20.6, -3.4, () => {
     for (const x of [20.2, 21.0]) {
       cyl(0.17, 0.17, 0.05, x, 0.72, -3.4, mat.white);
       cyl(0.025, 0.025, 0.72, x, 0, -3.4, mat.steel, world, 8);
     }
-  });
+  }, 'Stehtische');
   // booth interior + shelf niche on east face of core, pallet sofa
-  box(0.9, 0.04, 0.5, 25.3, 0.74, -1.8, mat.white);
+  item('booth-table', 'booth-table', 'Tisch Telefonkabine', () => box(0.9, 0.04, 0.5, 25.3, 0.74, -1.8, mat.white));
   within(26, -1.1, () => shelf(26.28, -1.1, 1.9, 2.0, 0.4, Math.PI / 2));
   within(26, -4.2, () => {
     box(0.9, 0.3, 2.0, 26.6, 0, -4.2, mat.plyLight);
     box(0.9, 0.18, 2.0, 26.6, 0.3, -4.2, mat.fabric);
     box(0.25, 0.4, 0.5, 26.3, 0.48, -4.9, mat.black);
-  });
+  }, 'Palettensofa');
 
   /* =================================================================
      WEST END: entry corridor, Wassermelonen room
@@ -865,10 +928,12 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   wall(ANNEX.x1, B.z1, ANNEX.x1, AZ, 3.8, [], { t: 0.3, outer: true });
   box(1.6, 0.9, 0.05, meetX, 1.0, AZ - 0.19, mat.black); // screen on the north face of the south window wall, facing the sofa
   box(1.52, 0.82, 0.01, meetX, 1.04, AZ - 0.22, L(0x20262c));
-  box(2.1, 0.4, 0.9, meetX, 0, B.z1 + 0.7, mat.fabric); // sofa seat (against the north wall)
-  box(2.1, 0.5, 0.2, meetX, 0.4, B.z1 + 0.3, mat.fabric); // backrest
-  for (const dx of [-1.0, 1.0]) box(0.2, 0.28, 0.9, meetX + dx, 0.4, B.z1 + 0.7, mat.dark); // armrests
-  box(0.9, 0.38, 0.5, meetX, 0, B.z1 + 1.9, mat.plyLight); // coffee table
+  item('sofa', 'sofa', 'Sofa', () => {
+    box(2.1, 0.4, 0.9, meetX, 0, B.z1 + 0.7, mat.fabric); // sofa seat (against the north wall)
+    box(2.1, 0.5, 0.2, meetX, 0.4, B.z1 + 0.3, mat.fabric); // backrest
+    for (const dx of [-1.0, 1.0]) box(0.2, 0.28, 0.9, meetX + dx, 0.4, B.z1 + 0.7, mat.dark); // armrests
+  });
+  item('coffee-table', 'coffee-table', 'Couchtisch', () => box(0.9, 0.38, 0.5, meetX, 0, B.z1 + 1.9, mat.plyLight)); // coffee table
   plant(-5.6, -3.5, 1.5, 0, false, { x1: -5.06 }); // west of the lounge partition (x -5)
 
   /* =================================================================
@@ -921,18 +986,23 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     // two seats on the back bench, either side of the table, facing the room (game coordinates)
     for (const lx of [-0.7, 0.7]) {
       const lz = -d / 2 + 0.38;
-      podSeats.push({
-        x: g.position.x + lx * Math.cos(POD_ROT) + lz * Math.sin(POD_ROT),
-        z: g.position.z - lx * Math.sin(POD_ROT) + lz * Math.cos(POD_ROT),
-        yaw: POD_ROT,
-      });
+      podSeats.push(
+        track({
+          x: g.position.x + lx * Math.cos(POD_ROT) + lz * Math.sin(POD_ROT),
+          z: g.position.z - lx * Math.sin(POD_ROT) + lz * Math.cos(POD_ROT),
+          yaw: POD_ROT,
+        }),
+      );
     }
+    podCenter.x = (podSeats[0].x + podSeats[1].x) / 2;
+    podCenter.z = (podSeats[0].z + podSeats[1].z) / 2 + 0.6;
+    track(podCenter);
     for (const x of [-0.5, -0.3, -0.1]) {
       const b = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), mat.lampWarm);
       b.position.set(x, 1.55 + x * 0.3, -0.3);
       g.add(b);
     }
-  });
+  }, 'Holzhaus');
   plant(-4.0, 5.3, 2.0, 0, false, { x0: -4.94 }); // in front of the pod, left side
   const FOOS = { x: -0.15, z: 7.7, rot: (70 * Math.PI) / 180 }; // rot.y > 0 = anticlockwise seen from above
   // the two players stand at the ends of the rods (local z), facing the table
@@ -941,7 +1011,8 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     z: gz(FOOS.z) + side * 1.25 * Math.cos(FOOS.rot),
     yaw: Math.atan2(-side * Math.sin(FOOS.rot), -side * Math.cos(FOOS.rot)),
   }));
-  {
+  item('foosball', 'foosball', 'Tischkicker', () => {
+    foosStands.forEach(track);
     // foosball table: wooden body, green field, handled rods with little players
     const g = new THREE.Group();
     g.position.set(gx(FOOS.x), 0, gz(FOOS.z)); // lounge side of the reception counter, south end, a bit off the walls
@@ -958,15 +1029,15 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       for (const sz of [-1, 1]) box(0.035, 0.035, 0.12, rx, 0.95, sz * 0.62, mat.black, 0, g); // handles
       for (const pz of [-0.18, 0, 0.18]) if ((i + (pz > 0 ? 1 : 0)) % 3 !== 2) box(0.05, 0.1, 0.04, rx, 0.9, pz, i % 2 ? mat.white : L(0xd8322a), 0, g);
     }
-  }
+  });
   // reception counter (white, slatted front) dividing lounge from first desk row
-  {
+  item('reception-counter', 'reception-counter', 'Empfangstheke', () => {
     const m = new THREE.MeshLambertMaterial({ map: slats });
     const zc = az(6.025);
     const len = 6.65 * SCALE; // runs to the window wall
     rbox(0.6, 1.12, len, ax(2.0), 0, zc, m);
     rbox(0.7, 0.05, len + 0.1, ax(2.0), 1.12, zc, mat.white);
-  }
+  });
   // bunting + string lights (hang from the ceiling -> part of the roof layer)
   const sagLine = (a: THREE.Vector3, b: THREE.Vector3, n: number, sag: number, fn: (p: THREE.Vector3, i: number) => void) => {
     for (let i = 0; i <= n; i++) {
@@ -1025,7 +1096,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     deskRowZ(2.72, ROW3, 1, ROW3_OPT); // flipped, back against the reception counter (face x=2.3)
     box(0.84, 1.3, 6.45, 5.486, 0, 6.125, mat.white); // white divider units, double depth, desk-side face unchanged (x 5.906)
     for (const z of [4.5, 7.2]) pendant(3.0, z, 'steel', 2.1, 4.2);
-  });
+  }, 'Trennmöbel Himbeeren');
   // Kreative Kiwis (x 9.7..12.483)
   within(9.08, 5.9, () => {
     deskRowZ(8.672, ROW3, -1, ROW3_OPT);
@@ -1066,7 +1137,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     plant(12.483 - DW / 4, 3.7, 1.9, 1.25, true);
     plant(12.483 - DW / 4, 6.7, 0.9, 1.25, true);
     coatRack(12.083, 2.65);
-  });
+  }, 'Trennwand Kiwis');
   // Digitale Birnen (x 14.7..19.5)
   within(15.884, 6.1, () => {
     deskRowZ(15.474, ROW3, -1, ROW3_OPT);
@@ -1079,7 +1150,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   slab(19.06, 19.5, CORR + 0.15, B.z1, 0, 1.1, mat.white);
   segM(19.5, CORR, 19.5, B.z1, 1.1, 2.7, mat.frosted, 0.04);
   segM(19.5, CORR, 19.5, B.z1, 2.7, 2.8, mat.white, 0.1);
-  box(0.3, 0.14, 0.5, 19.2, 1.1, 5.0, L(0xd8322a));
+  item('box', 'red-box', 'Rote Kiste', () => box(0.3, 0.14, 0.5, 19.2, 1.1, 5.0, L(0xd8322a)));
 
   /* =================================================================
      GLASS ROOM (x 19.5..26.5) - interior not photographed
@@ -1118,9 +1189,14 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     box(1.3, 0.05, 4.4, 23, 0.72, 6.0, mat.white);
     box(0.8, 0.72, 0.1, 23, 0, 4.0, mat.lightgrey);
     box(0.8, 0.72, 0.1, 23, 0, 8.0, mat.lightgrey);
+    meetCenter.x = gx(23);
+    meetCenter.z = gz(6.0);
+    track(meetCenter);
     // wall-mounted TV on the door wall (corridor side), facing into the room
-    box(2.2, 1.25, 0.05, 23, 0.9, 2.3, mat.black);
-    box(2.12, 1.17, 0.01, 23, 0.94, 2.33, L(0x20262c));
+    item('tv', 'meeting-tv', 'Fernseher', () => {
+      box(2.2, 1.25, 0.05, 23, 0.9, 2.3, mat.black);
+      box(2.12, 1.17, 0.01, 23, 0.94, 2.33, L(0x20262c));
+    });
     // red shell chairs (one moulded seat+back shell on a slim 4-leg steel frame), 3 per long side, backs away from the table
     const shellMat = L(0xe5402a, { side: THREE.DoubleSide });
     const frameMat = L(0x8d867f);
@@ -1131,11 +1207,11 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       [23.0, 3.4, -Math.PI / 2], // north head, faces the table
       [23.0, 8.6, Math.PI / 2], // south head
     ];
-    for (const [cx, cz, ry] of seats) {
+    for (const [cx, cz, ry] of seats) item('chair', at('chair', cx, cz), 'Stuhl', () => {
       const chair = new THREE.Group();
       chair.position.set(gx(cx), 0, gz(cz));
       chair.rotation.y = ry;
-      if (Math.abs(Math.sin(ry)) < 0.5) meetSeats.push({ x: gx(cx), z: gz(cz), yaw: Math.atan2(Math.cos(ry), -Math.sin(ry)) }); // side chairs only; local +x = seat front
+      if (Math.abs(Math.sin(ry)) < 0.5) meetSeats.push(track({ x: gx(cx), z: gz(cz), yaw: Math.atan2(Math.cos(ry), -Math.sin(ry)) })); // side chairs only; local +x = seat front
       chair.add(new THREE.Mesh(shellGeo, shellMat));
       for (const [fx, tx] of [[0.14, 0.27], [-0.1, -0.26]]) {
         for (const sz of [-1, 1]) {
@@ -1145,8 +1221,8 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
         chairRod(chair, [fx, 0.415, -0.17], [fx, 0.415, 0.17], 0.01, frameMat); // cross bar under the shell
       }
       world.add(chair);
-    }
-  });
+    });
+  }, 'Besprechungstisch');
 
   /* =================================================================
      EAST END STRIP (x 26.5..31.5), full building depth
@@ -1167,7 +1243,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     });
   }
   plant(32.1, 5.9, 0.8, 0.85); // sill plant between the two groups
-  box(0.45, 0.7, 1.2, 32.05, 0, 2.9, mat.white); // low white cabinet under the east windows
+  item('cabinet', at('cabinet', 32.05, 2.9), 'Sideboard', () => box(0.45, 0.7, 1.2, 32.05, 0, 2.9, mat.white)); // low white cabinet under the east windows
   // tables 10 + 11: centred in the room (x 27.1..32.35) and pushed against the north wall (inner face z = -5.35)
   within(29.7, -3.7, () => {
     const NW = 1.85; // tables 10 + 11: desks 1.85 wide (was 1.6), first one against the north wall
@@ -1177,7 +1253,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     pendant(29.7, -3.7, 'black', 1.95, 2.8);
   });
   coatRack(31.9, -1.4, false); // white coat stand near the window
-  box(0.8, 0.6, 0.45, 31.9, 0, 1.1, mat.lightgrey); // drawer cabinet at window
+  item('cabinet', at('cabinet', 31.9, 1.1), 'Rollkorpus', () => box(0.8, 0.6, 0.45, 31.9, 0, 1.1, mat.lightgrey)); // drawer cabinet at window
   coatRack(32.1, 0.1, true);
   plant(32.1, -0.9, 1.3);
   plant(27.1, 9.0, 1.1);
@@ -1220,12 +1296,38 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   world.updateMatrixWorld(true);
   roof.updateMatrixWorld(true);
 
-  const blockers: THREE.Box3[] = [];
-  world.traverse((o) => {
-    if (!(o instanceof THREE.Mesh) || o.userData.nonav) return;
-    const bb = new THREE.Box3().setFromObject(o);
-    if (bb.min.y < 1.2 && bb.max.y > 0.25) blockers.push(bb);
-  });
+  /** Footprints of everything below `root` that is in a walker's way. */
+  const collectBlockers = (root: THREE.Object3D): THREE.Box3[] => {
+    const out: THREE.Box3[] = [];
+    root.traverse((o) => {
+      if (!(o instanceof THREE.Mesh) || o.userData.nonav) return;
+      const bb = new THREE.Box3().setFromObject(o);
+      if (bb.min.y < 1.2 && bb.max.y > 0.25) out.push(bb);
+    });
+    return out;
+  };
+  // architecture and everything else that never moves
+  const blockers = collectBlockers(world);
+
+  // movable furniture: one merged scene object per item, placed at its pivot (centre of the footprint)
+  const items: RoomItem[] = [];
+  for (const d of drafts) {
+    const inner = new THREE.Group();
+    inner.add(...d.objs);
+    inner.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(inner);
+    if (bounds.isEmpty()) continue;
+    const pivot = new THREE.Vector3((bounds.min.x + bounds.max.x) / 2, 0, (bounds.min.z + bounds.max.z) / 2);
+    const local = collectBlockers(inner).map((b) => b.translate(pivot.clone().negate()));
+    const outer = new THREE.Group();
+    outer.add(inner);
+    inner.position.copy(pivot).negate();
+    const holder = mergeStatic(outer, false);
+    holder.position.copy(pivot);
+    scene.add(holder);
+    const hasSeat = d.anchors.length > 0;
+    items.push(new RoomItem(d.id, d.kind, d.label, holder, { x: pivot.x, z: pivot.z, yaw: 0 }, local, bounds.translate(pivot.clone().negate()), d.anchors, !hasSeat));
+  }
 
   const desks: DeskPlacement[] = [];
   const POTS = [mat.terracotta, mat.potWhite, mat.pot];
@@ -1247,28 +1349,33 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       const side = rnd(1) < 0.5 ? -1 : 1;
       const px = side * (0.4 + rnd(2) * (s.w / 2 - 0.55));
       const pz = -0.32 + rnd(3) * 0.1;
+      // part of the desk (merged per material), so it moves with it
       const pg = new THREE.Group();
-      pg.position.set(s.x, 0, s.z);
-      pg.rotation.y = s.rot;
       const pl = new THREE.Group();
       pl.position.set(px, 0.75, pz);
       pl.rotation.y = rnd(4) * Math.PI * 2;
       pl.scale.setScalar(0.85 + rnd(5) * 0.4);
       pg.add(pl);
-      world.add(pg);
       deskPlant(pl, Math.floor(rnd(6) * 4), 0, 0, 0, POTS[Math.floor(rnd(7) * 3)]);
+      root.add(mergeStatic(pg, false));
     }
     scene.add(root);
-    root.updateMatrixWorld(true);
-    blockers.push(tpl.box.clone().applyMatrix4(root.matrixWorld));
-    const sin = Math.sin(s.rot);
-    const cos = Math.cos(s.rot);
-    desks.push({
-      rig: { root, screen },
-      seat: { x: s.x + sin * 0.75, z: s.z + cos * 0.75 },
-      yaw: s.rot + Math.PI,
-      back: { x: sin, z: cos },
-    });
+    const placement: DeskPlacement = { rig: { root, screen }, seat: { x: 0, z: 0 }, yaw: 0, back: { x: 0, z: 0 } };
+    desks.push(placement);
+    const turn = new THREE.Matrix4().makeRotationY(s.rot);
+    const deskItem = new RoomItem(s.id, 'desk', `Tisch ${i + 1}`, root, { x: s.x, z: s.z, yaw: s.rot }, [tpl.box.clone().applyMatrix4(turn)], tpl.box.clone().applyMatrix4(turn), [], false);
+    // the chair sits 0.75 behind the desk centre (local +z)
+    deskItem.onApply = () => {
+      const sin = Math.sin(root.rotation.y);
+      const cos = Math.cos(root.rotation.y);
+      placement.seat.x = root.position.x + sin * 0.75;
+      placement.seat.z = root.position.z + cos * 0.75;
+      placement.yaw = root.rotation.y + Math.PI;
+      placement.back.x = sin;
+      placement.back.z = cos;
+    };
+    deskItem.apply();
+    items.push(deskItem);
   }
 
   const staticWorld = mergeStatic(world, true);
@@ -1297,12 +1404,19 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   const paper = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.012, 0.3), L(0xffffff));
   paper.position.set(ax(12.4), 0.84, az(CZ - 0.45 - 0.33));
   paper.visible = false;
-  scene.add(paper);
-  const printer = { stand: { x: ax(12.4), z: az(CZ - 1.25) }, yaw: 0, paper };
+  const printerItem = items.find((it) => it.id === 'printer');
+  if (printerItem) {
+    // rides on the printer when that is moved
+    paper.position.x -= printerItem.base.x;
+    paper.position.z -= printerItem.base.z;
+    printerItem.holder.add(paper);
+  } else scene.add(paper);
+  const printer = { stand: printerStand, paper };
 
-  const meeting = { doorPos: { x: ax(20.65), z: az(CORR) }, center: { x: ax(23), z: az(6.0) }, seats: meetSeats };
+  const meeting = { doorPos: { x: ax(20.65), z: az(CORR) }, center: meetCenter, seats: meetSeats };
   // the strip south of the wall, east of the annex, is outside: block it so nobody walks out through the entrance doorway into thin air
   blockers.push(new THREE.Box3(new THREE.Vector3(ax(ANNEX.x1), 0, OFFICE_D), new THREE.Vector3(OFFICE_W, 1.2, OFFICE_D + ANNEX_D)));
+  const allBlockers = () => [...blockers, ...items.flatMap((it) => it.blockers())];
   // numbered room labels (blue, model coordinates of the room centres)
   const roomLabels = new THREE.Group();
   scene.add(roomLabels);
@@ -1332,7 +1446,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     roomLabels.add(sp);
   });
 
-  return { desks, blockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: { x: (podSeats[0].x + podSeats[1].x) / 2, z: (podSeats[0].z + podSeats[1].z) / 2 + 0.6 }, seats: podSeats } };
+  return { desks, items, blockers: allBlockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats } };
 }
 
 /**

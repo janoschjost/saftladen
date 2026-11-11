@@ -51,7 +51,6 @@ export class Overlay {
   toggleNames(): void {
     this.namesVisible = !this.namesVisible;
     this.toggle.setAttribute('aria-pressed', String(this.namesVisible));
-    this.toggle.textContent = this.namesVisible ? 'Namen verbergen' : 'Namen zeigen';
     for (const el of this.labelEls.values()) el.hidden = !this.namesVisible;
   }
 

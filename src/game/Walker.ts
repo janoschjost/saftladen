@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { Talk } from './Social';
+import type { Traffic } from './Traffic';
 
 export type WalkerState = 'idle' | 'walk';
 
@@ -30,6 +31,11 @@ export abstract class Walker {
   private stuckClock = 0;
   private stuckFrom: Vec2 = { x: 0, z: 0 };
   private stuckCount = 0;
+  private replanned = false;
+  /** the traffic director (routes and destinations); set by the game */
+  traffic: Traffic | null = null;
+  /** which way this walker prefers to pass head-on (stable, so nobody dithers) */
+  private dodgePref: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
   /** true while the user holds this walker with the mouse */
   held = false;
   /** conversation this walker is part of, if any */
@@ -127,6 +133,11 @@ export abstract class Walker {
       this.timer -= dt;
       this.blockedTime = 0;
       if (!this.talk && this.stepAside(dt, nav, others)) return;
+      if (!this.talk && !this.fixed && this.timer < 1 && this.crowded(others)) {
+        // packed in with a bunch of bystanders: walk off somewhere else
+        this.wanderTo(nav);
+        if (this.path.length) return;
+      }
       this.moving += (0 - this.moving) * Math.min(1, dt * 8);
       if (this.talk) {
         // standing in a conversation: face the others
@@ -170,7 +181,7 @@ export abstract class Walker {
       const k = 1 - d / reach;
       // lateral offset of the other relative to our heading: side > 0 means it is on our right
       const side = ox * dz - oz * dx;
-      const dodge = side > 0 ? 1 : -1; // go to the opposite side of it
+      const dodge = Math.abs(side) < 0.15 ? this.dodgePref : side > 0 ? 1 : -1; // go to the opposite side of it (head-on: our usual side)
       // perpendicular to heading (left = (-dz, dx)); dodge > 0 means other is on right, so go left
       sx += (-dz * dodge - ox / d * 0.3) * k * 3.2;
       sz += (dx * dodge - oz / d * 0.3) * k * 3.2;
@@ -197,6 +208,15 @@ export abstract class Walker {
 
     // stuck for too long -> give up and pick something else
     this.blockedTime = speedFactor < 0.5 ? this.blockedTime + dt : 0;
+    if (this.blockedTime === 0) this.replanned = false;
+    if (this.blockedTime > 0.8 && !this.replanned && this.path.length) {
+      // wedged behind people: flip our passing side and plan a route that stays well clear of them
+      this.replanned = true;
+      this.dodgePref = this.dodgePref === 1 ? -1 : 1;
+      const goal = this.path[this.path.length - 1];
+      this.goTo(nav, goal, 12);
+      if (this.path.length) return;
+    }
     if (this.blockedTime > 2.5) {
       this.blockedTime = 0;
       this.path = [];
@@ -230,7 +250,7 @@ export abstract class Walker {
           this.timer = 0.2 + Math.random() * 0.5;
           return;
         }
-        this.goTo(nav, goal);
+        this.goTo(nav, goal, 12);
         return;
       }
       this.stuckCount = 0;
@@ -250,6 +270,16 @@ export abstract class Walker {
    * Idle walker makes room: when someone walks towards us (or stands on us) shuffle sideways, out of their path.
    * Returns true while stepping (replaces the idle animation for this step).
    */
+  /** true when 4+ other bodies stand within ~1.8 and this walker is not part of a talk: time to move on */
+  private crowded(others: readonly Walker[]): boolean {
+    let n = 0;
+    for (const o of others) {
+      if (o === this || o.away || o.held || this.ignores(o) || o.talk) continue;
+      if (Math.hypot(o.pos.x - this.pos.x, o.pos.z - this.pos.z) < 1.8 && ++n >= 4) return true;
+    }
+    return false;
+  }
+
   /** true if there is free floor (with body clearance) a short way in direction (dx,dz). */
   private clear(nav: NavGrid, dx: number, dz: number): boolean {
     const m = 0.3;
@@ -323,12 +353,13 @@ export abstract class Walker {
 
   /** Walk to a random free cell, with random jitter so people don't stack on cell centres. */
   protected wanderTo(nav: NavGrid): void {
+    if (this.traffic) return this.goTo(nav, this.traffic.wanderSpot(this));
     const { cx, cz } = nav.randomWalkable();
     this.goTo(nav, nav.center(cx, cz));
   }
 
-  protected goTo(nav: NavGrid, to: Vec2): void {
-    const path = nav.findPath(this.pos, to);
+  protected goTo(nav: NavGrid, to: Vec2, avoid = 3): void {
+    const path = this.traffic ? this.traffic.route(this, to, avoid) : nav.findPath(this.pos, to);
     if (!path.length) {
       this.timer = 0.5;
       return;
