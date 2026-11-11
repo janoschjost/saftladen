@@ -7,6 +7,7 @@ import { screenVariants, type ScreenKind } from '../render/screens';
 import { DOOR_IN, DOOR_OUT } from './Door';
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { MeetSeat } from './Meeting';
+import type { CoffeeSpot } from './Coffee';
 import type { Desk, FoosSpot, Office } from './Office';
 import type { Talk } from './Social';
 import { Walker } from './Walker';
@@ -83,6 +84,21 @@ interface MeetJob {
   dismissed: boolean;
 }
 
+interface CoffeeJob {
+  spot: CoffeeSpot;
+  talk: Talk;
+  /** approach = walking to the kitchen, drink = standing with a cup, leave = lowering the cup before walking off */
+  phase: 'approach' | 'drink' | 'leave';
+  t: number;
+  age: number;
+  retries: number;
+  retryIn: number;
+  /** offsets the sip rhythm so a group doesn't drink in unison */
+  offset: number;
+  /** the break is over */
+  dismissed: boolean;
+}
+
 interface PhoneJob {
   remaining: number;
   /** pace = walks back and forth between `a` and `b`, wander = strolls from spot to spot */
@@ -144,6 +160,10 @@ export class Person extends Walker {
   phoneAmt = 0;
   /** on a call, sitting in the phone box (phone at the ear while seated) */
   boothCall = false;
+  /** walking to / standing in the kitchen with a coffee */
+  coffeeJob: CoffeeJob | null = null;
+  /** 0 = no cup .. 1 = cup in the hand (eased) */
+  cupAmt = 0;
   /** walking to / sitting in the meeting room */
   meetJob: MeetJob | null = null;
   /** called to a meeting while still at a desk: goes once they have stood up */
@@ -294,6 +314,12 @@ export class Person extends Walker {
           this.abortLeaving();
           return false;
         }
+        if (this.sit > 0.01) {
+          // stand up first, only then walk to the door
+          this.sit = Math.max(0, this.sit - dt * 4);
+          this.moving += (0 - this.moving) * Math.min(1, dt * 8);
+          return true;
+        }
         if (this.script) {
           if (this.runScript(dt)) return true;
           this.presence = 'out';
@@ -397,6 +423,8 @@ export class Person extends Walker {
 
   override update(dt: number, nav: NavGrid, others: readonly Walker[] = []): void {
     this.updatePhone(dt);
+    this.cupAmt += ((this.coffeeJob?.phase === 'drink' ? 1 : 0) - this.cupAmt) * Math.min(1, dt * 4);
+    if (this.cupAmt < 0.005) this.cupAmt = 0;
     super.update(dt, nav, others);
     this.clock += dt;
     if (this.rig.setMood && (this.moodTimer -= dt) <= 0) {
@@ -569,6 +597,7 @@ export class Person extends Walker {
     if (this.controlled) {
       this.cancelPrint();
       this.cancelFoos();
+      this.cancelCoffee();
       // the player takes over: stand up from the desk first, then walk freely
       const t = this.task;
       if (t?.phase === 'approach') this.cancelTask();
@@ -577,6 +606,7 @@ export class Person extends Walker {
       if (!this.task && !this.meetJob) return this.steerStep(dt);
     }
     if (this.meetJob) return this.controlMeet(dt, nav);
+    if (this.coffeeJob) return this.controlCoffee(dt, nav);
     if (this.held && !this.task && !this.printJob && !this.foosJob && !this.vapeJob) {
       // carried by the player: sits down in the air while snapped to a chair, stands otherwise
       const snap = this.snapDesk;
@@ -907,6 +937,115 @@ export class Person extends Walker {
     if (job.partner.foosJob?.partner === this) job.partner.cancelFoos();
   }
 
+  /** True while on the way to the kitchen coffee break, or already in it. */
+  get inCoffee(): boolean {
+    return !!this.coffeeJob;
+  }
+
+  /** True once standing in the kitchen with a cup. */
+  get coffeeReady(): boolean {
+    return this.coffeeJob?.phase === 'drink';
+  }
+
+  /** 0 = cup held at chest height .. 1 = cup at the mouth (a sip every few seconds). */
+  get cupSip(): number {
+    const j = this.coffeeJob;
+    if (!j || j.phase !== 'drink') return 0;
+    const k = (j.t + j.offset) % 7;
+    return k < 2.2 ? Math.sin((k / 2.2) * Math.PI) : 0;
+  }
+
+  /** Called to the kitchen: drops what they were doing, walks to `spot` and drinks a coffee until `dismissCoffee`. */
+  callToCoffee(nav: NavGrid, spot: CoffeeSpot, talk: Talk): void {
+    this.interrupt();
+    spot.occupant = this;
+    this.talk = talk;
+    this.coffeeJob = { spot, talk, phase: 'approach', t: 0, age: 0, retries: 0, retryIn: 0.5, offset: Math.random() * 7, dismissed: false };
+    this.goTo(nav, spot.stand);
+  }
+
+  /** The break is over (or this person was pulled out): lower the cup and leave, or give up on the way. */
+  dismissCoffee(): void {
+    const j = this.coffeeJob;
+    if (!j || j.phase === 'approach') this.cancelCoffee();
+    else j.dismissed = true;
+  }
+
+  /** Drops out of the coffee break right where they are. */
+  cancelCoffee(): void {
+    const j = this.coffeeJob;
+    if (!j) return;
+    if (j.spot.occupant === this) j.spot.occupant = null;
+    if (this.talk === j.talk) {
+      this.talk = null;
+      this.speaking = false;
+    }
+    this.coffeeJob = null;
+    this.path = [];
+    this.state = 'idle';
+    this.timer = 0.3 + Math.random();
+    this.socialCooldown = Math.max(this.socialCooldown, 6 + Math.random() * 10);
+  }
+
+  private controlCoffee(dt: number, nav: NavGrid): boolean {
+    const j = this.coffeeJob!;
+    if (this.held) {
+      this.cancelCoffee();
+      return false;
+    }
+    const ease = Math.min(1, dt * 8);
+    if (this.sit > 0.01) {
+      // dropped from the desk: stand up first
+      this.sit = Math.max(0, this.sit - dt * 4);
+      this.moving += (0 - this.moving) * ease;
+      return true;
+    }
+    const spot = j.spot;
+    if (j.phase === 'approach') {
+      j.age += dt;
+      if (j.age > 70) {
+        this.cancelCoffee();
+        return false;
+      }
+      if (this.isWalking()) return false;
+      this.moving += (0 - this.moving) * ease;
+      if (Math.hypot(spot.stand.x - this.pos.x, spot.stand.z - this.pos.z) < 0.6) {
+        j.phase = 'drink';
+        j.t = 0;
+        return true;
+      }
+      j.retryIn -= dt;
+      if (j.retryIn <= 0) {
+        j.retryIn = 0.5;
+        this.goTo(nav, spot.stand);
+        if (!this.isWalking() && ++j.retries > 8) this.cancelCoffee();
+      }
+      return true;
+    }
+    this.moving += (0 - this.moving) * ease;
+    this.path = [];
+    this.state = 'idle';
+    this.timer = 1;
+    const c = j.talk.center;
+    this.turnTo(Math.atan2(c.x - this.pos.x, c.z - this.pos.z), dt);
+    if (j.phase === 'drink') {
+      j.t += dt;
+      // drift back onto the spot when somebody nudged them
+      const k = Math.min(1, dt * 2);
+      this.pos.x += (spot.stand.x - this.pos.x) * k;
+      this.pos.z += (spot.stand.z - this.pos.z) * k;
+      if (j.dismissed) {
+        j.phase = 'leave';
+        j.t = 0;
+      }
+      return true;
+    }
+    // leave: the cup goes down first
+    j.t += dt;
+    if (j.t > 0.8) this.cancelCoffee();
+    return true;
+  }
+
   private controlVape(dt: number): boolean {
     const job = this.vapeJob!;
     if (this.held || this.controlled || this.talk) {
@@ -975,6 +1114,7 @@ export class Person extends Walker {
   private cancelTask(): void {
     this.cancelPrint();
     this.cancelFoos();
+    this.cancelCoffee();
     this.vapeJob = null;
     this.phoneJob = null;
     if (!this.task) return;

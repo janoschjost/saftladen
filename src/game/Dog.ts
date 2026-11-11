@@ -7,6 +7,7 @@ import { Walker } from './Walker';
 
 const FOLLOW_DISTANCE = 1.4; // dog starts running when the owner is further away than this
 const HEEL_DISTANCE = 0.9; // where the dog tries to end up
+const SLEEP_AFTER = 12; // seconds lying beside a seated owner before dozing off
 
 export interface PetOptions {
   /** unique walker id (defaults to `dog-<owner>`) */
@@ -37,6 +38,9 @@ export class Dog extends Walker {
   private retry = 0;
   /** 0 standing .. 1 lying down (owner is seated and the pet is settled) */
   lie = 0;
+  /** 0 awake .. 1 asleep (after lying a while beside the seated owner) */
+  sleep = 0;
+  private lying = 0;
 
   constructor(
     readonly name: string,
@@ -135,6 +139,9 @@ export class Dog extends Walker {
     super.update(dt, nav, others);
     const settle = this.owner.sit > 0.5 && this.owner.presence === 'in' && !this.away && this.state === 'idle' && this.moving < 0.1;
     this.lie += ((settle ? 1 : 0) - this.lie) * Math.min(1, dt * 3);
+    this.lying = settle ? this.lying + dt : 0;
+    const asleep = settle && this.lying > SLEEP_AFTER;
+    this.sleep += ((asleep ? 1 : 0) - this.sleep) * Math.min(1, dt * (asleep ? 1 : 6));
   }
 
   protected decide(nav: NavGrid): void {

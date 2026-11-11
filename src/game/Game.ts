@@ -23,6 +23,7 @@ import { DeskLights } from './DeskLights';
 import { Dog } from './Dog';
 import { DOOR } from './Door';
 import { Doors } from './Doors';
+import { Kitchen } from './Coffee';
 import { MeetingRoom } from './Meeting';
 import { Pod } from './Pod';
 import { PhoneBooth } from './PhoneBooth';
@@ -75,6 +76,7 @@ export class Game {
   private doors!: Doors;
   private meetingRoom!: MeetingRoom;
   private pod!: Pod;
+  private kitchen!: Kitchen;
   private phoneBooth!: PhoneBooth;
   private metaTimer = 0;
   private rosterTimer = 0;
@@ -128,6 +130,7 @@ export class Game {
     this.doors = new Doors(model.doors);
     this.meetingRoom = new MeetingRoom(model.meeting, this.nav);
     this.pod = new Pod(model.pod, this.nav);
+    this.kitchen = new Kitchen(model.kitchen);
     this.phoneBooth = new PhoneBooth(model.phoneBooth, this.nav);
     this.meetingRoom.onClosed = (closed) => this.doors.setLocked(this.meetingRoom.doorPos, closed);
     this.views = new Views(stage, this.renderer.domElement, this.nav, (mode) => {
@@ -533,6 +536,29 @@ export class Game {
         return 'Holzhaus wird verlassen';
       },
     });
+    devEvents.register({
+      id: 'coffee',
+      group: 'Meetings',
+      label: 'Kaffeepause (3)',
+      run: () => {
+        if (this.kitchen.current) return null;
+        const group = pickFree(3);
+        if (group.length < 2) return null;
+        group.forEach(drop);
+        return this.kitchen.start(group, this.nav) ? `Kaffeepause: ${group.map((p) => p.member.name.split(' ')[0]).join(', ')}` : null;
+      },
+    });
+    devEvents.register({
+      id: 'coffee-end',
+      group: 'Meetings',
+      label: 'Kaffeepause beenden',
+      run: () => {
+        const b = this.kitchen.current;
+        if (!b) return null;
+        b.end();
+        return 'Kaffeepause beendet';
+      },
+    });
     devEvents.register({ id: 'meeting-chat', group: 'Meetings', label: 'Gespräch (2)', run: meeting(2) });
     devEvents.register({ id: 'meeting-small', group: 'Meetings', label: 'Meeting (4)', run: meeting(4) });
     devEvents.register({ id: 'meeting-big', group: 'Meetings', label: 'Meeting (6)', run: meeting(6) });
@@ -768,6 +794,7 @@ export class Game {
     this.social.update(dt, this.people, this.nav, this.traffic);
     this.meetingRoom.update(dt, this.people, this.nav);
     this.pod.update(dt, this.people, this.nav);
+    this.kitchen.update(dt, this.people, this.nav);
     this.phoneBooth.update(dt, this.people, this.nav);
     this.separate();
     this.separate();
@@ -880,6 +907,7 @@ export class Game {
           r.body.position.y += Math.max(0, Math.sin(t * 2.2)) * 0.02;
         }
       }
+      this.poseCup(w, r);
     } else if (w instanceof Dog) {
       const r = w.rig;
       const s = Math.sin(ph * 1.6) * 0.8 * w.moving;
@@ -893,8 +921,62 @@ export class Game {
       r.legs[3].rotation.x = THREE.MathUtils.lerp(s, 1.45, lie);
       for (const l of r.legs) l.position.y = base - drop;
       r.body.position.y = (bob * 1.2 + breathe) * (1 - lie) + breathe * lie - drop;
-      r.tail.rotation.y = Math.sin(performance.now() / 90 + w.phase) * (0.35 + 0.4 * w.moving) * (1 - 0.7 * lie);
+      const z = w.sleep;
+      // asleep: roll onto the side, slow deep breaths, tail still, small floating Zzz
+      const th = 1.45 * z;
+      const sn = Math.sin(th);
+      const cs = Math.cos(th);
+      const h = 0.44; // torso centre height: the body rolls around it
+      const bx = h * sn;
+      const by = r.body.position.y + h * (1 - cs) - 0.03 * z + Math.sin(performance.now() / 1100 + w.phase) * 0.012 * z;
+      r.body.rotation.z = th;
+      r.body.position.x = bx;
+      r.body.position.y = by;
+      r.legs.forEach((l, i) => {
+        const q = (l.userData.q ??= { x: l.position.x, z: l.position.z }) as { x: number; z: number };
+        l.rotation.order = 'ZXY';
+        l.rotation.z = th;
+        l.position.set(q.x * cs - 0.32 * sn + bx, q.x * sn + 0.32 * cs + by, q.z);
+        if (z > 0) l.rotation.x = THREE.MathUtils.lerp(l.rotation.x, i < 2 ? -0.5 : 0.5, z);
+      });
+      r.tail.rotation.y = Math.sin(performance.now() / 90 + w.phase) * (0.35 + 0.4 * w.moving) * (1 - 0.7 * lie) * (1 - z);
+      this.poseZzz(w, z, r.face, -r.face.y * sn + bx, r.face.y * cs + by);
     }
+  }
+
+  /** Little "z" bubbles drifting up from a sleeping pet. */
+  private poseZzz(w: Dog, amt: number, face: { y: number; z: number; r: number }, hx: number, hy: number): void {
+    let zs = w.root.userData.zzz as THREE.Sprite[] | undefined;
+    if (!zs) {
+      if (amt < 0.01) return;
+      const c = document.createElement('canvas');
+      c.width = c.height = 64;
+      const g = c.getContext('2d')!;
+      g.font = 'bold 48px sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.lineWidth = 6;
+      g.strokeStyle = 'rgba(0,0,0,0.6)';
+      g.strokeText('z', 32, 34);
+      g.fillStyle = '#fff';
+      g.fillText('z', 32, 34);
+      const tex = new THREE.CanvasTexture(c);
+      zs = [0, 1, 2].map(() => {
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+        w.root.add(sp);
+        return sp;
+      });
+      w.root.userData.zzz = zs;
+    }
+    const t = performance.now() / 1000;
+    zs.forEach((sp, i) => {
+      const k = (t / 3 + i / 3) % 1;
+      sp.visible = amt > 0.02;
+      sp.position.set(hx + 0.05 + k * 0.12, hy + face.r * 0.5 + k * 0.28, face.z + 0.05);
+      const sc = (0.07 + 0.08 * k) / w.root.scale.y;
+      sp.scale.set(sc, sc, 1);
+      sp.material.opacity = Math.sin(k * Math.PI) * amt;
+    });
   }
 
   /** Tired people: heavy eyelids, dark eye bags, a slouch and a yawn now and then (hand over the mouth). */
@@ -916,6 +998,18 @@ export class Game {
       }
     }
     r.setTired(lids);
+  }
+
+  /** Coffee cup in the left hand: held in front of the chest, now and then raised to the mouth. The cup stays upright. */
+  private poseCup(w: Person, r: Person['rig']): void {
+    const a = w.cupAmt;
+    r.cup.visible = a > 0.02;
+    if (!r.cup.visible) return;
+    const sip = w.cupSip;
+    r.armL.rotation.x = THREE.MathUtils.lerp(r.armL.rotation.x, THREE.MathUtils.lerp(-1.25, -1.95, sip), a);
+    r.armL.rotation.z = (0.12 + 0.25 * sip) * a;
+    r.cup.quaternion.copy(r.armL.quaternion).invert();
+    r.cup.rotateX(-0.7 * sip);
   }
 
   /** Phone at the ear during a call: upper arm lifted, forearm folded up, a little nod while walking. */
@@ -1028,10 +1122,12 @@ export class Game {
       this.overlay.hideTooltip();
     }
     const meet = this.meetingRoom.current;
+    const coffee = this.kitchen.current;
     const rep = this.reply;
     this.overlay.setBubbles([
       ...(rep && !rep.who.away ? [{ id: `reply-${rep.who.id}`, text: rep.text, ...this.project(rep.who, 0.55) }] : []),
       ...this.social.active.filter((c) => c.phase === 'talk').map((c) => ({ id: c.speaker.id, text: c.text, ...this.project(c.speaker, 0.55) })),
+      ...(coffee?.phase === 'chat' ? [{ id: coffee.speaker.id, text: coffee.text, ...this.project(coffee.speaker, 0.55) }] : []),
       ...(meet?.phase === 'session' ? [{ id: meet.speaker.id, text: meet.text, ...this.project(meet.speaker, 0.55) }] : []),
     ]);
     this.metaTimer -= 1 / 60;

@@ -21,6 +21,8 @@ export interface CharacterRig {
   vape?: { elbow: THREE.Object3D; led: THREE.MeshBasicMaterial; puffs: THREE.Mesh[] };
   /** only on `phone` looks: the bendable forearm of the right arm, which holds the phone */
   phone?: { elbow: THREE.Object3D };
+  /** coffee cup in the left hand (hidden until a coffee break), kept upright by the game while the arm moves */
+  cup: THREE.Object3D;
 }
 
 /** A scale of 1 is this tall; `heightM` on a Look is converted relative to it. */
@@ -321,6 +323,17 @@ export function buildCharacter(look: Look): CharacterRig {
     return pivot;
   };
   const armL = mkArm(-1);
+  const cup = new THREE.Group();
+  cup.position.y = -0.58;
+  cup.visible = false;
+  cup.add(
+    mesh([
+      box(0.075, 0.09, 0.075, 0, 0, 0, '#f4f1ea'), // mug
+      box(0.062, 0.006, 0.062, 0, 0.046, 0, '#3b2415'), // coffee
+      box(0.016, 0.05, 0.03, -0.045, 0, 0, '#f4f1ea'), // handle
+    ]),
+  );
+  armL.add(cup);
   let armR: THREE.Object3D;
   let vape: CharacterRig['vape'];
   let phone: CharacterRig['phone'];
@@ -415,5 +428,5 @@ export function buildCharacter(look: Look): CharacterRig {
   const h = look.heightM ? look.heightM / REF_HEIGHT_M : look.height ?? 1;
   root.scale.setScalar(h);
 
-  return { root, body, legL, legR, kneeL, kneeR, armL, armR, headHeight: 1.95 * h, setTired, setMood, vape, phone };
+  return { root, body, legL, legR, kneeL, kneeR, armL, armR, headHeight: 1.95 * h, setTired, setMood, vape, phone, cup };
 }

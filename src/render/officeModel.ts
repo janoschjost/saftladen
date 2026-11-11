@@ -82,6 +82,8 @@ export interface OfficeModel {
   meeting: { doorPos: Vec2; center: Vec2; seats: Array<{ x: number; z: number; yaw: number }> };
   /** the two bench seats in the wooden pod (game coordinates, yaw = facing out of the pod) */
   pod: { center: Vec2; seats: Array<{ x: number; z: number; yaw: number }> };
+  /** kitchen: where the coffee group gathers (game coordinates, in front of the espresso machine) */
+  kitchen: { center: Vec2 };
   /** the stool in the phone box (game coordinates, yaw = facing the door) */
   phoneBooth: { seat: { x: number; z: number; yaw: number } };
 }
@@ -136,6 +138,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   const podCenter: Vec2 = { x: 0, z: 0 };
   const boothSeat = { x: 0, z: 0, yaw: 0 };
   const meetCenter: Vec2 = { x: 0, z: 0 };
+  const kitchenCenter: Vec2 = { x: 0, z: 0 };
   const deskSpecs: Array<{ id: string; x: number; z: number; rot: number; white: boolean; w: number; stand: boolean }> = [];
 
   /* ---------- movable items (room editor) ---------- */
@@ -886,6 +889,9 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     box(0.12, EXACT ? 2.6 : CUT, 4.2, 4.07, 0, -3.1, mat.black); // dark splash wall
     cyl(0.18, 0.18, 0.55, 5.3, 0, -5.1, mat.steel);
     cyl(0.2, 0.18, 0.5, 5.8, 0, -5.1, mat.grey);
+    kitchenCenter.x = gx(5.5);
+    kitchenCenter.z = gz(-2.8);
+    track(kitchenCenter);
   }, 'Küchenzeile');
   within(8.57, -3.6, () => {
     // table runs from x 6.7 all the way to the east wall (inner face ~10.45)
@@ -2183,7 +2189,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     roomLabels.add(sp);
   });
 
-  return { desks, items, blockers: allBlockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, phoneBooth: { seat: boothSeat } };
+  return { desks, items, blockers: allBlockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter }, phoneBooth: { seat: boothSeat } };
 }
 
 /**
