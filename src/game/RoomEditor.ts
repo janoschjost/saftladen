@@ -62,6 +62,7 @@ export class RoomEditor {
       exportJson: () => this.exportJson(),
       importJson: (text) => this.importJson(text),
       resetAll: () => this.resetAll(),
+      saveToRepo: () => this.saveToRepo(),
     });
 
     // the saved layout applies before the game derives the nav grid and the seats from the items
@@ -242,6 +243,27 @@ export class RoomEditor {
       if (o) out[it.id] = o;
     }
     return JSON.stringify(out, null, 2);
+  }
+
+  /** Dev server only: writes the current layout to src/data/layout.json (the new shipped default). */
+  private async saveToRepo(): Promise<string> {
+    const out: Layout = {};
+    for (const it of this.items) {
+      const cur = it.override ?? {};
+      if (!sameOverride(cur, {})) out[it.id] = cur;
+    }
+    try {
+      const res = await fetch('/__save-layout', { method: 'POST', body: JSON.stringify(out) });
+      if (!res.ok) throw new Error(String(res.status));
+    } catch {
+      return 'Speichern fehlgeschlagen – nur mit dem Dev-Server (npm run dev) möglich.';
+    }
+    try {
+      localStorage.removeItem(KEY); // the file is the layout now
+    } catch {
+      /* ignore */
+    }
+    return 'In src/data/layout.json gespeichert. Jetzt committen.';
   }
 
   /** Replaces the whole layout; returns a status message. */

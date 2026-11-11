@@ -13,6 +13,8 @@ export interface EditorPanelActions {
   /** returns a status message */
   importJson(text: string): string;
   resetAll(): void;
+  /** writes the layout into the repo (dev server); resolves to a status message */
+  saveToRepo(): Promise<string>;
 }
 
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -51,6 +53,10 @@ export class EditorPanel {
         if (Number.isFinite(x) && Number.isFinite(z)) actions.moveTo(x, z);
       });
     }
+    el('editor-save').addEventListener('click', () => {
+      this.status('Speichere …');
+      actions.saveToRepo().then((msg) => this.status(msg));
+    });
     el('editor-export').addEventListener('click', () => {
       this.json.value = actions.exportJson();
       this.json.select();
