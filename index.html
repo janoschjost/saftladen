@@ -54,37 +54,22 @@
         transform-origin: 50% 100%;
         animation: loader-sip 2.8s ease-in-out infinite;
       }
-      .m-loader__carton polygon {
-        stroke-width: 0.4;
+      .m-loader__box polygon {
+        stroke-width: 0.3;
         stroke-linejoin: round;
       }
-      .m-loader__facet {
-        fill: black;
-        opacity: 0.05;
-      }
-      .m-loader__facet--dark {
-        opacity: 0.12;
-      }
-      .m-loader__straw-base,
-      .m-loader__straw-stripe {
-        fill: none;
-        stroke-width: 6;
-        stroke-linejoin: miter;
-      }
-      .m-loader__straw-base {
-        stroke: #ff1fa9;
-      }
-      .m-loader__straw-stripe {
-        stroke: #ffc4e4;
-        stroke-dasharray: 5 7;
+      .m-loader__slab {
+        fill: #b9b9bd;
+        stroke: #b9b9bd;
       }
       .m-loader__bubble-shape {
         fill: white;
+        stroke: white;
       }
       .m-loader__two {
         fill: #1c1c1e;
         font-family: 'Apercu', system-ui, sans-serif;
-        font-size: 24px;
+        font-size: 22px;
         font-weight: 700;
       }
       .m-loader__juice {
@@ -123,7 +108,7 @@
       @keyframes loader-fill {
         0% {
           opacity: 0;
-          transform: translateY(44px);
+          transform: translateY(32px);
         }
         8% {
           opacity: 1;
@@ -131,11 +116,11 @@
         70%,
         90% {
           opacity: 1;
-          transform: translateY(4px);
+          transform: translateY(1px);
         }
         100% {
           opacity: 0;
-          transform: translateY(4px);
+          transform: translateY(1px);
         }
       }
       @keyframes loader-wave-x {
@@ -143,7 +128,7 @@
           transform: translateX(0);
         }
         to {
-          transform: translateX(-40px);
+          transform: translateX(-20px);
         }
       }
       @keyframes loader-sip {
@@ -185,7 +170,7 @@
         }
         .m-loader__juice {
           animation: none;
-          transform: translateY(14px);
+          transform: translateY(8px);
         }
       }
     </style>
@@ -194,35 +179,47 @@
     <div class="m-loader" id="loader" role="status" aria-live="polite">
       <svg class="m-loader__box" viewBox="0 0 100 130" aria-hidden="true">
         <defs>
-          <clipPath id="loader-clip"><polygon points="36,60 64,60 70,66 70,86 64,92 42,92 32,102 32,66" /></clipPath>
+          <clipPath id="loader-clip"><polygon points="7,7 29,7 33,11 33,31 29,35 14,35 6,43 6,11" /></clipPath>
         </defs>
-        <polyline class="m-loader__straw-base" points="60,46 60,24 76,9" />
-        <polyline class="m-loader__straw-stripe" points="60,46 60,24 76,9" />
-        <g class="m-loader__carton">
-        <polygon points="26,50 74,50 46,82" fill="#2a2a2e" stroke="#2a2a2e" />
-        <polygon points="74,50 82,58 46,82" fill="#222226" stroke="#222226" />
-        <polygon points="82,58 82,112 46,82" fill="#18181b" stroke="#18181b" />
-        <polygon points="82,112 74,120 46,82" fill="#101012" stroke="#101012" />
-        <polygon points="74,120 26,120 46,82" fill="#17171a" stroke="#17171a" />
-        <polygon points="26,120 18,112 46,82" fill="#202024" stroke="#202024" />
-        <polygon points="18,112 18,58 46,82" fill="#2c2c31" stroke="#2c2c31" />
-        <polygon points="18,58 26,50 46,82" fill="#34343a" stroke="#34343a" />
-        <polygon points="30,42 70,42 74,50" fill="#3e3e45" stroke="#3e3e45" />
-        <polygon points="30,42 74,50 26,50" fill="#34343a" stroke="#34343a" />
-        <polygon points="18,58 26,50 11,60" fill="#0a0a0b" stroke="#0a0a0b" />
-        </g>
-        <polygon class="m-loader__bubble-shape" points="36,60 64,60 70,66 70,86 64,92 42,92 32,102 32,66" />
-        <polygon class="m-loader__facet" points="36,60 64,60 50,76" />
-        <polygon class="m-loader__facet" points="70,66 70,86 50,76" />
-        <polygon class="m-loader__facet m-loader__facet--dark" points="32,102 42,92 50,76" />
-        <g clip-path="url(#loader-clip)">
-          <g class="m-loader__juice">
-            <g transform="translate(32 62)">
-              <path class="m-loader__fill m-loader__wave" d="M-40,0 l10,-5 l10,5 l10,-5 l10,5 l10,-5 l10,5 l10,-5 l10,5 l10,-5 l10,5 l10,-5 l10,5 l10,-5 l10,5 l10,-5 l10,5 V60 H-40 Z" />
+        <polygon points="50.0,46.0 81.18,64.0 50.0,82.0 18.82,64.0" fill="#4a4a52" stroke="#4a4a52" />
+        <polygon points="18.82,64.0 50.0,82.0 50.0,126.0 18.82,108.0" fill="#2c2c31" stroke="#2c2c31" />
+        <polygon points="50.0,82.0 81.18,64.0 81.18,108.0 50.0,126.0" fill="#161618" stroke="#161618" />
+        <polygon points="74.25,18.0 79.44,21.0 74.25,24.0 69.05,21.0" fill="#ff5cc0" stroke="#ff5cc0" />
+        <polygon points="69.05,21.0 74.25,24.0 74.25,30.0 69.05,27.0" fill="#ff1fa9" stroke="#ff1fa9" />
+        <polygon points="74.25,24.0 79.44,21.0 79.44,27.0 74.25,30.0" fill="#c4007f" stroke="#c4007f" />
+        <polygon points="69.05,21.0 74.25,24.0 69.05,27.0 63.86,24.0" fill="#ffe6f4" stroke="#ffe6f4" />
+        <polygon points="63.86,24.0 69.05,27.0 69.05,33.0 63.86,30.0" fill="#ffc4e4" stroke="#ffc4e4" />
+        <polygon points="69.05,27.0 74.25,24.0 74.25,30.0 69.05,33.0" fill="#e39cc6" stroke="#e39cc6" />
+        <polygon points="63.86,24.0 69.05,27.0 63.86,30.0 58.66,27.0" fill="#ff5cc0" stroke="#ff5cc0" />
+        <polygon points="58.66,27.0 63.86,30.0 63.86,36.0 58.66,33.0" fill="#ff1fa9" stroke="#ff1fa9" />
+        <polygon points="63.86,30.0 69.05,27.0 69.05,33.0 63.86,36.0" fill="#c4007f" stroke="#c4007f" />
+        <polygon points="63.86,54.0 69.05,57.0 63.86,60.0 58.66,57.0" fill="#ff5cc0" stroke="#ff5cc0" />
+        <polygon points="58.66,57.0 63.86,60.0 63.86,66.0 58.66,63.0" fill="#ff1fa9" stroke="#ff1fa9" />
+        <polygon points="63.86,60.0 69.05,57.0 69.05,63.0 63.86,66.0" fill="#c4007f" stroke="#c4007f" />
+        <polygon points="63.86,48.0 69.05,51.0 63.86,54.0 58.66,51.0" fill="#ffe6f4" stroke="#ffe6f4" />
+        <polygon points="58.66,51.0 63.86,54.0 63.86,60.0 58.66,57.0" fill="#ffc4e4" stroke="#ffc4e4" />
+        <polygon points="63.86,54.0 69.05,51.0 69.05,57.0 63.86,60.0" fill="#e39cc6" stroke="#e39cc6" />
+        <polygon points="63.86,42.0 69.05,45.0 63.86,48.0 58.66,45.0" fill="#ff5cc0" stroke="#ff5cc0" />
+        <polygon points="58.66,45.0 63.86,48.0 63.86,54.0 58.66,51.0" fill="#ff1fa9" stroke="#ff1fa9" />
+        <polygon points="63.86,48.0 69.05,45.0 69.05,51.0 63.86,54.0" fill="#c4007f" stroke="#c4007f" />
+        <polygon points="63.86,36.0 69.05,39.0 63.86,42.0 58.66,39.0" fill="#ffe6f4" stroke="#ffe6f4" />
+        <polygon points="58.66,39.0 63.86,42.0 63.86,48.0 58.66,45.0" fill="#ffc4e4" stroke="#ffc4e4" />
+        <polygon points="63.86,42.0 69.05,39.0 69.05,45.0 63.86,48.0" fill="#e39cc6" stroke="#e39cc6" />
+        <polygon points="63.86,30.0 69.05,33.0 63.86,36.0 58.66,33.0" fill="#ff5cc0" stroke="#ff5cc0" />
+        <polygon points="58.66,33.0 63.86,36.0 63.86,42.0 58.66,39.0" fill="#ff1fa9" stroke="#ff1fa9" />
+        <polygon points="63.86,36.0 69.05,33.0 69.05,39.0 63.86,42.0" fill="#c4007f" stroke="#c4007f" />
+        <g transform="matrix(0.866 0.5 0 1 18.82 64.0)">
+          <polygon class="m-loader__slab" points="7,7 29,7 33,11 33,31 29,35 14,35 6,43 6,11" transform="translate(0 1.5)" />
+          <polygon class="m-loader__bubble-shape" points="7,7 29,7 33,11 33,31 29,35 14,35 6,43 6,11" />
+          <g clip-path="url(#loader-clip)">
+            <g class="m-loader__juice">
+              <g transform="translate(0 7)">
+                <path class="m-loader__fill m-loader__wave" d="M-40,3 h10 v-3 h10 v3 h10 v-3 h10 v3 h10 v-3 h10 v3 h10 v-3 h10 v3 h10 v-3 h10 v3 h10 v-3 h10 v3 h10 v-3 h10 v3 h10 v-3 h10 v3 V50 H-40 Z" />
+              </g>
             </g>
           </g>
+          <text class="m-loader__two" x="19.5" y="28" text-anchor="middle">2</text>
         </g>
-        <text class="m-loader__two" x="51" y="87" text-anchor="middle">2</text>
       </svg>
       <div class="m-loader__shadow" aria-hidden="true"></div>
       <p class="m-loader__name" aria-label="Saftladen"><span class="m-loader__letter" style="--i:0">S</span><span class="m-loader__letter" style="--i:1">a</span><span class="m-loader__letter" style="--i:2">f</span><span class="m-loader__letter" style="--i:3">t</span><span class="m-loader__letter" style="--i:4">l</span><span class="m-loader__letter" style="--i:5">a</span><span class="m-loader__letter" style="--i:6">d</span><span class="m-loader__letter" style="--i:7">e</span><span class="m-loader__letter" style="--i:8">n</span></p>
@@ -345,24 +342,33 @@
         <div class="m-picker__view">
           <div class="m-picker__stage" id="picker-stage"></div>
           <figure class="m-picker__reference" id="picker-reference">
-            <img class="m-picker__reference-image" id="picker-reference-image" alt="" width="480" height="681" />
-            <figcaption class="m-picker__reference-caption">Vorlage</figcaption>
+            <div class="m-picker__reference-stage" id="picker-home-stage"></div>
+            <figcaption class="m-picker__reference-caption" id="picker-home-caption">Homeoffice</figcaption>
           </figure>
         </div>
-        <div class="m-picker__info">
-          <h3 class="m-picker__name" id="picker-name"></h3>
-          <p class="m-picker__role" id="picker-role"></p>
-          <label class="m-picker__home">
-            <span class="m-picker__home-label">Homeoffice</span>
-            <select class="m-picker__home-select" id="picker-home"></select>
-          </label>
-        </div>
-        <div class="m-picker__controls">
-          <button class="m-button" id="picker-prev" type="button" aria-label="Vorherige Figur">&uarr; Zurück</button>
-          <button class="m-button" id="picker-left" type="button" aria-label="Nach links drehen">&larr; Drehen</button>
-          <button class="m-button" id="picker-spin" type="button" aria-pressed="true">Auto-Drehung</button>
-          <button class="m-button" id="picker-right" type="button" aria-label="Nach rechts drehen">Drehen &rarr;</button>
-          <button class="m-button" id="picker-next" type="button" aria-label="Nächste Figur">Weiter &darr;</button>
+        <div class="m-picker__footer">
+          <div class="m-picker__info">
+            <h3 class="m-picker__name" id="picker-name"></h3>
+            <p class="m-picker__role" id="picker-role"></p>
+            <label class="m-picker__home">
+              <span class="m-picker__home-label">Homeoffice</span>
+              <span class="m-picker__home-wrap">
+                <select class="m-picker__home-select" id="picker-home"></select>
+                <svg class="m-picker__home-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+              </span>
+            </label>
+          </div>
+          <div class="m-picker__controls">
+            <div class="m-picker__group" role="group" aria-label="Figur wechseln">
+              <button class="m-button" id="picker-prev" type="button" aria-label="Vorherige Figur">&uarr; Zurück</button>
+              <button class="m-button" id="picker-next" type="button" aria-label="Nächste Figur">Weiter &darr;</button>
+            </div>
+            <div class="m-picker__group" role="group" aria-label="Ansicht drehen">
+              <button class="m-button" id="picker-left" type="button" aria-label="Nach links drehen">&larr; Drehen</button>
+              <button class="m-button" id="picker-spin" type="button" aria-pressed="true">Auto-Drehung</button>
+              <button class="m-button" id="picker-right" type="button" aria-label="Nach rechts drehen">Drehen &rarr;</button>
+            </div>
+          </div>
         </div>
         <p class="m-picker__hint">Ziehen zum Drehen · Scrollen zum Zoomen · &uarr;&darr; wechseln · &larr;&rarr; drehen · Esc schliesst</p>
         <button class="m-button m-picker__close" id="picker-close" type="button">Schliessen</button>

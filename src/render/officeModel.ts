@@ -116,6 +116,8 @@ interface Opening {
   flush?: boolean;
   /** a / b are already game coordinates (no plan scaling) */
   abs?: boolean;
+  /** wall above the opening is fully solid (not the see-through ghost above CUT) */
+  solidAbove?: boolean;
   /** door only: dark frame around the door, fixed glass above it up to the wall top (no plaster) */
   frame?: boolean;
 }
@@ -374,13 +376,16 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
           put(op.b - 0.05, op.b, 0, top + 0.05, mat.black, t + 0.02);
           put(op.a, op.b, top, top + 0.05, mat.black, t + 0.02);
           put(op.a, op.b, top + 0.05, hFull, mat.glass, op.flush ? t : 0.03);
-        } else put(op.a, op.b, top, hFull);
+        } else if (op.solidAbove) seg(...P(op.a), ...P(op.b), top, hFull, mat.wall, t);
+        else put(op.a, op.b, top, hFull);
         if (bottom > 0) put(op.a, op.b, 0, bottom);
         let fill: THREE.Mesh | undefined;
         if (op.door) {
           const glassDoor = op.fill === 'glass';
-          const W = op.b - op.a - 0.04;
-          const H = top - 0.03;
+          // leaf fills the opening exactly (inside the dark frame jambs when there is one), no gaps
+          const inset = op.frame ? 0.05 : 0;
+          const W = op.b - op.a - 2 * inset;
+          const H = top;
           const pivot = new THREE.Group();
           const leaf = new THREE.Mesh(new THREE.BoxGeometry(W, H, glassDoor ? 0.03 : t), glassDoor ? mat.glass : mat.lightgrey);
           leaf.position.set(W / 2, H / 2, 0);
@@ -399,7 +404,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
             }
           }
           const base = alongX ? 0 : -Math.PI / 2;
-          const [hx, hz] = P(op.a + 0.02);
+          const [hx, hz] = P(op.a + inset);
           pivot.position.set(hx, 0, hz);
           pivot.rotation.y = base;
           scene.add(pivot);
@@ -661,7 +666,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     { a: -3.0, b: -2.0, door: 1 }, // storage door
     { a: 2.5, b: 3.4, door: 1 }, // door under "RISCHE"
     { a: 4.9, b: 5.8, door: 1 }, // kitchen/dining door
-    { a: 6.2, b: 9.5, top: 2.1, fill: 'glass', flush: true }, // glazed panel into dining (same height as the doors)
+    { a: 6.2, b: 9.5, top: 2.1, fill: 'glass', flush: true, solidAbove: true }, // glazed panel into dining: glass up to door height, solid wall above
     { a: 14.4, b: 15.3, door: 1 }, // "Archiv"
     { a: 18.5, b: 23, top: 2.5 }, // dark room, black curtain
     { a: 23.25, b: 24.25, top: 2.2, fill: 'glass', door: -1 }, // booth glass door, opens outwards (into the hallway)
@@ -694,12 +699,16 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       g.fillStyle = '#0d0d0f';
       g.textBaseline = 'alphabetic';
       g.font = FONT;
+      const w0 = [...text].map((ch) => g.measureText(ch).width).reduce((a, b) => a + b, 0);
+      // grow the font until the letter spacing is tight (~0.02em), but keep the capitals inside the canvas
+      const size = Math.min(320, (250 * (w - 20)) / (w0 + 0.02 * 250 * (text.length - 1)));
+      g.font = FONT.replace('250px', `${size}px`);
       const widths = [...text].map((ch) => g.measureText(ch).width);
       const total = widths.reduce((a, b) => a + b, 0);
       const track = (w - 20 - total) / (text.length - 1);
       let x = 10;
       [...text].forEach((ch, i) => {
-        g.fillText(ch, x, 218);
+        g.fillText(ch, x, 232);
         x += widths[i] + track;
       });
       const maskH = ((Y0 + Hh - OPEN_TOP) / Hh) * h; // canvas y of OPEN_TOP
@@ -885,7 +894,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     box(2.1, 0.3, 0.14, SX, 0.88, CZ - 0.14, tile); // tiled back ledge
     box(2.1, 1.35, 0.02, SX, 1.2, Z_S - 0.03, mirror);
     box(2.1, 0.08, 0.08, SX, 2.6, Z_S - 0.05, lightStrip);
-    for (const x of [SX - 0.8, SX - 0.45, SX + 0.8]) plant(x, CZ - 0.14, 0.45, 1.18, true);
+    for (const x of [SX - 0.8, SX - 0.45, SX + 0.8]) plant(x, CZ - 0.14, 0.45, 1.18, true, { z1: Z_S, x0: X_W, x1: X_E });
     for (const z of [-2.0, -2.3]) box(0.04, 0.42, 0.22, X_W + 0.03, 1.1, z, mat.fabric);
     box(0.3, 0.3, 0.3, 0.4, 0, -2.7, mat.dark); // bin
 
@@ -2015,9 +2024,10 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
 
   // entrance door leaf (not merged, so it can swing open when somebody walks through)
   const door = new THREE.Group();
-  const doorW = 0.94;
-  const leaf = new THREE.Mesh(new THREE.BoxGeometry(doorW, 2.07, 0.05), mat.lightgrey);
-  leaf.position.set(doorW / 2, 2.07 / 2, 0);
+  const doorW = 1.0; // fills the doorway (model x -4.4 .. -3.4) exactly
+  const doorH = 2.1;
+  const leaf = new THREE.Mesh(new THREE.BoxGeometry(doorW, doorH, 0.05), mat.lightgrey);
+  leaf.position.set(doorW / 2, doorH / 2, 0);
   leaf.castShadow = true;
   const handle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.03, 0.09), mat.steel);
   handle.position.set(doorW - 0.1, 1.0, 0);
@@ -2025,7 +2035,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   const pane = new THREE.Mesh(new THREE.BoxGeometry(doorW - 0.3, 1.1, 0.06), mat.glass);
   pane.position.set(doorW / 2, 1.3, 0);
   door.add(leaf, pane, handle);
-  door.position.set(ax(-3.9) - 0.5 + 0.03, 0, az(B.z1));
+  door.position.set(ax(-3.9) - 0.5, 0, az(B.z1) - 0.15 + 0.025); // flush with the inner face of the 0.3 m wall
   scene.add(door);
 
   // printer paper (not merged, shown while somebody prints)

@@ -3,8 +3,8 @@ import { team } from '../data/team';
 import { buildCharacter } from '../render/characterBuilder';
 import { buildCat } from '../render/catBuilder';
 import { buildDog } from '../render/dogBuilder';
-import { HOME_COUNT, HOME_LABELS, SPECIAL_HOME } from '../render/homeOffice';
-import { assignHomeRoom, homeOwnerOf, homeRoomOf } from '../data/homeAssignments';
+import { HOME_COUNT, HOME_LABELS, HomeOffice, SPECIAL_HOME } from '../render/homeOffice';
+import { assignHomeRoom, homeOwnerOf, homeRoomOf, reservedRooms } from '../data/homeAssignments';
 
 const TURN_STEP = Math.PI / 4;
 const AUTO_SPEED = 0.6; // rad/s
@@ -17,13 +17,16 @@ export class CharacterPicker {
   private list = document.getElementById('picker-list') as HTMLElement;
   private nameEl = document.getElementById('picker-name') as HTMLElement;
   private roleEl = document.getElementById('picker-role') as HTMLElement;
-  private refFigure = document.getElementById('picker-reference') as HTMLElement;
-  private refImage = document.getElementById('picker-reference-image') as HTMLImageElement;
+  private homeStage = document.getElementById('picker-home-stage') as HTMLElement;
+  private homeCaption = document.getElementById('picker-home-caption') as HTMLElement;
   private homeSelect = document.getElementById('picker-home') as HTMLSelectElement;
   private spinBtn = document.getElementById('picker-spin') as HTMLButtonElement;
   private openBtn = document.getElementById('open-picker') as HTMLButtonElement;
 
   private renderer: THREE.WebGLRenderer | null = null;
+  private homeRenderer: THREE.WebGLRenderer | null = null;
+  private homes = new Map<number, HomeOffice>();
+  private home: HomeOffice | null = null;
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(28, 1, 0.1, 50);
   private turntable = new THREE.Group();
@@ -108,6 +111,7 @@ export class CharacterPicker {
     this.homeSelect.addEventListener('change', () => {
       assignHomeRoom(team[this.index].id, this.homeSelect.value === '' ? null : Number(this.homeSelect.value));
       this.updateHomeSelect();
+      this.showHome();
     });
 
     const host = this.canvasHost;
@@ -201,14 +205,8 @@ export class CharacterPicker {
     group.position.x = pets.length ? -0.28 : 0;
     this.figure = group;
     this.turntable.add(group);
-    if (m.portrait) {
-      this.refImage.src = import.meta.env.BASE_URL + m.portrait;
-      this.refImage.alt = `Porträt von ${m.name}`;
-      this.refFigure.hidden = false;
-    } else {
-      this.refFigure.hidden = true;
-    }
     this.updateHomeSelect();
+    this.showHome();
     this.nameEl.textContent = m.name;
     this.roleEl.textContent = m.role;
     this.itemEls.forEach((el, n) => {
@@ -217,6 +215,32 @@ export class CharacterPicker {
       el.setAttribute('aria-current', String(on));
       if (on) el.scrollIntoView({ block: 'nearest' });
     });
+  }
+
+  /** Room shown for a person: their special / assigned room, else a stable pick among the rooms nobody else owns. */
+  private roomFor(id: string): number {
+    const own = homeRoomOf(id);
+    if (own !== null) return own;
+    const taken = reservedRooms(id);
+    const free = Array.from({ length: HOME_COUNT }, (_, r) => r).filter((r) => !taken.has(r));
+    let h = 0;
+    for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    return free.length ? free[h % free.length] : h % HOME_COUNT;
+  }
+
+  /** Puts the selected person into their home office scene in the side card. */
+  private showHome(): void {
+    const m = team[this.index];
+    const room = this.roomFor(m.id);
+    let home = this.homes.get(room);
+    if (!home) {
+      home = new HomeOffice(room);
+      this.homes.set(room, home);
+    }
+    if (this.home && this.home !== home) this.home.setOccupant(null);
+    this.home = home;
+    home.setOccupant(m, true);
+    this.homeCaption.textContent = HOME_LABELS[room];
   }
 
   /** Home office room of the selected person: a regular room can be picked (one owner each), special people have their own fixed room. */
@@ -248,6 +272,11 @@ export class CharacterPicker {
       this.canvasHost.appendChild(this.renderer.domElement);
       this.resizeObserver = new ResizeObserver(() => this.resize());
       this.resizeObserver.observe(this.canvasHost);
+      this.homeRenderer = new THREE.WebGLRenderer({ antialias: true });
+      this.homeRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      this.homeRenderer.shadowMap.enabled = true;
+      this.homeStage.appendChild(this.homeRenderer.domElement);
+      this.resizeObserver.observe(this.homeStage);
     }
     this.yaw = START_YAW;
     this.zoom = 1;
@@ -272,6 +301,13 @@ export class CharacterPicker {
     this.renderer.setSize(w, h, false);
     this.renderer.domElement.style.width = '100%';
     this.renderer.domElement.style.height = '100%';
+    const hw = this.homeStage.clientWidth;
+    const hh = this.homeStage.clientHeight;
+    if (this.homeRenderer && hw && hh) {
+      this.homeRenderer.setSize(hw, hh, false);
+      this.homeRenderer.domElement.style.width = '100%';
+      this.homeRenderer.domElement.style.height = '100%';
+    }
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
   }
@@ -282,10 +318,14 @@ export class CharacterPicker {
     if (this.autoSpin && !this.dragging) this.yaw += AUTO_SPEED * dt;
     this.turntable.rotation.y = this.yaw;
 
-    const dist = 5.8 * this.zoom;
+    const dist = 5.2 * this.zoom;
     this.camera.position.set(0, 1 + Math.sin(this.pitch) * dist, Math.cos(this.pitch) * dist);
     this.camera.lookAt(0, 0.95, 0);
     this.renderer!.render(this.scene, this.camera);
+    if (this.home && this.homeRenderer && this.homeStage.clientWidth) {
+      this.home.update(dt);
+      this.home.render(this.homeRenderer, 0, 0, this.homeStage.clientWidth, this.homeStage.clientHeight);
+    }
     this.raf = requestAnimationFrame((n) => this.frame(n));
   }
 }

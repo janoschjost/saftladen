@@ -632,15 +632,15 @@ interface Occupant {
 
 const occupants = new Map<string, Occupant>();
 
-function occupantOf(member: TeamMember): Occupant {
-  let o = occupants.get(member.id);
+function occupantOf(member: TeamMember, fresh = false): Occupant {
+  let o = fresh ? undefined : occupants.get(member.id);
   if (o) return o;
   const rig = buildCharacter(member.look);
   const pets: Occupant['pets'] = [];
   if (member.dog) pets.push({ rig: buildDog(member.dog), spot: new THREE.Vector3(-1.15, 0, 0.35), yaw: 0.5, onDesk: false });
   for (const [i, c] of (member.cats ?? []).entries()) pets.push({ rig: buildCat(c.kind), spot: new THREE.Vector3(0.62 + i * 0.3, 0.74, 0.88), yaw: 0.3 - i * 0.5, onDesk: true });
   o = { rig, pets };
-  occupants.set(member.id, o);
+  if (!fresh) occupants.set(member.id, o);
   return o;
 }
 
@@ -720,15 +720,15 @@ export class HomeOffice {
     return this.member?.id ?? null;
   }
 
-  /** Put somebody into the room (or empty it with null). */
-  setOccupant(member: TeamMember | null): void {
+  /** Put somebody into the room (or empty it with null). `fresh` builds private figures, so another scene keeps its own. */
+  setOccupant(member: TeamMember | null, fresh = false): void {
     if (this.occupant) {
       this.scene.remove(this.occupant.rig.root);
       for (const p of this.occupant.pets) this.scene.remove(p.rig.root);
       if (this.occupant.headset) this.occupant.rig.body.remove(this.occupant.headset);
     }
     this.member = member;
-    this.occupant = member ? occupantOf(member) : null;
+    this.occupant = member ? occupantOf(member, fresh) : null;
     if (!this.occupant) return;
     const { rig, pets } = this.occupant;
     rig.root.position.set(0, 0, 0);
