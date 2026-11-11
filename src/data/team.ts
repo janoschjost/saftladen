@@ -114,6 +114,9 @@ const skipBreaks: Record<string, HomeBreak[]> = {
 // can't stand coffee
 const coffeeHaters = new Set(['janosch-jost']);
 
+// grab chips from the kitchen and eat them while walking around
+const snackers = new Set(['jan-hasler']);
+
 // in the home office a lot, never out on errands
 const homebodies = new Set(['marco-hefti']);
 
@@ -131,6 +134,7 @@ export const team: TeamMember[] = raw.map((p) => ({
   homeRoom: homeRooms[p.id],
   skipBreaks: skipBreaks[p.id],
   hatesCoffee: coffeeHaters.has(p.id),
+  snacker: snackers.has(p.id),
   swimLook: swimLooks[p.id],
   dog: dogs[p.id],
   dogName: dogNames[p.id],
