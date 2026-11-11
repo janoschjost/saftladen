@@ -1,18 +1,110 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { NavGrid } from '../game/NavGrid';
+import { makeCollapsible } from '../ui/collapsible';
 import { IsoCamera } from './IsoCamera';
 import { ax, az } from './officeModel';
 import { WORLD } from './World';
 
 export type ViewMode = 'iso' | 'orbit' | 'plan' | 'walk';
 
-const HINTS: Record<ViewMode, string> = {
-  iso: 'Ziehen zum Verschieben · Scrollen zum Zoomen · Person ziehen · N Namen · R Dach · H Homeoffice · F Folgen · C Auswahl steuern (WASD)',
-  orbit: 'Ziehen zum Drehen · Rechtsklick-Ziehen zum Verschieben · Scrollen zum Zoomen · N Namen · R Dach · Person anklicken, F folgen, C zum Steuern (WASD, Shift = rennen)',
-  plan: 'Ziehen zum Verschieben · Scrollen zum Zoomen · N Namen · F Folgen · C Auswahl steuern (WASD)',
-  walk: 'W A S D / Pfeiltasten zum Gehen · Shift = rennen · Ziehen zum Umschauen · E / Klick = Tür öffnen, Person ansprechen · N Namen',
+/** Mouse gestures in the controls panel (24px line icons, drawn with currentColor). */
+const ICONS = {
+  drag: '<path d="M12 3v18M3 12h18"/><path d="m9 6 3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/>',
+  rotate: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v4h-4"/>',
+  rightDrag: '<rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 3v7"/><path d="M12 3a6 6 0 0 1 6 6v1h-6z" fill="currentColor"/>',
+  wheel: '<rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 7v4"/>',
+  click: '<path d="m6 3 13 7-6 2-2 6z"/>',
+  person: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/>',
+  look: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+} as const;
+
+/** One line of the controls panel: a mouse gesture (icon, action, how to do it) or keyboard keys and the action. */
+type Hint = { icon: keyof typeof ICONS; text: string; how: string } | { keys: string[]; text: string };
+/** The panel lists its lines in small titled groups. */
+type HintGroup = { title: string; items: Hint[] };
+
+/** two keys per line (forward/back, left/right) keeps the key column narrow; walk mode also takes the arrow keys */
+const wasd = (arrows = false): Hint[] => [
+  { keys: ['W', 'S'], text: arrows ? 'Vor / zurück (oder ↑ ↓)' : 'Vor / zurück' },
+  { keys: ['A', 'D'], text: arrows ? 'Links / rechts (oder ← →)' : 'Links / rechts' },
+];
+const PERSON: HintGroup = {
+  title: 'Ausgewählte Person',
+  items: [{ keys: ['F'], text: 'Folgen' }, { keys: ['C'], text: 'Steuern' }, ...wasd(), { keys: ['Shift'], text: 'Rennen' }],
 };
+const HINTS: Record<ViewMode, HintGroup[]> = {
+  iso: [
+    {
+      title: 'Maus',
+      items: [
+        { icon: 'drag', text: 'Verschieben', how: 'Ziehen' },
+        { icon: 'wheel', text: 'Zoomen', how: 'Scrollen' },
+        { icon: 'person', text: 'Umsetzen', how: 'Person ziehen' },
+      ],
+    },
+    { title: 'Ansicht', items: [{ keys: ['N'], text: 'Namen' }, { keys: ['R'], text: 'Dach' }, { keys: ['H'], text: 'Homeoffice' }] },
+    PERSON,
+  ],
+  orbit: [
+    {
+      title: 'Maus',
+      items: [
+        { icon: 'rotate', text: 'Drehen', how: 'Ziehen' },
+        { icon: 'rightDrag', text: 'Verschieben', how: 'Rechtsklick + Ziehen' },
+        { icon: 'wheel', text: 'Zoomen', how: 'Scrollen' },
+        { icon: 'click', text: 'Auswählen', how: 'Person anklicken' },
+      ],
+    },
+    { title: 'Ansicht', items: [{ keys: ['N'], text: 'Namen' }, { keys: ['R'], text: 'Dach' }] },
+    PERSON,
+  ],
+  plan: [
+    {
+      title: 'Maus',
+      items: [
+        { icon: 'drag', text: 'Verschieben', how: 'Ziehen' },
+        { icon: 'wheel', text: 'Zoomen', how: 'Scrollen' },
+      ],
+    },
+    { title: 'Ansicht', items: [{ keys: ['N'], text: 'Namen' }] },
+    PERSON,
+  ],
+  walk: [
+    { title: 'Bewegen', items: [...wasd(true), { keys: ['Shift'], text: 'Rennen' }] },
+    { title: 'Maus', items: [{ icon: 'look', text: 'Umschauen', how: 'Ziehen' }, { icon: 'click', text: 'Tür öffnen, Person ansprechen', how: 'Klick' }] },
+    { title: 'Ansicht', items: [{ keys: ['E'], text: 'Tür öffnen, Person ansprechen' }, { keys: ['N'], text: 'Namen' }] },
+  ],
+};
+
+const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] =>
+  Object.assign(document.createElement(tag), { className }, text === undefined ? {} : { textContent: text });
+
+function hintItem(h: Hint): HTMLLIElement {
+  const li = el('li', 'm-help__item');
+  const how = el('span', 'm-help__how');
+  const label = el('span', 'm-help__label', h.text);
+  if ('icon' in h) {
+    how.innerHTML = `<span class="m-help__chip"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[h.icon]}</svg></span>`;
+    label.append(el('small', 'm-help__gesture', h.how));
+  } else {
+    // alternatives (W / S) get a slash between the keys
+    h.keys.forEach((k, i) => {
+      if (i) how.append(el('span', 'm-help__or', '/'));
+      how.append(el('kbd', 'm-help__key', k));
+    });
+  }
+  li.append(how, label);
+  return li;
+}
+
+function hintGroup(g: HintGroup): HTMLLIElement {
+  const li = el('li', 'm-help__group');
+  const list = el('ul', 'm-help__items');
+  list.append(...g.items.map(hintItem));
+  li.append(el('span', 'm-help__group-title', g.title), list);
+  return li;
+}
 
 const DEFAULT_MODE: ViewMode = 'orbit';
 const EYE = 1.65;
@@ -72,6 +164,8 @@ export class Views {
 
     this.buttons = [...document.querySelectorAll<HTMLButtonElement>('[data-view]')];
     this.hint = document.getElementById('hint');
+    const help = document.getElementById('help');
+    if (help) makeCollapsible(help, help.querySelector('.m-help__title') as HTMLElement, 'saftladen.help.collapsed');
     this.buttons.forEach((b) => b.addEventListener('click', () => this.setMode(b.dataset.view as ViewMode)));
     this.bind();
     // deep link: #orbit | #plan | #walk | #walk@x,z,yaw (game metres, radians)
@@ -112,7 +206,7 @@ export class Views {
     if (mode === 'orbit') this.resetOrbit();
     if (mode === 'walk') this.applyWalk();
     this.buttons.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === mode)));
-    if (this.hint) this.hint.textContent = HINTS[mode];
+    this.hint?.replaceChildren(...HINTS[mode].map(hintGroup));
     this.stage.dataset.view = mode;
     this.onChange(mode);
     this.resize(window.innerWidth, window.innerHeight);
