@@ -77,7 +77,7 @@ export interface TeamMember {
   skipBreaks?: HomeBreak[];
   /** changes to the look for a swim (changed out of sight); without it they swim in their clothes */
   swimLook?: Partial<Look>;
-  dog?: 'shiba' | 'puppy' | 'doodle';
+  dog?: 'shiba' | 'puppy' | 'doodle' | 'terrier';
   dogName?: string;
   cats?: Array<{ kind: 'tabby' | 'tortie'; name: string }>; // cats following this person
   adhd?: boolean; // restless: short idle/work spells, fidgets

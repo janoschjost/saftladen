@@ -41,6 +41,32 @@ export class Dog extends Walker {
   /** 0 awake .. 1 asleep (after lying a while beside the seated owner) */
   sleep = 0;
   private lying = 0;
+  /** somebody is petting this pet: it trots over, stands still and wags */
+  petted: { by: Person; t: number } | null = null;
+  /** 0..1 eased "being petted" amount (wagging, hopping) */
+  happy = 0;
+  /** seconds of barking / meowing left (hops, shows a bubble) */
+  barkT = 0;
+  /** no new petting before this many seconds have passed */
+  petCooldown = 0;
+
+  get isCat(): boolean {
+    return this.label.includes('katze');
+  }
+
+  /** Walk up to the person and enjoy the attention for `seconds`. */
+  petBy(person: Person, seconds: number, nav: NavGrid): void {
+    this.petted = { by: person, t: seconds };
+    this.petCooldown = seconds + 25 + Math.random() * 30;
+    const a = Math.atan2(this.pos.x - person.pos.x, this.pos.z - person.pos.z);
+    const spot = nav.nearestWalkable({ x: person.pos.x + Math.sin(a) * 0.65, z: person.pos.z + Math.cos(a) * 0.65 }, 3);
+    if (spot) this.goTo(nav, spot);
+  }
+
+  /** Woof / meow at the door. */
+  bark(): void {
+    this.barkT = 1.7;
+  }
 
   constructor(
     readonly name: string,
@@ -101,6 +127,21 @@ export class Dog extends Walker {
       if (!this.runScript(dt) && o.presence !== 'in') this.sendAway(); // reached the porch
       return true;
     }
+    const pet = this.petted;
+    if (pet) {
+      if (o.presence !== 'in' || pet.by.presence !== 'in' || !pet.by.petting || this.held) {
+        this.petted = null;
+      } else {
+        pet.t -= dt;
+        if (pet.t <= 0) this.petted = null;
+        else if (this.state === 'walk') return false;
+        else {
+          this.moving += (0 - this.moving) * Math.min(1, dt * 8);
+          this.turnTo(Math.atan2(pet.by.pos.x - this.pos.x, pet.by.pos.z - this.pos.z), dt);
+          return true;
+        }
+      }
+    }
     if (o.presence === 'leaving' || o.presence === 'out') {
       if (!this.headingOut) {
         // drop whatever we were doing and run for the door
@@ -130,13 +171,16 @@ export class Dog extends Walker {
 
   override update(dt: number, nav: NavGrid, others: readonly Walker[] = []): void {
     // while walking, re-target if the owner moved away from the current goal
-    if (this.state === 'walk' && this.owner.presence === 'in') {
+    if (this.state === 'walk' && this.owner.presence === 'in' && !this.petted) {
       const goal = this.path[this.path.length - 1];
       if (!goal || Math.hypot(this.owner.pos.x - goal.x, this.owner.pos.z - goal.z) > FOLLOW_DISTANCE * 1.5) {
         this.decide(nav);
       }
     }
     super.update(dt, nav, others);
+    this.happy += ((this.petted && this.state !== 'walk' ? 1 : 0) - this.happy) * Math.min(1, dt * 5);
+    if (this.barkT > 0) this.barkT -= dt;
+    if (this.petCooldown > 0) this.petCooldown -= dt;
     const settle = this.owner.sit > 0.5 && this.owner.presence === 'in' && !this.away && this.state === 'idle' && this.moving < 0.1;
     this.lie += ((settle ? 1 : 0) - this.lie) * Math.min(1, dt * 3);
     this.lying = settle ? this.lying + dt : 0;

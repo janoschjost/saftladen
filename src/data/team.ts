@@ -59,6 +59,7 @@ const dogs: Record<string, TeamMember['dog']> = {
   'ramon-lenherr': 'shiba',
   'janosch-jost': 'puppy',
   'nina-vetsch': 'doodle',
+  'fabian-bucher': 'terrier',
 };
 
 // dog names
@@ -66,6 +67,7 @@ const dogNames: Record<string, string> = {
   'ramon-lenherr': 'Tala',
   'janosch-jost': 'Ellie',
   'nina-vetsch': 'Harry',
+  'fabian-bucher': 'Mira',
 };
 
 // cats that follow their person around
