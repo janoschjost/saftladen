@@ -22,6 +22,7 @@ import { DOOR } from './Door';
 import { Doors } from './Doors';
 import { MeetingRoom } from './Meeting';
 import { Pod } from './Pod';
+import { PhoneBooth } from './PhoneBooth';
 import { NavGrid } from './NavGrid';
 import { Office } from './Office';
 import { Person } from './Person';
@@ -32,6 +33,9 @@ import { Traffic } from './Traffic';
 import type { Walker } from './Walker';
 
 const STEP = 1 / 60; // fixed simulation step
+const TALK_REACH = 2.6; // metres: how far the player can be from somebody to talk to them
+const ANSWERS = ['Hoi!', 'Na, alles klar?', 'Gerade viel los…', 'Kaffee später?', 'Schönen Tag!', 'Ha, du hier?', 'Moment, bin gleich bei dir.', 'Hast du das Meeting gesehen?', 'Mir fehlt Kaffee.', 'Läuft!'];
+const BUSY_ANSWERS = ['Grad keine Zeit!', 'Später…', 'Bin im Fokus.', 'Psst, Call!', 'Mhm.'];
 const BODY_RADIUS = 0.2; // how close to a wall a walker may get (nav cells are 0.5 m)
 const SEATS_KEY = 'saftladen.seats';
 const STEER_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
@@ -63,10 +67,12 @@ export class Game {
   private doors!: Doors;
   private meetingRoom!: MeetingRoom;
   private pod!: Pod;
+  private phoneBooth!: PhoneBooth;
   private metaTimer = 0;
   private rosterTimer = 0;
   private raycaster = new THREE.Raycaster();
   private pointer = new THREE.Vector2();
+  private centre = new THREE.Vector2(0, 0);
   private pointerInside = false;
   private hovered: Walker | null = null;
   private selected: Walker | null = null;
@@ -75,6 +81,10 @@ export class Game {
   private dragStart = { x: 0, y: 0 };
   private dragged: Walker | null = null;
   private steered: Person | null = null;
+  /** what the walk-mode crosshair points at right now */
+  private aim: { text: string; act: () => void } | null = null;
+  /** reply bubble above the person the player talked to */
+  private reply: { who: Person; text: string; t: number } | null = null;
   private keys = new Set<string>();
   private dragOffset = new THREE.Vector2();
   private dragMoved = false;
@@ -106,10 +116,12 @@ export class Game {
     this.doors = new Doors(model.doors);
     this.meetingRoom = new MeetingRoom(model.meeting, this.nav);
     this.pod = new Pod(model.pod, this.nav);
+    this.phoneBooth = new PhoneBooth(model.phoneBooth, this.nav);
     this.meetingRoom.onClosed = (closed) => this.doors.setLocked(this.meetingRoom.doorPos, closed);
     this.views = new Views(stage, this.renderer.domElement, this.nav, (mode) => {
       this.roof.visible = mode === 'walk' ? true : mode === 'plan' ? false : this.roofWanted;
     });
+    this.views.setDoorways(model.doors.map((d) => ({ x: d.center.x, z: d.center.z, r: d.width / 2 })));
     this.overlay = new Overlay();
     this.roster = new Roster(
       (id) => this.feeds.focus(id),
@@ -182,6 +194,7 @@ export class Game {
     this.office.relayout(this.nav);
     this.meetingRoom.relayout(this.nav);
     this.pod.relayout(this.nav);
+    this.phoneBooth.relayout(this.nav);
   }
 
   private restoreSeats(): void {
@@ -341,7 +354,8 @@ export class Game {
         return;
       }
       // pick at the click itself: the hover state may be a frame behind (or empty on touch)
-      const hit = this.views.mode === 'walk' ? null : this.pick(this.toNdc(e));
+      if (this.views.mode === 'walk') return this.interact();
+      const hit = this.pick(this.toNdc(e));
       this.selected = hit && hit !== this.selected ? hit : null;
       this.followed = this.selected && !this.selected.away ? this.selected : null; // selecting starts follow mode right away
     });
@@ -354,6 +368,7 @@ export class Game {
       this.keys.add(e.code);
       if (this.steered && STEER_KEYS.includes(e.code)) e.preventDefault();
       if (e.key.toLowerCase() === 'c' && this.selected instanceof Person) this.toggleSteer(this.selected);
+      if (e.key.toLowerCase() === 'e' && this.views.mode === 'walk') this.interact();
       if (e.key.toLowerCase() === 'f') this.toggleFollow();
       if (e.key.toLowerCase() === 'n') this.overlay.toggleNames();
       if (e.key.toLowerCase() === 'r' && (this.views.mode === 'iso' || this.views.mode === 'orbit')) this.roof.visible = this.roofWanted = !this.roofWanted;
@@ -388,6 +403,8 @@ export class Game {
     this.views.update(dt);
     this.updateHomes(dt);
     this.updateDoor(dt);
+    this.updateAim();
+    if (this.reply && (this.reply.t -= dt) <= 0) this.reply = null;
     this.render(this.acc / STEP);
     this.renderFeeds();
   }
@@ -520,6 +537,29 @@ export class Game {
       });
     }
     devEvents.register({
+      id: 'phone-booth',
+      group: 'Aktionen',
+      label: 'Jemand telefoniert in der Kabine',
+      run: () => {
+        if (this.phoneBooth.current) return null;
+        const p = pickFree(1).find((o) => o.member.look.phone) ?? this.people.find((o) => o.member.look.phone && o.inOffice && !o.held && !o.talk && !o.meetJob);
+        if (!p) return null;
+        drop(p);
+        return this.phoneBooth.start(p, this.nav) ? `${p.member.name.split(' ')[0]} geht telefonieren in die Kabine` : null;
+      },
+    });
+    devEvents.register({
+      id: 'phone-booth-end',
+      group: 'Aktionen',
+      label: 'Telefonkabine leeren',
+      run: () => {
+        const s = this.phoneBooth.current;
+        if (!s) return null;
+        s.abort();
+        return 'Kabine wird verlassen';
+      },
+    });
+    devEvents.register({
       id: 'printer',
       group: 'Aktionen',
       label: 'Jemand druckt',
@@ -563,6 +603,45 @@ export class Game {
         return 'Alle kommen zurück';
       },
     });
+  }
+
+  /** Walk mode: do what the crosshair points at (open / close a door, talk to somebody). */
+  private interact(): void {
+    this.aim?.act();
+  }
+
+  /** Walk mode: finds the person or door in front of the player and updates the crosshair hint. */
+  private updateAim(): void {
+    if (this.views.mode !== 'walk') {
+      this.aim = null;
+      this.reply = null;
+      this.overlay.setReticle(null);
+      return;
+    }
+    const eye = this.views.eye;
+    this.aim = null;
+    this.raycaster.setFromCamera(this.centre, this.views.camera);
+    const hits = this.raycaster.intersectObjects(
+      this.people.filter((p) => !p.away && p.inOffice).map((p) => p.root),
+      true,
+    );
+    if (hits.length && hits[0].distance < TALK_REACH) {
+      let o: THREE.Object3D | null = hits[0].object;
+      while (o && !o.userData.walker) o = o.parent;
+      const p = o?.userData.walker;
+      if (p instanceof Person) this.aim = { text: `E · mit ${p.member.name.split(' ')[0]} reden`, act: () => this.talkTo(p, eye) };
+    }
+    if (!this.aim) {
+      const door = this.doors.facing(eye.x, eye.z, eye.dx, eye.dz);
+      if (door) this.aim = door.locked ? { text: 'Tür verschlossen (Meeting läuft)', act: () => {} } : { text: door.open ? 'E · Tür schliessen' : 'E · Tür öffnen', act: door.toggle };
+    }
+    this.overlay.setReticle(this.aim?.text ?? '');
+  }
+
+  private talkTo(p: Person, eye: { x: number; z: number }): void {
+    const stopped = p.talkTo({ x: eye.x, z: eye.z }, 4);
+    const lines = stopped ? ANSWERS : BUSY_ANSWERS;
+    this.reply = { who: p, text: lines[Math.floor(Math.random() * lines.length)], t: 3.5 };
   }
 
   private toggleFollow(): void {
@@ -640,6 +719,7 @@ export class Game {
     this.social.update(dt, this.people, this.nav, this.traffic);
     this.meetingRoom.update(dt, this.people, this.nav);
     this.pod.update(dt, this.people, this.nav);
+    this.phoneBooth.update(dt, this.people, this.nav);
     this.separate();
     this.separate();
     this.separate();
@@ -872,7 +952,9 @@ export class Game {
       this.overlay.hideTooltip();
     }
     const meet = this.meetingRoom.current;
+    const rep = this.reply;
     this.overlay.setBubbles([
+      ...(rep && !rep.who.away ? [{ id: `reply-${rep.who.id}`, text: rep.text, ...this.project(rep.who, 0.55) }] : []),
       ...this.social.active.filter((c) => c.phase === 'talk').map((c) => ({ id: c.speaker.id, text: c.text, ...this.project(c.speaker, 0.55) })),
       ...(meet?.phase === 'session' ? [{ id: meet.speaker.id, text: meet.text, ...this.project(meet.speaker, 0.55) }] : []),
     ]);
@@ -941,7 +1023,7 @@ export class Game {
     this.entrance.rotation.y = -this.doorOpen * 1.7;
     this.doors.update(
       dt,
-      this.walkers.filter((w) => !w.away).map((w) => w.pos),
+      [...this.walkers.filter((w) => !w.away).map((w) => w.pos), ...(this.views.mode === 'walk' ? [this.views.eye] : [])],
     );
   }
 

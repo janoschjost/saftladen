@@ -55,6 +55,33 @@ export class Doors {
     }
   }
 
+  /** The door the player is facing within `reach` metres, if any. */
+  facing(x: number, z: number, dx: number, dz: number, reach = 2.2): { open: boolean; locked: boolean; toggle: () => void } | null {
+    let best: State | null = null;
+    let bestD = reach;
+    for (const s of this.states) {
+      const vx = s.rig.center.x - x;
+      const vz = s.rig.center.z - z;
+      const d = Math.hypot(vx, vz);
+      if (d >= bestD || (d > 0.5 && (vx * dx + vz * dz) / d < 0.6)) continue;
+      best = s;
+      bestD = d;
+    }
+    if (!best) return null;
+    const s = best;
+    return {
+      open: s.open > 0.5,
+      locked: s.locked,
+      toggle: () => {
+        if (s.locked) return;
+        // the player's choice holds for a good while; people walking through still push it open
+        s.rest = s.open > 0.5 ? 0 : 1;
+        s.hold = 0;
+        s.reroll = 60;
+      },
+    };
+  }
+
   /** Keeps the door nearest to `at` shut (or releases it). */
   setLocked(at: { x: number; z: number }, locked: boolean): void {
     let best: State | null = null;

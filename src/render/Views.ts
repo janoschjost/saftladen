@@ -11,7 +11,7 @@ const HINTS: Record<ViewMode, string> = {
   iso: 'Ziehen zum Verschieben · Scrollen zum Zoomen · Person ziehen · N Namen · R Dach · H Homeoffice · F Folgen · C Auswahl steuern (WASD)',
   orbit: 'Ziehen zum Drehen · Rechtsklick-Ziehen zum Verschieben · Scrollen zum Zoomen · N Namen · R Dach · Person anklicken, F folgen, C zum Steuern (WASD, Shift = rennen)',
   plan: 'Ziehen zum Verschieben · Scrollen zum Zoomen · N Namen · F Folgen · C Auswahl steuern (WASD)',
-  walk: 'W A S D / Pfeiltasten zum Gehen · Shift = rennen · Ziehen zum Umschauen · N Namen',
+  walk: 'W A S D / Pfeiltasten zum Gehen · Shift = rennen · Ziehen zum Umschauen · E / Klick = Tür öffnen, Person ansprechen · N Namen',
 };
 
 const DEFAULT_MODE: ViewMode = 'orbit';
@@ -31,6 +31,8 @@ export class Views {
   private center = new THREE.Vector3(WORLD.width / 2, 0, WORLD.depth / 2);
   private aspect = 1;
   private keys = new Set<string>();
+  /** doorway centres: the nav grid is coarser than a door, so these openings are always passable for the player */
+  private doorSpots: Array<{ x: number; z: number; r: number }> = [];
   private yaw = -Math.PI / 2; // looking along +x (down the corridor)
   private pitch = -0.05;
   private walkPos = new THREE.Vector3(ax(-4.2), EYE, az(1.1));
@@ -85,6 +87,15 @@ export class Views {
 
   get camera(): THREE.Camera {
     return this.mode === 'iso' ? this.iso.camera : this.mode === 'plan' ? this.ortho : this.persp;
+  }
+
+  setDoorways(spots: Array<{ x: number; z: number; r: number }>): void {
+    this.doorSpots = spots;
+  }
+
+  /** Where the walk-mode eye is (floor metres) and which way it looks (unit vector on the floor). */
+  get eye(): { x: number; z: number; dx: number; dz: number } {
+    return { x: this.walkPos.x, z: this.walkPos.z, dx: -Math.sin(this.yaw), dz: -Math.cos(this.yaw) };
   }
 
   /** true when the last pointer gesture moved more than a click's worth */
@@ -157,8 +168,8 @@ export class Views {
     const run = k.has('ShiftLeft') || k.has('ShiftRight');
     const f = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
     const s = (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
-    if (k.has('ArrowLeft') || k.has('KeyQ')) this.yaw += 1.6 * dt;
-    if (k.has('ArrowRight') || k.has('KeyE')) this.yaw -= 1.6 * dt;
+    if (k.has('ArrowLeft')) this.yaw += 1.6 * dt;
+    if (k.has('ArrowRight')) this.yaw -= 1.6 * dt;
     if (f || s) {
       const sp = (run ? RUN_SPEED : WALK_SPEED) * dt;
       const dx = (-Math.sin(this.yaw) * f + Math.cos(this.yaw) * s) * sp;
@@ -172,6 +183,7 @@ export class Views {
 
   /** Walkable at p, with a little clearance (checks the four sides of the body). */
   private free(x: number, z: number): boolean {
+    if (this.doorSpots.some((d) => Math.hypot(x - d.x, z - d.z) < d.r)) return true;
     const r = WALK_RADIUS;
     for (const [ox, oz] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) {
       const c = this.nav.toCell({ x: x + ox, z: z + oz });

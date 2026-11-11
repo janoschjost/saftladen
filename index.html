@@ -4,12 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Saftladen</title>
+    <link rel="preload" href="/fonts/ApercuBold.woff2" as="font" type="font/woff2" crossorigin />
     <style>
-      :root {
-        --loader-bg: #f4f3f2;
-        --loader-ink: black;
-        --loader-muted: #a4a4a4;
+      @font-face {
+        font-family: 'Apercu';
+        src: url('/fonts/ApercuMedium.woff2') format('woff2');
+        font-weight: 500;
+        font-display: swap;
       }
+      @font-face {
+        font-family: 'Apercu';
+        src: url('/fonts/ApercuBold.woff2') format('woff2');
+        font-weight: 700;
+        font-display: swap;
+      }
+      :root {
+        --loader-bg: white;
+        --loader-ink: black;
+        --loader-juice: #ffc4e4;
+              }
       body.is-loading {
         background: var(--loader-bg);
       }
@@ -27,59 +40,192 @@
         gap: 1.25rem;
         background: var(--loader-bg);
         color: var(--loader-ink);
-        font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+        font-family: 'Apercu', system-ui, -apple-system, 'Segoe UI', sans-serif;
         transition: opacity 0.5s ease-out;
       }
       .m-loader.is-done {
         opacity: 0;
         pointer-events: none;
       }
+      .m-loader__box {
+        width: 7rem;
+        height: 9rem;
+        overflow: visible;
+        transform-origin: 50% 100%;
+        animation: loader-sip 2.8s ease-in-out infinite;
+      }
+      .m-loader__carton polygon {
+        stroke-width: 0.4;
+        stroke-linejoin: round;
+      }
+      .m-loader__facet {
+        fill: black;
+        opacity: 0.05;
+      }
+      .m-loader__facet--dark {
+        opacity: 0.12;
+      }
+      .m-loader__straw-base,
+      .m-loader__straw-stripe {
+        fill: none;
+        stroke-width: 6;
+        stroke-linejoin: miter;
+      }
+      .m-loader__straw-base {
+        stroke: #ff1fa9;
+      }
+      .m-loader__straw-stripe {
+        stroke: #ffc4e4;
+        stroke-dasharray: 5 7;
+      }
+      .m-loader__bubble-shape {
+        fill: white;
+      }
+      .m-loader__two {
+        fill: #1c1c1e;
+        font-family: 'Apercu', system-ui, sans-serif;
+        font-size: 24px;
+        font-weight: 700;
+      }
+      .m-loader__juice {
+        animation: loader-fill 2.8s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+      }
+      .m-loader__fill {
+        fill: var(--loader-juice);
+      }
+      .m-loader__wave {
+        animation: loader-wave-x 1s linear infinite;
+      }
+      .m-loader__shadow {
+        width: 4rem;
+        height: 0.5rem;
+        margin-top: -1rem;
+        border-radius: 50%;
+        background: black;
+        opacity: 0.08;
+        filter: blur(0.25rem);
+        animation: loader-shadow 2.8s ease-in-out infinite;
+      }
       .m-loader__name {
-        margin: 0;
-        font-size: 0.875rem;
-        font-weight: 500;
+        display: flex;
+        margin: 0.5rem 0 0;
+        font-size: 1rem;
+        font-weight: 700;
         letter-spacing: 0.3em;
         text-transform: uppercase;
         padding-left: 0.3em;
       }
-      .m-loader__bar {
-        position: relative;
-        width: 7.5rem;
-        height: 0.125rem;
-        overflow: hidden;
-        background: rgba(0, 0, 0, 0.1);
-        border-radius: 0.125rem;
+      .m-loader__letter {
+        display: inline-block;
+        animation: loader-letter 1.6s ease-in-out infinite;
+        animation-delay: calc(var(--i) * 0.08s);
       }
-      .m-loader__bar::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        width: 40%;
-        background: currentColor;
-        border-radius: inherit;
-        animation: loader-slide 1.2s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+      @keyframes loader-fill {
+        0% {
+          opacity: 0;
+          transform: translateY(44px);
+        }
+        8% {
+          opacity: 1;
+        }
+        70%,
+        90% {
+          opacity: 1;
+          transform: translateY(4px);
+        }
+        100% {
+          opacity: 0;
+          transform: translateY(4px);
+        }
       }
-      @keyframes loader-slide {
+      @keyframes loader-wave-x {
         from {
-          transform: translateX(-100%);
+          transform: translateX(0);
         }
         to {
-          transform: translateX(250%);
+          transform: translateX(-40px);
+        }
+      }
+      @keyframes loader-sip {
+        0%,
+        100% {
+          transform: rotate(-3deg) scale(1, 1);
+        }
+        50% {
+          transform: rotate(3deg) scale(1.03, 0.97);
+        }
+      }
+      @keyframes loader-shadow {
+        0%,
+        100% {
+          transform: scaleX(1);
+        }
+        50% {
+          transform: scaleX(0.85);
+        }
+      }
+      @keyframes loader-letter {
+        0%,
+        60%,
+        100% {
+          transform: translateY(0);
+          opacity: 0.5;
+        }
+        30% {
+          transform: translateY(-0.3rem);
+          opacity: 1;
         }
       }
       @media (prefers-reduced-motion: reduce) {
-        .m-loader__bar::after {
+        .m-loader__box,
+        .m-loader__shadow,
+        .m-loader__letter,
+        .m-loader__wave {
           animation: none;
-          width: 100%;
-          opacity: 0.4;
+        }
+        .m-loader__juice {
+          animation: none;
+          transform: translateY(14px);
         }
       }
     </style>
   </head>
   <body class="is-loading">
     <div class="m-loader" id="loader" role="status" aria-live="polite">
-      <p class="m-loader__name">Saftladen</p>
-      <div class="m-loader__bar" aria-hidden="true"></div>
+      <svg class="m-loader__box" viewBox="0 0 100 130" aria-hidden="true">
+        <defs>
+          <clipPath id="loader-clip"><polygon points="36,60 64,60 70,66 70,86 64,92 42,92 32,102 32,66" /></clipPath>
+        </defs>
+        <polyline class="m-loader__straw-base" points="60,46 60,24 76,9" />
+        <polyline class="m-loader__straw-stripe" points="60,46 60,24 76,9" />
+        <g class="m-loader__carton">
+        <polygon points="26,50 74,50 46,82" fill="#2a2a2e" stroke="#2a2a2e" />
+        <polygon points="74,50 82,58 46,82" fill="#222226" stroke="#222226" />
+        <polygon points="82,58 82,112 46,82" fill="#18181b" stroke="#18181b" />
+        <polygon points="82,112 74,120 46,82" fill="#101012" stroke="#101012" />
+        <polygon points="74,120 26,120 46,82" fill="#17171a" stroke="#17171a" />
+        <polygon points="26,120 18,112 46,82" fill="#202024" stroke="#202024" />
+        <polygon points="18,112 18,58 46,82" fill="#2c2c31" stroke="#2c2c31" />
+        <polygon points="18,58 26,50 46,82" fill="#34343a" stroke="#34343a" />
+        <polygon points="30,42 70,42 74,50" fill="#3e3e45" stroke="#3e3e45" />
+        <polygon points="30,42 74,50 26,50" fill="#34343a" stroke="#34343a" />
+        <polygon points="18,58 26,50 11,60" fill="#0a0a0b" stroke="#0a0a0b" />
+        </g>
+        <polygon class="m-loader__bubble-shape" points="36,60 64,60 70,66 70,86 64,92 42,92 32,102 32,66" />
+        <polygon class="m-loader__facet" points="36,60 64,60 50,76" />
+        <polygon class="m-loader__facet" points="70,66 70,86 50,76" />
+        <polygon class="m-loader__facet m-loader__facet--dark" points="32,102 42,92 50,76" />
+        <g clip-path="url(#loader-clip)">
+          <g class="m-loader__juice">
+            <g transform="translate(32 62)">
+              <path class="m-loader__fill m-loader__wave" d="M-40,0 l10,-5 l10,5 l10,-5 l10,5 l10,-5 l10,5 l10,-5 l10,5 l10,-5 l10,5 l10,-5 l10,5 l10,-5 l10,5 l10,-5 l10,5 V60 H-40 Z" />
+            </g>
+          </g>
+        </g>
+        <text class="m-loader__two" x="51" y="87" text-anchor="middle">2</text>
+      </svg>
+      <div class="m-loader__shadow" aria-hidden="true"></div>
+      <p class="m-loader__name" aria-label="Saftladen"><span class="m-loader__letter" style="--i:0">S</span><span class="m-loader__letter" style="--i:1">a</span><span class="m-loader__letter" style="--i:2">f</span><span class="m-loader__letter" style="--i:3">t</span><span class="m-loader__letter" style="--i:4">l</span><span class="m-loader__letter" style="--i:5">a</span><span class="m-loader__letter" style="--i:6">d</span><span class="m-loader__letter" style="--i:7">e</span><span class="m-loader__letter" style="--i:8">n</span></p>
     </div>
     <div class="l-stage" id="stage"></div>
     <header class="l-hud">
@@ -128,6 +274,10 @@
         <h2 class="m-feeds__title"><span class="m-feeds__dot" aria-hidden="true"></span>Homeoffice · live <span class="m-feeds__count" id="feeds-count"></span></h2>
         <div class="m-feeds__grid" id="feeds-grid"></div>
       </aside>
+      <div class="m-reticle" id="reticle" hidden>
+        <span class="m-reticle__dot" aria-hidden="true"></span>
+        <p class="m-reticle__prompt" id="reticle-prompt" hidden></p>
+      </div>
       <div class="m-actions" id="actions" hidden>
         <p class="m-actions__name" id="actions-name"></p>
         <button class="m-button" id="actions-follow" type="button" aria-pressed="false">Folgen (F)</button>
@@ -170,6 +320,7 @@
       </div>
       <h3 class="m-editor__group">Layout <span id="editor-count"></span></h3>
       <div class="m-editor__buttons">
+        <button class="m-button" id="editor-save" type="button">In Repo speichern</button>
         <button class="m-button" id="editor-export" type="button">Export</button>
         <button class="m-button" id="editor-import" type="button">Import</button>
         <button class="m-button" id="editor-reset-all" type="button">Alles zurücksetzen</button>

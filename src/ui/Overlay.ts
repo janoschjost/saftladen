@@ -8,10 +8,21 @@ export class Overlay {
   private meta = document.getElementById('hud-meta') as HTMLElement;
   private labelEls = new Map<string, HTMLElement>();
   private bubbleEls = new Map<string, HTMLElement>();
+  private reticle = document.getElementById('reticle') as HTMLElement;
+  private reticlePrompt = document.getElementById('reticle-prompt') as HTMLElement;
   namesVisible = false;
 
   constructor() {
     this.toggle.addEventListener('click', () => this.toggleNames());
+  }
+
+  /** Walk-mode crosshair: `null` hides it, '' shows the dot only, text adds the interaction hint below it. */
+  setReticle(prompt: string | null): void {
+    this.reticle.hidden = prompt === null;
+    const has = !!prompt;
+    this.reticlePrompt.hidden = !has;
+    if (has && this.reticlePrompt.textContent !== prompt) this.reticlePrompt.textContent = prompt;
+    this.reticle.classList.toggle('is-active', has);
   }
 
   setMeta(text: string): void {
