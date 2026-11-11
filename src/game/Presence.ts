@@ -2,6 +2,7 @@ import { HOME_COUNT } from '../render/homeOffice';
 import { homeRoomOf, reservedRooms } from '../data/homeAssignments';
 import type { NavGrid } from './NavGrid';
 import type { Person } from './Person';
+import type { TimeOfDay } from './TimeOfDay';
 
 /** Share of the team that is out of the office at any time (errands + home office). */
 const ABSENT_SHARE = 0.36;
@@ -12,13 +13,36 @@ const CHECK = [2, 6]; // seconds between departure decisions
 const ERRAND = [25, 70]; // seconds out for a coffee / lunch / parcel
 const HOME = [90, 220]; // seconds of working from home
 
+/** The night shift: these two work late in the office (one, both or nobody), Marco sometimes works from home. Everybody else is off. */
+const NIGHT_OFFICE = ['sandro-hagen', 'fabian-bucher'];
+const NIGHT_HOME = 'marco-rieser';
+const NIGHT_ROLL = [45, 130]; // seconds between night-shift reshuffles
+const OFF = 9999; // "off for the night": stays away until morning
+
 const between = ([a, b]: number[]) => a + Math.random() * (b - a);
 
 /** Sends people out of the door (errand or home office) and lets them come back later. */
 export class Presence {
   private timer = 4;
+  private wasNight = false;
+  private nightTimer = 0;
+  private nightCheck = 0;
+  private wantOffice = new Set<string>();
+  private wantHome = false;
+  /** people the player moved by hand during the night: the night shift leaves them alone */
+  private overridden = new Set<Person>();
 
-  constructor(private people: readonly Person[]) {}
+  constructor(
+    private people: readonly Person[],
+    private tod: TimeOfDay,
+  ) {
+    this.wasNight = tod.night;
+  }
+
+  /** People who are out on an errand or in the home office (not those who simply went home for the night). */
+  get away(): Person[] {
+    return this.people.filter((p) => p.presence !== 'in' && p.awayKind !== 'off');
+  }
 
   get target(): number {
     return Math.round(this.people.length * ABSENT_SHARE);
@@ -47,6 +71,21 @@ export class Presence {
     return p.preferredHome;
   }
 
+  /** Who works tonight: one or both of the office people (or nobody), Marco from home about half the time. */
+  private rollNight(): void {
+    this.nightTimer = between(NIGHT_ROLL);
+    const r = Math.random();
+    this.wantOffice = new Set(r < 0.35 ? [NIGHT_OFFICE[0]] : r < 0.7 ? [NIGHT_OFFICE[1]] : r < 0.88 ? NIGHT_OFFICE : []);
+    this.wantHome = Math.random() < 0.5;
+  }
+
+  /** What this person should be doing at night: at their desk (`in`), at home working, or off. */
+  private nightRole(p: Person): 'in' | 'home' | 'off' {
+    if (this.wantOffice.has(p.id)) return 'in';
+    if (p.id === NIGHT_HOME && this.wantHome) return 'home';
+    return 'off';
+  }
+
   /** Some people are already gone when the game starts (#homes: all eight home offices occupied, for a look at the rooms). */
   seed(): void {
     if (location.hash.includes('homes')) {
@@ -62,6 +101,16 @@ export class Presence {
         p.homeVariant = free[i];
         p.startAway('home', 9999);
       });
+      return;
+    }
+    if (this.tod.night) {
+      this.rollNight();
+      for (const p of this.people) {
+        const role = this.nightRole(p);
+        if (role === 'in') continue;
+        if (role === 'home') p.homeVariant = this.freeVariant(p);
+        p.startAway(role, OFF);
+      }
       return;
     }
     const pool = [...this.people].sort(() => Math.random() - 0.5);
@@ -88,11 +137,13 @@ export class Presence {
       if (this.homeFull) return;
       p.homeVariant = this.freeVariant(p);
     }
+    if (this.tod.night) this.overridden.add(p);
     p.leaveOffice(nav, kind, 600);
   }
 
   /** Bring somebody back to the office. */
   callBack(p: Person): void {
+    if (this.tod.night) this.overridden.add(p);
     if (p.presence === 'out') p.awayLeft = 0;
     else p.cancelLeave();
   }
@@ -107,7 +158,67 @@ export class Presence {
     else this.callBack(p);
   }
 
+  /** Dawn: everybody who went home for the night comes back, spread over a minute or so. */
+  private dawn(): void {
+    this.overridden.clear();
+    for (const p of this.people) {
+      if (p.presence === 'out' && p.awayKind === 'off') p.awayLeft = between([3, 70]);
+      else if (p.presence === 'out' && p.awayKind === 'home' && p.awayLeft > 600) p.awayLeft = between([20, 80]);
+    }
+  }
+
+  /** Night: send everybody except tonight's shift home, keep the shift at their desks. */
+  private updateNight(dt: number, nav: NavGrid): void {
+    this.nightTimer -= dt;
+    if (this.nightTimer <= 0) this.rollNight();
+    this.nightCheck -= dt;
+    if (this.nightCheck > 0) return;
+    this.nightCheck = 0.6;
+    let leaving = this.people.filter((p) => p.presence === 'leaving').length;
+    for (const p of this.people) {
+      if (this.overridden.has(p)) continue;
+      const role = this.nightRole(p);
+      switch (p.presence) {
+        case 'in': {
+          if (role === 'in' || leaving >= 6) break;
+          if (p.held || p.controlled || p.talk || p.meetJob || p.printJob || p.foosJob || p.vapeJob) break;
+          if (role === 'home') p.homeVariant = this.freeVariant(p);
+          p.leaveOffice(nav, role, OFF);
+          leaving++;
+          break;
+        }
+        case 'leaving':
+          if (role === 'in') p.cancelLeave();
+          else {
+            p.awayKind = role;
+            p.awayLeft = OFF;
+          }
+          break;
+        case 'out':
+          if (role === 'in') {
+            if (p.awayLeft > 12) p.awayLeft = between([3, 12]); // back to the desk soon
+          } else if (p.awayKind !== role || p.awayLeft < OFF - 1) {
+            if (role === 'home' && p.awayKind !== 'home') p.homeVariant = this.freeVariant(p);
+            p.awayKind = role;
+            p.awayLeft = OFF;
+          }
+          break;
+      }
+    }
+  }
+
   update(dt: number, nav: NavGrid): void {
+    if (this.tod.night !== this.wasNight) {
+      this.wasNight = this.tod.night;
+      if (this.tod.night) {
+        this.overridden.clear();
+        this.rollNight();
+      } else this.dawn();
+    }
+    if (this.tod.night) {
+      this.updateNight(dt, nav);
+      return;
+    }
     this.timer -= dt;
     if (this.timer > 0) return;
     this.timer = between(CHECK);

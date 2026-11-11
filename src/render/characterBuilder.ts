@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Look } from '../data/types';
+import { tattooOverlay, type TattooKind } from './tattoo';
 import { box, frame, merge, propMaterial } from './geo';
 
 export interface CharacterRig {
@@ -12,6 +13,8 @@ export interface CharacterRig {
   armL: THREE.Object3D;
   armR: THREE.Object3D;
   headHeight: number;
+  /** 0 = fresh .. 1 = exhausted: heavy eyelids and dark eye bags */
+  setTired: (amount: number) => void;
   /** only on `moody` looks: true = very happy face, false = very serious */
   setMood?: (happy: boolean) => void;
   /** only on `vape` looks: the bendable forearm of the right arm, the glowing tip and the vapour puffs */
@@ -31,6 +34,8 @@ function mesh(parts: THREE.BufferGeometry[]): THREE.Mesh {
   m.castShadow = true;
   return m;
 }
+
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
 function mix(a: string, b: string, t: number): THREE.Color {
   return new THREE.Color(a).lerp(new THREE.Color(b), t);
@@ -228,6 +233,36 @@ export function buildCharacter(look: Look): CharacterRig {
   const torsoMesh = mesh(torso);
   body.add(torsoMesh);
 
+  // tired face: dark bags under the eyes, eyelids that sag over the top of the eyes
+  const skinDark = mix(skin, '#4a3040', 0.28);
+  const bagMat = propMaterial.clone();
+  bagMat.transparent = true;
+  bagMat.opacity = 0;
+  const bags = new THREE.Mesh(
+    merge([box(0.075, 0.022, 0.012, -0.09, 1.552, 0.19, mix(skin, '#5b3f6a', 0.55)), box(0.075, 0.022, 0.012, 0.09, 1.552, 0.19, mix(skin, '#5b3f6a', 0.55))]),
+    bagMat,
+  );
+  bags.visible = false;
+  body.add(bags);
+  const lids = [-0.09, 0.09].map((x) => {
+    const pivot = new THREE.Group();
+    pivot.position.set(x, 1.632, 0.206);
+    const m = new THREE.Mesh(merge([box(0.082, 0.036, 0.012, 0, -0.018, 0, skinDark)]), propMaterial);
+    pivot.add(m);
+    pivot.visible = false;
+    body.add(pivot);
+    return pivot;
+  });
+  const setTired = (amount: number) => {
+    const t = clamp01(amount);
+    bags.visible = t > 0.12;
+    bagMat.opacity = clamp01((t - 0.1) * 1.3);
+    for (const l of lids) {
+      l.visible = t > 0.08;
+      l.scale.y = Math.max(0.01, t);
+    }
+  };
+
   // two faces for moody looks: very happy (wide open smile, raised brows) and very serious (flat mouth, low heavy brows)
   let setMood: CharacterRig['setMood'];
   if (look.moody) {
@@ -269,15 +304,19 @@ export function buildCharacter(look: Look): CharacterRig {
       box(0.115 * ar, foreLen, 0.13 * ar, 0, -armLen - foreLen / 2, 0, skin),
     ];
     // anatomical left arm is +x because the character faces +z
+    let tattoo: TattooKind | null = null;
     if (look.tattoo === 'both' || (look.tattoo === 'left' && side === 1) || (look.tattoo === 'right' && side === -1)) {
-      for (const [at, len] of [[0.12, 0.1], [0.35, 0.06], [0.58, 0.12], [0.84, 0.05]] as const) {
-        parts.push(box(0.123 * ar, foreLen * len, 0.138 * ar, 0, -armLen - foreLen * at, 0, '#34495e'));
-      }
+      tattoo = look.tattooDark ? 'dark' : look.tattoo === 'both' ? 'script' : 'vine';
     }
     if (look.wristbands && side === -1) {
       look.wristbands.forEach((col, i) => parts.push(box(0.125 * ar, 0.024, 0.14 * ar, 0, -0.575 + i * 0.03, 0, col)));
     }
     pivot.add(mesh(parts));
+    if (tattoo) {
+      const ov = tattooOverlay(0.115 * ar, foreLen, 0.13 * ar, side, tattoo);
+      ov.position.y = -armLen - foreLen / 2;
+      pivot.add(ov);
+    }
     body.add(pivot);
     return pivot;
   };
@@ -376,5 +415,5 @@ export function buildCharacter(look: Look): CharacterRig {
   const h = look.heightM ? look.heightM / REF_HEIGHT_M : look.height ?? 1;
   root.scale.setScalar(h);
 
-  return { root, body, legL, legR, kneeL, kneeR, armL, armR, headHeight: 1.95 * h, setMood, vape, phone };
+  return { root, body, legL, legR, kneeL, kneeR, armL, armR, headHeight: 1.95 * h, setTired, setMood, vape, phone };
 }

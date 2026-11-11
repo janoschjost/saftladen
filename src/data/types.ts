@@ -20,6 +20,7 @@ export interface Look {
   necklace?: string[]; // bead colours, hangs on the chest
   wristbands?: string[]; // colours, worn on the person's right wrist
   flipflops?: boolean;
+  tattooDark?: boolean; // bold solid-ink tattoo work (upper arm + forearm)
   tattoo?: 'left' | 'right' | 'both'; // forearm tattoo (anatomical side)
   blazer?: string; // blazer colour, worn over `top`
   buttonShirt?: boolean; // collar, placket and chest pockets

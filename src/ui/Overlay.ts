@@ -81,6 +81,7 @@ export class Overlay {
     if (this.tipName.textContent !== name) {
       this.tipName.textContent = name;
       this.tipRole.textContent = role;
+      this.tipRole.hidden = !role;
       if (portrait) {
         this.tipImage.src = portrait.startsWith('data:') ? portrait : import.meta.env.BASE_URL + portrait;
         this.tipImage.hidden = false;

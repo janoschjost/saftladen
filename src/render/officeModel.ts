@@ -116,6 +116,8 @@ interface Opening {
   flush?: boolean;
   /** a / b are already game coordinates (no plan scaling) */
   abs?: boolean;
+  /** glass only: oversize the pane by this much (m) on every side (thickness unchanged) so it overlaps the wall around the opening */
+  grow?: number;
   /** wall above the opening is fully solid (not the see-through ghost above CUT) */
   solidAbove?: boolean;
   /** door only: dark frame around the door, fixed glass above it up to the wall top (no plaster) */
@@ -413,7 +415,10 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
           s0 = op.b;
           return;
         }
-        if (op.fill === 'glass') fill = put(op.a, op.b, bottom, top, mat.glass, op.flush ? t : 0.03);
+        if (op.fill === 'glass') {
+          const g = op.grow ?? 0;
+          fill = put(op.a - g, op.b + g, Math.max(0, bottom - g), Math.min(hFull, top + g), mat.glass, op.flush ? t : 0.03);
+        }
         if (op.fill === 'frosted') fill = put(op.a, op.b, bottom, top, mat.frosted, 0.03);
         if (op.fill === 'door') fill = put(op.a + 0.03, op.b - 0.03, 0, top - 0.03, mat.lightgrey, t + 0.03);
         if (fill && op.pass) fill.userData.nonav = true;
@@ -442,6 +447,56 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   }
 
   /* ---------- furniture ---------- */
+  /** Black task chair (flat nylon 5-star base, double grey casters, fabric seat, tall mesh back on side uprights, flat armrests) at (cx, cz) in the local space of `g`. Faces -Z. */
+  function officeChair(g: THREE.Object3D, cx: number, cz: number): void {
+    const R = 0.3;
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + 0.3;
+      const ex = cx + Math.cos(a) * R, ez = cz + Math.sin(a) * R;
+      // flat wide leg, hub -> rim, resting just above the casters
+      rbox(R, 0.035, 0.065, cx + Math.cos(a) * R * 0.5, 0.075, cz + Math.sin(a) * R * 0.5, mat.black, -a, g);
+      // caster fork + double wheel
+      cyl(0.016, 0.016, 0.06, ex, 0.04, ez, mat.black, g, 8);
+      const cg = new THREE.Group();
+      cg.position.set(ex, 0, ez);
+      cg.rotation.y = -a + 0.5;
+      g.add(cg);
+      for (const sz of [-0.014, 0.014]) {
+        const w = cyl(0.032, 0.032, 0.012, 0, 0, sz, mat.lightgrey, cg, 10);
+        w.rotation.x = Math.PI / 2;
+        w.position.y = 0.032;
+      }
+    }
+    cyl(0.055, 0.045, 0.09, cx, 0.09, cz, mat.black, g, 10); // hub
+    cyl(0.042, 0.042, 0.22, cx, 0.17, cz, mat.black, g, 10); // gas lift cover
+    const lever = cyl(0.018, 0.018, 0.05, cx + 0.04, 0, cz - 0.01, mat.dark, g, 8); // height lever
+    lever.rotation.x = Math.PI / 2;
+    lever.position.y = 0.3;
+    rbox(0.34, 0.05, 0.3, cx, 0.4, cz, mat.black, 0, g); // mechanism
+    // seat: thick fabric cushion, rounded front
+    rbox(0.5, 0.08, 0.46, cx, 0.45, cz, mat.black, 0, g);
+    const roll = cyl(0.04, 0.04, 0.5, cx, 0, cz - 0.23, mat.black, g, 8);
+    roll.rotation.z = Math.PI / 2;
+    roll.position.y = 0.49;
+    // two uprights from the seat sides carry the backrest
+    for (const sx of [-1, 1]) {
+      const ux = cx + sx * 0.21;
+      chairRod(g, [ux, 0.42, cz + 0.2], [ux, 0.66, cz + 0.29], 0.02, mat.black);
+    }
+    // tall mesh backrest leaning back
+    const back = new THREE.Group();
+    back.position.set(cx, 0.58, cz + 0.28);
+    back.rotation.x = 0.14;
+    g.add(back);
+    rbox(0.48, 0.6, 0.025, 0, 0, 0, mat.black, 0, back); // frame
+    rbox(0.4, 0.5, 0.03, 0, 0.05, -0.003, mat.dark, 0, back); // mesh
+    // flat armrests: post behind the seat's mid-point + wide flat pad reaching forward
+    for (const sx of [-1, 1]) {
+      const ax = cx + sx * 0.285;
+      rbox(0.04, 0.22, 0.07, ax, 0.44, cz + 0.12, mat.black, 0, g);
+      rbox(0.075, 0.03, 0.32, ax, 0.66, cz + 0.02, mat.black, 0, g);
+    }
+  }
   /** Desk template (1.6 x 0.8, chair on local +Z, monitor at local -Z), static parts merged per material. */
   function deskTemplate(white: boolean, w = 1.6, stand = false): THREE.Group {
     const g = new THREE.Group();
@@ -464,13 +519,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     rbox(0.262, 0.005, 0.098, 0, top + 0.01, kz, mat.white, 0, g);
     for (let r = 1; r < 6; r++) rbox(0.262, 0.0015, 0.003, 0, top + 0.0145, kz - 0.049 + (r * 0.098) / 6, mat.lightgrey, 0, g);
     rbox(0.057, 0.014, 0.113, 0.27, top, 0.12, mat.white, 0, g);
-    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.42, 8), mat.dark);
-    stem.position.set(0, 0.04 + 0.21, 0.75);
-    const star = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.04, 5), mat.dark);
-    star.position.set(0, 0.02, 0.75);
-    g.add(stem, star);
-    rbox(0.46, 0.07, 0.46, 0, 0.45, 0.75, mat.black, 0, g);
-    rbox(0.44, 0.5, 0.05, 0, 0.55, 0.98, mat.black, 0, g);
+    officeChair(g, 0, 0.75);
     return mergeStatic(g, false);
   }
   const tplCache = new Map<string, { group: THREE.Group; box: THREE.Box3 }>();
@@ -666,7 +715,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     { a: -3.0, b: -2.0, door: 1 }, // storage door
     { a: 2.5, b: 3.4, door: 1 }, // door under "RISCHE"
     { a: 4.9, b: 5.8, door: 1 }, // kitchen/dining door
-    { a: 6.2, b: 9.5, top: 2.1, fill: 'glass', flush: true, solidAbove: true }, // glazed panel into dining: glass up to door height, solid wall above
+    { a: 6.2, b: 9.5, top: 1.64, fill: 'glass', flush: true, solidAbove: true, grow: 0.04 }, // glazed panel into dining: glass up to the bottom of the lettering (Y0), solid wall behind the text above
     { a: 14.4, b: 15.3, door: 1 }, // "Archiv"
     { a: 18.5, b: 23, top: 2.5 }, // dark room, black curtain
     { a: 23.25, b: 24.25, top: 2.2, fill: 'glass', door: -1 }, // booth glass door, opens outwards (into the hallway)
@@ -684,14 +733,12 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     const X1 = 15.5;
     const W = ax(X1) - ax(X0); // plan-scaled span of the lettering
     const Hh = 0.95;
+    const FLOAT = 0.065; // lettering sits directly on the wall face (half-thickness 0.06 + 5 mm), no visible gap
     const Y0 = 1.64; // bottom of the plane: the baseline sits at ~1.78 m, the middle of the capitals at 2.1 m = top of the glazed panel
     const OPEN_TOP = 2.1; // head of an open doorway
-    // doors under the lettering: it is masked out of the wall there and drawn onto the door leaf instead
-    const OPEN: Array<[number, number]> = [
-      [2.5, 3.4], // door under "RISCHE"
-      [4.9, 5.8], // kitchen/dining door
-      [14.4, 15.3], // "Archiv"
-    ];
+    // doors under the lettering: it is masked out of the wall there and drawn onto the door leaf instead.
+    // Use the real door rigs (doors keep their size when the plan is scaled, so the mask must too).
+    const lettered = doors.filter((rig) => Math.abs(rig.center.z - az(CZ)) < 0.01 && rig.center.x > ax(X0) && rig.center.x < ax(X1) && rig.height > Y0 + 0.02);
     const pxPerM = 4096 / 15.2;
     const FONT = '700 250px Apercu, "Helvetica Neue", Helvetica, Arial, sans-serif';
     const draw = (g: CanvasRenderingContext2D, w: number, h: number) => {
@@ -712,21 +759,18 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
         x += widths[i] + track;
       });
       const maskH = ((Y0 + Hh - OPEN_TOP) / Hh) * h; // canvas y of OPEN_TOP
-      for (const [a, b] of OPEN) g.clearRect(((ax(a) - ax(X0)) / W) * w, maskH, ((ax(b) - ax(a)) / W) * w, h - maskH);
+      for (const rig of lettered) g.clearRect(((rig.center.x - rig.width / 2 - ax(X0)) / W) * w, maskH, (rig.width / W) * w, h - maskH);
     };
     const tex = canvasTex(Math.round(W * pxPerM), 256, draw);
     const leafTex: THREE.Texture[] = [];
-    for (const rig of doors) {
-      // leaf under the lettering? (core south wall, running along x)
-      if (Math.abs(rig.center.z - az(CZ)) > 0.01 || rig.center.x < ax(X0) || rig.center.x > ax(X1)) continue;
-      if (rig.height - Y0 < 0.02) continue; // lettering sits above the door head
+    for (const rig of lettered) {
       const lt = tex.clone();
-      lt.repeat.set(rig.width / W, (rig.height - (Y0 - 0)) / Hh);
+      lt.repeat.set(rig.width / W, (rig.height - Y0) / Hh);
       lt.offset.set((rig.center.x - rig.width / 2 - ax(X0)) / W, 0);
       leafTex.push(lt);
       const lh = rig.height - Y0;
-      const part = new THREE.Mesh(new THREE.PlaneGeometry(rig.width, lh), new THREE.MeshBasicMaterial({ map: lt, transparent: true }));
-      part.position.set(rig.width / 2, Y0 + lh / 2, 0.062); // door leaf is as thick as the wall (0.12), so its face is flush with the wall face
+      const part = new THREE.Mesh(new THREE.PlaneGeometry(rig.width, lh), new THREE.MeshBasicMaterial({ map: lt, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+      part.position.set(rig.width / 2, Y0 + lh / 2, FLOAT); // door leaf is as thick as the wall (0.12), so its face is flush with the wall face
       rig.pivot.add(part);
     }
     document.fonts?.load(FONT).then(() => {
@@ -735,9 +779,10 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       tex.needsUpdate = true;
       for (const t of leafTex) t.needsUpdate = true;
     });
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(W, Hh), new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
-    m.position.set(ax(X0) + W / 2, Y0 + Hh / 2, az(CZ) + 0.062); // flush on the wall face (half-thickness 0.06), same plane as the lettering on the door leaves
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(W, Hh), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 })); // polygon offset pulls it towards the camera: no z-fighting flicker with the wall
+    m.position.set(ax(X0) + W / 2, Y0 + Hh / 2, az(CZ) + FLOAT); // flush on the wall face, same plane as the lettering on the door leaves
     m.userData.nonav = true;
+    m.renderOrder = 2; // after the transparent glass so the lettering is never cut by it
     world.add(m);
   }
   // storage / craft room (room 3, from the photos): black rubber floor, long black work desk along the west wall,
@@ -842,14 +887,18 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     cyl(0.18, 0.18, 0.55, 5.3, 0, -5.1, mat.steel);
     cyl(0.2, 0.18, 0.5, 5.8, 0, -5.1, mat.grey);
   }, 'Küchenzeile');
-  within(8.1, -3.6, () => {
-    box(2.8, 0.05, 0.9, 8.1, 0.72, -3.6, mat.black);
-    for (const sx of [-1.3, 1.3]) for (const sz of [-0.38, 0.38]) box(0.07, 0.72, 0.07, 8.1 + sx, 0, -3.6 + sz, mat.lightgrey);
+  within(8.57, -3.6, () => {
+    // table runs from x 6.7 all the way to the east wall (inner face ~10.45)
+    const TX = 8.57;
+    const TL = 3.74;
+    const LX = TL / 2 - 0.1; // leg offset from centre
+    box(TL, 0.05, 0.9, TX, 0.72, -3.6, mat.black);
+    for (const sx of [-LX, LX]) for (const sz of [-0.38, 0.38]) box(0.07, 0.72, 0.07, TX + sx, 0, -3.6 + sz, mat.lightgrey);
     for (const sz of [-0.85, 0.85]) {
-      box(2.8, 0.05, 0.35, 8.1, 0.42, -3.6 + sz, mat.black);
-      for (const sx of [-1.3, 1.3]) box(0.07, 0.42, 0.3, 8.1 + sx, 0, -3.6 + sz, mat.lightgrey);
+      box(TL, 0.05, 0.35, TX, 0.42, -3.6 + sz, mat.black);
+      for (const sx of [-LX, LX]) box(0.07, 0.42, 0.3, TX + sx, 0, -3.6 + sz, mat.lightgrey);
     }
-    for (const x of [7.2, 8.1, 9.0]) pendant(x, -3.6, 'black', 1.55, 2.9);
+    for (const x of [7.3, 8.57, 9.85]) pendant(x, -3.6, 'black', 1.55, 2.9);
   }, 'Esstisch');
   within(7.6, 0, () => {
     for (const x of [7.2, 8.0]) {
@@ -866,7 +915,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     const mirror = L(0xcfe3ea);
     const lightStrip = new THREE.MeshBasicMaterial({ color: 0xeaf6ff });
     const frame = L(0xf3f1ec);
-    const cabinColors = [0xdcdcd8, 0x2fa39a, 0xd9619b, 0xe0502e]; // shower (plain), then 3 WC cabins
+    const cabinColors = [0xeceae6, 0xe8631a, 0xf2b61e, 0xe8506a]; // shower (white tiles), orange WC, yellow WC, pink pissoir
     const X_W = 0.07; // inner face of west wall
     const X_E = 3.93; // inner face of east wall (kitchen wall)
     const Z_N = -5.33; // inner face of north wall
@@ -898,22 +947,52 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     for (const z of [-2.0, -2.3]) box(0.04, 0.42, 0.22, X_W + 0.03, 1.1, z, mat.fabric);
     box(0.3, 0.3, 0.3, 0.4, 0, -2.7, mat.dark); // bin
 
-    // cabins along the north wall, doors facing south
+    // cabins along the north wall, doors facing south (from the photos): shower, orange WC, yellow WC, pink pissoir
+    const mosaicTex = canvasTex(32, 32, (g, w, h) => {
+      g.fillStyle = '#30343a';
+      g.fillRect(0, 0, w, h);
+      g.fillStyle = '#17181b';
+      g.fillRect(w - 2, 0, 2, h);
+      g.fillRect(0, h - 2, w, 2);
+    });
+    const mosaic = (rx: number, ry: number): THREE.MeshLambertMaterial => {
+      const t = mosaicTex.clone();
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(rx, ry);
+      t.needsUpdate = true;
+      return new THREE.MeshLambertMaterial({ map: t });
+    };
+    const darkTile = mosaic(16, 21); // wall block behind the fixtures
+    const showerFloor = mosaic(17, 24);
+    const lightTile = L(0xd2d4d2);
+    const whiteTile = L(0xeceae6);
+    const spot = new THREE.MeshBasicMaterial({ color: 0xfff6dc });
+    const spray = L(0xd8344a);
     for (let i = 0; i < 4; i++) {
       const x0 = edges[i];
       const x1 = edges[i + 1];
       const xm = (x0 + x1) / 2;
-      const col = L(cabinColors[i]);
+      const xL = x0 + 0.075; // inner faces of the side walls
+      const xR = x1 - 0.075;
+      const iw = xR - xL;
+      const shower = i === 0;
+      const col = shower ? whiteTile : L(cabinColors[i]);
+      const lower = shower ? whiteTile : lightTile;
       const dep = ZF - Z_N;
       const cz = (ZF + Z_N) / 2;
-      // colored upper part + grey lower part (inside)
+      // colored upper part + tiled lower part (inside)
       box(0.03, H_CORE - 1.05, dep, x0 + 0.06, 1.05, cz, col);
       box(0.03, H_CORE - 1.05, dep, x1 - 0.06, 1.05, cz, col);
       box(x1 - x0 - 0.12, H_CORE - 1.05, 0.03, xm, 1.05, Z_N + 0.03, col);
-      box(0.03, 1.05, dep, x0 + 0.06, 0, cz, mat.lightgrey);
-      box(0.03, 1.05, dep, x1 - 0.06, 0, cz, mat.lightgrey);
-      box(x1 - x0 - 0.12, 1.05, 0.03, xm, 0, Z_N + 0.03, mat.lightgrey);
-      box(x1 - x0 - 0.1, 0.05, dep, xm, 2.5, cz, col); // low colored ceiling
+      box(0.03, 1.05, dep, x0 + 0.06, 0, cz, lower);
+      box(0.03, 1.05, dep, x1 - 0.06, 0, cz, lower);
+      box(x1 - x0 - 0.12, 1.05, 0.03, xm, 0, Z_N + 0.03, lower);
+      if (shower) {
+        // low ceiling only on the shower (dark purple); WC cabins are open at the top
+        box(x1 - x0 - 0.1, 0.05, dep, xm, 2.5, cz, purple);
+        box(0.22, 0.02, 0.22, xm, 2.485, Z_N + 0.35, mat.white); // vent
+        box(0.1, 0.02, 0.1, xm, 2.485, cz + 0.2, spot); // ceiling spot
+      }
       // core partition (purple) + front wall with door opening
       box(0.08, H_CORE, dep, x0, 0, cz, purple);
       box(xm - 0.4 - x0, H_CORE, 0.1, (x0 + xm - 0.4) / 2, 0, ZF, purple);
@@ -928,15 +1007,44 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
         const th = (75 * Math.PI) / 180;
         box(0.78, 2.0, 0.04, xm - 0.4 + Math.cos(th) * 0.39, 0, ZF + 0.03 + Math.sin(th) * 0.39, frame, -th);
       }
-      // fixtures: 1 = shower, 2 + 3 = toilet, 4 = urinal
-      if (i === 0) {
-        box(x1 - x0 - 0.3, 0.06, dep - 0.3, xm, 0, cz, mat.white); // shower tray
-        cyl(0.02, 0.02, 1.2, xm, 1.0, Z_N + 0.1, mat.steel, world, 8); // riser pipe
-        cyl(0.11, 0.11, 0.03, xm, 2.15, Z_N + 0.25, mat.steel); // rain head
-      } else if (i === 3) box(0.3, 0.55, 0.28, xm, 0.8, Z_N + 0.2, mat.white); // urinal
-      else {
-        box(0.4, 0.38, 0.5, xm, 0, Z_N + 0.35, mat.white); // bowl
-        box(0.4, 0.35, 0.2, xm, 0.38, Z_N + 0.12, mat.white); // cistern
+
+      if (shower) {
+        // white tiles, dark mosaic floor, raised tray at the back, curtain on the right, rain head, niche, towel rail
+        box(iw, 0.01, dep - 0.06, xm, 0.03, cz + 0.03, showerFloor);
+        const trayD = 0.55;
+        box(iw - 0.04, 0.16, trayD, xm, 0.03, Z_N + 0.03 + trayD / 2, mat.white);
+        box(iw - 0.04, 0.16, 0.04, xm, 0.03, Z_N + 0.03 + trayD + 0.02, darkTile);
+        cyl(0.045, 0.045, 0.01, xm, 0.19, Z_N + 0.3, mat.steel);
+        cyl(0.01, 0.01, 0.6, xm + 0.2, 1.35, Z_N + 0.06, mat.steel); // slide bar
+        cyl(0.07, 0.07, 0.03, xm + 0.2, 1.9, Z_N + 0.12, mat.steel); // hand shower head
+        box(0.1, 0.1, 0.03, xm, 1.05, Z_N + 0.05, mat.dark); // mixer
+        box(0.2, 0.2, 0.02, xm - 0.2, 1.25, Z_N + 0.045, mat.black); // niche
+        for (const [dx, h, c] of [[-0.27, 0.12, 0xd8c23a], [-0.2, 0.15, 0xeeeeee], [-0.13, 0.1, 0x6aa84f]] as const) box(0.045, h, 0.045, xm + dx, 1.17, Z_N + 0.06, L(c));
+        box(0.02, 0.02, 0.8, xR - 0.04, 2.0, Z_N + 0.43, mat.steel); // curtain rod
+        box(0.02, 1.75, 0.65, xR - 0.05, 0.2, Z_N + 0.43, mat.white); // curtain
+        box(0.02, 0.02, 0.4, xR - 0.03, 1.2, Z_N + 0.95, mat.steel); // towel rail
+        box(0.02, 0.5, 0.16, xR - 0.04, 0.7, Z_N + 0.95, mat.fabric); // towel
+        continue;
+      }
+
+      // WC + pissoir: dark mosaic block along the back wall with the fixture in front of it
+      box(iw - 0.02, 1.05, 0.2, xm, 0, Z_N + 0.13, darkTile);
+      if (i === 3) {
+        cyl(0.12, 0.12, 0.4, xm, 0, Z_N + 0.33, mat.black, world, 10); // pedestal
+        box(0.28, 0.5, 0.2, xm, 0.4, Z_N + 0.33, mat.white); // urinal
+        box(0.16, 0.3, 0.02, xm, 0.5, Z_N + 0.44, mat.lightgrey); // bowl recess
+        box(0.12, 0.06, 0.04, xL + 0.1, 0.9, Z_N + 0.3, mat.steel); // flush button
+      } else {
+        box(0.22, 0.14, 0.02, xm, 0.75, Z_N + 0.24, mat.white); // flush plate
+        for (const dx of [-0.05, 0.05]) box(0.07, 0.04, 0.005, xm + dx, 0.8, Z_N + 0.255, mat.lightgrey);
+        box(0.34, 0.3, 0.45, xm, 0.38, Z_N + 0.46, mat.white); // wall-hung bowl
+        box(0.2, 0.01, 0.28, xm, 0.685, Z_N + 0.47, mat.grey); // opening
+        box(0.32, 0.4, 0.03, xm, 0.68, Z_N + 0.28, mat.white); // lid, up
+        for (const dx of [-0.22, -0.14]) cyl(0.05, 0.05, 0.1, xm + dx, 1.05, Z_N + 0.12, mat.white); // paper rolls
+        cyl(0.03, 0.03, 0.2, xm + 0.15, 1.05, Z_N + 0.1, spray);
+        cyl(0.1, 0.09, 0.3, xL + 0.12, 0, Z_N + 0.7, mat.steel); // pedal bin
+        cyl(0.025, 0.025, 0.4, xR - 0.08, 0, Z_N + 0.55, mat.black, world, 8); // brush
+        if (i === 2) for (const dx of [0.05, 0.1]) cyl(0.018, 0.018, 1.45, xR - dx, 1.05, Z_N + 0.06, col, world, 8); // yellow pipes
       }
     }
   }
@@ -1267,16 +1375,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     const chair = (id: string, x: number, z: number, ry: number): void => {
       item('chair', id, 'Bürostuhl', () => {
         const g = grp(x, z, ry);
-        R(0.06, 0.4, 0.06, 0, 0.04, 0, mat.dark, g);
-        const star = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.04, 5), mat.steel);
-        star.position.set(0, 0.02, 0);
-        g.add(star);
-        R(0.48, 0.08, 0.48, 0, 0.44, 0, mat.black, g);
-        R(0.46, 0.5, 0.06, 0, 0.55, 0.26, mat.black, g);
-        for (const sx of [-0.27, 0.27]) {
-          R(0.05, 0.03, 0.3, sx, 0.68, 0.05, mat.black, g);
-          R(0.03, 0.2, 0.03, sx, 0.5, 0.05, mat.black, g);
-        }
+        officeChair(g, 0, 0);
       });
     };
     chair('studio-chair-1', 20.5, -3.35, Math.PI / 2 + 0.2);

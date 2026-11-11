@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { team } from '../data/team';
+import shippedSeats from '../data/seats.json';
 import { buildCharacter } from '../render/characterBuilder';
 import { buildCat } from '../render/catBuilder';
 import { buildDog } from '../render/dogBuilder';
@@ -16,7 +17,9 @@ import { Roster } from '../ui/Roster';
 import { Seats } from '../ui/Seats';
 import { DevPanel } from '../ui/DevPanel';
 import { Settings } from '../ui/Settings';
+import { TimeControl } from '../ui/TimeControl';
 import { devEvents } from './DevEvents';
+import { DeskLights } from './DeskLights';
 import { Dog } from './Dog';
 import { DOOR } from './Door';
 import { Doors } from './Doors';
@@ -29,6 +32,7 @@ import { Person } from './Person';
 import { Presence } from './Presence';
 import { RoomEditor } from './RoomEditor';
 import { Social } from './Social';
+import { TimeOfDay, applySky, type SkyRig } from './TimeOfDay';
 import { Traffic } from './Traffic';
 import type { Walker } from './Walker';
 
@@ -57,6 +61,10 @@ export class Game {
   private social = new Social();
   private traffic = new Traffic(this.nav);
   private presence!: Presence;
+  private tod = new TimeOfDay();
+  private sky!: SkyRig;
+  private deskLights!: DeskLights;
+  private timeControl!: TimeControl;
   private feeds = new Feeds();
   private roster: Roster;
   private actions: Actions;
@@ -105,12 +113,16 @@ export class Game {
     const stageColor = getComputedStyle(document.documentElement).getPropertyValue('--color-scene').trim();
     this.scene.background = new THREE.Color(stageColor);
 
-    buildWorld(this.scene);
+    const { sun, hemi } = buildWorld(this.scene);
+    this.sky = { scene: this.scene, sun, hemi, dayBackground: new THREE.Color(stageColor) };
+    this.timeControl = new TimeControl(this.tod);
+    applySky(this.tod, this.sky);
     const model = (this.model = buildOffice(this.scene));
     // the editor puts the furniture where the saved layout wants it, before anything is derived from its position
     this.editor = new RoomEditor(this.scene, model.items, WORLD, () => this.relayout());
     this.blockNav();
     this.office = new Office(model, this.nav);
+    this.deskLights = new DeskLights(this.scene, this.office, this.tod);
     this.roof = model.roof;
     this.entrance = model.entrance;
     this.doors = new Doors(model.doors);
@@ -170,7 +182,7 @@ export class Game {
     this.spawn();
     new DevPanel();
     this.registerDevEvents();
-    this.presence = new Presence(this.people);
+    this.presence = new Presence(this.people, this.tod);
     this.presence.seed();
     for (const w of this.walkers) if (w instanceof Dog && w.owner.presence === 'out') w.sendAway(); // pets of people who start away
     this.bind();
@@ -198,13 +210,27 @@ export class Game {
   }
 
   private restoreSeats(): void {
-    let saved: Record<string, number> = {};
+    let local: Record<string, number> | null = null;
     try {
-      saved = JSON.parse(localStorage.getItem(SEATS_KEY) ?? '{}');
+      const raw = localStorage.getItem(SEATS_KEY);
+      if (raw) local = JSON.parse(raw);
     } catch {
       /* storage may be unavailable or corrupt */
     }
-    this.savedSeats = saved;
+    // seats saved in this browser win; in dev they are moved into src/data/seats.json (then the file is the truth)
+    this.savedSeats = local && Object.keys(local).length ? local : { ...(shippedSeats as Record<string, number>) };
+    if (local && Object.keys(local).length) void this.writeSeats(local);
+  }
+
+  /** Dev server only: writes the seat assignment to src/data/seats.json and drops the localStorage copy. */
+  private async writeSeats(out: Record<string, number>): Promise<void> {
+    try {
+      const res = await fetch('/__save-seats', { method: 'POST', body: JSON.stringify(out) });
+      if (!res.ok) throw new Error(String(res.status));
+      localStorage.removeItem(SEATS_KEY);
+    } catch {
+      /* no dev server: localStorage stays */
+    }
   }
 
   /** Called by the seat panel: persists the assignment and applies it to the person (they move over when they next sit down). */
@@ -219,6 +245,7 @@ export class Game {
     } catch {
       /* ignore */
     }
+    void this.writeSeats(out);
     this.seats.setOwners(this.seatOwners());
   }
 
@@ -311,6 +338,14 @@ export class Game {
       const w = this.dragged;
       w.pos.x = THREE.MathUtils.clamp(g.x + this.dragOffset.x, 0.4, WORLD.width - 0.4);
       w.pos.z = THREE.MathUtils.clamp(g.z + this.dragOffset.y, 0.4, WORLD.depth - 0.4);
+      // near a free chair: snap onto it (the person sits while carried)
+      if (w instanceof Person) {
+        w.snapDesk = this.office.desks.find((k) => w.canSit(k) && Math.min(Math.hypot(k.seat.x - w.pos.x, k.seat.z - w.pos.z), Math.hypot(k.approach.x - w.pos.x, k.approach.z - w.pos.z)) < 1) ?? null;
+        if (w.snapDesk) {
+          w.pos.x = w.snapDesk.seat.x;
+          w.pos.z = w.snapDesk.seat.z;
+        }
+      }
       w.prev.x = w.pos.x; // no interpolation while held, follow the cursor exactly
       w.prev.z = w.pos.z;
     });
@@ -322,6 +357,16 @@ export class Game {
       if (!this.dragged) return;
       const d = this.dragged;
       d.held = false;
+      // snapped to a chair: stay sitting there
+      if (d instanceof Person) {
+        const desk = d.snapDesk;
+        d.snapDesk = null;
+        if (desk && d.sitDownAt(desk)) {
+          this.dragged = null;
+          if (this.stage.hasPointerCapture(e.pointerId)) this.stage.releasePointerCapture(e.pointerId);
+          return;
+        }
+      }
       // let go inside a wall / desk: settle on the nearest free floor
       const c = this.nav.toCell(d.pos);
       if (!this.nav.walkable(c.cx, c.cz)) {
@@ -400,6 +445,10 @@ export class Game {
       this.simulate(STEP);
       this.acc -= STEP;
     }
+    this.tod.update(dt);
+    applySky(this.tod, this.sky);
+    this.deskLights.update(dt);
+    this.timeControl.sync();
     this.views.update(dt);
     this.updateHomes(dt);
     this.updateDoor(dt);
@@ -813,6 +862,7 @@ export class Game {
       } else {
         r.armL.rotation.z = r.armR.rotation.z = 0;
       }
+      this.poseTired(w, r);
       if (r.vape) this.poseVape(w, r.vape, ph);
       if (r.phone) this.posePhone(w, r.phone);
       if (w.talk && w.moving < 0.2 && !(w.sit > 0.5 && !w.speaking)) {
@@ -833,13 +883,39 @@ export class Game {
     } else if (w instanceof Dog) {
       const r = w.rig;
       const s = Math.sin(ph * 1.6) * 0.8 * w.moving;
-      r.legs[0].rotation.x = s;
-      r.legs[1].rotation.x = -s;
-      r.legs[2].rotation.x = -s;
-      r.legs[3].rotation.x = s;
-      r.body.position.y = bob * 1.2 + breathe;
-      r.tail.rotation.y = Math.sin(performance.now() / 90 + w.phase) * (0.35 + 0.4 * w.moving);
+      const lie = w.lie;
+      // lying: torso sinks to the floor, front legs stretch forward, hind legs fold back
+      const base = (r.legs[0].userData.baseY ??= r.legs[0].position.y) as number;
+      const drop = base * 0.8 * lie;
+      r.legs[0].rotation.x = THREE.MathUtils.lerp(s, -1.45, lie);
+      r.legs[1].rotation.x = THREE.MathUtils.lerp(-s, -1.45, lie);
+      r.legs[2].rotation.x = THREE.MathUtils.lerp(-s, 1.45, lie);
+      r.legs[3].rotation.x = THREE.MathUtils.lerp(s, 1.45, lie);
+      for (const l of r.legs) l.position.y = base - drop;
+      r.body.position.y = (bob * 1.2 + breathe) * (1 - lie) + breathe * lie - drop;
+      r.tail.rotation.y = Math.sin(performance.now() / 90 + w.phase) * (0.35 + 0.4 * w.moving) * (1 - 0.7 * lie);
     }
+  }
+
+  /** Tired people: heavy eyelids, dark eye bags, a slouch and a yawn now and then (hand over the mouth). */
+  private poseTired(w: Person, r: Person['rig']): void {
+    const tired = this.tod.tired;
+    let lids = tired;
+    r.body.rotation.x = tired * 0.07 * (1 - w.sit * 0.5);
+    r.body.position.y -= tired * 0.012 * (1 - w.sit);
+    const idle = w.moving < 0.2 && w.phoneAmt < 0.05 && !w.vapeJob && !w.foosAmt && !(w.talk && w.speaking);
+    if (tired > 0.35 && idle) {
+      // one yawn every ~25 s, each person on their own beat
+      const t = (performance.now() / 1000 + w.phase * 9) % 25;
+      if (t < 2.4) {
+        const k = Math.sin((t / 2.4) * Math.PI);
+        r.armR.rotation.x = THREE.MathUtils.lerp(r.armR.rotation.x, -2.5, k * tired);
+        r.armR.rotation.z = THREE.MathUtils.lerp(r.armR.rotation.z, 0.25, k * tired);
+        r.body.rotation.x -= k * tired * 0.1;
+        lids = Math.min(1, tired + k * 0.7);
+      }
+    }
+    r.setTired(lids);
   }
 
   /** Phone at the ear during a call: upper arm lifted, forearm folded up, a little nod while walking. */
@@ -947,7 +1023,7 @@ export class Game {
     if (active instanceof Person) {
       this.overlay.showTooltip(active.member.name, active.member.role, active.member.portrait, this.project(active));
     } else if (active instanceof Dog) {
-      this.overlay.showTooltip(active.name, active.label, active.portrait, this.project(active));
+      this.overlay.showTooltip(active.name, '',active.portrait, this.project(active));
     } else {
       this.overlay.hideTooltip();
     }
@@ -964,24 +1040,24 @@ export class Game {
       const talking = this.social.chattingCount;
       const inMeeting = this.meetingRoom.count;
       const working = this.people.filter((p) => p.working).length;
-      const absent = this.presence.absent;
+      const absent = this.presence.away;
       const home = absent.filter((p) => p.awayKind === 'home').length;
-      const inside = this.people.length - absent.length;
+      const inside = this.people.filter((p) => p.presence === 'in').length;
       const pets = this.walkers.filter((w) => w instanceof Dog && !w.away).length;
       this.overlay.setMeta(
-        `${inside} im Büro${absent.length ? `, ${absent.length - home} weg, ${home} im Homeoffice` : ''} · ${pets} Tiere${working ? ` · ${working} arbeiten` : ''}${talking ? ` · ${talking} im Gespräch` : ''}${inMeeting ? ` · ${inMeeting} im Meeting` : ''}`,
+        `${this.tod.clock} · ${inside} im Büro${absent.length ? `, ${absent.length - home} weg, ${home} im Homeoffice` : ''} · ${pets} Tiere${working ? ` · ${working} arbeiten` : ''}${talking ? ` · ${talking} im Gespräch` : ''}${inMeeting ? ` · ${inMeeting} im Meeting` : ''}`,
       );
     }
     this.rosterTimer -= 1 / 60;
     if (this.rosterTimer <= 0) {
       this.rosterTimer = 0.25;
       this.roster.update(
-        this.presence.absent
+        this.presence.away
           .map((p) => ({
             id: p.id,
             name: p.member.name,
             portrait: p.member.portrait,
-            kind: p.awayKind ?? 'errand',
+            kind: p.awayKind === 'home' ? ('home' as const) : ('errand' as const),
             moving: p.presence !== 'out',
             left: p.awayLeft,
           }))

@@ -253,6 +253,14 @@
       </aside>
       <aside class="m-settings" id="settings" aria-label="Einstellungen" hidden>
         <h2 class="m-settings__title">Einstellungen</h2>
+        <div class="m-settings__time">
+          <div class="m-settings__time-head">
+            <span>Tageszeit</span>
+            <output class="m-settings__clock" id="time-clock" for="time-slider">10:00</output>
+          </div>
+          <input class="m-settings__slider" type="range" id="time-slider" min="0" max="1000" step="1" value="308" aria-label="Tageszeit" />
+          <label class="m-settings__row"><input type="checkbox" id="time-auto" checked /> Zeit läuft automatisch</label>
+        </div>
         <label class="m-settings__row"><input type="checkbox" id="setting-tables" checked /> Tische (Reihennummern)</label>
         <label class="m-settings__row"><input type="checkbox" id="setting-seats" checked /> Platznummern</label>
         <label class="m-settings__row"><input type="checkbox" id="setting-rooms" checked /> Raumnummern</label>

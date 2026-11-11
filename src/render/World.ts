@@ -40,7 +40,7 @@ function parquetTexture(w: number, d: number): THREE.CanvasTexture {
 }
 
 /** Parquet floor slab + soft light. Walls and furniture come from the office model (render/officeModel.ts). */
-export function buildWorld(scene: THREE.Scene): { sun: THREE.DirectionalLight } {
+export function buildWorld(scene: THREE.Scene): { sun: THREE.DirectionalLight; hemi: THREE.HemisphereLight } {
   const { width: W, slab } = WORLD;
   const D = OFFICE_D;
 
@@ -58,7 +58,8 @@ export function buildWorld(scene: THREE.Scene): { sun: THREE.DirectionalLight } 
   annex.receiveShadow = true;
   scene.add(annex);
 
-  scene.add(new THREE.HemisphereLight('#ffffff', '#c9b8a4', 1.3));
+  const hemi = new THREE.HemisphereLight('#ffffff', '#c9b8a4', 1.3);
+  scene.add(hemi);
   const sun = new THREE.DirectionalLight('#ffffff', 1.9);
   sun.position.set(W * 0.9, 24, D * 1.6);
   sun.target.position.set(W / 2, 0, D / 2);
@@ -70,5 +71,5 @@ export function buildWorld(scene: THREE.Scene): { sun: THREE.DirectionalLight } 
   sun.shadow.normalBias = 0.03;
   scene.add(sun, sun.target);
 
-  return { sun };
+  return { sun, hemi };
 }

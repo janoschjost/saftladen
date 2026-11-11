@@ -27,7 +27,7 @@ export abstract class Walker {
   abstract id: string;
   /** Walker this one stays with (dog -> owner); excluded from avoidance and collision. */
   companion: Walker | null = null;
-  private blockedTime = 0;
+  protected blockedTime = 0;
   private stuckClock = 0;
   private stuckFrom: Vec2 = { x: 0, z: 0 };
   private stuckCount = 0;
@@ -298,18 +298,33 @@ export abstract class Walker {
       const ox = this.pos.x - o.pos.x; // from them to us
       const oz = this.pos.z - o.pos.z;
       const d = Math.hypot(ox, oz);
-      const near = this.radius + o.radius + 1.2;
+      // a walker stuck behind people (waiting) asks bystanders in its lane to clear out, from further away
+      const stuck = o.state === 'walk' && o.blockedTime > 0.3 && o.path.length > 0;
+      const near = this.radius + o.radius + (stuck ? 2.4 : 1.2);
       if (d >= near) continue;
       if (o.state === 'walk') {
-        const hx = Math.sin(o.yaw);
-        const hz = Math.cos(o.yaw);
-        if (d > 1e-4 && (ox * hx + oz * hz) / d > -0.2) continue; // they are not heading at us
-        // sidestep perpendicular to their heading, to the side we are already on
+        let hx = Math.sin(o.yaw);
+        let hz = Math.cos(o.yaw);
+        if (stuck) {
+          // head for where they want to go, not where they currently face
+          const t = o.path[0];
+          const tl = Math.hypot(t.x - o.pos.x, t.z - o.pos.z);
+          if (tl > 1e-4) {
+            hx = (t.x - o.pos.x) / tl;
+            hz = (t.z - o.pos.z) / tl;
+          }
+        }
+        const along = -(ox * hx + oz * hz); // how far in front of them we stand
         const side = ox * hz - oz * hx;
+        if (stuck) {
+          if (along < -0.2 || Math.abs(side) > this.radius + o.radius + 0.9) continue; // not in their lane
+        } else if (d > 1e-4 && (ox * hx + oz * hz) / d > -0.2) continue; // they are not heading at us
+        // sidestep perpendicular to their heading, to the side we are already on
         const sgn = side >= 0 ? 1 : -1;
-        const k = 1 - d / near;
+        const k = stuck ? 1 : 1 - d / near;
         ax += hz * sgn * k * 2 + (d > 1e-4 ? (ox / d) * 0.3 : 0);
         az += -hx * sgn * k * 2 + (d > 1e-4 ? (oz / d) * 0.3 : 0);
+        if (stuck) this.timer = Math.max(this.timer, 1.5); // stay out of the way a moment after they pass
       } else if (d < this.radius + o.radius && d > 1e-4 && !o.fixed) {
         // two standing bodies overlap: drift apart
         ax += ox / d;

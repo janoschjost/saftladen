@@ -39,7 +39,8 @@ type Phase = 'approach' | 'enter' | 'work' | 'leave';
 /** in = in the office, leaving = on the way out, out = gone (errand or home office), returning = coming back through the door */
 export type Presence = 'in' | 'leaving' | 'out' | 'returning';
 /** errand = popped out for a while, home = working from home (live feed available) */
-export type AwayKind = 'errand' | 'home';
+/** errand / home office, or `off`: finished for the day (night), not listed anywhere */
+export type AwayKind = 'errand' | 'home' | 'off';
 
 interface DeskTask {
   desk: Desk;
@@ -370,6 +371,30 @@ export class Person extends Walker {
     desk.setScreen(true, this.pickScreen());
   }
 
+  /** Chair the held person is currently snapped to (set by the game while dragging). */
+  snapDesk: Desk | null = null;
+
+  /** Can this person be put on `desk` by the player (free chair, nothing else keeping them busy)? */
+  canSit(desk: Desk): boolean {
+    return this.presence === 'in' && !this.controlled && !this.talk && !this.inMeeting && !this.pendingMeet && !desk.pending && (!desk.occupant || desk.occupant === this);
+  }
+
+  /** Dropped on a chair by the player: sit there and start working. */
+  sitDownAt(desk: Desk): boolean {
+    if (!this.canSit(desk)) return false;
+    this.cancelTask();
+    desk.occupant = this;
+    this.task = { desk, phase: 'work', t: 0, from: { ...desk.seat }, remaining: (WORK_TIME.min + Math.random() * (WORK_TIME.max - WORK_TIME.min)) * (this.adhd ? 0.3 : 1), retries: 0, retryIn: 0 };
+    this.pos.x = this.prev.x = desk.seat.x;
+    this.pos.z = this.prev.z = desk.seat.z;
+    this.yaw = this.prevYaw = desk.yaw;
+    this.sit = 1;
+    this.path = [];
+    this.state = 'idle';
+    desk.setScreen(true, this.pickScreen());
+    return true;
+  }
+
   override update(dt: number, nav: NavGrid, others: readonly Walker[] = []): void {
     this.updatePhone(dt);
     super.update(dt, nav, others);
@@ -552,6 +577,17 @@ export class Person extends Walker {
       if (!this.task && !this.meetJob) return this.steerStep(dt);
     }
     if (this.meetJob) return this.controlMeet(dt, nav);
+    if (this.held && !this.task && !this.printJob && !this.foosJob && !this.vapeJob) {
+      // carried by the player: sits down in the air while snapped to a chair, stands otherwise
+      const snap = this.snapDesk;
+      this.sit += ((snap ? 1 : 0) - this.sit) * Math.min(1, dt * 10);
+      if (snap) this.turnTo(snap.yaw, dt);
+      this.moving += (0 - this.moving) * Math.min(1, dt * 8);
+      this.path = [];
+      this.state = 'idle';
+      this.timer = 0.6;
+      return true;
+    }
     if (!this.task && this.sit > 0.01) {
       // dropped from the desk: stand up first, only then start the next thing
       this.sit = Math.max(0, this.sit - dt * 4);

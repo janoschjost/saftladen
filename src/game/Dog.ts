@@ -35,6 +35,8 @@ export class Dog extends Walker {
   private outWait = 0;
   private headingOut = false;
   private retry = 0;
+  /** 0 standing .. 1 lying down (owner is seated and the pet is settled) */
+  lie = 0;
 
   constructor(
     readonly name: string,
@@ -131,6 +133,8 @@ export class Dog extends Walker {
       }
     }
     super.update(dt, nav, others);
+    const settle = this.owner.sit > 0.5 && this.owner.presence === 'in' && !this.away && this.state === 'idle' && this.moving < 0.1;
+    this.lie += ((settle ? 1 : 0) - this.lie) * Math.min(1, dt * 3);
   }
 
   protected decide(nav: NavGrid): void {

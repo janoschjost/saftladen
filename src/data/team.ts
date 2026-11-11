@@ -31,7 +31,7 @@ const looks: Record<string, Look> = {
   'jeerapat-wang': { skin: '#e2b98e', hair: '#0f0c0a', style: 'bob', bangs: true, eyes: 'narrow', glasses: '#9a9aa2', thinGlasses: true, top: '#15161a', bottom: '#15161a', heightM: 1.75 },
   'teresa-sutter': { skin: FAIR, hair: '#3a2a22', style: 'long', top: '#1a1a1d', bottom: '#ece8e0', heightM: 1.6 },
   'jacqueline-graf': { skin: FAIR, hair: '#1a1416', style: 'long', bangs: true, glasses: '#c9a46a', top: '#1f3fd0', bottom: '#15161a', heightM: 1.9 },
-  'donata-manser': { skin: FAIR, hair: '#c49a6c', style: 'long', tee: true, top: '#17171a', bottom: '#202228', tattoo: 'right', heightM: 1.63 },
+  'donata-manser': { skin: FAIR, hair: '#c49a6c', style: 'long', tee: true, top: '#17171a', bottom: '#202228', tattoo: 'both', tattooDark: true, heightM: 1.63 },
   'oriana-pontieri': { skin: MEDIUM, hair: '#2a1c18', style: 'long', top: '#f3f1ee', bottom: '#202228', mouth: 'full', heightM: 1.7 },
   'samuel-guttinger': { skin: LIGHT, hair: '#2b2320', style: 'short', beard: 'stubble', tee: true, top: BLACK, bottom: BLACK, build: 0.82, eyebrows: true, heightM: 2.0 },
   'alessandro-romeo': { skin: LIGHT, hair: '#2a2420', style: 'short', tee: true, top: '#cdb8a0', bottom: '#1e2740' },
