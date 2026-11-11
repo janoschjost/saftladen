@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Saftladen</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preload" href="/fonts/ApercuBold.woff2" as="font" type="font/woff2" crossorigin />
     <style>
       @font-face {
@@ -54,7 +55,9 @@
         transform-origin: 50% 100%;
         animation: loader-sip 2.8s ease-in-out infinite;
       }
-      .m-loader__box polygon {
+      .m-loader__box polygon,
+      .m-loader__slab,
+      .m-loader__bubble-shape {
         stroke-width: 0.3;
         stroke-linejoin: round;
       }
@@ -68,9 +71,9 @@
       }
       .m-loader__two {
         fill: #1c1c1e;
-        font-family: 'Apercu', system-ui, sans-serif;
-        font-size: 22px;
-        font-weight: 700;
+        stroke: #1c1c1e;
+        stroke-width: 0.5;
+        stroke-linejoin: round;
       }
       .m-loader__juice {
         animation: loader-fill 2.8s cubic-bezier(0.45, 0, 0.25, 1) infinite;
@@ -179,11 +182,11 @@
     <div class="m-loader" id="loader" role="status" aria-live="polite">
       <svg class="m-loader__box" viewBox="0 0 100 130" aria-hidden="true">
         <defs>
-          <clipPath id="loader-clip"><polygon points="7,7 29,7 33,11 33,31 29,35 14,35 6,43 6,11" /></clipPath>
+          <clipPath id="loader-clip"><path d="M27.3 0H7C6 0 5 0.4 4.3 1.1C3.6 1.7 3.2 2.7 3.2 3.6V17.1L0 25L8.1 21.8H27.3C28.3 21.8 29.2 21.4 29.9 20.7C30.6 20 31 19.1 31 18.1V3.6C31 3.1 30.9 2.7 30.7 2.2C30.5 1.8 30.2 1.4 29.9 1C29.6 0.7 29.1 0.4 28.7 0.2C28.3 0.1 27.8 0 27.3 0Z" transform="translate(2.4 12) scale(1.1)" /></clipPath>
         </defs>
-        <polygon points="50.0,46.0 81.18,64.0 50.0,82.0 18.82,64.0" fill="#4a4a52" stroke="#4a4a52" />
-        <polygon points="18.82,64.0 50.0,82.0 50.0,126.0 18.82,108.0" fill="#2c2c31" stroke="#2c2c31" />
-        <polygon points="50.0,82.0 81.18,64.0 81.18,108.0 50.0,126.0" fill="#161618" stroke="#161618" />
+        <polygon points="50.0,46.0 81.18,64.0 50.0,82.0 18.82,64.0" fill="#f8f8fb" stroke="#f8f8fb" />
+        <polygon points="18.82,64.0 50.0,82.0 50.0,126.0 18.82,108.0" fill="#ececf1" stroke="#ececf1" />
+        <polygon points="50.0,82.0 81.18,64.0 81.18,108.0 50.0,126.0" fill="#dcdce3" stroke="#dcdce3" />
         <polygon points="74.25,18.0 79.44,21.0 74.25,24.0 69.05,21.0" fill="#ff5cc0" stroke="#ff5cc0" />
         <polygon points="69.05,21.0 74.25,24.0 74.25,30.0 69.05,27.0" fill="#ff1fa9" stroke="#ff1fa9" />
         <polygon points="74.25,24.0 79.44,21.0 79.44,27.0 74.25,30.0" fill="#c4007f" stroke="#c4007f" />
@@ -209,16 +212,16 @@
         <polygon points="58.66,33.0 63.86,36.0 63.86,42.0 58.66,39.0" fill="#ff1fa9" stroke="#ff1fa9" />
         <polygon points="63.86,36.0 69.05,33.0 69.05,39.0 63.86,42.0" fill="#c4007f" stroke="#c4007f" />
         <g transform="matrix(0.866 0.5 0 1 18.82 64.0)">
-          <polygon class="m-loader__slab" points="7,7 29,7 33,11 33,31 29,35 14,35 6,43 6,11" transform="translate(0 1.5)" />
-          <polygon class="m-loader__bubble-shape" points="7,7 29,7 33,11 33,31 29,35 14,35 6,43 6,11" />
+          <path class="m-loader__slab" d="M27.3 0H7C6 0 5 0.4 4.3 1.1C3.6 1.7 3.2 2.7 3.2 3.6V17.1L0 25L8.1 21.8H27.3C28.3 21.8 29.2 21.4 29.9 20.7C30.6 20 31 19.1 31 18.1V3.6C31 3.1 30.9 2.7 30.7 2.2C30.5 1.8 30.2 1.4 29.9 1C29.6 0.7 29.1 0.4 28.7 0.2C28.3 0.1 27.8 0 27.3 0Z" transform="translate(2.4 12) scale(1.1) translate(0 1.4)" />
+          <path class="m-loader__bubble-shape" d="M27.3 0H7C6 0 5 0.4 4.3 1.1C3.6 1.7 3.2 2.7 3.2 3.6V17.1L0 25L8.1 21.8H27.3C28.3 21.8 29.2 21.4 29.9 20.7C30.6 20 31 19.1 31 18.1V3.6C31 3.1 30.9 2.7 30.7 2.2C30.5 1.8 30.2 1.4 29.9 1C29.6 0.7 29.1 0.4 28.7 0.2C28.3 0.1 27.8 0 27.3 0Z" transform="translate(2.4 12) scale(1.1)" />
           <g clip-path="url(#loader-clip)">
             <g class="m-loader__juice">
-              <g transform="translate(0 7)">
+              <g transform="translate(0 11)">
                 <path class="m-loader__fill m-loader__wave" d="M-40,3 h10 v-3 h10 v3 h10 v-3 h10 v3 h10 v-3 h10 v3 h10 v-3 h10 v3 h10 v-3 h10 v3 h10 v-3 h10 v3 h10 v-3 h10 v3 h10 v-3 h10 v3 V50 H-40 Z" />
               </g>
             </g>
           </g>
-          <text class="m-loader__two" x="19.5" y="28" text-anchor="middle">2</text>
+          <path class="m-loader__two" d="M21.1 16.6H12.7V14L17.3 9.9C17.8 9.5 18.4 9 18.4 8.3C18.4 8.1 18.34 7.91 18.3 7.8C18.2 7.6 18.1 7.5 18 7.4C17.9 7.3 17.7 7.19 17.5 7.1C17.26 6.99 17.1 7 17 7C16.8 7 16.6 7 16.4 7.1C16.2 7.2 16 7.3 15.9 7.4C15.8 7.5 15.65 7.69 15.6 7.9C15.54 8.13 15.5 8.3 15.5 8.5L13 8.3C13 6 14.7 4.8 17 4.8C19.2 4.8 20.8 6 20.8 8.3C20.8 8.9 20.7 9.5 20.4 10C20.1 10.5 19.7 11 19.2 11.4L15.6 14.4H21V16.6H21.1Z" transform="translate(2.4 12) scale(1.1)" />
         </g>
       </svg>
       <div class="m-loader__shadow" aria-hidden="true"></div>
@@ -232,10 +235,11 @@
       </div>
       <div class="m-toolbar" role="toolbar" aria-label="Werkzeuge">
         <button class="m-tool" id="open-picker" type="button" aria-label="Figuren" data-tip="Figuren"><svg class="m-tool__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg></button>
+        <button class="m-tool" id="open-day" type="button" aria-label="Ein Tag im Leben" data-tip="Ein Tag im Leben" aria-pressed="false"><svg class="m-tool__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m10 8.5 5 3.5-5 3.5z"/></svg></button>
         <button class="m-tool" id="toggle-seats" type="button" aria-label="Plätze" data-tip="Plätze" aria-pressed="false"><svg class="m-tool__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 11V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v5"/><path d="M5 11h14v5H5z"/><path d="M7 16v4M17 16v4"/></svg></button>
         <button class="m-tool" id="toggle-names" type="button" aria-label="Namen" data-tip="Namen" aria-pressed="false"><svg class="m-tool__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1"/></svg></button>
         <span class="m-toolbar__sep" aria-hidden="true"></span>
-        <button class="m-tool" id="toggle-settings" type="button" aria-label="Einstellungen" data-tip="Einstellungen" aria-pressed="false"><svg class="m-tool__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></svg></button>
+        <button class="m-tool" id="toggle-settings" type="button" aria-label="Einstellungen" data-tip="Einstellungen" aria-pressed="false"><svg class="m-tool__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
         <span class="m-toolbar__sep" aria-hidden="true"></span>
         <button class="m-tool" id="toggle-editor" type="button" aria-label="Raum bearbeiten" data-tip="Raum bearbeiten (E)" aria-pressed="false"><svg class="m-tool__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M3 12h18"/><path d="m9 6 3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg></button>
         <button class="m-tool" id="toggle-dev" type="button" aria-label="Dev-Events" data-tip="Dev-Events" aria-pressed="false"><svg class="m-tool__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 8-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/></svg></button>
@@ -396,6 +400,54 @@
           </figure>
         </div>
         <button class="m-button m-picker__close" id="picker-close" type="button">Schliessen</button>
+      </div>
+    </section>
+    <section class="m-day-menu" id="day-menu" aria-labelledby="day-menu-title" hidden>
+      <div class="m-day-menu__stage" id="day-menu-stage"></div>
+      <div class="m-day-menu__tags" id="day-menu-tags"></div>
+      <header class="m-day-menu__head">
+        <h2 class="m-day-menu__title" id="day-menu-title">Ein Tag im Leben</h2>
+        <p class="m-day-menu__lead">Wähle deine Figur und erledige ihre Aufgaben so schnell wie möglich. Das Büro läuft einfach weiter.</p>
+      </header>
+      <div class="m-day-menu__panel">
+        <p class="m-day-menu__name" id="day-menu-name"></p>
+        <p class="m-day-menu__role" id="day-menu-role"></p>
+        <p class="m-day-menu__tagline" id="day-menu-tagline"></p>
+        <div class="m-day-menu__buttons">
+          <button class="m-button" id="day-menu-prev" type="button" aria-label="Vorherige Figur">&larr;</button>
+          <button class="m-button m-day-menu__start" id="day-menu-start" type="button">Tag starten</button>
+          <button class="m-button" id="day-menu-next" type="button" aria-label="Nächste Figur">&rarr;</button>
+        </div>
+        <button class="m-day-menu__close" id="day-menu-close" type="button">Abbrechen (Esc)</button>
+      </div>
+    </section>
+    <aside class="m-day-hud" id="day-hud" aria-label="Ein Tag im Leben" hidden>
+      <div class="m-day-hud__bar">
+        <div class="m-day-hud__who">
+          <p class="m-day-hud__name" id="day-hud-name"></p>
+          <p class="m-day-hud__status" id="day-hud-status" role="status" hidden></p>
+        </div>
+        <output class="m-day-hud__clock" id="day-hud-clock">00:00</output>
+        <button class="m-button" id="day-hud-exit" type="button">Beenden</button>
+      </div>
+      <ol class="m-day-hud__tasks" id="day-hud-tasks" hidden></ol>
+      <div class="m-day-hud__meter" id="day-hud-meter" data-mood="safe" hidden>
+        <p class="m-day-hud__meter-label" id="day-hud-meter-label"></p>
+        <div class="m-day-hud__meter-track"><div class="m-day-hud__meter-fill" id="day-hud-meter-fill"></div></div>
+      </div>
+    </aside>
+    <div class="m-day-pointer" id="day-pointer" hidden>
+      <svg class="m-day-pointer__arrow" id="day-pointer-arrow" viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M12 3 21 20H3z"/></svg>
+      <span class="m-day-pointer__dist" id="day-pointer-dist"></span>
+    </div>
+    <section class="m-day-result" id="day-result" aria-labelledby="day-result-title" hidden>
+      <h2 class="m-day-result__title" id="day-result-title"></h2>
+      <p class="m-day-result__total" id="day-result-total"></p>
+      <p class="m-day-result__best" id="day-result-best"></p>
+      <ul class="m-day-result__rows" id="day-result-rows"></ul>
+      <div class="m-day-result__buttons">
+        <button class="m-button" id="day-result-again" type="button">Nochmal</button>
+        <button class="m-button" id="day-result-exit" type="button">Beenden</button>
       </div>
     </section>
     <aside class="m-help" id="help" aria-label="Steuerung">
