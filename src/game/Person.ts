@@ -7,7 +7,7 @@ import { screenVariants, type ScreenKind } from '../render/screens';
 import { DOOR_IN, DOOR_OUT } from './Door';
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { MeetSeat } from './Meeting';
-import type { CoffeeSpot } from './Coffee';
+import type { CoffeeSpot, Kitchen, MachineSpot } from './Coffee';
 import type { Desk, FoosSpot, Office } from './Office';
 import type { Talk } from './Social';
 import { Walker } from './Walker';
@@ -34,6 +34,22 @@ const SEAT_PHONE_TIME = { min: 15, max: 40 };
 const SEAT_VAPE_RATE = 0.015; // per second while working at the desk (vapers): chance to take a drag without getting up
 const PHONE_PACE_LEN = { min: 3.5, max: 9 }; // metres between the two ends of a pacing path
 const TRANSITION = 1.1; // seconds to sit down / stand up
+const RUN_RATE = 0.012; // per second at the desk without a coffee: chance to get up and fetch one (a lot less with a mug still on the desk)
+const RUN_CHANCE = 0.1; // per decision while wandering: fetch a coffee from the machine
+const BREW = 4.2; // seconds at the machine
+const CUP_LIFE = 70; // seconds a carried cup lasts when it never makes it to a desk
+const SEAT_DRINK_RATE = 0.035; // per second at the desk with coffee on it: chance to take a sip
+/** timeline of a sip at the desk (seconds): hand out to the mug, back to the body, sip, down to the desk, mug set down, hand back to the keys */
+const DRINK = { grab: 0.6, up: 1.1, sipEnd: 3.1, put: 3.6, end: 4.1 };
+const EMOTE_GAP = { min: 12, max: 38 }; // seconds between two little gestures (yawn, stretch, ...)
+export type Emote = 'yawn' | 'stretch' | 'scratch' | 'look';
+const EMOTES: Array<[Emote, number, number]> = [
+  // kind, weight, seconds
+  ['yawn', 3, 2.8],
+  ['stretch', 2, 3.0],
+  ['scratch', 3, 3.2],
+  ['look', 2, 2.4],
+];
 
 type Phase = 'approach' | 'enter' | 'work' | 'leave';
 
@@ -51,6 +67,29 @@ interface DeskTask {
   remaining: number; // seconds of work left
   retries: number;
   retryIn: number;
+  /** about to leave the desk for a coffee: where at the machine, and how much work was left */
+  errand?: { spot: MachineSpot; left: number };
+}
+
+/** On the way to the espresso machine, brewing, then back to the desk with the cup (the desk stays reserved meanwhile). */
+interface CoffeeRun {
+  phase: 'out' | 'brew';
+  /** the desk to go back to (null: none, takes any free one on the way back) */
+  desk: Desk | null;
+  left: number;
+  spot: MachineSpot;
+  t: number;
+  age: number;
+  retries: number;
+  retryIn: number;
+}
+
+/** A sip taken at the desk (see DRINK for the timeline). `held`: the mug is in the hand. */
+interface Drink {
+  t: number;
+  held: boolean;
+  sipped: boolean;
+  desk: Desk;
 }
 
 interface PrintJob {
@@ -147,6 +186,10 @@ export class Person extends Walker {
   readonly steer = { x: 0, z: 0, run: false };
   /** the player (walk mode) is talking to this person: they stop and face `at` until `t` runs out */
   playerChat: { t: number; total: number; at: Vec2 } | null = null;
+  /** stroking a pet (reuses the stop-and-turn of `playerChat`, but without the talking gestures) */
+  petting = false;
+  /** 0..1 eased petting pose */
+  petAmt = 0;
   awayKind: AwayKind | null = null;
   /** seconds until this person comes back (counts down while `out`) */
   awayLeft = 0;
@@ -166,6 +209,27 @@ export class Person extends Walker {
   coffeeJob: CoffeeJob | null = null;
   /** 0 = no cup .. 1 = cup in the hand (eased) */
   cupAmt = 0;
+  /** where the espresso machine is (set by the game) */
+  kitchen: Kitchen | null = null;
+  /** fetching a coffee from the machine */
+  run: CoffeeRun | null = null;
+  /** carrying a cup (from the machine, or from the kitchen chat) */
+  cupHeld = false;
+  /** how full the carried cup is, 0..1 */
+  cupFill = 1;
+  private cupLeft = 0;
+  /** taking a sip from the mug on the desk */
+  drink: Drink | null = null;
+  /** 0..1 eased: the left arm is busy with the mug */
+  drinkAmt = 0;
+  /** a little gesture in progress: yawn, stretch, scratching the head, looking around */
+  emote: { kind: Emote; t: number; dur: number } | null = null;
+  /** the last gesture, its progress 0..1, its strength 0..1 (eased in and out) and which way `look` turns */
+  emoteKind: Emote = 'yawn';
+  emoteP = 0;
+  emoteAmt = 0;
+  emoteDir: 1 | -1 = 1;
+  private emoteIn = EMOTE_GAP.min + Math.random() * (EMOTE_GAP.max - EMOTE_GAP.min);
   /** walking to / sitting in the meeting room */
   meetJob: MeetJob | null = null;
   /** called to a meeting while still at a desk: goes once they have stood up */
@@ -199,6 +263,7 @@ export class Person extends Walker {
   override get fixed(): boolean {
     if (this.presence === 'out' || this.script) return true;
     if (this.printJob?.phase === 'print') return true;
+    if (this.run?.phase === 'brew') return true;
     if (this.foosJob?.phase === 'play') return true;
     if (this.meetJob) return this.meetJob.phase !== 'approach';
     return !!this.task && this.task.phase !== 'approach';
@@ -227,6 +292,7 @@ export class Person extends Walker {
     if (t && t.phase !== 'approach') {
       // stand up from the desk first
       this.pendingMeet = { seat, talk, nav };
+      this.dropErrand(t);
       if (t.phase !== 'leave') t.remaining = 0;
       return;
     }
@@ -397,31 +463,64 @@ export class Person extends Walker {
     this.sit = 1;
     this.state = 'idle';
     desk.setScreen(true, this.pickScreen());
+    if (Math.random() < 0.35 && !this.member.hatesCoffee) desk.putMug(0.25 + Math.random() * 0.7); // a coffee already waiting on the desk
   }
 
   /** Chair the held person is currently snapped to (set by the game while dragging). */
   snapDesk: Desk | null = null;
 
   /** Can this person be put on `desk` by the player (free chair, nothing else keeping them busy)? */
-  canSit(desk: Desk): boolean {
-    return this.presence === 'in' && !this.controlled && !this.talk && !this.inMeeting && !this.pendingMeet && !desk.pending && (!desk.occupant || desk.occupant === this);
+  canSit(desk: Desk, steal = false): boolean {
+    const o = desk.occupant;
+    return this.presence === 'in' && !this.controlled && !this.talk && !this.inMeeting && !this.pendingMeet && !desk.pending && (!o || o === this || (steal && o.canBeBumped));
+  }
+
+  /** Somebody else may take this person's chair: they are in the office and not carried / steered by the player. */
+  get canBeBumped(): boolean {
+    return this.presence === 'in' && !this.controlled && !this.held;
+  }
+
+  /** The player put somebody else on this person's desk: they stand up and look for another one. */
+  evictFromDesk(desk: Desk): void {
+    if (this.run?.desk === desk) {
+      this.run.desk = null;
+      this.office?.release(desk, this);
+    } else {
+      this.cancelTask();
+      if (desk.occupant === this) this.office?.release(desk, this);
+    }
+    this.displaced = true;
+    this.sit = 0;
+    this.pos.x = this.prev.x = desk.approach.x;
+    this.pos.z = this.prev.z = desk.approach.z;
+    this.timer = 0.4 + Math.random() * 0.6;
+  }
+
+  /** The player put somebody else on this person's meeting chair: they stand up where the chair is open. */
+  evictFromMeeting(seat: MeetSeat): void {
+    this.cancelMeet();
+    this.sit = 0;
+    this.pos.x = this.prev.x = seat.approach.x;
+    this.pos.z = this.prev.z = seat.approach.z;
   }
 
   /** Meeting-room chair the held person is currently snapped to (set by the game while dragging). */
   snapMeetSeat: MeetSeat | null = null;
 
   /** Can this person be put on this meeting chair by the player? */
-  canSitMeet(seat: MeetSeat): boolean {
-    return this.presence === 'in' && !this.controlled && !this.talk && !this.inMeeting && !this.pendingMeet && (!seat.occupant || seat.occupant === this);
+  canSitMeet(seat: MeetSeat, steal = false): boolean {
+    const o = seat.occupant;
+    return this.presence === 'in' && !this.controlled && !this.talk && !this.inMeeting && !this.pendingMeet && (!o || o === this || (steal && o.canBeBumped));
   }
 
-  /** Dropped on a meeting chair by the player: sit there for a while. */
-  sitDownAtMeeting(seat: MeetSeat): boolean {
+  /** Dropped on a meeting chair by the player: sit there for a while (or until `session` ends, e.g. the phone box call). */
+  sitDownAtMeeting(seat: MeetSeat, session?: Talk): boolean {
     if (!this.canSitMeet(seat)) return false;
     this.cancelTask();
     seat.occupant = this;
-    const talk: Talk = { kind: 'chat', center: { ...seat.seat }, members: [this] };
-    this.meetJob = { seat, talk, phase: 'sit', t: 0, from: { ...seat.seat }, age: 0, retries: 0, retryIn: 0, dismissed: false, solo: 20 + Math.random() * 25 };
+    const talk: Talk = session ?? { kind: 'chat', center: { ...seat.seat }, members: [this] };
+    if (session) this.talk = session;
+    this.meetJob = { seat, talk, phase: 'sit', t: 0, from: { ...seat.seat }, age: 0, retries: 0, retryIn: 0, dismissed: false, solo: session ? undefined : 20 + Math.random() * 25 };
     this.pos.x = this.prev.x = seat.seat.x;
     this.pos.z = this.prev.z = seat.seat.z;
     this.yaw = this.prevYaw = seat.yaw;
@@ -449,8 +548,12 @@ export class Person extends Walker {
 
   override update(dt: number, nav: NavGrid, others: readonly Walker[] = []): void {
     this.updatePhone(dt);
-    this.cupAmt += ((this.coffeeJob?.phase === 'drink' ? 1 : 0) - this.cupAmt) * Math.min(1, dt * 4);
+    if (this.cupHeld && ((this.cupLeft -= dt) <= 0 || this.presence !== 'in' || this.meetJob || this.held)) this.cupHeld = false;
+    this.cupAmt += ((this.coffeeJob?.phase === 'drink' || this.cupHeld ? 1 : 0) - this.cupAmt) * Math.min(1, dt * 4);
     if (this.cupAmt < 0.005) this.cupAmt = 0;
+    this.drinkAmt += ((this.drink ? 1 : 0) - this.drinkAmt) * Math.min(1, dt * 6);
+    if (this.drinkAmt < 0.005) this.drinkAmt = 0;
+    this.updateEmote(dt);
     super.update(dt, nav, others);
     this.clock += dt;
     if (this.rig.setMood && (this.moodTimer -= dt) <= 0) {
@@ -458,6 +561,37 @@ export class Person extends Walker {
       this.happy = !this.happy;
       this.rig.setMood(this.happy);
     }
+  }
+
+  /** Free to do a little gesture: sitting at the desk working, or standing around doing nothing. */
+  private canEmote(): boolean {
+    if (this.presence !== 'in' || this.held || this.controlled || this.phoneJob || this.vapeJob || this.drink || this.cupHeld || this.coffeeJob || this.meetJob || this.pendingMeet || this.run) return false;
+    if (this.printJob || this.foosJob || this.playerChat) return false;
+    if (this.task) return this.task.phase === 'work' && !this.task.errand;
+    return this.state === 'idle' && this.moving < 0.2 && this.sit < 0.05 && !this.talk;
+  }
+
+  /** Now and then a yawn, a stretch, a scratch of the head or a look around; eases in and out of the pose. */
+  private updateEmote(dt: number): void {
+    const e = this.emote;
+    if (e) {
+      e.t += dt;
+      this.emoteP = Math.min(1, e.t / e.dur);
+      if (e.t >= e.dur || !this.canEmote()) this.emote = null;
+    } else if ((this.emoteIn -= dt) <= 0) {
+      this.emoteIn = (EMOTE_GAP.min + Math.random() * (EMOTE_GAP.max - EMOTE_GAP.min)) * (this.adhd ? 0.6 : 1);
+      if (this.canEmote()) {
+        let pick = Math.random() * EMOTES.reduce((n, x) => n + x[1], 0);
+        const [kind, , dur] = EMOTES.find((x) => (pick -= x[1]) < 0) ?? EMOTES[0];
+        this.emote = { kind, t: 0, dur };
+        this.emoteKind = kind;
+        this.emoteP = 0;
+        this.emoteDir = Math.random() < 0.5 ? 1 : -1;
+      }
+    }
+    const k = this.emote ? smooth(Math.min(this.emote.t, this.emote.dur - this.emote.t) / 0.45) : 0;
+    this.emoteAmt += (k - this.emoteAmt) * Math.min(1, dt * 12);
+    if (this.emoteAmt < 0.005) this.emoteAmt = 0;
   }
 
   /** Counts the call down, ends it when something else takes over, and raises / lowers the hand. */
@@ -504,10 +638,180 @@ export class Person extends Walker {
   }
 
   /** Occasionally a phone call or a vape drag while sitting at the desk. */
-  private seatedBreaks(dt: number, task: DeskTask): void {
-    if (this.held || this.talk || this.phoneJob || this.vapeJob || task.remaining < 6) return;
+  private seatedBreaks(dt: number, task: DeskTask, nav: NavGrid): void {
+    if (this.held || this.talk || this.phoneJob || this.vapeJob || this.drink || this.cupHeld || task.remaining < 6) return;
     if (this.member.look.phone && Math.random() < SEAT_PHONE_RATE * dt) this.startSeatedPhone(task);
     else if (this.member.look.vape && Math.random() < SEAT_VAPE_RATE * dt) this.startVape(Math.random() < 0.35 ? 2 : 1);
+    else if (!this.emote) {
+      const d = task.desk;
+      const coffee = d.mugFill !== null && d.mugFill > 0.06;
+      if (coffee && Math.random() < SEAT_DRINK_RATE * dt) this.drink = { t: 0, held: false, sipped: false, desk: d };
+      else if (!this.member.hatesCoffee && task.remaining > 18 && !task.errand && Math.random() < RUN_RATE * (coffee ? 0.15 : 1) * dt) this.startRun(task, nav);
+    }
+  }
+
+  /** Gets up for a coffee: the desk stays theirs while they are at the machine. */
+  private startRun(task: DeskTask, nav: NavGrid): void {
+    const spot = this.kitchen?.claimMachine(this, nav);
+    if (!spot) return;
+    task.errand = { spot, left: task.remaining };
+    task.remaining = 0; // the usual stand-up follows; `beginRun` takes over at the end of it
+  }
+
+  /** Changed their mind about the coffee run (called to a meeting, desk wanted by its owner). */
+  private dropErrand(task: DeskTask): void {
+    if (!task.errand) return;
+    task.errand = undefined;
+    this.kitchen?.releaseMachine(this);
+  }
+
+  /** Stood up from the desk with a coffee in mind: off to the machine, the desk stays reserved. */
+  private beginRun(task: DeskTask, nav: NavGrid): void {
+    const e = task.errand!;
+    this.task = null;
+    this.sit = 0;
+    this.state = 'idle';
+    this.path = [];
+    this.run = { phase: 'out', desk: task.desk, left: e.left, spot: e.spot, t: 0, age: 0, retries: 0, retryIn: 0.5 };
+    this.goTo(nav, e.spot.stand);
+  }
+
+  /** Walks over from wherever they are (no desk to go back to; they pick one on the way back). */
+  private startWanderRun(nav: NavGrid): boolean {
+    const spot = this.kitchen?.claimMachine(this, nav);
+    if (!spot) return false;
+    this.run = { phase: 'out', desk: null, left: 0, spot, t: 0, age: 0, retries: 0, retryIn: 0.5 };
+    this.goTo(nav, spot.stand);
+    return true;
+  }
+
+  private controlRun(dt: number, nav: NavGrid): boolean {
+    const j = this.run!;
+    if (this.held) {
+      this.cancelRun();
+      return false;
+    }
+    const ease = Math.min(1, dt * 8);
+    j.age += dt;
+    if (j.phase === 'out') {
+      if (j.age > 70) {
+        this.cancelRun();
+        return false;
+      }
+      if (this.isWalking()) return false;
+      this.moving += (0 - this.moving) * ease;
+      if (Math.hypot(j.spot.stand.x - this.pos.x, j.spot.stand.z - this.pos.z) < 0.6) {
+        j.phase = 'brew';
+        j.t = 0;
+        this.cupHeld = true; // takes a cup from the shelf
+        this.cupFill = 0;
+        this.cupLeft = CUP_LIFE + BREW;
+        return true;
+      }
+      j.retryIn -= dt;
+      if (j.retryIn <= 0) {
+        j.retryIn = 0.5;
+        this.goTo(nav, j.spot.stand);
+        if (!this.isWalking() && ++j.retries > 8) this.cancelRun();
+      }
+      return true;
+    }
+    // brew: facing the machine with the cup under the spout
+    this.moving += (0 - this.moving) * ease;
+    this.path = [];
+    this.state = 'idle';
+    this.timer = 1;
+    this.turnTo(j.spot.yaw, dt);
+    const k = Math.min(1, dt * 3);
+    this.pos.x += (j.spot.stand.x - this.pos.x) * k;
+    this.pos.z += (j.spot.stand.z - this.pos.z) * k;
+    j.t += dt;
+    this.cupFill = Math.min(1, j.t / (BREW - 0.8));
+    if (j.t >= BREW) this.finishBrew(nav);
+    return true;
+  }
+
+  /** Coffee is ready: back to the desk with it (or to any free one). */
+  private finishBrew(nav: NavGrid): void {
+    const j = this.run!;
+    this.kitchen?.releaseMachine(this);
+    this.run = null;
+    this.cupFill = 1;
+    this.cupLeft = CUP_LIFE;
+    this.displaced = false;
+    this.state = 'idle';
+    this.path = [];
+    this.timer = 0.2;
+    const desk = j.desk ?? this.office?.claim(this) ?? null;
+    if (!desk) return;
+    const left = j.desk ? Math.max(j.left, 20) : (WORK_TIME.min + Math.random() * (WORK_TIME.max - WORK_TIME.min)) * (this.adhd ? 0.3 : 1);
+    this.task = { desk, phase: 'approach', t: 0, from: { ...this.pos }, remaining: left, retries: 0, retryIn: 0.5 };
+    this.goTo(nav, desk.approach);
+  }
+
+  /** Gives up the coffee run where they stand (the desk is free again). */
+  private cancelRun(): void {
+    this.kitchen?.releaseMachine(this);
+    const j = this.run;
+    if (!j) return;
+    this.run = null;
+    if (j.phase === 'brew') this.cupHeld = false;
+    if (j.desk) this.office?.release(j.desk, this);
+    this.path = [];
+    this.state = 'idle';
+    this.timer = 0.3 + Math.random();
+  }
+
+  /** Advances the sip at the desk; arrived with a coffee: sip first, then set it down. */
+  private tickDrink(dt: number, task: DeskTask): void {
+    const d = task.desk;
+    let dr = this.drink;
+    if (!dr) {
+      if (!this.cupHeld) return;
+      this.cupLeft = CUP_LIFE;
+      this.drink = dr = { t: DRINK.up, held: true, sipped: false, desk: d };
+    }
+    dr.t += dt;
+    if (!dr.held && dr.t >= DRINK.grab && dr.t < DRINK.put) {
+      dr.held = true;
+      this.cupHeld = true;
+      this.cupFill = d.mugFill ?? 1;
+      this.cupLeft = CUP_LIFE;
+      d.holdMug();
+    }
+    if (!dr.sipped && dr.t >= (DRINK.up + DRINK.sipEnd) / 2) {
+      dr.sipped = true;
+      this.cupFill = Math.max(0, this.cupFill - 0.2);
+    }
+    if (dr.held && dr.t >= DRINK.put) {
+      dr.held = false;
+      this.cupHeld = false;
+      d.putMug(this.cupFill);
+    }
+    if (dr.t >= DRINK.end) this.drink = null;
+  }
+
+  /** The sip is cut short (they get up): the mug goes back on the desk. */
+  private endDrink(): void {
+    const dr = this.drink;
+    if (!dr) return;
+    this.drink = null;
+    if (dr.held) {
+      this.cupHeld = false;
+      dr.desk.putMug(this.cupFill);
+    }
+  }
+
+  /** 0..1: how far the left hand has reached out sideways to the mug on the desk. */
+  get cupReach(): number {
+    const dr = this.drink;
+    if (!dr) return 0;
+    const t = dr.t;
+    if (t < DRINK.grab) return smooth(t / DRINK.grab);
+    if (t < DRINK.up) return 1 - smooth((t - DRINK.grab) / (DRINK.up - DRINK.grab));
+    if (t < DRINK.sipEnd) return 0;
+    if (t < DRINK.put) return smooth((t - DRINK.sipEnd) / (DRINK.put - DRINK.sipEnd));
+    return 1 - smooth((t - DRINK.put) / (DRINK.end - DRINK.put));
   }
 
   /** Advances a drag taken in the chair (the arm and puffs are animated from `vapeJob.t`). */
@@ -576,6 +880,7 @@ export class Person extends Walker {
     }
     if (!seek && Math.random() < PRINT_CHANCE && this.startPrint(nav)) return;
     if (!seek && Math.random() < FOOS_CHANCE && this.office?.challenge(this, nav)) return;
+    if (!seek && !this.cupHeld && !this.member.hatesCoffee && !this.talk && Math.random() < RUN_CHANCE && this.startWanderRun(nav)) return;
     if (this.office && (seek || Math.random() < (this.adhd ? WORK_CHANCE * 0.6 : WORK_CHANCE))) {
       const desk = this.office.claim(this);
       if (desk) {
@@ -594,9 +899,13 @@ export class Person extends Walker {
   }
 
   /** The player talks to this person: they drop their walk and turn around. False when they are too busy to stop (desk, meeting, printer, …). */
-  talkTo(at: Vec2, seconds: number): boolean {
+  talkTo(at: Vec2, seconds: number, stayAtDesk = true): boolean {
     if (this.fixed || this.held || this.controlled || this.talk || this.presence !== 'in' || this.inMeeting) return false;
-    this.interrupt();
+    if (stayAtDesk && this.task?.phase === 'work') {
+      // seated: swivel the chair towards the player instead of standing up
+      this.phoneJob = null;
+      this.vapeJob = null;
+    } else this.interrupt();
     this.path = [];
     this.state = 'idle';
     this.playerChat = { t: seconds, total: seconds, at };
@@ -604,20 +913,38 @@ export class Person extends Walker {
     return true;
   }
 
+  /** Stops and strokes a pet at `at` for a few seconds. False when busy (desk, meeting, call, …). */
+  petDog(at: Vec2, seconds: number): boolean {
+    if (!this.talkTo(at, seconds, false)) return false;
+    this.petting = true;
+    this.speaking = false;
+    return true;
+  }
+
   protected override control(dt: number, nav: NavGrid): boolean {
-    if (this.presence !== 'in') return this.controlPresence(dt, nav);
+    if (this.presence !== 'in') {
+      this.petting = false;
+      return this.controlPresence(dt, nav);
+    }
     const chat = this.playerChat;
+    if (!chat) this.petting = false;
     if (chat) {
       chat.t -= dt;
       if (chat.t <= 0 || this.held || this.controlled || this.talk) {
         this.playerChat = null;
+        this.petting = false;
         this.speaking = false;
         this.timer = 0.4 + Math.random();
       } else {
         this.state = 'idle';
         this.timer = 1;
-        this.speaking = chat.total - chat.t < 2.6; // answers first, then listens
-        this.sit = Math.max(0, this.sit - dt * 4);
+        this.speaking = !this.petting && chat.total - chat.t < 2.6; // answers first, then listens
+        const seat = this.task?.phase === 'work' ? this.task.desk.seat : null;
+        if (seat) {
+          this.pos.x = seat.x;
+          this.pos.z = seat.z;
+          this.sit = 1;
+        } else this.sit = Math.max(0, this.sit - dt * 4);
         this.moving += (0 - this.moving) * Math.min(1, dt * 8);
         this.turnTo(Math.atan2(chat.at.x - this.pos.x, chat.at.z - this.pos.z), dt);
         return true;
@@ -627,6 +954,7 @@ export class Person extends Walker {
       this.cancelPrint();
       this.cancelFoos();
       this.cancelCoffee();
+      this.cancelRun();
       // the player takes over: stand up from the desk first, then walk freely
       const t = this.task;
       if (t?.phase === 'approach') this.cancelTask();
@@ -636,6 +964,7 @@ export class Person extends Walker {
     }
     if (this.meetJob) return this.controlMeet(dt, nav);
     if (this.coffeeJob) return this.controlCoffee(dt, nav);
+    if (this.run) return this.controlRun(dt, nav);
     if (this.held && !this.task && !this.printJob && !this.foosJob && !this.vapeJob) {
       // carried by the player: sits down in the air while snapped to a chair, stands otherwise
       const snap = this.snapDesk ?? this.snapMeetSeat;
@@ -711,8 +1040,10 @@ export class Person extends Walker {
         this.moving += (0 - this.moving) * ease;
         task.remaining -= dt;
         this.tickSeatedVape(dt);
-        this.seatedBreaks(dt, task);
+        this.tickDrink(dt, task);
+        this.seatedBreaks(dt, task, nav);
         if (task.remaining <= 0) {
+          this.endDrink();
           this.vapeJob = null;
           this.phoneJob = null;
           task.phase = 'leave';
@@ -729,7 +1060,10 @@ export class Person extends Walker {
         this.sit = 1 - smooth(task.t / 0.4);
         if (task.t > 0.25) this.turnTo(d.yaw + Math.PI, dt);
         this.step(dt, task.t > 0.35 ? 0.7 : 0);
-        if (task.t >= 1) this.finishTask();
+        if (task.t >= 1) {
+          if (task.errand) this.beginRun(task, nav);
+          else this.finishTask();
+        }
         return true;
       }
     }
@@ -759,8 +1093,18 @@ export class Person extends Walker {
 
   /** The desk's owner is coming: stand up soon and look for another desk. */
   yieldDesk(): void {
+    const away = this.run;
+    if (away?.desk) {
+      // off for a coffee: the desk is handed over right away, a new one is picked on the way back
+      const d = away.desk;
+      away.desk = null;
+      this.displaced = true;
+      this.office?.release(d, this);
+      return;
+    }
     const task = this.task;
     if (!task) return;
+    this.dropErrand(task);
     this.displaced = true;
     if (task.phase === 'approach') this.cancelTask();
     else task.remaining = Math.min(task.remaining, 0.6 + Math.random() * 0.8);
@@ -979,6 +1323,8 @@ export class Person extends Walker {
 
   /** 0 = cup held at chest height .. 1 = cup at the mouth (a sip every few seconds). */
   get cupSip(): number {
+    const dr = this.drink;
+    if (dr) return dr.t >= DRINK.up && dr.t < DRINK.sipEnd ? Math.sin(((dr.t - DRINK.up) / (DRINK.sipEnd - DRINK.up)) * Math.PI) : 0;
     const j = this.coffeeJob;
     if (!j || j.phase !== 'drink') return 0;
     const k = (j.t + j.offset) % 7;
@@ -1011,6 +1357,12 @@ export class Person extends Walker {
       this.speaking = false;
     }
     this.coffeeJob = null;
+    if (j.phase !== 'approach' && !this.held && !this.controlled && this.presence === 'in') {
+      // the break is over: the cup comes along (and is set down at the desk)
+      this.cupHeld = true;
+      this.cupFill = 0.7;
+      this.cupLeft = CUP_LIFE;
+    }
     this.path = [];
     this.state = 'idle';
     this.timer = 0.3 + Math.random();
@@ -1145,6 +1497,8 @@ export class Person extends Walker {
     this.cancelPrint();
     this.cancelFoos();
     this.cancelCoffee();
+    this.cancelRun();
+    this.endDrink();
     this.vapeJob = null;
     this.phoneJob = null;
     if (!this.task) return;

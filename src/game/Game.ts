@@ -5,7 +5,7 @@ import { buildCharacter } from '../render/characterBuilder';
 import { buildCat } from '../render/catBuilder';
 import { buildDog } from '../render/dogBuilder';
 import { petPortrait } from '../render/petPortrait';
-import { HOME_COUNT, HOME_LABELS, HomeOffice, ROOM_COUNT } from '../render/homeOffice';
+import { HOME_COUNT, HOME_LABELS, HomeOffice, ROOM_COUNT, heldPoses, type ArmPose } from '../render/homeOffice';
 import { SIT_DROP } from '../render/officeBuilder';
 import { Views } from '../render/Views';
 import { buildOffice, CORRIDOR_POINT, type OfficeModel } from '../render/officeModel';
@@ -21,6 +21,10 @@ import { TimeControl } from '../ui/TimeControl';
 import { devEvents } from './DevEvents';
 import { DeskLights } from './DeskLights';
 import { Dog } from './Dog';
+import { PetCare } from './PetCare';
+import { Weather } from './Weather';
+import { RainFx } from '../render/rainFx';
+import { loadState, saveState } from '../ui/persist';
 import { DOOR } from './Door';
 import { Doors } from './Doors';
 import { Kitchen } from './Coffee';
@@ -44,6 +48,7 @@ const BUSY_ANSWERS = ['Grad keine Zeit!', 'Später…', 'Bin im Fokus.', 'Psst, 
 const BODY_RADIUS = 0.2; // how close to a wall a walker may get (nav cells are 0.5 m)
 const SEATS_KEY = 'saftladen.seats';
 const STEER_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+const OVERCAST = new THREE.Color('#8c95a3'); // sky colour in the rain
 const MAX_FRAME = 0.25; // avoid spiral of death after tab switches
 
 export class Game {
@@ -63,6 +68,14 @@ export class Game {
   private traffic = new Traffic(this.nav);
   private presence!: Presence;
   private tod = new TimeOfDay();
+  private weather = new Weather();
+  private petCare = new PetCare();
+  private rainFx!: RainFx;
+  private settings!: Settings;
+  /** pets (dogs and cats), cached */
+  private pets: Dog[] = [];
+  private lastPresence = new Map<Person, Person['presence']>();
+  private persistTimer = 2;
   private sky!: SkyRig;
   private deskLights!: DeskLights;
   private timeControl!: TimeControl;
@@ -117,8 +130,14 @@ export class Game {
 
     const { sun, hemi } = buildWorld(this.scene);
     this.sky = { scene: this.scene, sun, hemi, dayBackground: new THREE.Color(stageColor) };
+    const saved = loadState();
+    if (typeof saved.cycle === 'number' && Number.isFinite(saved.cycle)) {
+      this.tod.setCycle(saved.cycle);
+      this.tod.night = this.tod.day < 0.45;
+    }
     this.timeControl = new TimeControl(this.tod);
     applySky(this.tod, this.sky);
+    this.rainFx = new RainFx(this.scene);
     const model = (this.model = buildOffice(this.scene));
     // the editor puts the furniture where the saved layout wants it, before anything is derived from its position
     this.editor = new RoomEditor(this.scene, model.items, WORLD, () => this.relayout());
@@ -130,8 +149,9 @@ export class Game {
     this.doors = new Doors(model.doors);
     this.meetingRoom = new MeetingRoom(model.meeting, this.nav);
     this.pod = new Pod(model.pod, this.nav);
-    this.kitchen = new Kitchen(model.kitchen);
+    this.kitchen = new Kitchen(model.kitchen, this.nav);
     this.phoneBooth = new PhoneBooth(model.phoneBooth, this.nav);
+    this.phoneBooth.onClosed = (closed) => this.doors.setLocked(this.phoneBooth.doorPos, closed);
     this.meetingRoom.onClosed = (closed) => this.doors.setLocked(this.meetingRoom.doorPos, closed);
     this.views = new Views(stage, this.renderer.domElement, this.nav, (mode) => {
       this.roof.visible = mode === 'walk' ? true : mode === 'plan' ? false : this.roofWanted;
@@ -167,10 +187,11 @@ export class Game {
       (id, number) => this.assignSeat(id, number),
     );
 
-    new Settings((state) => {
-      model.rowLabels.visible = state.tables;
-      model.roomLabels.visible = state.rooms;
-      this.seats.setLabelsVisible(state.seats);
+    this.settings = new Settings((state) => {
+        model.rowLabels.visible = state.tables;
+        model.roomLabels.visible = state.rooms;
+        this.seats.setLabelsVisible(state.seats);
+      this.weather.mode = state.weather;
     });
 
     this.ring = new THREE.Mesh(
@@ -185,11 +206,19 @@ export class Game {
     this.spawn();
     new DevPanel();
     this.registerDevEvents();
-    this.presence = new Presence(this.people, this.tod);
+    this.pets = this.walkers.filter((w): w is Dog => w instanceof Dog);
+    this.presence = new Presence(this.people, this.tod, this.weather);
     this.presence.seed();
     for (const w of this.walkers) if (w instanceof Dog && w.owner.presence === 'out') w.sendAway(); // pets of people who start away
     this.bind();
     this.resize();
+    // back to where the last visit ended (a deep link in the URL wins over the saved camera)
+    if (!location.hash && saved.view) this.views.restore(saved.view, true);
+    if (saved.selected) {
+      const p = this.people.find((o) => o.id === saved.selected);
+      if (p && p.inOffice) this.selected = this.followed = p;
+    }
+    window.addEventListener('pagehide', () => this.saveSession());
     this.overlay.setMeta(`${this.people.length} Personen, ${this.walkers.length - this.people.length} Tiere`);
     this.overlay.initLabels(this.people.map((p) => ({ id: p.id, name: p.member.name })));
     this.seats.setOwners(this.seatOwners());
@@ -209,6 +238,7 @@ export class Game {
     this.office.relayout(this.nav);
     this.meetingRoom.relayout(this.nav);
     this.pod.relayout(this.nav);
+    this.kitchen.relayout(this.nav);
     this.phoneBooth.relayout(this.nav);
   }
 
@@ -260,6 +290,7 @@ export class Game {
     for (const [index, m] of team.entries()) {
       const person = new Person(m, buildCharacter(m.look), free());
       person.office = this.office;
+      person.kitchen = this.kitchen;
       this.office.people.push(person);
       person.preferredHome = index % HOME_COUNT;
       const seat = this.savedSeats[m.id];
@@ -343,14 +374,22 @@ export class Game {
       w.pos.z = THREE.MathUtils.clamp(g.z + this.dragOffset.y, 0.4, WORLD.depth - 0.4);
       // near a free chair: snap onto it (the person sits while carried)
       if (w instanceof Person) {
-        w.snapDesk = this.office.desks.find((k) => w.canSit(k) && Math.min(Math.hypot(k.seat.x - w.pos.x, k.seat.z - w.pos.z), Math.hypot(k.approach.x - w.pos.x, k.approach.z - w.pos.z)) < 1) ?? null;
+        w.snapDesk = this.office.desks.find((k) => w.canSit(k, true) && Math.min(Math.hypot(k.seat.x - w.pos.x, k.seat.z - w.pos.z), Math.hypot(k.approach.x - w.pos.x, k.approach.z - w.pos.z)) < 1) ?? null;
         if (w.snapDesk) {
           w.pos.x = w.snapDesk.seat.x;
           w.pos.z = w.snapDesk.seat.z;
         }
         w.snapMeetSeat = null;
         if (!w.snapDesk) {
-          w.snapMeetSeat = this.meetingRoom.seats.find((k) => w.canSitMeet(k) && Math.min(Math.hypot(k.seat.x - w.pos.x, k.seat.z - w.pos.z), Math.hypot(k.approach.x - w.pos.x, k.approach.z - w.pos.z)) < 1) ?? null;
+          let best = 1;
+          for (const k of [...this.meetingRoom.seats, ...(this.phoneBooth.seat && !this.phoneBooth.current ? [this.phoneBooth.seat] : [])]) {
+            if (!w.canSitMeet(k, k !== this.phoneBooth.seat)) continue;
+            const dist = Math.min(Math.hypot(k.seat.x - w.pos.x, k.seat.z - w.pos.z), Math.hypot(k.approach.x - w.pos.x, k.approach.z - w.pos.z));
+            if (dist < best) {
+              best = dist;
+              w.snapMeetSeat = k;
+            }
+          }
           if (w.snapMeetSeat) {
             w.pos.x = w.snapMeetSeat.seat.x;
             w.pos.z = w.snapMeetSeat.seat.z;
@@ -372,6 +411,7 @@ export class Game {
       if (d instanceof Person) {
         const desk = d.snapDesk;
         d.snapDesk = null;
+        if (desk?.occupant && desk.occupant !== d) desk.occupant.evictFromDesk(desk);
         if (desk && d.sitDownAt(desk)) {
           this.dragged = null;
           if (this.stage.hasPointerCapture(e.pointerId)) this.stage.releasePointerCapture(e.pointerId);
@@ -379,7 +419,8 @@ export class Game {
         }
         const chair = d.snapMeetSeat;
         d.snapMeetSeat = null;
-        if (chair && d.sitDownAtMeeting(chair)) {
+        if (chair?.occupant && chair.occupant !== d && chair !== this.phoneBooth.seat) chair.occupant.evictFromMeeting(chair);
+        if (chair && (chair === this.phoneBooth.seat ? this.phoneBooth.sitIn(d) : d.sitDownAtMeeting(chair))) {
           this.dragged = null;
           if (this.stage.hasPointerCapture(e.pointerId)) this.stage.releasePointerCapture(e.pointerId);
           return;
@@ -397,8 +438,17 @@ export class Game {
         }
       }
       this.dragged.timer = 0.8 + Math.random();
+      const landed = this.dragged;
       this.dragged = null;
       if (this.stage.hasPointerCapture(e.pointerId)) this.stage.releasePointerCapture(e.pointerId);
+      // let go in the meeting room next to somebody else: they start chatting
+      if (landed instanceof Person && this.meetingRoom.contains(landed.pos)) {
+        const group = this.people.filter((p) => (p === landed || this.meetingRoom.contains(p.pos)) && p.inOffice && !p.held && !p.controlled && !p.talk && !p.inMeeting && !p.playerChat && !p.printJob && !p.foosJob).slice(0, 6);
+        if (group.includes(landed) && group.length >= 2) {
+          group.forEach((p) => p.interrupt());
+          this.social.start(group, { x: landed.pos.x, z: landed.pos.z }, this.nav);
+        }
+      }
     };
     this.stage.addEventListener('pointerup', drop);
     this.stage.addEventListener('pointercancel', drop);
@@ -465,6 +515,12 @@ export class Game {
     }
     this.tod.update(dt);
     applySky(this.tod, this.sky);
+    this.updateWeather(dt);
+    this.updateArrivals();
+    if ((this.persistTimer -= dt) <= 0) {
+      this.persistTimer = 2;
+      this.saveSession();
+    }
     this.deskLights.update(dt);
     this.timeControl.sync();
     this.views.update(dt);
@@ -474,6 +530,31 @@ export class Game {
     if (this.reply && (this.reply.t -= dt) <= 0) this.reply = null;
     this.render(this.acc / STEP);
     this.renderFeeds();
+  }
+
+  /** Remembers time of day, camera and selection for the next visit. */
+  private saveSession(): void {
+    saveState({ cycle: this.tod.cycle, view: this.views.snapshot(), selected: this.selected instanceof Person ? this.selected.id : undefined });
+  }
+
+  /** Showers: rain streaks and a greyer, darker light. */
+  private updateWeather(dt: number): void {
+    this.weather.update(dt);
+    const r = this.weather.rain;
+    this.rainFx.update(dt, r, 1 - this.tod.day);
+    if (r > 0) {
+      this.sky.sun.intensity *= 1 - 0.45 * r;
+      this.sky.hemi.intensity *= 1 - 0.1 * r;
+      (this.scene.background as THREE.Color).lerp(OVERCAST, 0.45 * r * this.tod.day);
+    }
+  }
+
+  /** Somebody coming through the front door makes the pets announce it. */
+  private updateArrivals(): void {
+    for (const p of this.people) {
+      if (p.presence === 'returning' && this.lastPresence.get(p) !== 'returning') this.petCare.greet(this.pets);
+      this.lastPresence.set(p, p.presence);
+    }
   }
 
   /** Everything the dev panel can trigger. New behaviour: register another event here (or anywhere via `devEvents.register`). */
@@ -685,6 +766,25 @@ export class Game {
     devEvents.register({ id: 'errand', group: 'Anwesenheit', label: 'Jemand geht raus', run: away('errand') });
     devEvents.register({ id: 'home', group: 'Anwesenheit', label: 'Jemand ins Homeoffice', run: away('home') });
     devEvents.register({
+      id: 'rain',
+      group: 'Wetter',
+      label: 'Regen an / aus',
+      run: () => {
+        this.weather.set(!this.weather.raining);
+        this.settings.setWeather(this.weather.mode);
+        return this.weather.raining ? 'Es regnet' : 'Der Regen hört auf';
+      },
+    });
+    devEvents.register({
+      id: 'door-greet',
+      group: 'Tiere',
+      label: 'Tiere begrüssen (Tür)',
+      run: () => {
+        this.petCare.greet(this.pets);
+        return 'Die Tiere melden sich';
+      },
+    });
+    devEvents.register({
       id: 'all-back',
       group: 'Anwesenheit',
       label: 'Alle zurück',
@@ -807,6 +907,7 @@ export class Game {
       w.update(dt, this.nav, this.walkers);
     }
     this.social.update(dt, this.people, this.nav, this.traffic);
+    this.petCare.update(dt, this.people, this.pets, this.nav);
     this.meetingRoom.update(dt, this.people, this.nav);
     this.pod.update(dt, this.people, this.nav);
     this.kitchen.update(dt, this.people, this.nav);
@@ -904,10 +1005,12 @@ export class Game {
       } else {
         r.armL.rotation.z = r.armR.rotation.z = 0;
       }
+      r.elbowL.rotation.set(0, 0, 0);
+      r.elbowR.rotation.set(0, 0, 0);
       this.poseTired(w, r);
       if (r.vape) this.poseVape(w, r.vape, ph);
       if (r.phone) this.posePhone(w, r.phone);
-      const talking = !!(w.talk || w.playerChat) && w.moving < 0.2 && !(w.sit > 0.5 && !w.speaking);
+      const talking = !!(w.talk || (w.playerChat && !w.petting)) && w.moving < 0.2 && !(w.sit > 0.5 && !w.speaking);
       w.talkAmt += ((talking ? 1 : 0) - w.talkAmt) * 0.12;
       w.speakAmt += ((talking && w.speaking ? 1 : 0) - w.speakAmt) * 0.15;
       const ta = w.talkAmt;
@@ -934,6 +1037,17 @@ export class Game {
         r.body.rotation.y = 0;
       }
       this.poseCup(w, r);
+      this.poseEmote(w, r);
+      w.petAmt += ((w.petting && w.moving < 0.2 ? 1 : 0) - w.petAmt) * 0.12;
+      if (w.petAmt > 0.01) {
+        // bent forward, one hand stroking
+        const a = w.petAmt;
+        const t = performance.now() / 1000 + w.phase;
+        r.body.rotation.x += 0.45 * a;
+        r.body.position.y -= 0.06 * a;
+        r.armR.rotation.x = THREE.MathUtils.lerp(r.armR.rotation.x, -0.45 + Math.sin(t * 7) * 0.18, a);
+        r.armL.rotation.x = THREE.MathUtils.lerp(r.armL.rotation.x, -0.15, a);
+      }
     } else if (w instanceof Dog) {
       const r = w.rig;
       const s = Math.sin(ph * 1.6) * 0.8 * w.moving;
@@ -947,6 +1061,10 @@ export class Game {
       r.legs[3].rotation.x = THREE.MathUtils.lerp(s, 1.45, lie);
       for (const l of r.legs) l.position.y = base - drop;
       r.body.position.y = (bob * 1.2 + breathe) * (1 - lie) + breathe * lie - drop;
+      // happy hops while petted, quick double hop while barking
+      const now = performance.now() / 1000;
+      const bark = w.barkT > 0 ? Math.max(0, Math.sin(w.barkT * 14)) * Math.min(1, w.barkT) : 0;
+      r.body.position.y += Math.abs(Math.sin(now * 9 + w.phase)) * 0.04 * w.happy + bark * 0.11;
       const z = w.sleep;
       // asleep: roll onto the side, slow deep breaths, tail still, small floating Zzz
       const th = 1.45 * z;
@@ -965,7 +1083,7 @@ export class Game {
         l.position.set(q.x * cs - 0.32 * sn + bx, q.x * sn + 0.32 * cs + by, q.z);
         if (z > 0) l.rotation.x = THREE.MathUtils.lerp(l.rotation.x, i < 2 ? -0.5 : 0.5, z);
       });
-      r.tail.rotation.y = Math.sin(performance.now() / 90 + w.phase) * (0.35 + 0.4 * w.moving) * (1 - 0.7 * lie) * (1 - z);
+      r.tail.rotation.y = Math.sin(performance.now() / 90 + w.phase) * (0.35 + 0.4 * w.moving + 0.5 * w.happy) * (1 - 0.7 * lie) * (1 - z);
       this.poseZzz(w, z, r.face, -r.face.y * sn + bx, r.face.y * cs + by);
     }
   }
@@ -1030,12 +1148,58 @@ export class Game {
   private poseCup(w: Person, r: Person['rig']): void {
     const a = w.cupAmt;
     r.cup.visible = a > 0.02;
-    if (!r.cup.visible) return;
+    // the arm is also busy while reaching for (or setting down) the mug on the desk, with an empty hand
+    const arm = Math.max(a, w.drinkAmt);
+    if (arm < 0.02) return;
     const sip = w.cupSip;
-    r.armL.rotation.x = THREE.MathUtils.lerp(r.armL.rotation.x, THREE.MathUtils.lerp(-1.25, -1.95, sip), a);
-    r.armL.rotation.z = (0.12 + 0.25 * sip) * a;
+    const reach = w.cupReach; // out and down to the mug on the desk
+    r.armL.rotation.x = THREE.MathUtils.lerp(r.armL.rotation.x, THREE.MathUtils.lerp(THREE.MathUtils.lerp(-1.25, -1.95, sip), -1.12, reach), arm);
+    r.armL.rotation.z = (0.12 + 0.25 * sip - 0.42 * reach) * arm;
+    if (!r.cup.visible) return;
     r.cup.quaternion.copy(r.armL.quaternion).invert();
     r.cup.rotateX(-0.7 * sip);
+  }
+
+  /** Little gestures: a yawn behind the hand, a stretch, scratching the head, a look to the side. Blends over whatever the arms were doing. */
+  private poseEmote(w: Person, r: Person['rig']): void {
+    const a = w.emoteAmt;
+    if (a <= 0) return;
+    const held = heldPoses(r);
+    const t = performance.now() / 1000 + w.phase;
+    const lerp = THREE.MathUtils.lerp;
+    // ArmPose: x swing, z out to the side (away from the body), e elbow bend, ez elbow sideways; the left arm is on -x
+    const arm = (right: boolean, p: ArmPose) => {
+      const shoulder = right ? r.armR : r.armL;
+      const elbow = right ? r.elbowR : r.elbowL;
+      const sign = right ? 1 : -1;
+      shoulder.rotation.x = lerp(shoulder.rotation.x, p.x, a);
+      shoulder.rotation.z = lerp(shoulder.rotation.z, sign * p.z, a);
+      elbow.rotation.x = lerp(elbow.rotation.x, p.e, a);
+      elbow.rotation.z = lerp(elbow.rotation.z, sign * p.ez, a);
+    };
+    switch (w.emoteKind) {
+      case 'yawn': {
+        // hand over the mouth, head back, eyes screwed shut
+        arm(true, held.vape);
+        r.body.rotation.x -= 0.12 * a;
+        r.setTired(Math.min(1, this.tod.tired + Math.sin(w.emoteP * Math.PI) * 0.8 * a));
+        break;
+      }
+      case 'stretch': {
+        const up: ArmPose = { x: -3.05, z: 0.35 + Math.sin(t * 2.5) * 0.04, e: 0, ez: 0 };
+        arm(true, up);
+        arm(false, up);
+        r.body.rotation.x -= 0.14 * a;
+        break;
+      }
+      case 'scratch':
+        arm(true, { ...held.think, ez: held.think.ez + Math.sin(t * 14) * 0.12 });
+        r.body.rotation.x += 0.04 * a;
+        break;
+      case 'look':
+        r.body.rotation.y += w.emoteDir * 0.6 * a * Math.sin(Math.min(1, w.emoteP * 1.6) * Math.PI * 0.5);
+        break;
+    }
   }
 
   /** Phone at the ear during a call: upper arm lifted, forearm folded up, a little nod while walking. */
@@ -1157,6 +1321,9 @@ export class Game {
       ...this.social.active.filter((c) => c.phase !== 'gather' && c.text).map((c) => ({ id: c.speaker.id, text: c.text, ...this.project(c.speaker, 0.55) })),
       ...(coffee?.phase === 'chat' ? [{ id: coffee.speaker.id, text: coffee.text, ...this.project(coffee.speaker, 0.55) }] : []),
       ...(this.meetingRoom.casual ? [{ id: this.meetingRoom.casual.speaker.id, text: this.meetingRoom.casual.text, ...this.project(this.meetingRoom.casual.speaker, 0.55) }] : []),
+      ...this.pets
+        .filter((d) => !d.away && (d.barkT > 0 || (d.petted && d.happy > 0.5)))
+        .map((d) => ({ id: `pet-${d.id}`, text: d.barkT > 0 ? (d.isCat ? 'Miau!' : 'Wuff!') : '♥', ...this.project(d, 0.35) })),
       ...(meet?.phase === 'session' ? [{ id: meet.speaker.id, text: meet.text, ...this.project(meet.speaker, 0.55) }] : []),
     ]);
     this.metaTimer -= 1 / 60;
@@ -1169,9 +1336,18 @@ export class Game {
       const home = absent.filter((p) => p.awayKind === 'home').length;
       const inside = this.people.filter((p) => p.presence === 'in').length;
       const pets = this.walkers.filter((w) => w instanceof Dog && !w.away).length;
-      this.overlay.setMeta(
-        `${this.tod.clock} · ${inside} im Büro${absent.length ? `, ${absent.length - home} weg, ${home} im Homeoffice` : ''} · ${pets} Tiere${working ? ` · ${working} arbeiten` : ''}${talking ? ` · ${talking} im Gespräch` : ''}${inMeeting ? ` · ${inMeeting} im Meeting` : ''}`,
-      );
+      const meta = [this.tod.clock, `${inside} im Büro`];
+      if (this.weather.rain > 0.3) meta.push('Regen');
+      if (this.presence.lunch) meta.push('Mittagspause');
+      if (absent.length) {
+        if (absent.length - home > 0) meta.push(`${absent.length - home} weg`);
+        if (home > 0) meta.push(`${home} im Homeoffice`);
+      }
+      meta.push(`${pets} Tiere`);
+      if (working) meta.push(`${working} arbeiten`);
+      if (talking) meta.push(`${talking} im Gespräch`);
+      if (inMeeting) meta.push(`${inMeeting} im Meeting`);
+      this.overlay.setMeta(meta);
     }
     this.rosterTimer -= 1 / 60;
     if (this.rosterTimer <= 0) {
