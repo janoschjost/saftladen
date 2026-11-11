@@ -1,0 +1,288 @@
+import * as THREE from 'three';
+import { team } from '../data/team';
+import { buildCharacter } from '../render/characterBuilder';
+import { buildDog } from '../render/dogBuilder';
+import { HOME_COUNT, HOME_LABELS, SPECIAL_HOME } from '../render/homeOffice';
+import { assignHomeRoom, homeOwnerOf, homeRoomOf } from '../data/homeAssignments';
+
+const TURN_STEP = Math.PI / 4;
+const AUTO_SPEED = 0.6; // rad/s
+const START_YAW = Math.PI * 0.2;
+
+/** Full-screen "choose character" menu: pick a person, spin them around on a turntable. */
+export class CharacterPicker {
+  private root = document.getElementById('picker') as HTMLElement;
+  private canvasHost = document.getElementById('picker-stage') as HTMLElement;
+  private list = document.getElementById('picker-list') as HTMLElement;
+  private nameEl = document.getElementById('picker-name') as HTMLElement;
+  private roleEl = document.getElementById('picker-role') as HTMLElement;
+  private refFigure = document.getElementById('picker-reference') as HTMLElement;
+  private refImage = document.getElementById('picker-reference-image') as HTMLImageElement;
+  private homeSelect = document.getElementById('picker-home') as HTMLSelectElement;
+  private spinBtn = document.getElementById('picker-spin') as HTMLButtonElement;
+  private openBtn = document.getElementById('open-picker') as HTMLButtonElement;
+
+  private renderer: THREE.WebGLRenderer | null = null;
+  private scene = new THREE.Scene();
+  private camera = new THREE.PerspectiveCamera(28, 1, 0.1, 50);
+  private turntable = new THREE.Group();
+  private figure: THREE.Group | null = null;
+  private itemEls: HTMLButtonElement[] = [];
+  private index = 0;
+  private yaw = START_YAW;
+  private pitch = 0.12;
+  private zoom = 1;
+  private autoSpin = true;
+  private dragging = false;
+  private lastX = 0;
+  private lastY = 0;
+  private lastTime = 0;
+  private raf = 0;
+  private resizeObserver: ResizeObserver | null = null;
+
+  constructor() {
+    this.buildScene();
+    this.buildList();
+    this.bind();
+  }
+
+  private buildScene(): void {
+    this.scene.add(this.turntable);
+    const disc = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.9, 0.9, 0.12, 48),
+      new THREE.MeshLambertMaterial({ color: '#f7f7f5' }),
+    );
+    disc.position.y = -0.06;
+    disc.receiveShadow = true;
+    this.scene.add(disc);
+
+    this.scene.add(new THREE.HemisphereLight('#ffffff', '#c9b8a4', 1.4));
+    const sun = new THREE.DirectionalLight('#ffffff', 2);
+    sun.position.set(3, 6, 4);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    Object.assign(sun.shadow.camera, { left: -2, right: 2, top: 3, bottom: -1, near: 1, far: 20 });
+    this.scene.add(sun);
+  }
+
+  private buildList(): void {
+    team.forEach((m, i) => {
+      const li = document.createElement('li');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'm-picker__item';
+      btn.dataset.index = String(i);
+      if (m.portrait) {
+        const img = document.createElement('img');
+        img.className = 'm-picker__thumb';
+        img.src = import.meta.env.BASE_URL + m.portrait;
+        img.alt = '';
+        img.width = 40;
+        img.height = 40;
+        img.loading = 'lazy';
+        btn.appendChild(img);
+      } else {
+        const ph = document.createElement('span');
+        ph.className = 'm-picker__thumb';
+        btn.appendChild(ph);
+      }
+      const label = document.createElement('span');
+      label.textContent = m.name;
+      btn.appendChild(label);
+      btn.addEventListener('click', () => this.select(i));
+      li.appendChild(btn);
+      this.list.appendChild(li);
+      this.itemEls.push(btn);
+    });
+  }
+
+  private bind(): void {
+    this.openBtn.addEventListener('click', () => this.open());
+    document.getElementById('picker-close')!.addEventListener('click', () => this.close());
+    document.getElementById('picker-prev')!.addEventListener('click', () => this.step(-1));
+    document.getElementById('picker-next')!.addEventListener('click', () => this.step(1));
+    document.getElementById('picker-left')!.addEventListener('click', () => this.turn(-TURN_STEP));
+    document.getElementById('picker-right')!.addEventListener('click', () => this.turn(TURN_STEP));
+    this.spinBtn.addEventListener('click', () => this.setAutoSpin(!this.autoSpin));
+    this.homeSelect.addEventListener('change', () => {
+      assignHomeRoom(team[this.index].id, this.homeSelect.value === '' ? null : Number(this.homeSelect.value));
+      this.updateHomeSelect();
+    });
+
+    const host = this.canvasHost;
+    host.addEventListener('pointerdown', (e) => {
+      this.dragging = true;
+      this.lastX = e.clientX;
+      this.lastY = e.clientY;
+      host.setPointerCapture(e.pointerId);
+      host.classList.add('is-dragging');
+      this.setAutoSpin(false);
+    });
+    host.addEventListener('pointermove', (e) => {
+      if (!this.dragging) return;
+      this.yaw += (e.clientX - this.lastX) * 0.012;
+      this.pitch = THREE.MathUtils.clamp(this.pitch + (e.clientY - this.lastY) * 0.005, -0.15, 0.7);
+      this.lastX = e.clientX;
+      this.lastY = e.clientY;
+    });
+    const end = () => {
+      this.dragging = false;
+      host.classList.remove('is-dragging');
+    };
+    host.addEventListener('pointerup', end);
+    host.addEventListener('pointercancel', end);
+    host.addEventListener(
+      'wheel',
+      (e) => {
+        e.preventDefault();
+        this.zoom = THREE.MathUtils.clamp(this.zoom * Math.exp(e.deltaY * 0.001), 0.5, 1.6);
+      },
+      { passive: false },
+    );
+
+    window.addEventListener('keydown', (e) => {
+      if (this.root.hidden) return;
+      switch (e.key) {
+        case 'Escape': this.close(); break;
+        case 'ArrowUp': this.step(-1); break;
+        case 'ArrowDown': this.step(1); break;
+        case 'ArrowLeft': this.turn(-TURN_STEP); break;
+        case 'ArrowRight': this.turn(TURN_STEP); break;
+        case ' ': this.setAutoSpin(!this.autoSpin); break;
+        default: return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+    }, true);
+  }
+
+  private setAutoSpin(on: boolean): void {
+    this.autoSpin = on;
+    this.spinBtn.setAttribute('aria-pressed', String(on));
+  }
+
+  private turn(delta: number): void {
+    this.setAutoSpin(false);
+    this.yaw += delta;
+  }
+
+  private step(dir: number): void {
+    this.select((this.index + dir + team.length) % team.length);
+  }
+
+  private select(i: number): void {
+    this.index = i;
+    const m = team[i];
+    if (this.figure) {
+      this.turntable.remove(this.figure);
+      this.figure.traverse((o) => {
+        if (o instanceof THREE.Mesh) o.geometry.dispose();
+      });
+    }
+    const rig = buildCharacter(m.look);
+    rig.root.traverse((o) => {
+      if (o instanceof THREE.Mesh) o.castShadow = true;
+    });
+    const group = new THREE.Group();
+    group.add(rig.root);
+    if (m.dog) {
+      // the owner's dog sits beside them on the turntable
+      const dog = buildDog(m.dog);
+      dog.root.position.set(0.62, 0, 0.18);
+      dog.root.rotation.y = 0.5;
+      dog.root.traverse((o) => {
+        if (o instanceof THREE.Mesh) o.castShadow = true;
+      });
+      group.add(dog.root);
+    }
+    group.position.x = m.dog ? -0.28 : 0;
+    this.figure = group;
+    this.turntable.add(group);
+    if (m.portrait) {
+      this.refImage.src = import.meta.env.BASE_URL + m.portrait;
+      this.refImage.alt = `Porträt von ${m.name}`;
+      this.refFigure.hidden = false;
+    } else {
+      this.refFigure.hidden = true;
+    }
+    this.updateHomeSelect();
+    this.nameEl.textContent = m.name;
+    this.roleEl.textContent = m.role;
+    this.itemEls.forEach((el, n) => {
+      const on = n === i;
+      el.classList.toggle('is-active', on);
+      el.setAttribute('aria-current', String(on));
+      if (on) el.scrollIntoView({ block: 'nearest' });
+    });
+  }
+
+  /** Home office room of the selected person: a regular room can be picked (one owner each), special people have their own fixed room. */
+  private updateHomeSelect(): void {
+    const m = team[this.index];
+    const sel = this.homeSelect;
+    if (m.id in SPECIAL_HOME) {
+      sel.replaceChildren(new Option(`${HOME_LABELS[SPECIAL_HOME[m.id]]} (eigener Raum)`, ''));
+      sel.disabled = true;
+      return;
+    }
+    sel.disabled = false;
+    sel.replaceChildren(new Option('Automatisch', ''));
+    for (let r = 0; r < HOME_COUNT; r++) {
+      const owner = homeOwnerOf(r);
+      const ownerName = owner && owner !== m.id ? team.find((t) => t.id === owner)?.name.split(' ')[0] : null;
+      sel.add(new Option(ownerName ? `${HOME_LABELS[r]} · ${ownerName}` : HOME_LABELS[r], String(r)));
+    }
+    sel.value = String(homeRoomOf(m.id) ?? '');
+  }
+
+  open(): void {
+    if (!this.root.hidden) return;
+    this.root.hidden = false;
+    if (!this.renderer) {
+      this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      this.renderer.shadowMap.enabled = true;
+      this.canvasHost.appendChild(this.renderer.domElement);
+      this.resizeObserver = new ResizeObserver(() => this.resize());
+      this.resizeObserver.observe(this.canvasHost);
+    }
+    this.yaw = START_YAW;
+    this.zoom = 1;
+    this.setAutoSpin(true);
+    this.select(this.index);
+    this.resize();
+    this.lastTime = performance.now();
+    this.raf = requestAnimationFrame((t) => this.frame(t));
+  }
+
+  close(): void {
+    this.root.hidden = true;
+    cancelAnimationFrame(this.raf);
+    this.openBtn.focus();
+  }
+
+  private resize(): void {
+    if (!this.renderer) return;
+    const w = this.canvasHost.clientWidth;
+    const h = this.canvasHost.clientHeight;
+    if (!w || !h) return;
+    this.renderer.setSize(w, h, false);
+    this.renderer.domElement.style.width = '100%';
+    this.renderer.domElement.style.height = '100%';
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+  }
+
+  private frame(t: number): void {
+    const dt = Math.min((t - this.lastTime) / 1000, 0.1);
+    this.lastTime = t;
+    if (this.autoSpin && !this.dragging) this.yaw += AUTO_SPEED * dt;
+    this.turntable.rotation.y = this.yaw;
+
+    const dist = 5.8 * this.zoom;
+    this.camera.position.set(0, 1 + Math.sin(this.pitch) * dist, Math.cos(this.pitch) * dist);
+    this.camera.lookAt(0, 0.95, 0);
+    this.renderer!.render(this.scene, this.camera);
+    this.raf = requestAnimationFrame((n) => this.frame(n));
+  }
+}
