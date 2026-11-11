@@ -6,6 +6,7 @@ export class Overlay {
   private labels = document.getElementById('labels') as HTMLElement;
   private toggle = document.getElementById('toggle-names') as HTMLButtonElement;
   private meta = document.getElementById('hud-meta') as HTMLElement;
+  private metaKey = '';
   private labelEls = new Map<string, HTMLElement>();
   private bubbleEls = new Map<string, HTMLElement>();
   private reticle = document.getElementById('reticle') as HTMLElement;
@@ -26,8 +27,19 @@ export class Overlay {
     this.reticle.classList.toggle('is-active', has);
   }
 
-  setMeta(text: string): void {
-    this.meta.textContent = text;
+  setMeta(items: string | string[]): void {
+    const list = Array.isArray(items) ? items : [items];
+    const key = list.join('|');
+    if (key === this.metaKey) return;
+    this.metaKey = key;
+    this.meta.replaceChildren(
+      ...list.map((text, i) => {
+        const li = document.createElement('li');
+        li.className = i === 0 ? 'm-hud-title__chip m-hud-title__chip--clock' : 'm-hud-title__chip';
+        li.textContent = text;
+        return li;
+      }),
+    );
   }
 
   initLabels(items: Array<{ id: string; name: string }>): void {

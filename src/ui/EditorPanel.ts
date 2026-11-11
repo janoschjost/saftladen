@@ -1,4 +1,5 @@
 import type { RoomItem } from '../render/roomItem';
+import { exclusivePanel } from './exclusive';
 
 export interface EditorPanelActions {
   toggle(): void;
@@ -39,6 +40,9 @@ export class EditorPanel {
   private json = el<HTMLTextAreaElement>('editor-json');
   private statusEl = el('editor-status');
   private removedKey = '';
+  private closeOthers = exclusivePanel('editor', () => {
+    if (!this.root.hidden) this.actions.toggle();
+  });
 
   constructor(private actions: EditorPanelActions) {
     this.toggle.addEventListener('click', () => actions.toggle());
@@ -78,6 +82,7 @@ export class EditorPanel {
   setOpen(open: boolean): void {
     this.root.hidden = !open;
     this.toggle.setAttribute('aria-pressed', String(open));
+    if (open) this.closeOthers();
     document.body.classList.toggle('is-editing-room', open);
   }
 

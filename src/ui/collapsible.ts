@@ -46,7 +46,11 @@ export function makeCollapsible(root: HTMLElement, title: HTMLElement, key: stri
   btn.innerHTML = '<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M2 4.5 6 8.5 10 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   const siblings = group ? (groups.get(group) ?? []) : [];
   if (group) groups.set(group, [...siblings, set]);
-  btn.addEventListener('click', () => {
+  // the whole title bar toggles (the chevron button is inside it, so its clicks bubble up too)
+  title.classList.add('is-collapse-toggle');
+  title.addEventListener('click', (e) => {
+    const inner = (e.target as Element).closest('a, button, input, select, textarea');
+    if (inner && inner !== btn) return;
     const collapse = !root.classList.contains('is-collapsed');
     set(collapse, true);
     if (!collapse) groups.get(group ?? '')?.forEach((other) => other !== set && other(true, true));

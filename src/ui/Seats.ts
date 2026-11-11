@@ -1,3 +1,5 @@
+import { exclusivePanel } from './exclusive';
+
 export interface SeatPerson {
   id: string;
   name: string;
@@ -12,6 +14,7 @@ export class Seats {
   private labelEls: HTMLElement[] = [];
   private selects = new Map<string, HTMLSelectElement>();
   open = false;
+  private closeOthers = exclusivePanel('seats', () => this.setOpen(false));
 
   constructor(
     private deskCount: number,
@@ -46,6 +49,7 @@ export class Seats {
     this.open = open;
     this.root.hidden = !open;
     this.toggle.setAttribute('aria-pressed', String(open));
+    if (open) this.closeOthers();
   }
 
   /** seat number -> id of the person it is assigned to */

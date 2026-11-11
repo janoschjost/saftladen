@@ -1,18 +1,25 @@
+import type { WeatherMode } from '../game/Weather';
+import { exclusivePanel } from './exclusive';
+
 const KEY = 'saftladen.settings';
 
 export interface SettingsState {
   tables: boolean;
   seats: boolean;
   rooms: boolean;
+  weather: WeatherMode;
 }
 
-/** Settings panel: toggles for the table (desk row) labels and the seat numbers. Remembered in localStorage. */
+const WEATHER: WeatherMode[] = ['auto', 'sun', 'rain'];
+
+/** Settings panel: label toggles and weather. Remembered in localStorage. */
 export class Settings {
   private root = document.getElementById('settings') as HTMLElement;
   private toggle = document.getElementById('toggle-settings') as HTMLButtonElement;
   private tables = document.getElementById('setting-tables') as HTMLInputElement;
   private seats = document.getElementById('setting-seats') as HTMLInputElement;
   private rooms = document.getElementById('setting-rooms') as HTMLInputElement;
+  private weather = Array.from(document.querySelectorAll<HTMLInputElement>('input[name="setting-weather"]'));
 
   constructor(private onChange: (state: SettingsState) => void) {
     let saved: Partial<SettingsState> = {};
@@ -24,18 +31,47 @@ export class Settings {
     this.tables.checked = saved.tables ?? true;
     this.seats.checked = saved.seats ?? true;
     this.rooms.checked = saved.rooms ?? true;
+    this.setWeatherValue(WEATHER.includes(saved.weather as WeatherMode) ? (saved.weather as WeatherMode) : 'auto');
+    const closeOthers = exclusivePanel('settings', () => this.setOpen(false));
     this.toggle.addEventListener('click', () => {
-      this.root.hidden = !this.root.hidden;
-      this.toggle.setAttribute('aria-pressed', String(!this.root.hidden));
+      this.setOpen(this.root.hidden === true);
+      if (!this.root.hidden) closeOthers();
     });
-    for (const input of [this.tables, this.seats, this.rooms]) input.addEventListener('change', () => this.apply());
+    for (const input of [this.tables, this.seats, this.rooms, ...this.weather]) {
+      input.addEventListener('input', () => this.apply());
+      input.addEventListener('change', () => this.apply());
+    }
     this.apply();
   }
 
+  /** Set the weather segment from outside (dev events). */
+  setWeather(mode: WeatherMode): void {
+    this.setWeatherValue(mode);
+    this.apply();
+  }
+
+  private setWeatherValue(mode: WeatherMode): void {
+    for (const input of this.weather) input.checked = input.value === mode;
+  }
+
+  private getWeather(): WeatherMode {
+    return (this.weather.find((i) => i.checked)?.value as WeatherMode) ?? 'auto';
+  }
+
+  private setOpen(open: boolean): void {
+    this.root.hidden = !open;
+    this.toggle.setAttribute('aria-pressed', String(open));
+  }
+
   private apply(): void {
-    const state = { tables: this.tables.checked, seats: this.seats.checked, rooms: this.rooms.checked };
+    const state: SettingsState = {
+      tables: this.tables.checked,
+      seats: this.seats.checked,
+      rooms: this.rooms.checked,
+      weather: this.getWeather(),
+    };
     try {
-      localStorage.setItem(KEY, JSON.stringify(state));
+      localStorage.setItem(KEY, JSON.stringify({ tables: state.tables, seats: state.seats, rooms: state.rooms, weather: state.weather }));
     } catch {
       /* ignore */
     }

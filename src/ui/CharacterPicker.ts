@@ -16,6 +16,7 @@ export class CharacterPicker {
   private canvasHost = document.getElementById('picker-stage') as HTMLElement;
   private list = document.getElementById('picker-list') as HTMLElement;
   private nameEl = document.getElementById('picker-name') as HTMLElement;
+  private countEl = document.getElementById('picker-count') as HTMLElement;
   private roleEl = document.getElementById('picker-role') as HTMLElement;
   private homeStage = document.getElementById('picker-home-stage') as HTMLElement;
   private homeCaption = document.getElementById('picker-home-caption') as HTMLElement;
@@ -54,7 +55,7 @@ export class CharacterPicker {
     this.scene.add(this.turntable);
     const disc = new THREE.Mesh(
       new THREE.CylinderGeometry(0.9, 0.9, 0.12, 48),
-      new THREE.MeshLambertMaterial({ color: '#f7f7f5' }),
+      new THREE.MeshLambertMaterial({ color: '#fff' }),
     );
     disc.position.y = -0.06;
     disc.receiveShadow = true;
@@ -209,6 +210,7 @@ export class CharacterPicker {
     this.showHome();
     this.nameEl.textContent = m.name;
     this.roleEl.textContent = m.role;
+    this.countEl.textContent = `${i + 1} / ${team.length}`;
     this.itemEls.forEach((el, n) => {
       const on = n === i;
       el.classList.toggle('is-active', on);
@@ -318,9 +320,9 @@ export class CharacterPicker {
     if (this.autoSpin && !this.dragging) this.yaw += AUTO_SPEED * dt;
     this.turntable.rotation.y = this.yaw;
 
-    const dist = 5.2 * this.zoom;
+    const dist = 6 * this.zoom;
     this.camera.position.set(0, 1 + Math.sin(this.pitch) * dist, Math.cos(this.pitch) * dist);
-    this.camera.lookAt(0, 0.95, 0);
+    this.camera.lookAt(0, 0.8, 0);
     this.renderer!.render(this.scene, this.camera);
     if (this.home && this.homeRenderer && this.homeStage.clientWidth) {
       this.home.update(dt);

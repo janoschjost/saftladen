@@ -22,6 +22,7 @@ export class Feeds {
   private root = document.getElementById('feeds') as HTMLElement;
   private grid = document.getElementById('feeds-grid') as HTMLElement;
   private count = document.getElementById('feeds-count') as HTMLElement;
+  private anims: Animation[] = [];
   private tilesEls = new Map<string, { el: HTMLElement; variant: number; activity: HTMLElement }>();
 
   constructor() {
@@ -52,14 +53,65 @@ export class Feeds {
     this.count.textContent = String(entries.length);
   }
 
-  /** Enlarge one tile (click again to shrink). */
+  /** Enlarge one tile (click again to shrink). The tiles and the panel glide to their new size (FLIP). */
   focus(id: string): void {
     const t = this.tilesEls.get(id);
     if (!t) return;
     const large = !t.el.classList.contains('is-large');
+    const animate = !this.root.hidden && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // First: where everything is right now (including a running animation)
+    const firstRoot = this.root.getBoundingClientRect();
+    const first = new Map<string, DOMRect>();
+    if (animate) for (const [k, o] of this.tilesEls) first.set(k, o.el.getBoundingClientRect());
+    for (const a of this.anims) a.cancel();
+    this.anims = [];
+
     for (const o of this.tilesEls.values()) o.el.classList.remove('is-large');
     t.el.classList.toggle('is-large', large);
     this.root.hidden = false;
+    if (!animate) return;
+
+    // the enlarged tile is first in the grid: show the top before measuring the end state
+    if (large) this.root.scrollTop = 0;
+    const lastRoot = this.root.getBoundingClientRect();
+    const easing = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
+    const duration = 320;
+    this.root.classList.add('is-animating');
+    const rootAnim = this.root.animate(
+      { height: [`${firstRoot.height}px`, `${lastRoot.height}px`] },
+      { duration, easing },
+    );
+    this.anims.push(rootAnim);
+    for (const [k, o] of this.tilesEls) {
+      const f = first.get(k);
+      if (!f) continue;
+      const l = o.el.getBoundingClientRect();
+      if (!l.width || !l.height) continue;
+      const dx = f.left - l.left;
+      const dy = f.top - l.top;
+      const sx = f.width / l.width;
+      const sy = f.height / l.height;
+      if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5 && Math.abs(sx - 1) < 0.01 && Math.abs(sy - 1) < 0.01) continue;
+      o.el.classList.add('is-moving');
+      const a = o.el.animate(
+        [
+          { transformOrigin: '0 0', transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})` },
+          { transformOrigin: '0 0', transform: 'none' },
+        ],
+        { duration, easing },
+      );
+      this.anims.push(a);
+      const end = () => o.el.classList.remove('is-moving');
+      a.onfinish = end;
+      a.oncancel = end;
+    }
+    rootAnim.onfinish = () => {
+      this.anims = [];
+      this.root.classList.remove('is-animating');
+    };
+    rootAnim.oncancel = () => {
+      if (!this.anims.includes(rootAnim)) this.root.classList.remove('is-animating');
+    };
   }
 
   setActivity(id: string, text: string): void {

@@ -8,6 +8,15 @@ import { WORLD } from './World';
 
 export type ViewMode = 'iso' | 'orbit' | 'plan' | 'walk';
 
+/** Everything needed to put the camera back where it was (saved between visits). */
+export interface ViewSnapshot {
+  mode: ViewMode;
+  iso: { x: number; z: number; zoom: number };
+  orbit: { p: number[]; t: number[] };
+  plan: { p: number[]; t: number[]; zoom: number };
+  walk: { x: number; z: number; yaw: number; pitch: number };
+}
+
 /** Mouse gestures in the controls panel (24px line icons, drawn with currentColor). */
 const ICONS = {
   drag: '<path d="M12 3v18M3 12h18"/><path d="m9 6 3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/>',
@@ -72,7 +81,7 @@ const HINTS: Record<ViewMode, HintGroup[]> = {
   ],
   walk: [
     { title: 'Bewegen', items: [...wasd(true), { keys: ['Shift'], text: 'Rennen' }] },
-    { title: 'Maus', items: [{ icon: 'look', text: 'Umschauen', how: 'Ziehen' }, { icon: 'click', text: 'Tür öffnen, Person ansprechen', how: 'Klick' }] },
+    { title: 'Maus', items: [{ icon: 'look', text: 'Umschauen (Klick fängt die Maus, Esc löst sie)', how: 'Maus bewegen' }, { icon: 'click', text: 'Tür öffnen, Person ansprechen', how: 'Klick' }] },
     { title: 'Ansicht', items: [{ keys: ['E'], text: 'Tür öffnen, Person ansprechen' }, { keys: ['N'], text: 'Namen' }] },
   ],
 };
@@ -111,6 +120,10 @@ const EYE = 1.65;
 const WALK_SPEED = 2.2;
 const RUN_SPEED = 5;
 const WALK_RADIUS = 0.3;
+const ACCEL = 14; // m/s²: how fast the walk speed follows the keys (start and stop ease instead of snapping)
+const FOV_WALK = 60;
+const FOV_RUN = 68;
+const LOOK_SMOOTH = 22; // higher = the view follows the mouse more tightly
 
 /** Camera modes: isometric (default), free orbit, top-down floor plan and first-person walk-through. */
 export class Views {
@@ -127,6 +140,14 @@ export class Views {
   private doorSpots: Array<{ x: number; z: number; r: number }> = [];
   private yaw = -Math.PI / 2; // looking along +x (down the corridor)
   private pitch = -0.05;
+  /** smoothed view angles that the camera really uses; yaw / pitch are the targets the mouse sets */
+  private viewYaw = -Math.PI / 2;
+  private viewPitch = -0.05;
+  private vel = { x: 0, z: 0 };
+  private bob = 0; // head-bob phase
+  private bobAmp = 0;
+  private roll = 0;
+  private fov = FOV_WALK;
   private walkPos = new THREE.Vector3(ax(-4.2), EYE, az(1.1));
   private look: { id: number } | null = null;
   private moved = 0;
@@ -183,6 +204,40 @@ export class Views {
     return this.mode === 'iso' ? this.iso.camera : this.mode === 'plan' ? this.ortho : this.persp;
   }
 
+  snapshot(): ViewSnapshot {
+    return {
+      mode: this.mode,
+      iso: this.iso.getState(),
+      orbit: { p: this.persp.position.toArray(), t: this.orbit.target.toArray() },
+      plan: { p: this.ortho.position.toArray(), t: this.planCtl.target.toArray(), zoom: this.ortho.zoom },
+      walk: { x: this.walkPos.x, z: this.walkPos.z, yaw: this.yaw, pitch: this.pitch },
+    };
+  }
+
+  /** Puts all four cameras back; the mode is only switched when `withMode` (a deep link in the URL wins). */
+  restore(s: Partial<ViewSnapshot>, withMode: boolean): void {
+    const ok = (a: unknown, n: number): a is number[] => Array.isArray(a) && a.length === n && a.every((v) => Number.isFinite(v));
+    if (s.iso && [s.iso.x, s.iso.z, s.iso.zoom].every(Number.isFinite)) this.iso.setState(s.iso);
+    if (s.walk && [s.walk.x, s.walk.z, s.walk.yaw, s.walk.pitch].every(Number.isFinite)) {
+      this.walkPos.set(s.walk.x, EYE, s.walk.z);
+      this.yaw = s.walk.yaw;
+      this.pitch = s.walk.pitch;
+    }
+    if (s.orbit && ok(s.orbit.p, 3) && ok(s.orbit.t, 3)) {
+      this.persp.position.fromArray(s.orbit.p);
+      this.orbit.target.fromArray(s.orbit.t);
+      this.orbit.update();
+    }
+    if (s.plan && ok(s.plan.p, 3) && ok(s.plan.t, 3) && Number.isFinite(s.plan.zoom)) {
+      this.ortho.position.fromArray(s.plan.p);
+      this.planCtl.target.fromArray(s.plan.t);
+      this.ortho.zoom = s.plan.zoom;
+      this.ortho.updateProjectionMatrix();
+      this.planCtl.update();
+    }
+    if (withMode && s.mode && s.mode !== this.mode && ['iso', 'orbit', 'plan', 'walk'].includes(s.mode)) this.setMode(s.mode, true);
+  }
+
   setDoorways(spots: Array<{ x: number; z: number; r: number }>): void {
     this.doorSpots = spots;
   }
@@ -197,13 +252,19 @@ export class Views {
     return this.moved > 5;
   }
 
-  setMode(mode: ViewMode): void {
+  /** `keepCamera`: the orbit camera stays where `restore` put it instead of jumping back to the default spot. */
+  setMode(mode: ViewMode, keepCamera = false): void {
     this.mode = mode;
     this.iso.enabled = mode === 'iso';
     this.orbit.enabled = mode === 'orbit';
     this.planCtl.enabled = mode === 'plan';
     this.persp.rotation.order = mode === 'walk' ? 'YXZ' : 'XYZ';
-    if (mode === 'orbit') this.resetOrbit();
+    if (mode !== 'walk') {
+      if (this.locked) document.exitPointerLock();
+      this.fov = this.persp.fov = FOV_WALK;
+      this.persp.updateProjectionMatrix();
+    }
+    if (mode === 'orbit' && !keepCamera) this.resetOrbit();
     if (mode === 'walk') this.applyWalk();
     this.buttons.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === mode)));
     this.hint?.replaceChildren(...HINTS[mode].map(hintGroup));
@@ -253,8 +314,16 @@ export class Views {
   }
 
   private applyWalk(): void {
+    this.viewYaw = this.yaw;
+    this.viewPitch = this.pitch;
+    this.vel.x = this.vel.z = 0;
     this.persp.position.copy(this.walkPos);
     this.persp.rotation.set(this.pitch, this.yaw, 0);
+  }
+
+  /** Pointer-locked mouse look (no button held). */
+  get locked(): boolean {
+    return document.pointerLockElement === this.stage;
   }
 
   private walk(dt: number): void {
@@ -264,15 +333,44 @@ export class Views {
     const s = (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
     if (k.has('ArrowLeft')) this.yaw += 1.6 * dt;
     if (k.has('ArrowRight')) this.yaw -= 1.6 * dt;
-    if (f || s) {
-      const sp = (run ? RUN_SPEED : WALK_SPEED) * dt;
-      const dx = (-Math.sin(this.yaw) * f + Math.cos(this.yaw) * s) * sp;
-      const dz = (-Math.cos(this.yaw) * f - Math.sin(this.yaw) * s) * sp;
-      // axis-separated so you slide along walls and furniture
-      if (this.free(this.walkPos.x + dx, this.walkPos.z)) this.walkPos.x += dx;
-      if (this.free(this.walkPos.x, this.walkPos.z + dz)) this.walkPos.z += dz;
+
+    // wish direction -> eased velocity (diagonals no faster, backing up slower)
+    const len = Math.hypot(f, s) || 1;
+    const top = (run && f > 0 ? RUN_SPEED : f < 0 ? WALK_SPEED * 0.7 : WALK_SPEED) / len;
+    const wx = (-Math.sin(this.viewYaw) * f + Math.cos(this.viewYaw) * s) * top;
+    const wz = (-Math.cos(this.viewYaw) * f - Math.sin(this.viewYaw) * s) * top;
+    const a = 1 - Math.exp(-ACCEL * dt * (f || s ? 0.6 : 1));
+    this.vel.x += (wx - this.vel.x) * a;
+    this.vel.z += (wz - this.vel.z) * a;
+    const dx = this.vel.x * dt;
+    const dz = this.vel.z * dt;
+    const before = { x: this.walkPos.x, z: this.walkPos.z };
+    // axis-separated so you slide along walls and furniture
+    if (this.free(this.walkPos.x + dx, this.walkPos.z)) this.walkPos.x += dx;
+    else this.vel.x = 0;
+    if (this.free(this.walkPos.x, this.walkPos.z + dz)) this.walkPos.z += dz;
+    else this.vel.z = 0;
+    const speed = Math.hypot(this.walkPos.x - before.x, this.walkPos.z - before.z) / Math.max(dt, 1e-4);
+
+    // view: eased towards the mouse target, head bob while moving, lean into sideways steps, FOV kick when running
+    const lk = 1 - Math.exp(-LOOK_SMOOTH * dt);
+    this.viewYaw += (this.yaw - this.viewYaw) * lk;
+    this.viewPitch += (this.pitch - this.viewPitch) * lk;
+    this.bob += speed * dt * 4.2;
+    this.bobAmp += (Math.min(speed / WALK_SPEED, 1.6) - this.bobAmp) * Math.min(1, dt * 8);
+    const sideways = this.vel.x * Math.cos(this.viewYaw) - this.vel.z * Math.sin(this.viewYaw);
+    this.roll += (-sideways * 0.012 - this.roll) * Math.min(1, dt * 8);
+    this.fov += ((run && speed > WALK_SPEED * 1.2 ? FOV_RUN : FOV_WALK) - this.fov) * Math.min(1, dt * 6);
+    if (Math.abs(this.persp.fov - this.fov) > 0.01) {
+      this.persp.fov = this.fov;
+      this.persp.updateProjectionMatrix();
     }
-    this.applyWalk();
+    this.persp.position.set(
+      this.walkPos.x,
+      EYE + Math.sin(this.bob * 2) * 0.022 * this.bobAmp,
+      this.walkPos.z,
+    );
+    this.persp.rotation.set(this.viewPitch + Math.sin(this.bob * 2 + 1) * 0.004 * this.bobAmp, this.viewYaw, this.roll + Math.sin(this.bob) * 0.004 * this.bobAmp);
   }
 
   /** Walkable at p, with a little clearance (checks the four sides of the body). */
@@ -309,9 +407,19 @@ export class Views {
     });
     this.stage.addEventListener('pointermove', (e) => {
       if (e.buttons) this.moved += Math.abs(e.movementX) + Math.abs(e.movementY);
-      if (this.mode !== 'walk' || !this.look) return;
+      if (this.mode !== 'walk' || !(this.look || this.locked)) return;
       this.yaw -= e.movementX * 0.004;
       this.pitch = THREE.MathUtils.clamp(this.pitch - e.movementY * 0.004, -1.3, 1.3);
+    });
+    // first plain click captures the mouse (look without holding a button); Esc releases it
+    this.stage.addEventListener('click', () => {
+      if (this.mode === 'walk' && !this.locked && !this.wasDrag && this.stage.requestPointerLock) {
+        try {
+          void (this.stage.requestPointerLock() as unknown as Promise<void> | undefined)?.catch?.(() => {});
+        } catch {
+          /* not allowed: drag-look still works */
+        }
+      }
     });
     const end = (e: PointerEvent) => {
       this.look = null;

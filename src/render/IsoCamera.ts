@@ -37,6 +37,17 @@ export class IsoCamera {
     this.apply();
   }
 
+  getState(): { x: number; z: number; zoom: number } {
+    return { x: this.target.x, z: this.target.z, zoom: this.zoomGoal };
+  }
+
+  setState(s: { x: number; z: number; zoom: number }): void {
+    this.target.x = s.x;
+    this.target.z = s.z;
+    this.clampTarget();
+    this.zoomGoal = this.zoom = THREE.MathUtils.clamp(s.zoom, 0.6, 5);
+  }
+
   /** Eases the view centre towards a floor point (used while a person is steered). */
   follow(x: number, z: number, dt: number): void {
     const k = Math.min(1, dt * 4);

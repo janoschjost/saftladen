@@ -227,14 +227,16 @@
     <div class="l-stage" id="stage"></div>
     <header class="l-hud">
       <div class="m-hud-title">
-        <h1 class="m-hud-title__name">Saftladen</h1>
-        <p class="m-hud-title__meta" id="hud-meta"></p>
+        <h1 class="m-hud-title__name"><svg class="m-hud-title__mark" viewBox="0 0 31 25" width="31" height="25" fill="none" aria-hidden="true"><path class="m-hud-title__mark-two" d="M16.9799 13.9L19.5099 11.79C20.0099 11.39 20.4599 10.87 20.8299 10.26C21.1399 9.74005 21.2999 9.08005 21.2999 8.30005C21.2999 5.87005 19.6099 4.30005 16.9999 4.30005C14.2699 4.30005 12.4999 5.87005 12.4999 8.30005V8.76005L15.9999 9.04005V8.50005C15.9999 8.37005 16.0299 8.24005 16.0899 8.01005C16.1099 7.94005 16.1699 7.83005 16.2499 7.75005C16.2999 7.70005 16.4999 7.60005 16.6199 7.54005C16.7099 7.50005 16.8199 7.49005 17.0199 7.49005C17.1099 7.49005 17.1599 7.49005 17.2899 7.55005C17.5699 7.67005 17.6399 7.75005 17.6399 7.75005C17.7199 7.84005 17.7799 7.89005 17.8199 7.97005C17.8599 8.09005 17.8899 8.21005 17.8899 8.30005C17.8899 8.74005 17.4599 9.12005 16.9799 9.51005L12.1899 13.78V17.1H21.4899V13.9H16.9799Z"/><path fill="currentColor" d="M27.3 0H7C6 0 5 0.4 4.3 1.1C3.6 1.7 3.2 2.7 3.2 3.6V17.1L0 25L8.1 21.8H27.3C28.3 21.8 29.2 21.4 29.9 20.7C30.6 20 31 19.1 31 18.1V3.6C31 3.1 30.9 2.7 30.7 2.2C30.5 1.8 30.2 1.4 29.9 1C29.6 0.7 29.1 0.4 28.7 0.2C28.3 0.1 27.8 0 27.3 0ZM21.1 16.6H12.7V14L17.3 9.9C17.8 9.5 18.4 9 18.4 8.3C18.4 8.1 18.34 7.91 18.3 7.8C18.2 7.6 18.1 7.5 18 7.4C17.9 7.3 17.7 7.19 17.5 7.1C17.26 6.99 17.1 7 17 7C16.8 7 16.6 7 16.4 7.1C16.2 7.2 16 7.3 15.9 7.4C15.8 7.5 15.65 7.69 15.6 7.9C15.54 8.13 15.5 8.3 15.5 8.5L13 8.3C13 6 14.7 4.8 17 4.8C19.2 4.8 20.8 6 20.8 8.3C20.8 8.9 20.7 9.5 20.4 10C20.1 10.5 19.7 11 19.2 11.4L15.6 14.4H21V16.6H21.1Z"/></svg><span>Saftladen</span></h1>
+        <ul class="m-hud-title__meta" id="hud-meta" aria-live="off"></ul>
       </div>
       <div class="m-toolbar" role="toolbar" aria-label="Werkzeuge">
         <button class="m-tool" id="open-picker" type="button" aria-label="Figuren" data-tip="Figuren"><svg class="m-tool__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg></button>
         <button class="m-tool" id="toggle-seats" type="button" aria-label="Plätze" data-tip="Plätze" aria-pressed="false"><svg class="m-tool__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 11V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v5"/><path d="M5 11h14v5H5z"/><path d="M7 16v4M17 16v4"/></svg></button>
         <button class="m-tool" id="toggle-names" type="button" aria-label="Namen" data-tip="Namen" aria-pressed="false"><svg class="m-tool__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1"/></svg></button>
+        <span class="m-toolbar__sep" aria-hidden="true"></span>
         <button class="m-tool" id="toggle-settings" type="button" aria-label="Einstellungen" data-tip="Einstellungen" aria-pressed="false"><svg class="m-tool__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></svg></button>
+        <span class="m-toolbar__sep" aria-hidden="true"></span>
         <button class="m-tool" id="toggle-editor" type="button" aria-label="Raum bearbeiten" data-tip="Raum bearbeiten (E)" aria-pressed="false"><svg class="m-tool__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M3 12h18"/><path d="m9 6 3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg></button>
         <button class="m-tool" id="toggle-dev" type="button" aria-label="Dev-Events" data-tip="Dev-Events" aria-pressed="false"><svg class="m-tool__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 8-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/></svg></button>
       </div>
@@ -252,26 +254,40 @@
         <button class="m-button m-away__all" id="away-all" type="button">Alle zurück</button>
       </aside>
       <aside class="m-settings" id="settings" aria-label="Einstellungen" hidden>
-        <h2 class="m-settings__title">Einstellungen</h2>
-        <div class="m-settings__time">
-          <div class="m-settings__time-head">
-            <span>Tageszeit</span>
-            <output class="m-settings__clock" id="time-clock" for="time-slider">10:00</output>
+        <h2 class="m-flyout__title">Einstellungen</h2>
+        <section class="m-settings__group" aria-labelledby="settings-env">
+          <h3 class="m-settings__heading" id="settings-env">Umgebung</h3>
+          <div class="m-settings__field">
+            <div class="m-settings__field-head">
+              <span>Tageszeit</span>
+              <output class="m-settings__clock" id="time-clock" for="time-slider">10:00</output>
+            </div>
+            <input class="m-settings__slider" type="range" id="time-slider" min="0" max="1000" step="1" value="308" aria-label="Tageszeit" />
           </div>
-          <input class="m-settings__slider" type="range" id="time-slider" min="0" max="1000" step="1" value="308" aria-label="Tageszeit" />
-          <label class="m-settings__row"><input type="checkbox" id="time-auto" checked /> Zeit läuft automatisch</label>
-        </div>
-        <label class="m-settings__row"><input type="checkbox" id="setting-tables" checked /> Tische (Reihennummern)</label>
-        <label class="m-settings__row"><input type="checkbox" id="setting-seats" checked /> Platznummern</label>
-        <label class="m-settings__row"><input type="checkbox" id="setting-rooms" checked /> Raumnummern</label>
+          <label class="m-settings__row"><span>Zeit läuft automatisch</span><input class="m-settings__switch" type="checkbox" id="time-auto" checked /></label>
+          <div class="m-settings__field">
+            <div class="m-settings__field-head"><span id="weather-label">Wetter</span></div>
+            <div class="m-settings__segments" role="radiogroup" aria-labelledby="weather-label">
+              <label class="m-settings__segment"><input type="radio" name="setting-weather" value="auto" checked /><span>Auto</span></label>
+              <label class="m-settings__segment"><input type="radio" name="setting-weather" value="sun" /><span>Trocken</span></label>
+              <label class="m-settings__segment"><input type="radio" name="setting-weather" value="rain" /><span>Regen</span></label>
+            </div>
+          </div>
+        </section>
+        <section class="m-settings__group" aria-labelledby="settings-labels">
+          <h3 class="m-settings__heading" id="settings-labels">Beschriftungen</h3>
+          <label class="m-settings__row"><span>Tische <small>Reihennummern</small></span><input class="m-settings__switch" type="checkbox" id="setting-tables" checked /></label>
+          <label class="m-settings__row"><span>Plätze <small>Platznummern</small></span><input class="m-settings__switch" type="checkbox" id="setting-seats" checked /></label>
+          <label class="m-settings__row"><span>Räume <small>Raumnummern</small></span><input class="m-settings__switch" type="checkbox" id="setting-rooms" checked /></label>
+        </section>
       </aside>
       <aside class="m-dev" id="dev" aria-label="Dev-Events" hidden>
-        <h2 class="m-settings__title">Dev-Events <span class="m-dev__hint">( ` )</span></h2>
+        <h2 class="m-flyout__title">Dev-Events <span class="m-dev__hint">( ` )</span></h2>
         <div id="dev-body"></div>
         <p class="m-dev__status" id="dev-status" role="status"></p>
       </aside>
       <aside class="m-seats" id="seats" aria-label="Platzzuteilung" hidden>
-        <h2 class="m-seats__title">Plätze</h2>
+        <h2 class="m-flyout__title">Plätze</h2>
         <p class="m-seats__hint">Zugeteilte Personen sitzen an ihrem Platz. Alle anderen wählen einen freien Platz und weichen, wenn die Besitzerin oder der Besitzer kommt.</p>
         <ul class="m-seats__list" id="seats-list"></ul>
       </aside>
@@ -348,37 +364,37 @@
       </aside>
       <div class="m-picker__main">
         <div class="m-picker__view">
-          <div class="m-picker__stage" id="picker-stage"></div>
+          <div class="m-picker__figure">
+            <div class="m-picker__stage" id="picker-stage"></div>
+            <div class="m-picker__info">
+              <p class="m-picker__count" id="picker-count"></p>
+              <h3 class="m-picker__name" id="picker-name"></h3>
+              <p class="m-picker__role" id="picker-role"></p>
+            </div>
+            <div class="m-picker__controls">
+              <div class="m-picker__group" role="group" aria-label="Figur wechseln">
+                <button class="m-button" id="picker-prev" type="button" aria-label="Vorherige Figur">&uarr; Zurück</button>
+                <button class="m-button" id="picker-next" type="button" aria-label="Nächste Figur">Weiter &darr;</button>
+              </div>
+              <div class="m-picker__group" role="group" aria-label="Ansicht drehen">
+                <button class="m-button" id="picker-left" type="button" aria-label="Nach links drehen">&larr; Drehen</button>
+                <button class="m-button" id="picker-spin" type="button" aria-pressed="true">Auto-Drehung</button>
+                <button class="m-button" id="picker-right" type="button" aria-label="Nach rechts drehen">Drehen &rarr;</button>
+              </div>
+            </div>
+          </div>
           <figure class="m-picker__reference" id="picker-reference">
-            <div class="m-picker__reference-stage" id="picker-home-stage"></div>
             <figcaption class="m-picker__reference-caption" id="picker-home-caption">Homeoffice</figcaption>
-          </figure>
-        </div>
-        <div class="m-picker__footer">
-          <div class="m-picker__info">
-            <h3 class="m-picker__name" id="picker-name"></h3>
-            <p class="m-picker__role" id="picker-role"></p>
+            <div class="m-picker__reference-stage" id="picker-home-stage"></div>
             <label class="m-picker__home">
-              <span class="m-picker__home-label">Homeoffice</span>
+              <span class="m-picker__home-label">Homeoffice wählen</span>
               <span class="m-picker__home-wrap">
                 <select class="m-picker__home-select" id="picker-home"></select>
                 <svg class="m-picker__home-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
               </span>
             </label>
-          </div>
-          <div class="m-picker__controls">
-            <div class="m-picker__group" role="group" aria-label="Figur wechseln">
-              <button class="m-button" id="picker-prev" type="button" aria-label="Vorherige Figur">&uarr; Zurück</button>
-              <button class="m-button" id="picker-next" type="button" aria-label="Nächste Figur">Weiter &darr;</button>
-            </div>
-            <div class="m-picker__group" role="group" aria-label="Ansicht drehen">
-              <button class="m-button" id="picker-left" type="button" aria-label="Nach links drehen">&larr; Drehen</button>
-              <button class="m-button" id="picker-spin" type="button" aria-pressed="true">Auto-Drehung</button>
-              <button class="m-button" id="picker-right" type="button" aria-label="Nach rechts drehen">Drehen &rarr;</button>
-            </div>
-          </div>
+          </figure>
         </div>
-        <p class="m-picker__hint">Ziehen zum Drehen · Scrollen zum Zoomen · &uarr;&darr; wechseln · &larr;&rarr; drehen · Esc schliesst</p>
         <button class="m-button m-picker__close" id="picker-close" type="button">Schliessen</button>
       </div>
     </section>

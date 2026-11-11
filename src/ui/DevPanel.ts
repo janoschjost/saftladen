@@ -1,4 +1,5 @@
 import { devEvents } from '../game/DevEvents';
+import { exclusivePanel } from './exclusive';
 
 /** Dev panel: one button per registered dev event, grouped. Toggle with the "Dev" button or the ` key. */
 export class DevPanel {
@@ -6,6 +7,8 @@ export class DevPanel {
   private body = document.getElementById('dev-body') as HTMLElement;
   private status = document.getElementById('dev-status') as HTMLElement;
   private toggle = document.getElementById('toggle-dev') as HTMLButtonElement;
+
+  private closeOthers = exclusivePanel('dev', () => this.setOpen(false));
 
   constructor() {
     this.toggle.addEventListener('click', () => this.setOpen(!this.isOpen()));
@@ -24,6 +27,7 @@ export class DevPanel {
   private setOpen(open: boolean): void {
     this.root.hidden = !open;
     this.toggle.setAttribute('aria-pressed', String(open));
+    if (open) this.closeOthers();
   }
 
   private render(): void {
