@@ -10,6 +10,7 @@ export class Overlay {
   private bubbleEls = new Map<string, HTMLElement>();
   private reticle = document.getElementById('reticle') as HTMLElement;
   private reticlePrompt = document.getElementById('reticle-prompt') as HTMLElement;
+  private labelClip = '';
   namesVisible = false;
 
   constructor() {
@@ -57,6 +58,18 @@ export class Overlay {
       el.style.transform = `translate(${Math.round(it.x - el.offsetWidth / 2)}px, ${Math.round(it.y - el.offsetHeight - 6)}px)`;
     }
     for (const [id, el] of this.bubbleEls) if (!active.has(id)) el.hidden = true;
+  }
+
+  /**
+   * Cuts holes into the label layer where the live feeds are: their tiles are see-through (the scenes are drawn
+   * into the canvas behind), so names and bubbles of the office would otherwise show on top of the video.
+   */
+  maskOut(rects: DOMRect[]): void {
+    const holes = rects.map((r) => `M${Math.round(r.left)} ${Math.round(r.top)}h${Math.round(r.width)}v${Math.round(r.height)}h${-Math.round(r.width)}Z`).join('');
+    const clip = holes ? `path(evenodd, "M0 0H${window.innerWidth}V${window.innerHeight}H0Z${holes}")` : '';
+    if (clip === this.labelClip) return;
+    this.labelClip = clip;
+    this.labels.style.clipPath = clip;
   }
 
   toggleNames(): void {

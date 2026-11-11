@@ -1031,6 +1031,7 @@ export class Game {
   private posePhone(w: Person, ph: NonNullable<Person['rig']['phone']>): void {
     const a = w.phoneAmt;
     const r = w.rig;
+    ph.device.visible = a > 0;
     if (a > 0) {
       r.armR.rotation.x = THREE.MathUtils.lerp(r.armR.rotation.x, -0.35, a);
       r.armR.rotation.z = -0.3 * a;
@@ -1045,6 +1046,7 @@ export class Game {
   private poseVape(w: Person, v: NonNullable<Person['rig']['vape']>, _ph: number): void {
     const a = w.vapeAmt;
     const r = w.rig;
+    v.device.visible = a > 0;
     if (a > 0) {
       r.armR.rotation.x = THREE.MathUtils.lerp(r.armR.rotation.x, -0.64, a);
       r.armR.rotation.z = -0.39 * a;
@@ -1200,7 +1202,6 @@ export class Game {
     }
     const entries = atHome.map((p) => ({ id: p.id, name: p.member.name, variant: p.homeVariant, room: HOME_LABELS[p.homeVariant] }));
     this.feeds.sync(entries);
-    this.feeds.tick(dt);
   }
 
   /** The front door swings open while somebody is on the way through it. */
@@ -1217,6 +1218,7 @@ export class Game {
   /** Draws the home office scenes into the main canvas, behind the (transparent) feed tiles. */
   private renderFeeds(): void {
     const tiles = this.feeds.tiles();
+    this.overlay.maskOut(tiles.map((t) => t.clip));
     if (!tiles.length) return;
     const r = this.renderer;
     const h = window.innerHeight;
