@@ -28,6 +28,9 @@ const FOOS_TIME = { min: 25, max: 50 }; // seconds of one game
 const PHONE_CHANCE = 0.4; // chance per decision (phone people only) to take a call while walking around
 const PHONE_TIME = { min: 30, max: 80 }; // seconds of one call
 const PHONE_PACE_CHANCE = 0.5; // chance that a call is spent pacing up and down one path instead of wandering
+const SEAT_PHONE_RATE = 0.02; // per second while working at the desk (phone people): chance to take a call right in the chair
+const SEAT_PHONE_TIME = { min: 15, max: 40 };
+const SEAT_VAPE_RATE = 0.015; // per second while working at the desk (vapers): chance to take a drag without getting up
 const PHONE_PACE_LEN = { min: 3.5, max: 9 }; // metres between the two ends of a pacing path
 const TRANSITION = 1.1; // seconds to sit down / stand up
 
@@ -82,7 +85,7 @@ interface MeetJob {
 interface PhoneJob {
   remaining: number;
   /** pace = walks back and forth between `a` and `b`, wander = strolls from spot to spot */
-  mode: 'pace' | 'wander';
+  mode: 'pace' | 'wander' | 'sit';
   a: Vec2;
   b: Vec2;
   /** pacing: the end walked to next */
@@ -123,6 +126,8 @@ export class Person extends Walker {
   controlled = false;
   /** steering input in world space (direction on the floor, not normalised) */
   readonly steer = { x: 0, z: 0, run: false };
+  /** the player (walk mode) is talking to this person: they stop and face `at` until `t` runs out */
+  playerChat: { t: number; at: Vec2 } | null = null;
   awayKind: AwayKind | null = null;
   /** seconds until this person comes back (counts down while `out`) */
   awayLeft = 0;
@@ -136,6 +141,8 @@ export class Person extends Walker {
   phoneJob: PhoneJob | null = null;
   /** 0 = phone down .. 1 = at the ear (eased, kept after the call ends until the hand is down) */
   phoneAmt = 0;
+  /** on a call, sitting in the phone box (phone at the ear while seated) */
+  boothCall = false;
   /** walking to / sitting in the meeting room */
   meetJob: MeetJob | null = null;
   /** called to a meeting while still at a desk: goes once they have stood up */
@@ -379,11 +386,11 @@ export class Person extends Walker {
     const j = this.phoneJob;
     if (j) {
       j.remaining -= dt;
-      if (j.remaining <= 0 || this.held || this.controlled || this.presence !== 'in' || this.talk || this.meetJob || this.pendingMeet || this.task || this.printJob || this.foosJob || this.vapeJob) {
+      if (j.remaining <= 0 || this.held || this.controlled || this.presence !== 'in' || this.talk || this.meetJob || this.pendingMeet || this.printJob || this.foosJob || (this.task ? j.mode !== 'sit' || this.task.phase !== 'work' : j.mode === 'sit') || (this.vapeJob && j.mode !== 'sit')) {
         this.endPhone();
       }
     }
-    this.phoneAmt += ((this.phoneJob ? 1 : 0) - this.phoneAmt) * Math.min(1, dt * 5);
+    this.phoneAmt += ((this.phoneJob || (this.boothCall && this.meetSeated) ? 1 : 0) - this.phoneAmt) * Math.min(1, dt * 5);
     if (this.phoneAmt < 0.005) this.phoneAmt = 0;
   }
 
@@ -411,10 +418,38 @@ export class Person extends Walker {
     this.phoneStep(nav);
   }
 
+  /** Takes a call without leaving the chair. */
+  private startSeatedPhone(task: DeskTask): void {
+    const time = SEAT_PHONE_TIME.min + Math.random() * (SEAT_PHONE_TIME.max - SEAT_PHONE_TIME.min);
+    this.phoneJob = { remaining: Math.min(time, Math.max(2, task.remaining - 1)), mode: 'sit', a: { ...this.pos }, b: { ...this.pos }, toB: true };
+  }
+
+  /** Occasionally a phone call or a vape drag while sitting at the desk. */
+  private seatedBreaks(dt: number, task: DeskTask): void {
+    if (this.held || this.talk || this.phoneJob || this.vapeJob || task.remaining < 6) return;
+    if (this.member.look.phone && Math.random() < SEAT_PHONE_RATE * dt) this.startSeatedPhone(task);
+    else if (this.member.look.vape && Math.random() < SEAT_VAPE_RATE * dt) this.startVape(Math.random() < 0.35 ? 2 : 1);
+  }
+
+  /** Advances a drag taken in the chair (the arm and puffs are animated from `vapeJob.t`). */
+  private tickSeatedVape(dt: number): void {
+    const job = this.vapeJob;
+    if (!job) return;
+    if (this.held || this.controlled || this.talk) {
+      this.vapeJob = null;
+      return;
+    }
+    job.t += dt;
+    if (job.t >= VAPE_END) {
+      if (--job.drags > 0) job.t = VAPE_RAISE;
+      else this.vapeJob = null;
+    }
+  }
+
   /** Hangs up (the hand comes down on its own). */
   endPhone(): void {
     this.phoneJob = null;
-    this.timer = 0.3 + Math.random();
+    if (!this.task) this.timer = 0.3 + Math.random();
   }
 
   /** Next leg of the call: the other end of the path, or a new spot. */
@@ -479,8 +514,33 @@ export class Person extends Walker {
     this.wanderTo(nav);
   }
 
+  /** The player talks to this person: they drop their walk and turn around. False when they are too busy to stop (desk, meeting, printer, …). */
+  talkTo(at: Vec2, seconds: number): boolean {
+    if (this.fixed || this.held || this.controlled || this.talk || this.presence !== 'in' || this.inMeeting) return false;
+    this.interrupt();
+    this.path = [];
+    this.state = 'idle';
+    this.playerChat = { t: seconds, at };
+    return true;
+  }
+
   protected override control(dt: number, nav: NavGrid): boolean {
     if (this.presence !== 'in') return this.controlPresence(dt, nav);
+    const chat = this.playerChat;
+    if (chat) {
+      chat.t -= dt;
+      if (chat.t <= 0 || this.held || this.controlled || this.talk) {
+        this.playerChat = null;
+        this.timer = 0.4 + Math.random();
+      } else {
+        this.state = 'idle';
+        this.timer = 1;
+        this.sit = Math.max(0, this.sit - dt * 4);
+        this.moving += (0 - this.moving) * Math.min(1, dt * 8);
+        this.turnTo(Math.atan2(chat.at.x - this.pos.x, chat.at.z - this.pos.z), dt);
+        return true;
+      }
+    }
     if (this.controlled) {
       this.cancelPrint();
       this.cancelFoos();
@@ -498,7 +558,7 @@ export class Person extends Walker {
       this.moving += (0 - this.moving) * Math.min(1, dt * 8);
       return true;
     }
-    if (this.vapeJob) return this.controlVape(dt);
+    if (this.vapeJob && this.task?.phase !== 'work') return this.controlVape(dt);
     if (this.printJob) return this.controlPrint(dt, nav);
     if (this.foosJob) return this.controlFoos(dt, nav);
     const task = this.task;
@@ -555,7 +615,11 @@ export class Person extends Walker {
         this.turnTo(this.adhd ? d.yaw + Math.sin(this.clock * 2.3) * Math.sin(this.clock * 0.7) * 0.9 : d.yaw, dt);
         this.moving += (0 - this.moving) * ease;
         task.remaining -= dt;
+        this.tickSeatedVape(dt);
+        this.seatedBreaks(dt, task);
         if (task.remaining <= 0) {
+          this.vapeJob = null;
+          this.phoneJob = null;
           task.phase = 'leave';
           task.t = 0;
           d.setScreen(false);
@@ -840,6 +904,7 @@ export class Person extends Walker {
   /** Take a drag on the vape right where they stand. */
   startVape(drags = 1): void {
     this.vapeJob = { t: 0, drags };
+    if (this.task?.phase === 'work') return; // seated: stays in the chair
     this.path = [];
     this.state = 'idle';
   }

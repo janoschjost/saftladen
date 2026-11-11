@@ -82,6 +82,8 @@ export interface OfficeModel {
   meeting: { doorPos: Vec2; center: Vec2; seats: Array<{ x: number; z: number; yaw: number }> };
   /** the two bench seats in the wooden pod (game coordinates, yaw = facing out of the pod) */
   pod: { center: Vec2; seats: Array<{ x: number; z: number; yaw: number }> };
+  /** the stool in the phone box (game coordinates, yaw = facing the door) */
+  phoneBooth: { seat: { x: number; z: number; yaw: number } };
 }
 
 type Mat = THREE.Material;
@@ -128,6 +130,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   const meetSeats: Array<{ x: number; z: number; yaw: number }> = [];
   const podSeats: Array<{ x: number; z: number; yaw: number }> = [];
   const podCenter: Vec2 = { x: 0, z: 0 };
+  const boothSeat = { x: 0, z: 0, yaw: 0 };
   const meetCenter: Vec2 = { x: 0, z: 0 };
   const deskSpecs: Array<{ id: string; x: number; z: number; rot: number; white: boolean; w: number; stand: boolean }> = [];
 
@@ -379,14 +382,21 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
           const W = op.b - op.a - 0.04;
           const H = top - 0.03;
           const pivot = new THREE.Group();
-          const leaf = new THREE.Mesh(new THREE.BoxGeometry(W, H, glassDoor ? 0.03 : 0.05), glassDoor ? mat.glass : mat.lightgrey);
+          const leaf = new THREE.Mesh(new THREE.BoxGeometry(W, H, glassDoor ? 0.03 : t), glassDoor ? mat.glass : mat.lightgrey);
           leaf.position.set(W / 2, H / 2, 0);
           leaf.castShadow = !glassDoor;
           pivot.add(leaf);
-          if (!glassDoor) {
-            const handle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.03, 0.09), mat.steel);
-            handle.position.set(W - 0.1, 1.0, 0);
-            pivot.add(handle);
+          // lever handle on both faces: bar on two short posts
+          const th = glassDoor ? 0.015 : t / 2; // half leaf thickness
+          for (const side of [-1, 1]) {
+            const bar = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.025, 0.025), mat.steel);
+            bar.position.set(W - 0.12, 1.0, side * (th + 0.04));
+            pivot.add(bar);
+            for (const px of [W - 0.19, W - 0.05]) {
+              const post = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.04), mat.steel);
+              post.position.set(px, 1.0, side * (th + 0.02));
+              pivot.add(post);
+            }
           }
           const base = alongX ? 0 : -Math.PI / 2;
           const [hx, hz] = P(op.a + 0.02);
@@ -651,15 +661,16 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     { a: -3.0, b: -2.0, door: 1 }, // storage door
     { a: 2.5, b: 3.4, door: 1 }, // door under "RISCHE"
     { a: 4.9, b: 5.8, door: 1 }, // kitchen/dining door
-    { a: 6.2, b: 9.5, top: 2.4, fill: 'glass', flush: true }, // glazed panel into dining
+    { a: 6.2, b: 9.5, top: 2.1, fill: 'glass', flush: true }, // glazed panel into dining (same height as the doors)
     { a: 14.4, b: 15.3, door: 1 }, // "Archiv"
     { a: 18.5, b: 23, top: 2.5 }, // dark room, black curtain
-    { a: 23.4, b: 24.3, top: 2.2, fill: 'glass', door: 1 }, // booth glass door
+    { a: 23.25, b: 24.25, top: 2.2, fill: 'glass', door: -1 }, // booth glass door, opens outwards (into the hallway)
   ]);
   for (const x of [0, 4, 10.5, 18.5]) wall(x, B.z0, x, CZ, H_CORE);
   wall(23, -2.2, 23, CZ, H_CORE); // east of the dark room: only the booth vestibule part remains
   wall(26, B.z0, 26, CZ, H_CORE);
-  wall(23, -2.2, 26, -2.2, H_CORE); // dark room (extended over the old photo studio) / booth vestibule
+  wall(23, -2.2, 24.5, -2.2, H_CORE); // photo booth (x 23..24.5): back wall
+  wall(24.5, -2.2, 24.5, CZ, H_CORE); // photo booth: east wall
   // big wall lettering in the corporate font (Apercu): it starts low enough to run over the closed door and the
   // glazed panel; over open doorways the part below the door head (OPEN_TOP) is masked out
   {
@@ -668,7 +679,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     const X1 = 15.5;
     const W = ax(X1) - ax(X0); // plan-scaled span of the lettering
     const Hh = 0.95;
-    const Y0 = 1.94; // bottom of the plane: the baseline sits at ~2.08 m, the middle of the capitals at 2.4 m = top of the glazed panel
+    const Y0 = 1.64; // bottom of the plane: the baseline sits at ~1.78 m, the middle of the capitals at 2.1 m = top of the glazed panel
     const OPEN_TOP = 2.1; // head of an open doorway
     // doors under the lettering: it is masked out of the wall there and drawn onto the door leaf instead
     const OPEN: Array<[number, number]> = [
@@ -706,7 +717,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       leafTex.push(lt);
       const lh = rig.height - Y0;
       const part = new THREE.Mesh(new THREE.PlaneGeometry(rig.width, lh), new THREE.MeshBasicMaterial({ map: lt, transparent: true }));
-      part.position.set(rig.width / 2, Y0 + lh / 2, 0.028);
+      part.position.set(rig.width / 2, Y0 + lh / 2, 0.062); // door leaf is as thick as the wall (0.12), so its face is flush with the wall face
       rig.pivot.add(part);
     }
     document.fonts?.load(FONT).then(() => {
@@ -716,14 +727,101 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       for (const t of leafTex) t.needsUpdate = true;
     });
     const m = new THREE.Mesh(new THREE.PlaneGeometry(W, Hh), new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
-    m.position.set(ax(X0) + W / 2, Y0 + Hh / 2, az(CZ) + 0.09); // in front of the door leaf (half-thickness 0.075)
+    m.position.set(ax(X0) + W / 2, Y0 + Hh / 2, az(CZ) + 0.062); // flush on the wall face (half-thickness 0.06), same plane as the lettering on the door leaves
     m.userData.nonav = true;
     world.add(m);
   }
-  // storage room (dark, boxes)
-  within(-3.7, -2.7, () => {
-    for (let i = 0; i < 9; i++) box(0.6, 0.4 + (i % 3) * 0.25, 0.5, -4.4 + (i % 3) * 0.75, 0, -1.2 - Math.floor(i / 3) * 1.3, i % 2 ? mat.cardboard : mat.dark);
-  }, 'Lagerkisten');
+  // storage / craft room (room 3, from the photos): black rubber floor, long black work desk along the west wall,
+  // pegboards + paper rolls on the north wall, vacuum + cartons, small glass-top table on the east wall, tidy bags by the door
+  {
+    const XW = -4.93; // inner face west
+    const XE = -0.07; // inner face east
+    const ZN = -5.44; // inner face north
+    const ZS = CZ - 0.07; // inner face south
+    const rubber = L(0x1a1a1c);
+    const tabletop = L(0x24242a);
+    const matGrey = L(0x8f9496);
+    const matGreen = L(0x3d5a4a);
+    const blue = L(0x3f6fa8);
+    const bagWhite = L(0xeceae2);
+    const paper = [L(0xd88a9c), L(0x7fb8a0), L(0xe3c76a), L(0xa99ad0), L(0xf0ede4)];
+    slab(XW, XE, ZN, ZS, 0.005, 0.025, rubber);
+    item('craft-light', 'craft-light', 'Neonleuchte Lager', () => box(0.1, 0.06, 2.4, -3.9, 3.2, -3.3, new THREE.MeshBasicMaterial({ color: 0xf2f8ff })));
+
+    // work desk, west wall: 0.65 deep, black top on black panels
+    const DX = XW + 0.33;
+    const DZ0 = ZN + 0.02;
+    const DZ1 = -1.95;
+    const DL = DZ1 - DZ0;
+    const DZ = (DZ0 + DZ1) / 2;
+    item('craft-desk', 'craft-desk', 'Werktisch', () => {
+      box(0.66, 0.04, DL, DX, 0.74, DZ, tabletop);
+      box(0.04, 0.74, DL - 0.1, XW + 0.05, 0, DZ, mat.black); // back panel
+      box(0.04, 0.74, 0.5, XW + 0.6, 0, DZ1 - 0.05, mat.black); // front legs
+      box(0.04, 0.74, 0.5, XW + 0.6, 0, DZ0 + 0.1, mat.black);
+      box(0.6, 0.03, DL - 0.1, DX, 0.2, DZ, mat.black); // low shelf
+    });
+    item('craft-tools', 'craft-tools', 'Schneidematten + Werkzeug', () => {
+      box(0.55, 0.012, 0.8, DX, 0.78, -3.7, matGrey); // cutting mat
+      box(0.5, 0.012, 0.5, DX, 0.78, -4.5, matGreen);
+      box(0.62, 0.07, 0.62, DX, 0.78, -2.18, mat.grey); // paper guillotine
+      box(0.5, 0.012, 0.5, DX, 0.85, -2.18, blue);
+      cyl(0.02, 0.02, 0.62, DX - 0.28, 0.9, -2.18, mat.steel); // guillotine arm (stand-in for the bar)
+      box(0.28, 0.03, 0.06, DX, 0.78, -3.1, mat.dark); // stapler
+      cyl(0.05, 0.05, 0.12, DX - 0.15, 0.78, -5.2, mat.steel); // pen cup
+      box(0.3, 0.1, 0.25, DX - 0.05, 0.78, -5.05, mat.cardboard); // small parcel
+      box(0.3, 0.12, 0.2, DX, 0.78, -4.9, L(0xf2c43a)); // yellow crate
+    });
+    item('craft-bags', 'craft-bags', 'Papiertüten-Stapel', () => {
+      for (let i = 0; i < 6; i++) box(0.34, 0.035, 0.46, DX - 0.02 + (i % 2) * 0.01, 0.78 + i * 0.035, -2.75, mat.ply, 0.05 * i);
+    });
+    item('craft-baskets', 'craft-baskets', 'Drahtkörbe + Kartons', () => {
+      box(0.42, 0.34, 0.5, DX + 0.02, 0.22, -2.8, mat.lightgrey);
+      box(0.4, 0.3, 0.5, DX + 0.02, 0.22, -3.5, mat.lightgrey);
+      box(0.5, 0.25, 0.55, DX + 0.02, 0.22, -4.2, mat.cardboard);
+      box(0.45, 0.3, 0.45, DX, 0, -4.9, mat.terracotta); // plant pot under the desk
+    });
+
+    // north wall: two pegboards + paper roll bucket at the west corner
+    item('craft-pegboards', 'craft-pegboards', 'Lochwände', () => {
+      for (const px of [-3.55, -2.3]) {
+        box(0.9, 0.7, 0.02, px, 1.3, ZN + 0.02, mat.white);
+        box(0.18, 0.03, 0.1, px - 0.2, 1.7, ZN + 0.08, mat.white);
+        box(0.2, 0.03, 0.1, px + 0.15, 1.5, ZN + 0.08, mat.white);
+        box(0.12, 0.1, 0.08, px - 0.15, 1.4, ZN + 0.07, mat.cardboard);
+      }
+      box(0.9, 0.7, 0.02, XW + 0.03, 1.3, -4.2, mat.white, Math.PI / 2); // third board over the desk (west wall)
+    });
+    item('craft-rolls', 'craft-rolls', 'Papierrollen', () => {
+      cyl(0.14, 0.14, 0.5, -4.55, 0.04, ZN + 0.25, mat.steel);
+      paper.forEach((m, i) => cyl(0.03, 0.03, 0.9 + (i % 3) * 0.1, -4.62 + i * 0.05, 0.5, ZN + 0.22 + (i % 2) * 0.05, m, world, 10));
+    });
+
+    // north-east: vacuum cleaner, tall carton, flat cartons on the glass-top table
+    item('craft-vacuum', 'craft-vacuum', 'Staubsauger + Karton', () => {
+      box(0.6, 0.8, 0.45, -3.1, 0, ZN + 0.3, mat.cardboard);
+      box(0.52, 0.25, 0.4, -2.35, 0, ZN + 0.4, mat.white);
+      cyl(0.12, 0.12, 0.05, -2.35, 0.25, ZN + 0.4, mat.terracotta);
+      cyl(0.015, 0.015, 0.9, -2.5, 0.3, ZN + 0.25, mat.dark);
+    });
+    item('craft-sidetable', 'craft-sidetable', 'Glastisch', () => {
+      const tx = XE - 0.4;
+      box(0.7, 0.03, 1.5, tx, 0.74, -4.2, L(0xcfe3dc));
+      for (const dz of [-0.7, 0.7]) for (const dx of [-0.3, 0.3]) box(0.04, 0.74, 0.04, tx + dx, 0, -4.2 + dz, mat.black);
+      box(0.5, 0.12, 0.4, tx, 0.77, -4.6, mat.cardboard);
+      box(0.5, 0.12, 0.4, tx, 0.89, -4.6, mat.cardboard, 0.15);
+      box(0.4, 0.1, 0.3, tx, 0.77, -3.8, mat.cardboard);
+    });
+
+    // by the door: a few tidy bags and flat cartons
+    item('craft-bags-floor', 'craft-bags-floor', 'Säcke', () => {
+      for (const [x, z, h] of [[XE - 0.4, -2.0, 0.85], [XE - 0.4, -2.6, 0.7], [XE - 1.0, -2.2, 0.55]] as const) {
+        cyl(0.26, 0.3, h, x, 0.005, z, bagWhite);
+        cyl(0.1, 0.18, 0.15, x, h, z, bagWhite);
+      }
+      box(0.7, 0.04, 0.5, XE - 1.6, 0, -1.9, mat.cardboard);
+    });
+  }
   // kitchen (x 4..10.5): fridge + counter line on the west wall, dining table east
   within(4.0, B.z0, () => {
     box(0.62, 2.0, 0.65, 4.4, 0, -1.5, mat.white);
@@ -833,59 +931,433 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       }
     }
   }
-  // archive: grey shelving
-  within(14.1, B.z0, () => {
-    for (const x of [11.4, 13.2, 15.0, 16.8]) {
-      box(1.6, 2.0, 0.5, x, 0, -5.0, mat.grey);
-      for (let i = 0; i < 3; i++) box(0.45, 0.28, 0.4, x - 0.5 + i * 0.5, 2.0, -5.0, mat.crate);
+  /* ---------- archive / printer + server room (from the photos) ----------
+     inner faces: x 10.56 .. 18.44, z -5.44 (north, glass blocks) .. -1.06 (south, door at x 14.4-15.3).
+     north wall: bottle rack, tall fridge, three steel shelf units, server rack; east wall: copier, black board, AC;
+     west wall: supply shelves; south wall: cupboard with crates, stepladder, bar stools, paper shelf. */
+  const rnd = (n: number): number => {
+    const v = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+    return v - Math.floor(v);
+  };
+  const aMat = {
+    carton: L(0xb89468),
+    cartonDark: L(0x9c7a4e),
+    bin: L(0x9aa3ab),
+    binDark: L(0x2b2d30),
+    orange: L(0xe8742a),
+    blue: L(0x1f4fa8),
+    red: L(0xc23a2e),
+    yellow: L(0xe8cf2a),
+    purple: L(0x5a2a86),
+    green: L(0x3f8a3a),
+    boardBlack: L(0x0e0e10),
+    box: [L(0xd9d2c3), L(0xb89468), L(0xe9e6df), L(0x8a6a44)],
+    goods: [L(0x6aa84f), L(0xd9a441), L(0xc23a2e), L(0x3f6fb5), L(0xeee6c8), L(0x5b8f6b)],
+  };
+  type ShelfKind = 'bins' | 'archive' | 'drawers' | 'supplies';
+  /** Steel shelf unit. axis 'x': runs along x against the north wall; 'z': runs along z against the west wall. */
+  const shelfUnit = (cx: number, cz: number, len: number, h: number, dep: number, axis: 'x' | 'z', kind: ShelfKind, seed: number, frame: Mat = mat.grey): void => {
+    const B3 = (u: number, y: number, v: number, lu: number, hh: number, dv: number, m: Mat) =>
+      axis === 'x' ? box(lu, hh, dv, cx + u, y, cz + v, m) : box(dv, hh, lu, cx + v, y, cz + u, m);
+    for (const u of [-len / 2 + 0.02, len / 2 - 0.02]) for (const v of [-dep / 2 + 0.02, dep / 2 - 0.02]) B3(u, 0, v, 0.04, h, 0.04, frame);
+    const levels = 4;
+    for (let l = 0; l < levels; l++) B3(0, 0.05 + l * 0.5, 0, len - 0.04, 0.03, dep, frame);
+    B3(0, h - 0.03, 0, len - 0.04, 0.03, dep, frame);
+    for (let l = 0; l <= levels; l++) {
+      const y = l < levels ? 0.08 + l * 0.5 : h;
+      const n = 2 + Math.floor(rnd(seed + l) * 2);
+      for (let i = 0; i < n; i++) {
+        const u = -len / 2 + ((i + 0.5) * (len - 0.1)) / n + 0.05;
+        const r = rnd(seed * 3 + l * 7 + i);
+        const cw = (len - 0.14) / n - 0.04;
+        if (kind === 'bins') {
+          B3(u, y, 0, cw, 0.22 + (l === levels ? 0.08 : 0), dep - 0.12, aMat.bin);
+          if (r > 0.5 && l < levels) B3(u, y + 0.22, 0, cw * 0.95, 0.2, dep - 0.14, aMat.bin);
+        } else if (kind === 'archive') {
+          B3(u, y, 0, cw, 0.18 + r * 0.2, dep - 0.1, aMat.box[Math.floor(r * 4) % 4]);
+        } else if (kind === 'supplies') {
+          const m = aMat.goods[Math.floor(r * 6) % 6];
+          B3(u, y, 0.02, cw * 0.9, 0.2 + r * 0.2, dep - 0.16, m);
+          B3(u - cw * 0.3, y, -0.08, 0.08, 0.3, 0.08, aMat.goods[(Math.floor(r * 6) + 2) % 6]);
+        } else {
+          B3(u, y, 0, cw, 0.2 + r * 0.15, dep - 0.12, l % 2 ? aMat.carton : mat.plyLight);
+        }
+      }
     }
-  }, 'Archivregale');
-  within(18.5, -2.4, () => box(0.5, 2.0, 2.4, 17.9, 0, -2.8, mat.grey), 'Archivschrank');
-  within(10.5, -2.6, () => box(0.5, 2.0, 2.4, 10.9, 0, -2.6, mat.grey), 'Archivschrank');
-  // printer corner (south wall of the archive) + server rack (east wall)
-  const printerStand = { x: ax(12.4), z: az(CZ - 1.25), yaw: 0 }; // where people stand, facing the printer
-  {
+    if (kind === 'drawers') B3(0, 1.05 + 0.03, 0, len - 0.3, 0.7, dep - 0.1, mat.plyLight); // wooden mini drawer unit
+  };
+
+  // north wall, west to east:
+  item('bottle-rack', 'bottle-rack', 'Flaschenregal', () => {
+    for (let r = 0; r < 9; r++)
+      for (const dx of [-0.17, 0.17]) {
+        box(0.33, 0.19, 0.55, 11.0 + dx, 0.02 + r * 0.2, -5.14, mat.white);
+        box(0.2, 0.1, 0.03, 11.0 + dx, 0.06 + r * 0.2, -4.85, mat.dark);
+      }
+  });
+  item('fridge-tall', 'fridge-tall', 'Kühlschrank gross', () => {
+    box(0.6, 1.6, 0.62, 11.78, 0, -5.12, mat.white);
+    box(0.62, 0.012, 0.64, 11.78, 1.07, -5.12, mat.lightgrey); // freezer line
+    box(0.02, 0.35, 0.03, 11.5, 1.15, -4.79, mat.steel);
+    box(0.02, 0.5, 0.03, 11.5, 0.5, -4.79, mat.steel);
+  });
+  shelfUnit(12.8, -5.2, 1.3, 2.0, 0.45, 'x', 'archive', 11);
+  shelfUnit(14.1, -5.2, 1.3, 2.0, 0.45, 'x', 'drawers', 23);
+  shelfUnit(15.4, -5.2, 1.3, 2.0, 0.45, 'x', 'bins', 37);
+  item('server-rack', 'server-rack', 'Serverschrank', () => {
+    const RX = 16.8;
+    const RZ = -5.04;
     const ledG = new THREE.MeshBasicMaterial({ color: 0x3cff7a });
     const ledA = new THREE.MeshBasicMaterial({ color: 0xffb02e });
-    const PX = 12.4;
-    const PZ = CZ - 0.45;
-    item('printer', 'printer', 'Drucker', () => {
-      box(1.0, 0.75, 0.6, PX, 0, PZ, mat.plyLight); // table
-      box(0.62, 0.36, 0.5, PX, 0.75, PZ, mat.white); // printer body
-      box(0.6, 0.04, 0.3, PX, 1.11, PZ, mat.dark); // scanner lid
-      box(0.4, 0.02, 0.22, PX, 0.82, PZ - 0.33, mat.lightgrey); // output tray
-      box(0.05, 0.02, 0.02, PX + 0.22, 1.0, PZ - 0.26, ledG);
-      box(0.25, 0.4, 0.2, PX + 0.65, 0, PZ + 0.05, mat.cardboard); // paper stack on the floor
-      track(printerStand);
-    });
-    const RX = 18.1;
-    const RZ = -4.0;
-    item('server-rack', 'server-rack', 'Serverschrank', () => {
-      box(0.7, 2.0, 0.6, RX, 0, RZ, mat.black);
-      for (let i = 0; i < 8; i++) {
-        const y = 0.15 + i * 0.22;
-        box(0.02, 0.16, 0.52, RX - 0.36, y, RZ, mat.dark);
-        box(0.02, 0.025, 0.025, RX - 0.375, y + 0.07, RZ - 0.2, i % 3 === 2 ? ledA : ledG);
-        box(0.02, 0.025, 0.025, RX - 0.375, y + 0.07, RZ - 0.15, ledG);
+    for (const dx of [-0.38, 0.38]) for (const dz of [-0.38, 0.38]) box(0.05, 2.0, 0.05, RX + dx, 0, RZ + dz, mat.lightgrey);
+    box(0.8, 0.04, 0.8, RX, 0, RZ, mat.lightgrey);
+    box(0.8, 0.04, 0.8, RX, 1.96, RZ, mat.lightgrey);
+    box(0.72, 1.9, 0.72, RX, 0.04, RZ, mat.dark); // dark interior
+    box(0.3, 0.9, 0.12, RX - 0.12, 0.9, RZ + 0.05, aMat.orange); // bundle of orange cables
+    for (let i = 0; i < 6; i++) {
+      const y = 1.2 + i * 0.12;
+      box(0.62, 0.07, 0.4, RX, y, RZ - 0.1, i % 2 ? mat.lightgrey : mat.steel); // patch panels / switches
+      box(0.02, 0.02, 0.02, RX + 0.25, y + 0.02, RZ + 0.1, i % 3 === 2 ? ledA : ledG);
+    }
+    box(0.3, 0.2, 0.3, RX, 0.1, RZ, mat.black); // UPS
+    box(0.3, 0.25, 0.3, RX, 0.5, RZ, mat.black); // NAS
+    box(0.74, 1.9, 0.02, RX, 0.04, RZ + 0.39, mat.glass); // glass door on the front
+    box(0.03, 0.3, 0.03, RX + 0.3, 0.9, RZ + 0.41, mat.black); // lock
+  });
+
+  // east wall: copier (the printer), black board, AC
+  const PR = { x: 18.0, z: -3.8 };
+  const printerStand = { x: ax(17.0), z: az(PR.z), yaw: Math.PI / 2 }; // where people stand, facing the copier
+  item('printer', 'printer', 'Drucker', () => {
+    const ledG = new THREE.MeshBasicMaterial({ color: 0x3cff7a });
+    box(0.75, 0.72, 0.66, PR.x, 0.06, PR.z, mat.white); // body with paper drawers
+    box(0.7, 0.06, 0.6, PR.x, 0, PR.z, mat.dark); // plinth
+    for (let i = 0; i < 4; i++) box(0.02, 0.025, 0.52, PR.x - 0.38, 0.14 + i * 0.16, PR.z, mat.lightgrey); // drawer fronts
+    box(0.7, 0.28, 0.62, PR.x + 0.02, 0.78, PR.z, mat.lightgrey); // finisher / output
+    box(0.72, 0.1, 0.62, PR.x, 1.06, PR.z, mat.white); // scanner
+    box(0.64, 0.04, 0.5, PR.x, 1.16, PR.z, mat.dark); // document feeder
+    box(0.18, 0.04, 0.3, PR.x - 0.28, 1.0, PR.z + 0.1, mat.dark).rotation.z = 0.5; // touch panel
+    box(0.3, 0.02, 0.45, PR.x - 0.5, 0.82, PR.z, mat.lightgrey); // bypass tray (open)
+    box(0.02, 0.02, 0.02, PR.x - 0.38, 1.0, PR.z - 0.25, ledG);
+    track(printerStand);
+  });
+  item('black-board', 'black-board', 'Schwarze Tafel', () => box(0.03, 1.4, 1.0, 18.41, 0.35, -2.6, aMat.boardBlack));
+  item('ac', 'ac', 'Klimagerät', () => {
+    box(0.25, 0.28, 1.0, 18.31, 2.2, -3.4, mat.white);
+    box(0.12, 0.45, 0.4, 18.38, 1.65, -2.6, mat.white);
+  });
+  item('boxes-east', 'boxes-east', 'Kartons Ost', () => {
+    box(0.55, 0.65, 0.45, 17.15, 0, -2.25, aMat.carton);
+    box(0.5, 0.3, 0.4, 17.15, 0.65, -2.25, aMat.cartonDark);
+    box(0.5, 0.75, 0.5, 17.1, 0, -1.65, aMat.carton);
+    box(0.4, 0.12, 0.3, 17.1, 0.75, -1.65, mat.white); // paper on top
+    for (const dz of [0, 0.1, 0.2]) cyl(0.04, 0.04, 0.9, 18.2, 0, -1.8 + dz, mat.white, world, 8); // poster rolls
+  });
+  item('box-bin', 'box-bin', 'Kiste BOX', () => {
+    box(0.6, 0.3, 0.42, 14.85, 0, -4.1, aMat.bin);
+    box(0.5, 0.05, 0.34, 14.85, 0.3, -4.1, aMat.binDark);
+  });
+  item('fridge-small', 'fridge-small', 'Kühlschrank klein', () => {
+    box(0.55, 0.85, 0.55, 15.85, 0, -4.2, mat.white);
+    box(0.4, 0.01, 0.3, 15.85, 0.85, -4.2, mat.lightgrey);
+    box(0.12, 0.1, 0.01, 15.75, 0.5, -3.92, aMat.red);
+    box(0.1, 0.1, 0.01, 15.97, 0.3, -3.92, aMat.red);
+    box(0.12, 0.17, 0.01, 15.78, 0.7, -3.92, mat.lightgrey);
+  });
+
+  // west wall: supply shelves with drinks and food, crates, boxes
+  shelfUnit(10.82, -4.1, 1.3, 2.0, 0.5, 'z', 'supplies', 51, mat.steel);
+  shelfUnit(10.82, -2.8, 1.3, 2.0, 0.5, 'z', 'supplies', 67, mat.steel);
+  item('crates', 'crates', 'Getränkeharassen', () => {
+    for (let i = 0; i < 3; i++) box(0.4, 0.28, 0.3, 11.55, i * 0.28, -4.5, i === 2 ? aMat.orange : aMat.red);
+    for (let i = 0; i < 2; i++) box(0.4, 0.28, 0.3, 12.0, i * 0.28, -4.45, aMat.orange);
+    box(0.4, 0.28, 0.3, 12.0, 0, -4.1, aMat.red);
+  });
+  item('boxes-west', 'boxes-west', 'Kartons West', () => {
+    box(0.55, 0.4, 0.45, 12.3, 0, -3.3, aMat.carton);
+    box(0.6, 0.45, 0.5, 12.9, 0, -3.6, aMat.cartonDark);
+    box(0.55, 0.3, 0.45, 12.8, 0, -2.9, aMat.carton);
+    box(0.5, 0.4, 0.45, 13.6, 0, -4.4, aMat.carton);
+  });
+  item('household', 'household', 'Vorräte', () => {
+    for (let i = 0; i < 3; i++) box(0.3, 0.28, 0.3, 11.3, i * 0.28, -2.0, i % 2 ? aMat.green : mat.white); // toilet paper
+    box(0.25, 0.25, 0.2, 11.8, 0, -2.3, aMat.green); // watering can
+    box(0.3, 0.45, 0.04, 11.2, 0, -1.5, mat.plyLight); // wooden frame
+  });
+
+  // south wall: cupboard + crates, stepladder, bar stools, paper shelf
+  item('cupboard', 'cupboard', 'Schrank', () => {
+    box(1.0, 0.9, 0.45, 11.2, 0, -1.3, mat.white);
+    for (const dx of [-0.05, 0.05]) box(0.02, 0.25, 0.03, 11.2 + dx, 0.5, -1.06, mat.steel);
+    box(0.45, 0.2, 0.35, 11.2, 0.9, -1.3, mat.black);
+    for (let i = 0; i < 2; i++) box(0.45, 0.2, 0.35, 11.2, 1.1 + i * 0.2, -1.3, aMat.yellow);
+    box(0.6, 0.45, 0.45, 11.2, 1.5, -1.3, aMat.red);
+    box(0.5, 0.25, 0.4, 11.2, 1.95, -1.3, aMat.orange);
+  });
+  item('ladder', 'ladder', 'Leiter', () => {
+    for (const dz of [-0.16, 0.16]) box(0.03, 1.5, 0.03, 12.2, 0, -1.25 + dz, mat.steel);
+    for (let i = 0; i < 5; i++) box(0.03, 0.03, 0.34, 12.2, 0.25 + i * 0.28, -1.25, mat.steel);
+  });
+  item('stools', 'stools', 'Barhocker', () => {
+    for (const [sx, sz] of [[12.55, -1.75], [12.9, -2.05], [13.25, -1.55]]) {
+      cyl(0.17, 0.17, 0.02, sx, 0, sz, mat.steel);
+      cyl(0.025, 0.025, 0.7, sx, 0, sz, mat.steel, world, 8);
+      box(0.36, 0.06, 0.32, sx, 0.7, sz, mat.black);
+      box(0.04, 0.06, 0.3, sx - 0.2, 0.7, sz, mat.steel);
+    }
+  });
+  item('paper-shelf', 'paper-shelf', 'Papierregal', () => {
+    shelfParts(16.1, -1.3, 1.0, 1.9, 0.4, 0, false);
+    for (const [y, m] of [[0.06, mat.white], [0.55, aMat.blue], [1.0, mat.white], [1.45, aMat.blue]] as Array<[number, Mat]>)
+      for (let i = 0; i < 3; i++) box(0.28, 0.05 + (i === 1 ? 0.05 : 0), 0.2, 15.8 + i * 0.3, y + 0.03, -1.3, m);
+    for (let i = 0; i < 4; i++) box(0.2, 0.12, 0.3, 15.8 + (i % 2) * 0.3, 1.9, -1.3, i < 2 ? mat.white : aMat.purple);
+  });
+  /** Room 7, the photo studio (x 18.6..25.9, z -5.5..-1): shooting table with sweep + backdrop, softboxes, editing desk, pallet bar, fan, grey screen. */
+  function buildPhotoStudio(): void {
+    const grp = (x: number, z: number, ry = 0): THREE.Group => {
+      const g = new THREE.Group();
+      g.position.set(gx(x), 0, gz(z));
+      g.rotation.y = ry;
+      world.add(g);
+      return g;
+    };
+    const R = (w: number, h: number, d: number, x: number, y: number, z: number, m: Mat, p: THREE.Object3D, ry = 0) => rbox(w, h, d, x, y, z, m, ry, p);
+    const paper = L(0xf2f0e9, { side: THREE.DoubleSide });
+    const pine = L(0xd8b87a);
+    const pineDark = L(0xb98f55);
+    const felt = L(0xb4b1aa);
+    const NZ = B.z0 + 0.25; // north wall face (the slab stands 0.2 inside)
+
+    // black drape along the north (east part) and east wall: vertical folds
+    item('curtain', 'studio-curtain', 'Vorhang Studio', () => {
+      for (let i = 0; i < 14; i++) {
+        const m = rbox(0.22, 2.7, 0.08, ax(23.05 + i * 0.21), 0, az(B.z0) + 0.28 + (i % 2) * 0.05, i % 2 ? mat.black : mat.dark);
+        m.userData.nonav = true;
       }
-      box(0.8, 0.02, 0.62, RX, 2.0, RZ, mat.grey);
+      for (let i = 0; i < 14; i++) {
+        const m = rbox(0.08, 2.7, 0.22, ax(25.8) - (i % 2) * 0.05, 0, az(-5.2 + i * 0.21), i % 2 ? mat.black : mat.dark);
+        m.userData.nonav = true;
+      }
+    });
+
+    // backdrop roll on ceiling hooks, white paper hanging down, green core at the end
+    item('backdrop', 'studio-backdrop', 'Hintergrundrolle', () => {
+      const g = grp(21.1, -5.2);
+      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 2.9, 10), L(0x6b5d45));
+      rod.rotation.z = Math.PI / 2;
+      rod.position.set(0, 2.5, 0);
+      g.add(rod);
+      const green = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.5, 10), L(0x3f9a3a));
+      green.rotation.z = Math.PI / 2;
+      green.position.set(1.2, 2.5, 0);
+      g.add(green);
+      for (const x of [-1.1, 1.3]) {
+        R(0.04, 0.3, 0.04, x, 2.5, 0, mat.black, g);
+        R(0.1, 0.04, 0.1, x, 2.78, 0, mat.black, g);
+      }
+      R(2.0, 1.0, 0.012, -0.1, 1.55, 0.02, paper, g);
+      R(1.1, 0.35, 0.012, 0.0, 1.35, 0.06, paper, g, 0.12).rotation.z = -0.1;
+      R(0.7, 0.6, 0.012, 0.5, 1.7, 0.05, paper, g).rotation.x = -0.15;
+    });
+
+    // shooting table with curved white sweep
+    item('sweep', 'studio-sweep', 'Aufnahmetisch', () => {
+      const g = grp(20.9, NZ + 0.05);
+      const prof: Array<[number, number]> = [[0, 1.75], [0, 1.2]];
+      for (let i = 1; i <= 8; i++) {
+        const a = Math.PI + (i / 8) * (Math.PI / 2);
+        prof.push([0.45 + 0.45 * Math.cos(a), 1.2 + 0.45 * Math.sin(a)]);
+      }
+      prof.push([1.0, 0.75], [1.06, 0.7]);
+      const pos: number[] = [];
+      const idx: number[] = [];
+      prof.forEach(([z, y], i) => {
+        pos.push(-0.6, y, z, 0.6, y, z);
+        if (i) idx.push(2 * i - 2, 2 * i - 1, 2 * i, 2 * i - 1, 2 * i + 1, 2 * i);
+      });
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setIndex(idx);
+      geo.computeVertexNormals();
+      g.add(new THREE.Mesh(geo, paper));
+      for (const sx of [-0.57, 0.57]) {
+        R(0.03, 0.72, 0.03, sx, 0, 0.98, mat.black, g);
+        R(0.03, 0.72, 0.03, sx, 0, 0.12, mat.black, g);
+        R(0.03, 0.03, 0.88, sx, 0.7, 0.55, mat.black, g);
+      }
+      R(1.17, 0.03, 0.03, 0, 0.7, 0.98, mat.black, g);
+      R(0.5, 0.005, 0.35, 0.0, 0.76, 0.6, mat.white, g); // sheet on the table
+      // light stand with clamp behind the table's front edge
+      for (const sx of [-0.7]) {
+        R(0.03, 1.0, 0.03, sx, 0, 0.55, mat.black, g);
+        R(0.3, 0.03, 0.03, sx + 0.14, 0.95, 0.55, mat.black, g);
+      }
+    });
+    // grey drawer unit with a black bean bag on top
+    item('drawer-unit', 'studio-drawers', 'Rollcontainer', () => {
+      const g = grp(22.05, NZ + 0.35);
+      R(0.46, 0.6, 0.55, 0, 0.04, 0, mat.grey, g);
+      for (let i = 0; i < 4; i++) R(0.4, 0.01, 0.01, 0, 0.12 + i * 0.14, 0.28, mat.dark, g);
+      R(0.3, 0.12, 0.25, 0, 0.64, 0, mat.black, g);
+      for (const [x, z] of [[-0.18, -0.22], [0.18, -0.22], [-0.18, 0.22], [0.18, 0.22]]) R(0.04, 0.04, 0.04, x, 0, z, mat.dark, g);
+    });
+    // reflector frame leaning on the wall
+    item('reflector', 'studio-reflector', 'Reflektor', () => {
+      const g = grp(22.8, NZ + 0.12);
+      g.rotation.x = -0.1;
+      R(0.92, 1.5, 0.02, 0, 0.02, 0, mat.white, g);
+      R(0.97, 0.03, 0.04, 0, 0.02, 0, mat.steel, g);
+      R(0.97, 0.03, 0.04, 0, 1.49, 0, mat.steel, g);
+      for (const sx of [-0.47, 0.47]) R(0.03, 1.5, 0.04, sx, 0.02, 0, mat.steel, g);
+    });
+
+    // two softboxes with strobe heads leaning on the west wall + tripod
+    const softbox = (id: string, x: number, z: number, ry: number): void => {
+      item('softbox', id, 'Softbox', () => {
+        const g = grp(x, z, ry);
+        g.rotation.x = -0.08;
+        R(0.72, 1.5, 0.38, 0, 0.04, 0, mat.black, g);
+        R(0.66, 1.42, 0.01, 0, 0.08, 0.195, L(0x0b0b0c), g);
+        R(0.16, 0.16, 0.2, 0, 0.75, 0.26, L(0xc9c9c9), g);
+        R(0.12, 0.05, 0.1, 0, 0.91, 0.26, aMat.orange, g);
+      });
+    };
+    softbox('studio-softbox-1', 19.15, -5.1, 0.0);
+    softbox('studio-softbox-2', 19.4, -4.6, 0.12);
+    item('tripod', 'studio-tripod', 'Stativ', () => {
+      const g = grp(20.1, -4.5);
+      R(0.04, 1.0, 0.04, 0, 0.1, 0, mat.black, g);
+      R(0.12, 0.1, 0.1, 0, 1.1, 0, mat.dark, g);
+      for (const [x, z] of [[0.3, 0.0], [-0.15, 0.26], [-0.15, -0.26]]) chairRod(g, [0, 0.4, 0], [x, 0.02, z], 0.012, mat.black);
+    });
+
+    // editing desk along the west wall: two monitors with hoods, pen tablet, keyboard, headphones, battery charger
+    item('photo-desk', 'studio-desk', 'Fotoschreibtisch', () => {
+      const g = grp(19.45, -3.0, Math.PI / 2);
+      R(2.0, 0.04, 0.8, 0, 0.72, 0, mat.black, g);
+      for (const sx of [-0.96, 0.96]) {
+        R(0.05, 0.72, 0.05, sx, 0, -0.36, mat.black, g);
+        R(0.05, 0.72, 0.05, sx, 0, 0.36, mat.black, g);
+      }
+      R(1.9, 0.05, 0.03, 0, 0.67, -0.36, mat.black, g);
+      for (const mx of [-0.55, 0.2]) {
+        R(0.06, 0.22, 0.04, mx, 0.76, -0.27, mat.dark, g);
+        R(0.26, 0.015, 0.2, mx, 0.76, -0.27, mat.dark, g);
+        R(0.62, 0.38, 0.04, mx, 0.95, -0.25, mat.black, g);
+        R(0.56, 0.32, 0.006, mx, 0.98, -0.225, L(0x20262c), g);
+        R(0.62, 0.02, 0.2, mx, 1.33, -0.14, mat.dark, g); // hood
+        for (const sx of [-0.31, 0.31]) R(0.02, 0.38, 0.2, mx + sx, 0.95, -0.14, mat.dark, g);
+      }
+      R(0.4, 0.02, 0.27, 0.62, 0.76, 0.0, mat.dark, g).rotation.x = -0.1; // pen tablet
+      R(0.28, 0.01, 0.115, -0.1, 0.76, 0.2, mat.steel, g);
+      R(0.262, 0.005, 0.098, -0.1, 0.77, 0.2, mat.white, g);
+      R(0.06, 0.012, 0.11, 0.1, 0.76, 0.2, mat.white, g); // mouse
+      R(0.16, 0.05, 0.1, -0.75, 0.76, 0.18, aMat.yellow, g); // battery charger
+      R(0.18, 0.015, 0.12, -0.35, 0.76, 0.3, mat.black, g); // headphones
+    });
+    const chair = (id: string, x: number, z: number, ry: number): void => {
+      item('chair', id, 'Bürostuhl', () => {
+        const g = grp(x, z, ry);
+        R(0.06, 0.4, 0.06, 0, 0.04, 0, mat.dark, g);
+        const star = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.04, 5), mat.steel);
+        star.position.set(0, 0.02, 0);
+        g.add(star);
+        R(0.48, 0.08, 0.48, 0, 0.44, 0, mat.black, g);
+        R(0.46, 0.5, 0.06, 0, 0.55, 0.26, mat.black, g);
+        for (const sx of [-0.27, 0.27]) {
+          R(0.05, 0.03, 0.3, sx, 0.68, 0.05, mat.black, g);
+          R(0.03, 0.2, 0.03, sx, 0.5, 0.05, mat.black, g);
+        }
+      });
+    };
+    chair('studio-chair-1', 20.5, -3.35, Math.PI / 2 + 0.2);
+
+    // pallet bar along the east wall: standing pallets, wooden beam on top, long cardboard box, flight case
+    item('pallet-bar', 'studio-pallet-bar', 'Palettenbar', () => {
+      const g = grp(25.35, -4.0, Math.PI / 2);
+      for (let r = 0; r < 7; r++) R(2.3, 0.1, 0.03, 0, 0.04 + r * 0.14, -0.27, r % 3 ? pine : pineDark, g);
+      for (let i = 0; i < 5; i++) R(0.1, 0.95, 0.5, -1.1 + i * 0.55, 0.04, 0, pineDark, g);
+      for (let r = 0; r < 4; r++) R(2.3, 0.1, 0.03, 0, 0.1 + r * 0.24, 0.27, pine, g);
+      R(2.4, 0.09, 0.6, 0, 0.99, 0, pine, g);
+      R(2.3, 0.1, 0.16, 0, 1.08, 0.15, aMat.carton, g);
+    });
+    item('flight-case', 'studio-flight-case', 'Alukoffer', () => {
+      const g = grp(24.75, -5.0, 0.1);
+      R(0.55, 0.22, 0.36, 0, 0.0, 0, mat.steel, g);
+      R(0.57, 0.02, 0.38, 0, 0.11, 0, mat.grey, g);
+      R(0.1, 0.03, 0.03, 0, 0.14, 0.19, mat.dark, g);
+    });
+
+    // grey acoustic screen beside the booth, pedestal fan, power strip
+    item('screen', 'studio-screen', 'Akustikwand', () => {
+      const g = grp(25.2, -2.0);
+      R(1.3, 1.75, 0.08, 0, 0.1, 0, felt, g);
+      for (const sx of [-0.5, 0.5]) R(0.05, 0.03, 0.3, sx, 0.0, 0, mat.steel, g);
+    });
+    item('fan', 'studio-fan', 'Standventilator', () => {
+      const g = grp(24.55, -2.85);
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.26, 0.04, 20), mat.black);
+      base.position.y = 0.02;
+      g.add(base);
+      R(0.04, 1.3, 0.04, 0, 0.04, 0, mat.black, g);
+      const head = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.1, 20), L(0x303034));
+      head.rotation.x = Math.PI / 2;
+      head.position.set(0, 1.4, -0.05);
+      g.add(head);
+      R(0.12, 0.12, 0.2, 0, 1.34, 0.1, mat.black, g);
     });
   }
   // dark room behind the curtain
-  slab(18.6, 25.9, B.z0, B.z0, 0, 3.2, mat.black, 0.05).position.z = az(B.z0) + 0.2;
-  slab(18.6, 18.6, B.z0 + 0.15, CZ - 0.15, 0, EXACT ? 3.2 : CUT, mat.black, 0.05);
-  slab(25.9, 25.9, B.z0 + 0.15, -2.25, 0, EXACT ? 3.2 : CUT, mat.black, 0.05);
+  // room 7 = photo studio (from the photos): white walls in the west half, black curtain along the east half
+  slab(18.6, 22.9, B.z0, B.z0, 0, 3.2, mat.wall, 0.05).position.z = az(B.z0) + 0.2;
+  slab(22.9, 25.9, B.z0, B.z0, 0, 3.2, mat.black, 0.05).position.z = az(B.z0) + 0.2;
+  slab(18.6, 18.6, B.z0 + 0.15, CZ - 0.15, 0, EXACT ? 3.2 : CUT, mat.wall, 0.05);
+  slab(25.9, 25.9, B.z0 + 0.15, CZ - 0.15, 0, EXACT ? 3.2 : CUT, mat.black, 0.05);
+  slab(24.5, 25.9, -2.25, CZ - 0.15, 0.005, 0.025, L(0x1a1a1a)); // floor beside the booth
   slab(18.6, 22.9, B.z0 + 0.15, CZ - 0.15, 0.005, 0.025, L(0x1a1a1a));
   slab(22.9, 25.9, B.z0 + 0.15, -2.25, 0.005, 0.025, L(0x1a1a1a)); // floor of the extension
   within(19.4, 0, () => box(1.6, EXACT ? 2.45 : CUT, 0.12, 19.4, 0, CZ - 0.15, L(0x0c0c0d)), 'Vorhang'); // curtain (drawn part)
-  within(20.6, -3.4, () => {
-    for (const x of [20.2, 21.0]) {
-      cyl(0.17, 0.17, 0.05, x, 0.72, -3.4, mat.white);
-      cyl(0.025, 0.025, 0.72, x, 0, -3.4, mat.steel, world, 8);
+  // two white bar stools in front of the pallet bar
+  within(24.4, -4.0, () => {
+    for (const z of [-4.4, -3.6]) {
+      cyl(0.17, 0.17, 0.02, 24.4, 0, z, mat.steel);
+      cyl(0.025, 0.025, 0.68, 24.4, 0, z, mat.steel, world, 8);
+      box(0.4, 0.05, 0.32, 24.4, 0.68, z, mat.white);
     }
-  }, 'Stehtische');
-  // booth interior + shelf niche on east face of core, pallet sofa
-  item('booth-table', 'booth-table', 'Tisch Telefonkabine', () => box(0.9, 0.04, 0.5, 25.3, 0.74, -1.8, mat.white));
+  }, 'Barhocker Fotostudio');
+  buildPhotoStudio();
+  // photo booth (phone box) x 23..24.5, z -2.2..CZ: white cabinet, grey felt inside, glass door with handle and "PSST!" hanger
+  {
+    const f = L(0x4b4e53); // felt
+    const bw = ax(24.5) - ax(23);
+    const bx = (ax(23) + ax(24.5)) / 2;
+    const bz = az(-2.2);
+    rbox(0.02, 2.2, az(CZ) - bz - 0.06, ax(23) + 0.07, 0, (bz + az(CZ)) / 2 + 0.03, f); // west felt
+    rbox(0.02, 2.2, az(CZ) - bz - 0.06, ax(24.5) - 0.07, 0, (bz + az(CZ)) / 2 + 0.03, f); // east felt
+    rbox(bw - 0.14, 2.2, 0.02, bx, 0, bz + 0.07, f); // back felt
+    rbox(bw - 0.12, 0.03, az(CZ) - bz - 0.1, bx, 0.0, (bz + az(CZ)) / 2, L(0x3a3c40)); // carpet
+    rbox(bw, 0.06, az(CZ) - bz, bx, 2.2, (bz + az(CZ)) / 2, mat.wall); // lid
+    const rig = doors.find((d) => Math.abs(d.center.x - ax(23.75)) < 0.05 && Math.abs(d.center.z - az(CZ)) < 0.05);
+    if (rig) {
+      rig.pivot.position.z += 0.045; // leaf flush with the south face of the wall
+      const W = rig.width;
+      rbox(0.07, 0.24, 0.006, W - 0.12, 0.76, 0.05, L(0x6cc24a), 0, rig.pivot); // green "PSST!" hanger
+      rbox(0.04, 0.12, 0.04, 0.0, 0.2, 0, mat.steel, 0, rig.pivot); // hinges
+      rbox(0.04, 0.12, 0.04, 0.0, 1.85, 0, mat.steel, 0, rig.pivot);
+    }
+    item('booth-table', 'booth-table', 'Tisch Telefonkabine', () => {
+      box(0.36, 0.04, 0.72, 23.28, 0.98, -1.7, mat.white); // desk shelf on the west wall
+      box(0.34, 0.18, 0.7, 23.27, 0.8, -1.7, mat.white);
+    });
+    item('stool', 'booth-stool', 'Hocker Telefonkabine', () => {
+      track(boothSeat);
+      boothSeat.x = gx(23.95);
+      boothSeat.z = gz(-1.65);
+      cyl(0.17, 0.17, 0.02, 23.95, 0, -1.65, mat.steel);
+      cyl(0.025, 0.025, 0.68, 23.95, 0, -1.65, mat.steel, world, 8);
+      box(0.38, 0.05, 0.3, 23.95, 0.68, -1.65, mat.black);
+    });
+  }
   within(26, -1.1, () => shelf(26.28, -1.1, 1.9, 2.0, 0.4, Math.PI / 2));
   within(26, -4.2, () => {
     box(0.9, 0.3, 2.0, 26.6, 0, -4.2, mat.plyLight);
@@ -920,20 +1392,103 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   desk(-7.6, -4.9, 0, { white: true }); // desk 7, flipped 180°
   shelf(-5.9, -5.2, 1.0, 1.0, 0.35);
   coatRack(-5.5, -1.8, false);
-  // small meeting room: annex outside the south wall (doorway in that wall), windows west + south, sofa facing a wall-mounted screen
+  // small meeting room (annex south of the doorway): after the photos "GL Sizi" - solid navy south wall with TV above a grey futon,
+  // white rounded coffee table, two grey armchairs facing each other, industrial pendant, curtain + radiator at the west windows,
+  // planning board on the east wall
   const AZ = B.z1 + ANNEX.d; // z of the annex's south wall
-  const meetX = -8.0; // shifted west so the sofa clears the doorway (x -6.7..-5.6) in the north wall
-  windowWall(B.x0, B.z1, B.x0, AZ);
-  windowWall(B.x0, AZ, ANNEX.x1, AZ);
+  const MZ = B.z1 + ANNEX.d / 2; // room centre line (z)
+  const MX = (B.x0 + ANNEX.x1) / 2; // room centre line (x)
+  const SZ = AZ - 0.15; // inner face of the south wall
+  windowWall(B.x0, B.z1, B.x0, AZ); // west: windows
+  wall(B.x0, AZ, ANNEX.x1, AZ, H_LOW, [], { t: 0.3, outer: true }); // south: solid, the sofa stands against it
   wall(ANNEX.x1, B.z1, ANNEX.x1, AZ, 3.8, [], { t: 0.3, outer: true });
-  box(1.6, 0.9, 0.05, meetX, 1.0, AZ - 0.19, mat.black); // screen on the north face of the south window wall, facing the sofa
-  box(1.52, 0.82, 0.01, meetX, 1.04, AZ - 0.22, L(0x20262c));
-  item('sofa', 'sofa', 'Sofa', () => {
-    box(2.1, 0.4, 0.9, meetX, 0, B.z1 + 0.7, mat.fabric); // sofa seat (against the north wall)
-    box(2.1, 0.5, 0.2, meetX, 0.4, B.z1 + 0.3, mat.fabric); // backrest
-    for (const dx of [-1.0, 1.0]) box(0.2, 0.28, 0.9, meetX + dx, 0.4, B.z1 + 0.7, mat.dark); // armrests
+  const navy = L(0x1c2030);
+  const RW = ANNEX.x1 - B.x0 - 0.3; // clear room width
+  box(RW, H_LOW, 0.03, MX, 0, SZ - 0.015, navy); // dark painted back wall
+  for (const y of [2.5, 2.58]) box(RW, 0.05, 0.05, MX, y, SZ - 0.06, mat.white); // white conduits under the ceiling
+  // planning board on the east wall
+  const boardTex = canvasTex(256, 192, (g, w, h) => {
+    g.fillStyle = '#15191c';
+    g.fillRect(0, 0, w, h);
+    g.strokeStyle = '#2b3338';
+    g.lineWidth = 1;
+    for (let x = 12; x < w; x += 10) {
+      g.beginPath();
+      g.moveTo(x, 12);
+      g.lineTo(x, h * 0.62);
+      g.stroke();
+    }
+    for (let y = 12; y < h * 0.62; y += 10) {
+      g.beginPath();
+      g.moveTo(12, y);
+      g.lineTo(w - 12, y);
+      g.stroke();
+    }
+    g.fillStyle = '#e6e8e8';
+    for (const [x, y, cw] of [[20, 130, 40], [70, 140, 36], [120, 126, 44], [30, 156, 38], [90, 160, 40], [150, 150, 36], [190, 136, 40], [60, 118, 30]]) g.fillRect(x, y, cw, 8);
+    g.fillStyle = '#4f9a93';
+    for (const [x, y] of [[70, 30], [110, 52], [150, 40], [190, 70], [100, 20]]) g.fillRect(x, y, 22, 8);
   });
-  item('coffee-table', 'coffee-table', 'Couchtisch', () => box(0.9, 0.38, 0.5, meetX, 0, B.z1 + 1.9, mat.plyLight)); // coffee table
+  box(0.02, 1.12, 1.52, ANNEX.x1 - 0.16, 0.95, MZ - 0.2, mat.steel);
+  box(0.02, 1.04, 1.44, ANNEX.x1 - 0.175, 0.99, MZ - 0.2, L(0xffffff, { map: boardTex }));
+  // radiator under the west windows + curtain (drawn at both ends) hanging from a rail
+  box(0.08, 0.5, 2.0, B.x0 + 0.2, 0.2, MZ, mat.white);
+  box(0.05, 0.03, 3.2, B.x0 + 0.24, 2.52, MZ, mat.white); // curtain rail
+  for (const [cz, cw] of [[B.z1 + 0.55, 0.8], [AZ - 0.65, 1.0]] as const) {
+    box(0.07, 2.35, cw, B.x0 + 0.24, 0.17, cz, L(0xf1efe9));
+    for (let i = 0; i < 4; i++) box(0.09, 2.33, 0.03, B.x0 + 0.24, 0.18, cz - cw / 2 + (cw * (i + 0.5)) / 4, L(0xdad8d1)); // folds
+  }
+  item('small-tv', 'small-tv', 'Fernseher klein', () => {
+    box(1.08, 0.62, 0.05, MX, 1.15, SZ - 0.04, mat.black);
+    box(1.0, 0.56, 0.01, MX, 1.18, SZ - 0.075, L(0x20262c));
+  });
+  item('sofa', 'sofa', 'Sofa', () => {
+    const fab = L(0x66686c);
+    box(1.9, 0.28, 0.85, MX, 0.17, SZ - 0.5, fab); // seat (futon)
+    box(1.9, 0.52, 0.2, MX, 0.3, SZ - 0.12, fab); // backrest
+    for (const dx of [-0.95, 0.95]) box(0.1, 0.18, 0.8, MX + dx, 0.45, SZ - 0.5, fab); // thin arms
+    for (const dx of [-0.85, 0.85]) for (const dz of [0.15, 0.85]) box(0.04, 0.17, 0.04, MX + dx, 0, SZ - dz, mat.black); // feet
+    for (const k of [-1, 0, 1]) box(0.55, 0.38, 0.14, MX + k * 0.6, 0.42, SZ - 0.27, L(k === 0 ? 0x5a5c60 : 0x707276)); // cushions
+  });
+  const TZ = SZ - 1.75; // coffee table / chairs line
+  item('coffee-table', 'coffee-table', 'Couchtisch', () => {
+    const sh = new THREE.Shape();
+    const [hw, hd, r] = [0.55, 0.3, 0.17];
+    sh.moveTo(-hw + r, -hd);
+    sh.lineTo(hw - r, -hd);
+    sh.quadraticCurveTo(hw, -hd, hw, -hd + r);
+    sh.lineTo(hw, hd - r);
+    sh.quadraticCurveTo(hw, hd, hw - r, hd);
+    sh.lineTo(-hw + r, hd);
+    sh.quadraticCurveTo(-hw, hd, -hw, hd - r);
+    sh.lineTo(-hw, -hd + r);
+    sh.quadraticCurveTo(-hw, -hd, -hw + r, -hd);
+    const top = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.04, bevelEnabled: false }), mat.white);
+    top.rotation.x = -Math.PI / 2;
+    top.position.y = 0.38;
+    const tg = new THREE.Group(); // long side parallel to the sofa
+    tg.position.set(gx(MX), 0, gz(TZ));
+    tg.add(top);
+    world.add(tg);
+    for (const dx of [-0.42, 0.42]) for (const dz of [-0.17, 0.17]) cyl(0.03, 0.016, 0.38, MX + dx, 0, TZ + dz, mat.plyLight, world, 8); // tapered wooden legs
+  });
+  // two armchairs either side of the table, turned a little towards the sofa
+  const armchair = (n: number, x: number, z: number, yaw: number) =>
+    item('armchair', `armchair-${n}`, 'Sessel', () => {
+      const g = new THREE.Group();
+      g.position.set(gx(x), 0, gz(z));
+      g.rotation.y = yaw; // front = local +z
+      const grey = L(0xa9abae);
+      rbox(0.72, 0.2, 0.66, 0, 0.27, 0.03, grey, 0, g);
+      rbox(0.72, 0.45, 0.14, 0, 0.45, -0.3, grey, 0, g);
+      for (const s of [-1, 1]) rbox(0.12, 0.26, 0.66, s * 0.3, 0.45, 0.03, grey, 0, g);
+      for (const sx of [-0.27, 0.27]) for (const sz of [-0.25, 0.28]) rbox(0.04, 0.27, 0.04, sx, 0, sz, mat.plyLight, 0, g);
+      world.add(g);
+    });
+  armchair(1, MX - 1.25, TZ, Math.PI / 2 - 0.45);
+  armchair(2, MX + 1.25, TZ, -Math.PI / 2 + 0.45);
+  pendant(MX, TZ, 'steel', 1.85, H_LOW); // industrial glass pendant above the table
+  shelf(B.x0 + 0.9, B.z1 + 0.35, 1.2, 1.0, 0.35, 0); // low white shelf by the door side
   plant(-5.6, -3.5, 1.5, 0, false, { x1: -5.06 }); // west of the lounge partition (x -5)
 
   /* =================================================================
@@ -1185,18 +1740,88 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     world.add(m);
   }
   within(23, 6.0, () => {
-    // conference table, long axis along z (towards the TV)
-    box(1.3, 0.05, 4.4, 23, 0.72, 6.0, mat.white);
-    box(0.8, 0.72, 0.1, 23, 0, 4.0, mat.lightgrey);
-    box(0.8, 0.72, 0.1, 23, 0, 8.0, mat.lightgrey);
+    // conference table, long axis along z (towards the windows): thin white top with black edge, two black slab legs
+    box(1.3, 0.04, 4.4, 23, 0.72, 6.0, mat.white);
+    box(1.32, 0.012, 4.42, 23, 0.72, 6.0, mat.black);
+    box(0.7, 0.72, 0.07, 23, 0, 4.0, mat.black);
+    box(0.7, 0.72, 0.07, 23, 0, 8.0, mat.black);
+    // linear LED pendant over the table
+    item('pendant', 'meeting-linear-light', 'Hängelampe', () => {
+      box(0.07, 0.07, 2.6, 23, 2.15, 6.0, mat.white);
+      box(0.04, 0.01, 2.55, 23, 2.145, 6.0, mat.lampWarm);
+      for (const lz of [5.0, 7.0]) cyl(0.004, 0.004, 1.1, 23, 2.2, lz, mat.black, world, 4);
+    });
     meetCenter.x = gx(23);
     meetCenter.z = gz(6.0);
     track(meetCenter);
-    // wall-mounted TV on the door wall (corridor side), facing into the room
+    // wall-mounted display on the door wall: white frame, black screen, white header box above, facing into the room
     item('tv', 'meeting-tv', 'Fernseher', () => {
-      box(2.2, 1.25, 0.05, 23, 0.9, 2.3, mat.black);
-      box(2.12, 1.17, 0.01, 23, 0.94, 2.33, L(0x20262c));
+      box(2.2, 1.25, 0.06, 23, 0.9, 2.3, mat.white);
+      box(2.08, 1.13, 0.01, 23, 0.96, 2.335, L(0x15191c));
+      box(2.3, 0.16, 0.14, 23, 2.15, 2.28, mat.white);
     });
+    // easter egg: framed dead bug on the wall left of the screen
+    item('frame', 'dead-bug-frame', 'Gerahmte Mücke', () => {
+      const tex = canvasTex(160, 200, (g, w, h) => {
+        g.clearRect(0, 0, w, h);
+        const gold = g.createLinearGradient(0, 0, w, h);
+        gold.addColorStop(0, '#d9b25c');
+        gold.addColorStop(0.5, '#7a5420');
+        gold.addColorStop(1, '#c9a14a');
+        g.fillStyle = gold;
+        g.fillRect(0, 0, w, h);
+        g.clearRect(26, 26, w - 52, h - 52);
+        g.strokeStyle = '#4a3010';
+        g.lineWidth = 3;
+        g.strokeRect(4, 4, w - 8, h - 8);
+        g.strokeRect(24, 24, w - 48, h - 48);
+        g.fillStyle = '#e6c56e';
+        for (const [cx, cy] of [[14, 14], [w - 14, 14], [14, h - 14], [w - 14, h - 14]]) {
+          g.beginPath();
+          g.arc(cx, cy, 11, 0, Math.PI * 2);
+          g.fill();
+          g.stroke();
+        }
+        // dead bug (mosquito): body + legs
+        g.strokeStyle = '#1a1a1a';
+        g.fillStyle = '#1a1a1a';
+        g.lineWidth = 1.2;
+        g.beginPath();
+        g.ellipse(80, 100, 3, 9, 0.9, 0, Math.PI * 2);
+        g.fill();
+        for (const sx of [-1, 1]) {
+          for (let i = 0; i < 3; i++) {
+            g.beginPath();
+            g.moveTo(80, 100);
+            g.lineTo(80 + sx * (14 + i * 4), 100 + (i - 1) * 12);
+            g.stroke();
+          }
+        }
+      });
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.275), new THREE.MeshLambertMaterial({ map: tex, transparent: true }));
+      m.position.set(gx(21.5), 1.5, gz(2.34));
+      m.userData.nonav = true;
+      world.add(m);
+    });
+    // low white cubby shelf under the south windows, ficus on the west end, black chair, portable AC on the east end
+    shelf(22.7, 9.15, 5.6, 0.8, 0.35);
+    plant(20.15, 8.85, 1.9);
+    item('chair', 'meeting-black-chair', 'Stuhl', () => {
+      box(0.4, 0.04, 0.4, 20.85, 0.45, 8.85, mat.black);
+      box(0.4, 0.3, 0.04, 20.85, 0.6, 9.05, mat.black);
+      for (const [lx, lz] of [[-0.17, -0.17], [0.17, -0.17], [-0.17, 0.17], [0.17, 0.17]]) box(0.025, 0.45, 0.025, 20.85 + lx, 0, 8.85 + lz, mat.grey);
+    });
+    item('ac', 'meeting-ac', 'Klimagerät', () => {
+      box(0.42, 0.78, 0.38, 25.85, 0, 8.95, mat.white);
+      box(0.3, 0.08, 0.02, 25.85, 0.55, 8.75, mat.lightgrey);
+      cyl(0.08, 0.08, 0.5, 26.25, 0.3, 9.1, mat.white, world, 10);
+    });
+    for (const bx of [22.2, 22.38]) cyl(0.03, 0.03, 0.22, bx, 0.8, 9.3, mat.glass, world, 8);
+    // frosted sliding-panel curtains on the west and east walls
+    for (let pz = 2.7; pz < 9.2; pz += 0.9) {
+      for (const px of [19.57, 26.43]) box(0.025, 2.65, 0.03, px, 0, pz, mat.white);
+    }
+    for (const px of [19.57, 26.43]) box(0.05, 0.05, 6.8, px, 2.62, 6.0, mat.grey);
     // red shell chairs (one moulded seat+back shell on a slim 4-leg steel frame), 3 per long side, backs away from the table
     const shellMat = L(0xe5402a, { side: THREE.DoubleSide });
     const frameMat = L(0x8d867f);
@@ -1382,6 +2007,9 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   const staticRoof = mergeStatic(roof, true);
   scene.remove(world, roof);
   scene.add(staticWorld);
+  staticRoof.traverse((o) => {
+    if (o instanceof THREE.Mesh) o.receiveShadow = false; // thin slanted roof planes self-shadow into moire stripes
+  });
   staticRoof.visible = false;
   scene.add(staticRoof);
 
@@ -1401,8 +2029,8 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   scene.add(door);
 
   // printer paper (not merged, shown while somebody prints)
-  const paper = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.012, 0.3), L(0xffffff));
-  paper.position.set(ax(12.4), 0.84, az(CZ - 0.45 - 0.33));
+  const paper = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.012, 0.22), L(0xffffff));
+  paper.position.set(ax(PR.x - 0.52), 0.85, az(PR.z));
   paper.visible = false;
   const printerItem = items.find((it) => it.id === 'printer');
   if (printerItem) {
@@ -1446,7 +2074,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     roomLabels.add(sp);
   });
 
-  return { desks, items, blockers: allBlockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats } };
+  return { desks, items, blockers: allBlockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, phoneBooth: { seat: boothSeat } };
 }
 
 /**

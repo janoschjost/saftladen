@@ -170,7 +170,7 @@ export class Social {
     if (this.checkTimer > 0) return;
     this.checkTimer = CHECK_INTERVAL;
 
-    const free = people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.task && !p.printJob && !p.foosJob && !p.vapeJob && !p.phoneJob && p.socialCooldown <= 0);
+    const free = people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.playerChat && !p.meetJob && !p.task && !p.printJob && !p.foosJob && !p.vapeJob && !p.phoneJob && p.socialCooldown <= 0);
 
     // others may join a running conversation
     for (const c of this.active) {
