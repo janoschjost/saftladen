@@ -1,0 +1,224 @@
+[
+  {
+    "id": "marco-hefti",
+    "name": "Marco Hefti",
+    "role": "AI Engineer",
+    "portrait": "team/marco-hefti.jpg"
+  },
+  {
+    "id": "donata-manser",
+    "name": "Donata Manser",
+    "role": "UI/UX-Design",
+    "portrait": "team/donata-manser.jpg"
+  },
+  {
+    "id": "marco-rieser",
+    "name": "Marco Rieser",
+    "role": "Webdevelopment",
+    "portrait": "team/marco-rieser.jpg"
+  },
+  {
+    "id": "andrea-eichmann",
+    "name": "Andrea Eichmann",
+    "role": "Beratung, Leitung Online Marketing",
+    "portrait": "team/andrea-eichmann.jpg"
+  },
+  {
+    "id": "jeannine-zurcher",
+    "name": "Jeannine Zürcher",
+    "role": "Digital Support",
+    "portrait": "team/jeannine-zurcher.jpg"
+  },
+  {
+    "id": "samuel-guttinger",
+    "name": "Samuel Güttinger",
+    "role": "Verwaltungsrat, Unternehmenskultur",
+    "portrait": "team/samuel-guttinger.jpg"
+  },
+  {
+    "id": "jannik-stibi",
+    "name": "Jannik Stibi",
+    "role": "Grafik-Produktion",
+    "portrait": "team/jannik-stibi.jpg"
+  },
+  {
+    "id": "sandro-hagen",
+    "name": "Sandro Hagen",
+    "role": "Beratung Digital, Geschäftsleitung",
+    "portrait": "team/sandro-hagen.jpg"
+  },
+  {
+    "id": "philip-gygax",
+    "name": "Philip Gygax",
+    "role": "Beratung Digital",
+    "portrait": "team/philip-gygax.jpg"
+  },
+  {
+    "id": "oriana-pontieri",
+    "name": "Oriana Pontieri",
+    "role": "Buchhaltung & Administration",
+    "portrait": "team/oriana-pontieri.jpg"
+  },
+  {
+    "id": "martin-fuchs",
+    "name": "Martin Fuchs",
+    "role": "Konzeption",
+    "portrait": "team/martin-fuchs.jpg"
+  },
+  {
+    "id": "elia-vogt",
+    "name": "Elia Vogt",
+    "role": "Grafik-Design",
+    "portrait": "team/elia-vogt.jpg"
+  },
+  {
+    "id": "celine-buhler",
+    "name": "Céline Bühler",
+    "role": "Social Media Content Production",
+    "portrait": "team/celine-buhler.jpg"
+  },
+  {
+    "id": "devin-frei",
+    "name": "Devin Frei",
+    "role": "Online Marketing",
+    "portrait": "team/devin-frei.jpg"
+  },
+  {
+    "id": "alessandro-romeo",
+    "name": "Alessandro Romeo",
+    "role": "Social Media Content Production",
+    "portrait": "team/alessandro-romeo.jpg"
+  },
+  {
+    "id": "jeerapat-wang",
+    "name": "Jeerapat Wang",
+    "role": "Grafik-Design, Lernender",
+    "portrait": "team/jeerapat-wang.jpg"
+  },
+  {
+    "id": "alyosha-krajnc",
+    "name": "Alyosha Krajnc",
+    "role": "Interactive Media Design, Lernender",
+    "portrait": "team/alyosha-krajnc.jpg"
+  },
+  {
+    "id": "fabian-bucher",
+    "name": "Fabian Bucher",
+    "role": "Beratung Strategie, Geschäftsleitung, Partner",
+    "portrait": "team/fabian-bucher.jpg"
+  },
+  {
+    "id": "andrew-jelley",
+    "name": "Andrew Jelley",
+    "role": "Webdevelopment",
+    "portrait": "team/andrew-jelley.jpg"
+  },
+  {
+    "id": "larissa-lanker",
+    "name": "Larissa Lanker",
+    "role": "UI/UX-Design",
+    "portrait": "team/larissa-lanker.jpg"
+  },
+  {
+    "id": "nina-vetsch",
+    "name": "Nina Vetsch",
+    "role": "Beratung Digital",
+    "portrait": "team/nina-vetsch.jpg"
+  },
+  {
+    "id": "michael-eberle",
+    "name": "Michael Eberle",
+    "role": "Beratung",
+    "portrait": "team/michael-eberle.jpg"
+  },
+  {
+    "id": "ramon-lenherr",
+    "name": "Ramon Lenherr",
+    "role": "Kreativ-Direktion, Geschäftleitung, Partner",
+    "portrait": "team/ramon-lenherr.jpg"
+  },
+  {
+    "id": "dominic-rechsteiner",
+    "name": "Dominic Rechsteiner",
+    "role": "Grafik-Design",
+    "portrait": "team/dominic-rechsteiner.jpg"
+  },
+  {
+    "id": "milica-rakic",
+    "name": "Milica Rakic",
+    "role": "Beratung",
+    "portrait": "team/milica-rakic.jpg"
+  },
+  {
+    "id": "rene-kappeler",
+    "name": "René Kappeler",
+    "role": "Beratung, Geschäftsleitung, Partner",
+    "portrait": "team/rene-kappeler.jpg"
+  },
+  {
+    "id": "delya-kohler",
+    "name": "Delya Köhler",
+    "role": "Beratung",
+    "portrait": "team/delya-kohler.jpg"
+  },
+  {
+    "id": "teresa-sutter",
+    "name": "Teresa Sutter",
+    "role": "Beratung",
+    "portrait": "team/teresa-sutter.jpg"
+  },
+  {
+    "id": "jan-hasler",
+    "name": "Jan Hasler",
+    "role": "Beratung, Geschäftsleitung, Partner",
+    "portrait": "team/jan-hasler.jpg"
+  },
+  {
+    "id": "linda-peter",
+    "name": "Linda Peter",
+    "role": "Grafik-Design",
+    "portrait": "team/linda-peter.jpg"
+  },
+  {
+    "id": "oscar-grob",
+    "name": "Oscar Grob",
+    "role": "Grafik-Design, Lernender",
+    "portrait": "team/oscar-grob.jpg"
+  },
+  {
+    "id": "jacqueline-graf",
+    "name": "Jacqueline Graf",
+    "role": "Grafik- und UI/UX-Design",
+    "portrait": "team/jacqueline-graf.jpg"
+  },
+  {
+    "id": "janosch-jost",
+    "name": "Janosch Jost",
+    "role": "Webdevelopment",
+    "portrait": "team/janosch-jost.jpg"
+  },
+  {
+    "id": "marianne-hofstetter",
+    "name": "Marianne Hofstetter",
+    "role": "Grafik-Design, Teamleitung",
+    "portrait": "team/marianne-hofstetter.jpg"
+  },
+  {
+    "id": "nina-bauer",
+    "name": "Nina Bauer",
+    "role": "Beratung, Teamleitung",
+    "portrait": "team/nina-bauer.jpg"
+  },
+  {
+    "id": "julia-renz",
+    "name": "Julia Renz",
+    "role": "Interactive Media Design",
+    "portrait": "team/julia-renz.jpg"
+  },
+  {
+    "id": "zlatko-pesic",
+    "name": "Zlatko Pesic",
+    "role": "Team Vitamin 2",
+    "portrait": "team/zlatko-pesic.jpg"
+  }
+]
