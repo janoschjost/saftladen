@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Saftladen</title>
+  </head>
+  <body>
+    <div class="l-stage" id="stage"></div>
+    <header class="l-hud">
+      <div class="m-hud-title">
+        <h1 class="m-hud-title__name">Saftladen</h1>
+        <p class="m-hud-title__meta" id="hud-meta"></p>
+      </div>
+      <div class="m-hud-actions">
+        <div class="m-hud-views" role="group" aria-label="Ansicht">
+          <button class="m-button" type="button" data-view="iso" aria-pressed="false">Iso</button>
+          <button class="m-button" type="button" data-view="orbit" aria-pressed="true">Orbit</button>
+          <button class="m-button" type="button" data-view="plan" aria-pressed="false">Grundriss</button>
+          <button class="m-button" type="button" data-view="walk" aria-pressed="false">Rundgang</button>
+        </div>
+        <button class="m-button" id="open-picker" type="button">Figuren</button>
+        <button class="m-button" id="toggle-seats" type="button" aria-pressed="false">Plätze</button>
+        <button class="m-button" id="toggle-names" type="button" aria-pressed="false">Namen zeigen</button>
+      </div>
+    </header>
+    <div class="l-dock">
+      <aside class="m-away" id="away" aria-label="Nicht im Büro" hidden>
+        <h2 class="m-away__title">Nicht im Büro <span class="m-away__count" id="away-count"></span></h2>
+        <ul class="m-away__list" id="away-list"></ul>
+        <button class="m-button m-away__all" id="away-all" type="button">Alle zurück</button>
+      </aside>
+      <aside class="m-seats" id="seats" aria-label="Platzzuteilung" hidden>
+        <h2 class="m-seats__title">Plätze</h2>
+        <p class="m-seats__hint">Zugeteilte Personen sitzen an ihrem Platz. Alle anderen wählen einen freien Platz und weichen, wenn die Besitzerin oder der Besitzer kommt.</p>
+        <ul class="m-seats__list" id="seats-list"></ul>
+      </aside>
+      <aside class="m-feeds" id="feeds" aria-label="Homeoffice-Livebilder" hidden>
+        <h2 class="m-feeds__title"><span class="m-feeds__dot" aria-hidden="true"></span>Homeoffice · live <span class="m-feeds__count" id="feeds-count"></span></h2>
+        <div class="m-feeds__grid" id="feeds-grid"></div>
+      </aside>
+      <div class="m-actions" id="actions" hidden>
+        <p class="m-actions__name" id="actions-name"></p>
+        <button class="m-button" id="actions-steer" type="button" aria-pressed="false">Steuern (WASD)</button>
+        <button class="m-button" id="actions-home" type="button">Homeoffice</button>
+        <button class="m-button" id="actions-out" type="button">Rausgehen</button>
+      </div>
+    </div>
+    <div class="l-labels" id="labels" aria-hidden="true"></div>
+    <aside class="m-tooltip" id="tooltip" hidden>
+      <img class="m-tooltip__image" id="tooltip-image" alt="" width="96" height="96" />
+      <div class="m-tooltip__text">
+        <p class="m-tooltip__name" id="tooltip-name"></p>
+        <p class="m-tooltip__role" id="tooltip-role"></p>
+      </div>
+    </aside>
+    <section class="m-picker" id="picker" aria-label="Figur wählen" hidden>
+      <aside class="m-picker__sidebar">
+        <h2 class="m-picker__title">Figur wählen</h2>
+        <ul class="m-picker__list" id="picker-list"></ul>
+      </aside>
+      <div class="m-picker__main">
+        <div class="m-picker__view">
+          <div class="m-picker__stage" id="picker-stage"></div>
+          <figure class="m-picker__reference" id="picker-reference">
+            <img class="m-picker__reference-image" id="picker-reference-image" alt="" width="480" height="681" />
+            <figcaption class="m-picker__reference-caption">Vorlage</figcaption>
+          </figure>
+        </div>
+        <div class="m-picker__info">
+          <h3 class="m-picker__name" id="picker-name"></h3>
+          <p class="m-picker__role" id="picker-role"></p>
+          <label class="m-picker__home">
+            <span class="m-picker__home-label">Homeoffice</span>
+            <select class="m-picker__home-select" id="picker-home"></select>
+          </label>
+        </div>
+        <div class="m-picker__controls">
+          <button class="m-button" id="picker-prev" type="button" aria-label="Vorherige Figur">&uarr; Zurück</button>
+          <button class="m-button" id="picker-left" type="button" aria-label="Nach links drehen">&larr; Drehen</button>
+          <button class="m-button" id="picker-spin" type="button" aria-pressed="true">Auto-Drehung</button>
+          <button class="m-button" id="picker-right" type="button" aria-label="Nach rechts drehen">Drehen &rarr;</button>
+          <button class="m-button" id="picker-next" type="button" aria-label="Nächste Figur">Weiter &darr;</button>
+        </div>
+        <p class="m-picker__hint">Ziehen zum Drehen · Scrollen zum Zoomen · &uarr;&darr; wechseln · &larr;&rarr; drehen · Esc schliesst</p>
+        <button class="m-button m-picker__close" id="picker-close" type="button">Schliessen</button>
+      </div>
+    </section>
+    <p class="m-hint" id="hint">Ziehen zum Drehen · Rechtsklick-Ziehen zum Verschieben · Scrollen zum Zoomen · N Namen · R Dach</p>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
