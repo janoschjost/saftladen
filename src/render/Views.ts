@@ -8,9 +8,9 @@ import { WORLD } from './World';
 export type ViewMode = 'iso' | 'orbit' | 'plan' | 'walk';
 
 const HINTS: Record<ViewMode, string> = {
-  iso: 'Ziehen zum Verschieben · Scrollen zum Zoomen · Person ziehen · N Namen · R Dach · H Homeoffice · C Auswahl steuern (WASD)',
-  orbit: 'Ziehen zum Drehen · Rechtsklick-Ziehen zum Verschieben · Scrollen zum Zoomen · N Namen · R Dach · Person anklicken, C zum Steuern (WASD, Shift = rennen)',
-  plan: 'Ziehen zum Verschieben · Scrollen zum Zoomen · N Namen · C Auswahl steuern (WASD)',
+  iso: 'Ziehen zum Verschieben · Scrollen zum Zoomen · Person ziehen · N Namen · R Dach · H Homeoffice · F Folgen · C Auswahl steuern (WASD)',
+  orbit: 'Ziehen zum Drehen · Rechtsklick-Ziehen zum Verschieben · Scrollen zum Zoomen · N Namen · R Dach · Person anklicken, F folgen, C zum Steuern (WASD, Shift = rennen)',
+  plan: 'Ziehen zum Verschieben · Scrollen zum Zoomen · N Namen · F Folgen · C Auswahl steuern (WASD)',
   walk: 'W A S D / Pfeiltasten zum Gehen · Shift = rennen · Ziehen zum Umschauen · N Namen',
 };
 

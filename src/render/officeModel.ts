@@ -27,6 +27,10 @@ export const ax = (x: number): number => (x - B.x0) * SCALE;
 export const az = (z: number): number => (z - B.z0) * SCALE;
 export const OFFICE_W = (B.x1 - B.x0) * SCALE;
 export const OFFICE_D = (B.z1 - B.z0) * SCALE;
+/** Small meeting room: an annex outside the base rectangle, hanging off the south wall at the west end (model metres). */
+export const ANNEX = { x1: -5, d: 3.5 };
+export const ANNEX_W = ax(ANNEX.x1);
+export const ANNEX_D = ANNEX.d * SCALE;
 /** A point in the middle of the main corridor, in game coordinates. */
 export const CORRIDOR_POINT: Vec2 = { x: ax(12), z: az(1.1) };
 
@@ -61,11 +65,37 @@ export interface OfficeModel {
   roof: THREE.Group;
   /** front door leaf, hinged at its pivot; rotation.y = 0 is closed, negative swings it outwards */
   entrance: THREE.Group;
+  /** swinging interior doors */
+  doors: DoorRig[];
+  /** the two spots where people stand to play foosball (game coordinates, yaw = facing the table) */
+  foosball: Array<{ x: number; z: number; yaw: number }>;
   /** printer in the archive: where people stand (game coordinates), facing yaw, and the paper that shows while printing */
   printer: { stand: Vec2; yaw: number; paper: THREE.Mesh };
+  /** numbered sprites above every desk row (the tables) */
+  rowLabels: THREE.Group;
+  /** numbered sprites above every room (blue), toggled in the settings */
+  roomLabels: THREE.Group;
+  /** glass meeting room: doorway centre, table centre and the 6 side chairs (game coordinates, yaw = facing the table) */
+  meeting: { doorPos: Vec2; center: Vec2; seats: Array<{ x: number; z: number; yaw: number }> };
+  /** the two bench seats in the wooden pod (game coordinates, yaw = facing out of the pod) */
+  pod: { center: Vec2; seats: Array<{ x: number; z: number; yaw: number }> };
 }
 
 type Mat = THREE.Material;
+
+/** A swinging door leaf: `pivot.rotation.y = base + swing * open * DOOR_SWING` (open = 0 closed .. 1 wide open). */
+export interface DoorRig {
+  pivot: THREE.Group;
+  base: number;
+  /** +1 / -1: which side of the wall the leaf swings to */
+  swing: 1 | -1;
+  /** centre of the doorway, game coordinates */
+  center: Vec2;
+  /** leaf size */
+  width: number;
+  height: number;
+}
+export const DOOR_SWING = 1.6;
 
 interface Opening {
   a: number;
@@ -75,12 +105,25 @@ interface Opening {
   fill?: 'glass' | 'frosted' | 'door';
   /** people can walk through (door / glass door) */
   pass?: boolean;
+  /** dynamic swinging leaf (hinged at `a`), value = swing side; `fill: 'glass'` makes it a glass door */
+  door?: 1 | -1;
+  /** glass as thick as the wall, so it sits flush with the wall above it */
+  flush?: boolean;
+  /** a / b are already game coordinates (no plan scaling) */
+  abs?: boolean;
+  /** door only: dark frame around the door, fixed glass above it up to the wall top (no plaster) */
+  frame?: boolean;
 }
 
 export function buildOffice(scene: THREE.Scene): OfficeModel {
   rowCount = 0;
+  const rowLabels = new THREE.Group();
+  scene.add(rowLabels);
   const world = new THREE.Group();
   const roof = new THREE.Group();
+  const doors: DoorRig[] = [];
+  const meetSeats: Array<{ x: number; z: number; yaw: number }> = [];
+  const podSeats: Array<{ x: number; z: number; yaw: number }> = [];
   const deskSpecs: Array<{ x: number; z: number; rot: number; white: boolean; w: number; stand: boolean }> = [];
 
   /* ---------- placement: anchors scale, groups stay rigid ---------- */
@@ -253,6 +296,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     const gz1 = az(z1);
     const P = (s: number): [number, number] => (alongX ? [s, gz1] : [gx1, s]);
     const conv = (op: Opening): Opening => {
+      if (op.abs) return op;
       const w = op.b - op.a;
       const W = w <= DOOR_MAX ? w : w * SCALE;
       const C = alongX ? ax((op.a + op.b) / 2) : az((op.a + op.b) / 2);
@@ -276,10 +320,40 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
         const bottom = op.bottom || 0;
         const top = op.top ?? 2.1;
         put(s0, op.a, 0, hFull);
-        put(op.a, op.b, top, hFull);
+        if (op.frame) {
+          // frame: two jambs + head, fixed glass transom above up to the wall top
+          put(op.a, op.a + 0.05, 0, top + 0.05, mat.black, t + 0.02);
+          put(op.b - 0.05, op.b, 0, top + 0.05, mat.black, t + 0.02);
+          put(op.a, op.b, top, top + 0.05, mat.black, t + 0.02);
+          put(op.a, op.b, top + 0.05, hFull, mat.glass, op.flush ? t : 0.03);
+        } else put(op.a, op.b, top, hFull);
         if (bottom > 0) put(op.a, op.b, 0, bottom);
         let fill: THREE.Mesh | undefined;
-        if (op.fill === 'glass') fill = put(op.a, op.b, bottom, top, mat.glass, 0.03);
+        if (op.door) {
+          const glassDoor = op.fill === 'glass';
+          const W = op.b - op.a - 0.04;
+          const H = top - 0.03;
+          const pivot = new THREE.Group();
+          const leaf = new THREE.Mesh(new THREE.BoxGeometry(W, H, glassDoor ? 0.03 : 0.05), glassDoor ? mat.glass : mat.lightgrey);
+          leaf.position.set(W / 2, H / 2, 0);
+          leaf.castShadow = !glassDoor;
+          pivot.add(leaf);
+          if (!glassDoor) {
+            const handle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.03, 0.09), mat.steel);
+            handle.position.set(W - 0.1, 1.0, 0);
+            pivot.add(handle);
+          }
+          const base = alongX ? 0 : -Math.PI / 2;
+          const [hx, hz] = P(op.a + 0.02);
+          pivot.position.set(hx, 0, hz);
+          pivot.rotation.y = base;
+          scene.add(pivot);
+          const [cx, cz] = P((op.a + op.b) / 2);
+          doors.push({ pivot, base, swing: op.door, center: { x: cx, z: cz }, width: W, height: H });
+          s0 = op.b;
+          return;
+        }
+        if (op.fill === 'glass') fill = put(op.a, op.b, bottom, top, mat.glass, op.flush ? t : 0.03);
         if (op.fill === 'frosted') fill = put(op.a, op.b, bottom, top, mat.frosted, 0.03);
         if (op.fill === 'door') fill = put(op.a + 0.03, op.b - 0.03, 0, top - 0.03, mat.lightgrey, t + 0.03);
         if (fill && op.pass) fill.userData.nonav = true;
@@ -323,6 +397,13 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     }
     rbox(0.58, 0.34, 0.03, 0, 0.86, -0.22, mat.black, 0, g);
     rbox(0.06, 0.12, 0.06, 0, 0.75, -0.24, mat.black, 0, g);
+    // Apple Magic Keyboard (silver aluminium, white keys in rows) + Magic Mouse (white, low, glossy top)
+    const top = 0.752; // just above the desk surface (0.75) so the coplanar faces don't z-fight
+    const kz = 0.12;
+    rbox(0.28, 0.01, 0.115, 0, top, kz, mat.steel, 0, g);
+    rbox(0.262, 0.005, 0.098, 0, top + 0.01, kz, mat.white, 0, g);
+    for (let r = 1; r < 6; r++) rbox(0.262, 0.0015, 0.003, 0, top + 0.0145, kz - 0.049 + (r * 0.098) / 6, mat.lightgrey, 0, g);
+    rbox(0.057, 0.014, 0.113, 0.27, top, 0.12, mat.white, 0, g);
     const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.42, 8), mat.dark);
     stem.position.set(0, 0.04 + 0.21, 0.75);
     const star = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.04, 5), mat.dark);
@@ -408,7 +489,14 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       }
     }
   }
-  function plant(x: number, z: number, h = 1.6, base = 0, spiky = false): void {
+  function plant(x: number, z: number, h = 1.6, base = 0, spiky = false, lim: { x0?: number; x1?: number; z0?: number; z1?: number } = {}): void {
+    // keep the foliage inside the walls: default = inner faces of the exterior walls, `lim` adds nearer partitions
+    const pad = spiky ? 0.15 : 0.33;
+    const cl = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo + pad), hi - pad);
+    const bx0 = lim.x0 ?? B.x0 + 0.15;
+    const bx1 = lim.x1 ?? B.x1 - 0.15;
+    const bz0 = lim.z0 ?? B.z0 + 0.15;
+    const bz1 = lim.z1 ?? B.z1 - 0.15;
     cyl(0.2, 0.15, 0.32, x, base, z, spiky ? mat.terracotta : mat.pot);
     cyl(0.03, 0.03, h * 0.5, x, base + 0.3, z, mat.woodDark, world, 6);
     const n = spiky ? 9 : 6;
@@ -416,7 +504,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       const a = i * 2.4;
       const r = spiky ? 0.25 : 0.22 + (i % 3) * 0.08;
       const s = new THREE.Mesh(spiky ? new THREE.ConeGeometry(0.09, h * 0.6, 5) : new THREE.SphereGeometry(0.24 + (i % 2) * 0.08, 8, 6), i % 2 ? mat.green : mat.greenL);
-      s.position.set(gx(x + Math.cos(a) * r), base + h * (spiky ? 0.75 : 0.5 + i * 0.09), gz(z + Math.sin(a) * r));
+      s.position.set(gx(cl(x + Math.cos(a) * r, bx0, bx1)), base + h * (spiky ? 0.75 : 0.5 + i * 0.09), gz(cl(z + Math.sin(a) * r, bz0, bz1)));
       if (spiky) {
         s.rotation.z = Math.cos(a) * -0.5;
         s.rotation.x = Math.sin(a) * 0.5;
@@ -455,7 +543,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       sp.position.set(gx(x), 1.6, gz(zm));
       sp.scale.set(0.6, 0.6, 1);
       sp.renderOrder = 999;
-      scene.add(sp);
+      rowLabels.add(sp);
       console.log(`desk row ${n}: x=${x} z=${zs.join(',')}`);
     }
     zs.forEach((z) => desk(x, z, chairSide > 0 ? Math.PI / 2 : -Math.PI / 2, o));
@@ -478,7 +566,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       sp.position.set(gx((Math.min(...xs) + Math.max(...xs)) / 2), 1.6, gz(z));
       sp.scale.set(0.6, 0.6, 1);
       sp.renderOrder = 999;
-      scene.add(sp);
+      rowLabels.add(sp);
     }
     xs.forEach((x) => desk(x, z, chairSide > 0 ? 0 : Math.PI, o));
   }
@@ -490,7 +578,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   windowWall(B.x0, B.z0, B.x0, B.z1); // west end: Wassermelonen windows
   if (EXACT) {
     windowWall(B.x1, B.z0, B.x1, B.z1); // east end windows
-    wall(B.x0, B.z1, 7.5, B.z1, H_LOW, [{ a: -4.4, b: -3.4 }], { t: 0.3, outer: true }); // solid part, open doorway (the leaf is dynamic, see `entrance`)
+    wall(B.x0, B.z1, 7.5, B.z1, H_LOW, [{ a: -6.7, b: -5.6, door: -1 }, { a: -4.4, b: -3.4 }], { t: 0.3, outer: true }); // solid part, open doorway (the leaf is dynamic, see `entrance`)
     windowWall(7.5, B.z1, B.x1, B.z1); // long window wall
   }
   for (const [a, b] of [
@@ -503,39 +591,75 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
      CORE (z < 0): text wall + rooms
   ================================================================= */
   wall(-5, CZ, 26, CZ, H_CORE, [
-    { a: -3.0, b: -2.0 }, // storage door (open)
-    { a: 2.5, b: 3.4, fill: 'door', pass: true }, // closed door under "RISCHE"
-    { a: 4.9, b: 5.8 }, // kitchen/dining door
-    { a: 6.2, b: 9.5, top: 2.4, fill: 'glass' }, // glazed panel into dining
-    { a: 14.4, b: 15.3 }, // "Archiv"
+    { a: -3.0, b: -2.0, door: 1 }, // storage door
+    { a: 2.5, b: 3.4, door: 1 }, // door under "RISCHE"
+    { a: 4.9, b: 5.8, door: 1 }, // kitchen/dining door
+    { a: 6.2, b: 9.5, top: 2.4, fill: 'glass', flush: true }, // glazed panel into dining
+    { a: 14.4, b: 15.3, door: 1 }, // "Archiv"
     { a: 18.5, b: 23, top: 2.5 }, // dark room, black curtain
-    { a: 23.4, b: 24.3, top: 2.2, fill: 'glass', pass: true }, // booth glass door
+    { a: 23.4, b: 24.3, top: 2.2, fill: 'glass', door: 1 }, // booth glass door
   ]);
-  for (const x of [0, 4, 10.5, 18.5, 23]) wall(x, B.z0, x, CZ, H_CORE);
+  for (const x of [0, 4, 10.5, 18.5]) wall(x, B.z0, x, CZ, H_CORE);
+  wall(23, -2.2, 23, CZ, H_CORE); // east of the dark room: only the booth vestibule part remains
   wall(26, B.z0, 26, CZ, H_CORE);
-  wall(23, -2.2, 26, -2.2, H_CORE);
-  // big wall lettering, up on the wall above the door heads like in the photos
+  wall(23, -2.2, 26, -2.2, H_CORE); // dark room (extended over the old photo studio) / booth vestibule
+  // big wall lettering in the corporate font (Apercu): it starts low enough to run over the closed door and the
+  // glazed panel; over open doorways the part below the door head (OPEN_TOP) is masked out
   {
     const text = 'FRISCHE IDEEN, DIE WIRKEN';
-    const W = ax(15.5) - ax(0.3); // plan-scaled span of the lettering
-    const Hh = EXACT ? 0.95 : 1.25;
+    const X0 = 0.3;
+    const X1 = 15.5;
+    const W = ax(X1) - ax(X0); // plan-scaled span of the lettering
+    const Hh = 0.95;
+    const Y0 = 1.94; // bottom of the plane: the baseline sits at ~2.08 m, the middle of the capitals at 2.4 m = top of the glazed panel
+    const OPEN_TOP = 2.1; // head of an open doorway
+    // doors under the lettering: it is masked out of the wall there and drawn onto the door leaf instead
+    const OPEN: Array<[number, number]> = [
+      [2.5, 3.4], // door under "RISCHE"
+      [4.9, 5.8], // kitchen/dining door
+      [14.4, 15.3], // "Archiv"
+    ];
     const pxPerM = 4096 / 15.2;
-    const tex = canvasTex(Math.round(W * pxPerM), 256, (g, w, h) => {
+    const FONT = '700 250px Apercu, "Helvetica Neue", Helvetica, Arial, sans-serif';
+    const draw = (g: CanvasRenderingContext2D, w: number, h: number) => {
       g.clearRect(0, 0, w, h);
       g.fillStyle = '#0d0d0f';
       g.textBaseline = 'alphabetic';
-      g.font = `${EXACT ? 700 : 800} ${EXACT ? 250 : 252}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
+      g.font = FONT;
       const widths = [...text].map((ch) => g.measureText(ch).width);
       const total = widths.reduce((a, b) => a + b, 0);
       const track = (w - 20 - total) / (text.length - 1);
       let x = 10;
       [...text].forEach((ch, i) => {
-        g.fillText(ch, x, EXACT ? 218 : 222);
+        g.fillText(ch, x, 218);
         x += widths[i] + track;
       });
+      const maskH = ((Y0 + Hh - OPEN_TOP) / Hh) * h; // canvas y of OPEN_TOP
+      for (const [a, b] of OPEN) g.clearRect(((ax(a) - ax(X0)) / W) * w, maskH, ((ax(b) - ax(a)) / W) * w, h - maskH);
+    };
+    const tex = canvasTex(Math.round(W * pxPerM), 256, draw);
+    const leafTex: THREE.Texture[] = [];
+    for (const rig of doors) {
+      // leaf under the lettering? (core south wall, running along x)
+      if (Math.abs(rig.center.z - az(CZ)) > 0.01 || rig.center.x < ax(X0) || rig.center.x > ax(X1)) continue;
+      if (rig.height - Y0 < 0.02) continue; // lettering sits above the door head
+      const lt = tex.clone();
+      lt.repeat.set(rig.width / W, (rig.height - (Y0 - 0)) / Hh);
+      lt.offset.set((rig.center.x - rig.width / 2 - ax(X0)) / W, 0);
+      leafTex.push(lt);
+      const lh = rig.height - Y0;
+      const part = new THREE.Mesh(new THREE.PlaneGeometry(rig.width, lh), new THREE.MeshBasicMaterial({ map: lt, transparent: true }));
+      part.position.set(rig.width / 2, Y0 + lh / 2, 0.028);
+      rig.pivot.add(part);
+    }
+    document.fonts?.load(FONT).then(() => {
+      const c = tex.image as HTMLCanvasElement;
+      draw(c.getContext('2d')!, c.width, c.height);
+      tex.needsUpdate = true;
+      for (const t of leafTex) t.needsUpdate = true;
     });
     const m = new THREE.Mesh(new THREE.PlaneGeometry(W, Hh), new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
-    m.position.set(ax(0.3) + W / 2, (EXACT ? 2.2 : 1.95) + Hh / 2, az(CZ) + (EXACT ? 0.07 : 0.08));
+    m.position.set(ax(X0) + W / 2, Y0 + Hh / 2, az(CZ) + 0.09); // in front of the door leaf (half-thickness 0.075)
     m.userData.nonav = true;
     world.add(m);
   }
@@ -685,10 +809,11 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     box(0.8, 0.02, 0.62, RX, 2.0, RZ, mat.grey);
   }
   // dark room behind the curtain
-  slab(18.6, 22.9, B.z0, B.z0, 0, 3.2, mat.black, 0.05).position.z = az(B.z0) + 0.2;
+  slab(18.6, 25.9, B.z0, B.z0, 0, 3.2, mat.black, 0.05).position.z = az(B.z0) + 0.2;
   slab(18.6, 18.6, B.z0 + 0.15, CZ - 0.15, 0, EXACT ? 3.2 : CUT, mat.black, 0.05);
-  slab(22.9, 22.9, B.z0 + 0.15, -2.25, 0, EXACT ? 3.2 : CUT, mat.black, 0.05);
+  slab(25.9, 25.9, B.z0 + 0.15, -2.25, 0, EXACT ? 3.2 : CUT, mat.black, 0.05);
   slab(18.6, 22.9, B.z0 + 0.15, CZ - 0.15, 0.005, 0.025, L(0x1a1a1a));
+  slab(22.9, 25.9, B.z0 + 0.15, -2.25, 0.005, 0.025, L(0x1a1a1a)); // floor of the extension
   within(19.4, 0, () => box(1.6, EXACT ? 2.45 : CUT, 0.12, 19.4, 0, CZ - 0.15, L(0x0c0c0d))); // curtain (drawn part)
   within(20.6, -3.4, () => {
     for (const x of [20.2, 21.0]) {
@@ -708,13 +833,19 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   /* =================================================================
      WEST END: entry corridor, Wassermelonen room
   ================================================================= */
+  const DOOR_Z = az(0.6); // centre of the glass door in the hallway glass wall
   wall(-5, B.z0, -5, B.z1, 3.8, [
-    { a: 0.1, b: 2.1, top: 2.6, fill: 'glass', pass: true }, // glass partition + glass door
-    { a: 3.6, b: 8.6, bottom: 0.9, top: 2.2 }, // interior window lounge <-> Wassermelonen
+    // glass wall across the whole hallway width with a framed regular-size glass door inside, glass up to the top
+    { a: az(CZ), b: DOOR_Z - 0.5, top: 3.8, fill: 'glass', flush: true, abs: true },
+    { a: DOOR_Z - 0.5, b: DOOR_Z + 0.5, top: 2.1, fill: 'glass', door: 1, frame: true, flush: true, abs: true },
+    { a: DOOR_Z + 0.5, b: az(CORR), top: 3.8, fill: 'glass', flush: true, abs: true },
+    // northern part (next to the core rooms): wall as high as the core south wall (H_CORE), glass above up to the top
+    { a: az(B.z0), b: az(CZ), bottom: H_CORE, top: 3.8, fill: 'glass', flush: true, abs: true },
+    { a: 3.6, b: 8.6, bottom: 0.9, top: 2.2, fill: 'glass', pass: true }, // interior window lounge <-> Wassermelonen
   ]);
   wall(-5, CORR, -0.5, CORR, 3.8); // partition entry corridor | lounge (pod stands against it)
-  const POD_SHIFT = -3.3; // desks 1-6 sit this much further towards desk 7, makes room for the small meeting room at the south end
-  for (const z0 of [1.3, 4.6, 7.7].map((z) => z + POD_SHIFT)) {
+  // desk pairs (places 1-6) spaced evenly (~3.97 m) from desk 7 (z -4.9) to the last pair, which sits further from the south wall (room behind place 6); each pair stays rigid
+  for (const z0 of [-0.93, 3.03, 7.0]) {
     within(-8.3, z0, () => {
       desk(-8.3, z0 - 0.41, Math.PI);
       desk(-8.3, z0 + 0.41, 0);
@@ -723,20 +854,22 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       plant(-9.1, z0 + 1.5, 0.9, 0.85);
     });
   }
-  desk(-7.6, -4.9, Math.PI, { white: true });
+  desk(-7.6, -4.9, 0, { white: true }); // desk 7, flipped 180°
   shelf(-5.9, -5.2, 1.0, 1.0, 0.35);
   coatRack(-5.5, -1.8, false);
-  // small meeting room behind desk 6: partition wall with a doorway towards the lounge, sofa and wall-mounted screen
-  const MEET_Z = 6.5;
-  const meetX = -7.25;
-  wall(B.x0, MEET_Z, -5, MEET_Z, H_LOW, [{ a: -6.7, b: -5.6 }]);
-  box(1.6, 0.9, 0.05, meetX, 1.0, MEET_Z + 0.085, mat.black); // screen on the partition, facing the sofa
-  box(1.52, 0.82, 0.01, meetX, 1.04, MEET_Z + 0.115, L(0x20262c));
-  box(2.1, 0.4, 0.9, meetX, 0, 8.75, mat.fabric); // sofa seat
-  box(2.1, 0.5, 0.2, meetX, 0.4, 9.15, mat.fabric); // backrest
-  for (const dx of [-1.0, 1.0]) box(0.2, 0.28, 0.9, meetX + dx, 0.4, 8.75, mat.dark); // armrests
-  box(0.9, 0.38, 0.5, meetX, 0, 7.6, mat.plyLight); // coffee table
-  plant(-5.6, -3.5, 1.5);
+  // small meeting room: annex outside the south wall (doorway in that wall), windows west + south, sofa facing a wall-mounted screen
+  const AZ = B.z1 + ANNEX.d; // z of the annex's south wall
+  const meetX = -8.0; // shifted west so the sofa clears the doorway (x -6.7..-5.6) in the north wall
+  windowWall(B.x0, B.z1, B.x0, AZ);
+  windowWall(B.x0, AZ, ANNEX.x1, AZ);
+  wall(ANNEX.x1, B.z1, ANNEX.x1, AZ, 3.8, [], { t: 0.3, outer: true });
+  box(1.6, 0.9, 0.05, meetX, 1.0, AZ - 0.19, mat.black); // screen on the north face of the south window wall, facing the sofa
+  box(1.52, 0.82, 0.01, meetX, 1.04, AZ - 0.22, L(0x20262c));
+  box(2.1, 0.4, 0.9, meetX, 0, B.z1 + 0.7, mat.fabric); // sofa seat (against the north wall)
+  box(2.1, 0.5, 0.2, meetX, 0.4, B.z1 + 0.3, mat.fabric); // backrest
+  for (const dx of [-1.0, 1.0]) box(0.2, 0.28, 0.9, meetX + dx, 0.4, B.z1 + 0.7, mat.dark); // armrests
+  box(0.9, 0.38, 0.5, meetX, 0, B.z1 + 1.9, mat.plyLight); // coffee table
+  plant(-5.6, -3.5, 1.5, 0, false, { x1: -5.06 }); // west of the lounge partition (x -5)
 
   /* =================================================================
      LOUNGE: pod, foosball, reception counter
@@ -746,14 +879,17 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     const g = new THREE.Group();
     // stretches from the west wall to its old right edge, backs onto the corridor partition
     const wallX = ax(-5) + 0.06;
-    const right = gx(-1.9) + 1.15;
-    const w = right - wallX;
-    const d = 2.2;
+    const POD_SCALE = 0.9;
+    const w = 3.4; // sits near the west partition, free floor on its right
+    const d = 2.2 * POD_SCALE;
     const eave = 2.0;
     const rise = 1.4;
-    g.position.set((wallX + right) / 2, 0, az(CORR) + 0.06 + d / 2);
+    // turned 10 deg anticlockwise (seen from above); nudged south so the rotated back corner stays clear of the corridor partition
+    const POD_ROT = (10 * Math.PI) / 180;
+    g.position.set(wallX + 0.55 + w / 2, 0, az(CORR) + 0.06 + 1.1 + 0.25);
+    g.rotation.y = POD_ROT;
     world.add(g);
-    box(w, 0.14, d, 0, 0, 0, mat.ply, 0, g);
+    box(w, 0.04, d, 0, 0, 0, mat.ply, 0, g); // thin floor, people sit / walk on the office floor
     for (const s of [-1, 1]) {
       box(0.1, eave, d, s * (w / 2 - 0.05), 0, 0, mat.black, 0, g);
       box(0.03, eave, d - 0.1, s * (w / 2 - 0.12), 0.1, 0, mat.ply, 0, g);
@@ -777,23 +913,39 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       L(0xc98b47, { side: THREE.DoubleSide }),
       g,
     );
-    box(w - 0.3, 0.45, 0.45, 0, 0.14, -d / 2 + 0.35, mat.black, 0, g);
-    box(w - 0.3, 0.45, 0.1, 0, 0.59, -d / 2 + 0.17, mat.black, 0, g);
-    box(0.45, 0.45, 1.0, w / 2 - 0.4, 0.14, 0.2, mat.black, 0, g);
-    box(1.1, 0.04, 0.6, -0.25, 0.86, 0.15, mat.ply, 0, g);
-    box(0.06, 0.72, 0.06, -0.25, 0.14, 0.15, mat.black, 0, g);
+    box(w - 0.3, 0.41, 0.45, 0, 0.04, -d / 2 + 0.35, mat.black, 0, g); // bench along the back, seat height 0.45
+    box(w - 0.3, 0.45, 0.1, 0, 0.45, -d / 2 + 0.17, mat.black, 0, g);
+    for (const s of [-1, 1]) box(0.45, 0.41, 1.3, s * (w / 2 - 0.4), 0.04, 0.23, mat.black, 0, g); // side benches: U-shape open to +z
+    box(0.6, 0.04, 0.6, 0, 0.72, 0.2, mat.ply, 0, g); // small table centred between the benches
+    box(0.06, 0.68, 0.06, 0, 0.04, 0.2, mat.black, 0, g);
+    // two seats on the back bench, either side of the table, facing the room (game coordinates)
+    for (const lx of [-0.7, 0.7]) {
+      const lz = -d / 2 + 0.38;
+      podSeats.push({
+        x: g.position.x + lx * Math.cos(POD_ROT) + lz * Math.sin(POD_ROT),
+        z: g.position.z - lx * Math.sin(POD_ROT) + lz * Math.cos(POD_ROT),
+        yaw: POD_ROT,
+      });
+    }
     for (const x of [-0.5, -0.3, -0.1]) {
       const b = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), mat.lampWarm);
       b.position.set(x, 1.55 + x * 0.3, -0.3);
       g.add(b);
     }
   });
-  plant(-4.3, 4.7, 2.2);
+  plant(-4.0, 5.3, 2.0, 0, false, { x0: -4.94 }); // in front of the pod, left side
+  const FOOS = { x: -0.15, z: 7.7, rot: (70 * Math.PI) / 180 }; // rot.y > 0 = anticlockwise seen from above
+  // the two players stand at the ends of the rods (local z), facing the table
+  const foosStands = ([1, -1] as const).map((side) => ({
+    x: gx(FOOS.x) + side * 1.25 * Math.sin(FOOS.rot),
+    z: gz(FOOS.z) + side * 1.25 * Math.cos(FOOS.rot),
+    yaw: Math.atan2(-side * Math.sin(FOOS.rot), -side * Math.cos(FOOS.rot)),
+  }));
   {
     // foosball table: wooden body, green field, handled rods with little players
     const g = new THREE.Group();
-    g.position.set(gx(-4.3), 0, gz(8.4)); // SW corner of lounge, long side along west wall
-    g.rotation.y = Math.PI / 2;
+    g.position.set(gx(FOOS.x), 0, gz(FOOS.z)); // lounge side of the reception counter, south end, a bit off the walls
+    g.rotation.y = FOOS.rot;
     world.add(g);
     box(1.45, 0.3, 0.78, 0, 0.6, 0, mat.wood, 0, g);
     box(1.3, 0.02, 0.66, 0, 0.9, 0, L(0x3f7d4a), 0, g);
@@ -871,7 +1023,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   // Hashtag-Himbeeren (x 4.8..9.5)
   within(7.1, 6.1, () => {
     deskRowZ(2.72, ROW3, 1, ROW3_OPT); // flipped, back against the reception counter (face x=2.3)
-    box(0.42, 1.3, 6.45, 5.696, 0, 6.125, mat.white); // white divider units, ~1.1 m behind the chairs
+    box(0.84, 1.3, 6.45, 5.486, 0, 6.125, mat.white); // white divider units, double depth, desk-side face unchanged (x 5.906)
     for (const z of [4.5, 7.2]) pendant(3.0, z, 'steel', 2.1, 4.2);
   });
   // Kreative Kiwis (x 9.7..12.483)
@@ -880,11 +1032,39 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     deskRowZ(9.492, ROW3, 1, ROW3_OPT);
     shelf(9.08, 2.65, 2.0, 1.3, 0.4);
     for (const z of [4.6, 7.0]) pendant(9.08, z, 'steel', 2.1, 4.2);
-    box(0.25, 3.8, 0.25, 12.483, 0, 3.0, mat.white); // structural column
-    box(0.45, 1.25, 6.15, 12.483, 0, 6.275, mat.white); // planter / divider wall
-    seg(gx(12.483), gz(5.2), gx(12.483), gz(8.0), 1.25, 2.1, mat.glass, 0.03);
-    plant(12.483, 3.5, 1.9, 1.25, true);
-    plant(12.483, 6.5, 0.9, 1.25, true);
+    // planter / divider wall: deep enough for a plant on the west half, cupboards in both faces, glass on the east half fills the whole gap above (behind seat 18)
+    const DW = 0.9;
+    const DZ0 = CORR + 0.15; // wall runs the full depth of the glass meeting room (corridor partition .. south wall)
+    const DZ1 = B.z1;
+    const COL = 0.25;
+    // structural column at the corridor end: west face flush with the cupboard doors, east face flush with the glass
+    const colW0 = 12.483 - DW / 2 - 0.02;
+    const colW1 = 12.483 + DW / 4 + 0.015;
+    box(colW1 - colW0, 3.8, COL, (colW0 + colW1) / 2, 0, DZ0 + COL / 2, mat.white);
+    box(DW, 1.25, DZ1 - DZ0, 12.483, 0, (DZ0 + DZ1) / 2, mat.white);
+    const doors = 7;
+    const dw = (DZ1 - DZ0 - COL) / doors;
+    for (let i = 0; i < doors; i++) {
+      const dz = DZ0 + COL + (i + 0.5) * dw;
+      for (const f of [-1, 1]) {
+        if ((f === -1 && (i === 1 || i === 4)) || (f === 1 && (i === 2 || i === 5))) {
+          // open cupboard: dark back panel with 3 shelves (Regale)
+          const fx = 12.483 + f * (DW / 2);
+          // shelf frame is 0.02 thick so its front is flush with the closed doors (face + 0.02)
+          box(0.01, 1.0, dw - 0.04, fx + f * 0.005, 0.1, dz, mat.dark);
+          for (const sy of [0.1, 0.43, 0.76, 1.09]) box(0.02, 0.03, dw - 0.04, fx + f * 0.01, sy, dz, mat.lightgrey);
+          for (const sz of [-1, 1]) box(0.02, 1.02, 0.03, fx + f * 0.01, 0.1, dz + (sz * (dw - 0.07)) / 2, mat.lightgrey);
+          continue;
+        }
+        box(0.02, 1.0, dw - 0.04, 12.483 + f * (DW / 2 + 0.01), 0.1, dz, mat.lightgrey); // cupboard door
+        box(0.03, 0.12, 0.02, 12.483 + f * (DW / 2 + 0.03), 0.9, dz + dw * 0.35, mat.black); // handle
+      }
+    }
+    const GX = 12.483 + DW / 4; // glass sits on the east half
+    seg(gx(GX), gz(DZ0), gx(GX), gz(DZ1), 1.25, 2.7, mat.glass, 0.03);
+    box(0.08, 0.1, DZ1 - DZ0, GX, 2.7, (DZ0 + DZ1) / 2, mat.white); // top rail
+    plant(12.483 - DW / 4, 3.7, 1.9, 1.25, true);
+    plant(12.483 - DW / 4, 6.7, 0.9, 1.25, true);
     coatRack(12.083, 2.65);
   });
   // Digitale Birnen (x 14.7..19.5)
@@ -904,7 +1084,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   /* =================================================================
      GLASS ROOM (x 19.5..26.5) - interior not photographed
   ================================================================= */
-  wall(19.5, CORR, 26.5, CORR, H_CORE, [{ a: 20.2, b: 21.1 }]);
+  wall(19.5, CORR, 26.5, CORR, H_CORE, [{ a: 20.2, b: 21.1, door: 1 }]);
   segM(26.5, CORR, 26.5, B.z1, 0, 2.7, mat.frosted, 0.04);
   segM(26.5, CORR, 26.5, B.z1, 2.7, 2.8, mat.white, 0.1);
   rbox(0.1, 2.8, 0.1, ax(26.5), 0, az(CORR), mat.white);
@@ -939,27 +1119,32 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     box(0.8, 0.72, 0.1, 23, 0, 4.0, mat.lightgrey);
     box(0.8, 0.72, 0.1, 23, 0, 8.0, mat.lightgrey);
     // wall-mounted TV on the door wall (corridor side), facing into the room
-    box(1.4, 0.8, 0.05, 23, 1.0, 2.3, mat.black);
-    box(1.32, 0.72, 0.01, 23, 1.04, 2.33, L(0x20262c));
+    box(2.2, 1.25, 0.05, 23, 0.9, 2.3, mat.black);
+    box(2.12, 1.17, 0.01, 23, 0.94, 2.33, L(0x20262c));
     // red shell chairs (one moulded seat+back shell on a slim 4-leg steel frame), 3 per long side, backs away from the table
     const shellMat = L(0xe5402a, { side: THREE.DoubleSide });
     const frameMat = L(0x8d867f);
     const shellGeo = shellChairGeometry();
-    for (const [cx, dir] of [[22.0, -1], [24.0, 1]] as const) {
-      for (const cz of [4.8, 6.0, 7.2]) {
-        const chair = new THREE.Group();
-        chair.position.set(gx(cx), 0, gz(cz));
-        chair.rotation.y = dir < 0 ? 0 : Math.PI; // local +x = seat front, faces the table
-        chair.add(new THREE.Mesh(shellGeo, shellMat));
-        for (const [fx, tx] of [[0.14, 0.27], [-0.1, -0.26]]) {
-          for (const sz of [-1, 1]) {
-            chairRod(chair, [fx, 0.42, sz * 0.17], [tx, 0.02, sz * 0.27], 0.011, frameMat);
-            cyl(0.016, 0.016, 0.02, tx, 0, sz * 0.27, mat.black, chair, 8);
-          }
-          chairRod(chair, [fx, 0.415, -0.17], [fx, 0.415, 0.17], 0.01, frameMat); // cross bar under the shell
+    // [x, z, yaw]: local +x = seat front; 3 per long side plus one at each head of the table
+    const seats: [number, number, number][] = [
+      ...[4.8, 6.0, 7.2].flatMap((cz): [number, number, number][] => [[22.0, cz, 0], [24.0, cz, Math.PI]]),
+      [23.0, 3.4, -Math.PI / 2], // north head, faces the table
+      [23.0, 8.6, Math.PI / 2], // south head
+    ];
+    for (const [cx, cz, ry] of seats) {
+      const chair = new THREE.Group();
+      chair.position.set(gx(cx), 0, gz(cz));
+      chair.rotation.y = ry;
+      if (Math.abs(Math.sin(ry)) < 0.5) meetSeats.push({ x: gx(cx), z: gz(cz), yaw: Math.atan2(Math.cos(ry), -Math.sin(ry)) }); // side chairs only; local +x = seat front
+      chair.add(new THREE.Mesh(shellGeo, shellMat));
+      for (const [fx, tx] of [[0.14, 0.27], [-0.1, -0.26]]) {
+        for (const sz of [-1, 1]) {
+          chairRod(chair, [fx, 0.42, sz * 0.17], [tx, 0.02, sz * 0.27], 0.011, frameMat);
+          cyl(0.016, 0.016, 0.02, tx, 0, sz * 0.27, mat.black, chair, 8);
         }
-        world.add(chair);
+        chairRod(chair, [fx, 0.415, -0.17], [fx, 0.415, 0.17], 0.01, frameMat); // cross bar under the shell
       }
+      world.add(chair);
     }
   });
 
@@ -969,13 +1154,13 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   // After the photos (IMG_8872-8876): sit-stand desks, long rows running from the glass wall towards the east windows,
   // one head desk facing the windows, a walkway (and a low cabinet / plants) along the window wall, white open shelves as end caps.
   const SS = { stand: true };
-  const ROW_W = 1.5;
-  const EAST_XS = [29.1, 30.6]; // two desks per row, x 28.35..31.35
+  const ROW_W = 1.8; // tables 6-9 (was 1.5), east edge stays at x 31.35
+  const EAST_XS = [30.45]; // one desk per row (the inner desks, seats 23/25/28/30, were removed), x 29.55..31.35
   for (const zc of [4.2, 7.6]) {
     within(29.9, zc, () => {
       deskRowX(zc - 0.41, EAST_XS, -1, { ...SS, w: ROW_W });
       deskRowX(zc + 0.41, EAST_XS, 1, { ...SS, w: ROW_W });
-      desk(27.95, zc, -Math.PI / 2, SS); // head desk: chair on the west side, faces the east windows
+      desk(29.15, zc, -Math.PI / 2, SS); // head desk, flush against the row desks (x 29.55): chair on the west side, faces the east windows
       shelf(31.65, zc, 1.6, 1.1, 0.35, Math.PI / 2); // open shelf closing the group towards the walkway
       pendant(30.2, zc, 'black', 1.95, 2.8);
       pendant(28.4, zc, 'black', 1.95, 2.8);
@@ -985,9 +1170,10 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   box(0.45, 0.7, 1.2, 32.05, 0, 2.9, mat.white); // low white cabinet under the east windows
   // tables 10 + 11: centred in the room (x 27.1..32.35) and pushed against the north wall (inner face z = -5.35)
   within(29.7, -3.7, () => {
-    deskRowZ(29.3, [-4.5, -2.9], -1, SS);
-    deskRowZ(30.1, [-4.5, -2.9], 1, SS);
-    shelf(29.7, -1.7, 1.0, 1.1, 0.35, 0);
+    const NW = 1.85; // tables 10 + 11: desks 1.85 wide (was 1.6), first one against the north wall
+    deskRowZ(29.3, [-5.3 + NW / 2, -5.3 + NW * 1.5], -1, { ...SS, w: NW });
+    deskRowZ(30.1, [-5.3 + NW / 2, -5.3 + NW * 1.5], 1, { ...SS, w: NW });
+    shelf(26.06 + 0.175, CZ + 0.06 - 0.75, 1.0, 1.1, 0.35, Math.PI / 2); // cupboard behind seat 30: against the east face of the core wall (x 26), south end 0.25 north of its corner so the hallway stays free
     pendant(29.7, -3.7, 'black', 1.95, 2.8);
   });
   coatRack(31.9, -1.4, false); // white coat stand near the window
@@ -1004,7 +1190,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     const flat = (x1: number, z1: number, x2: number, z2: number, y: number) =>
       rbox(ax(x2) - ax(x1), 0.08, az(z2) - az(z1), (ax(x1) + ax(x2)) / 2, y, (az(z1) + az(z2)) / 2, rm, 0, roof);
     const rq = (pts: P3[], m: Mat) => quad(pts.map(([x, y, z]) => [ax(x), y, az(z)] as P3), m, roof);
-    flat(B.x0, B.z0, -5, B.z1, H_LOW); // Wassermelonen flat ceiling
+    flat(B.x0, B.z0, -5, B.z1 + ANNEX.d, H_LOW); // Wassermelonen + small meeting room annex flat ceiling
     flat(-5, BAND, B.x1, B.z1, H_LOW); // low band along long window wall
     flat(27.7, B.z0, B.x1, BAND, H_LOW); // low band along east end
     flat(-5, B.z0, 26, CZ, H_CORE); // lid of core box
@@ -1051,12 +1237,27 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     const screen = new THREE.Mesh(screenGeo, screenOffMaterial());
     screen.position.set(0, 1.03, -0.22 + 0.0165);
     root.add(screen);
-    // a little plant in the back corner next to the monitor (alternating side), varied kind and pot
-    const pg = new THREE.Group();
-    pg.position.set(s.x, 0, s.z);
-    pg.rotation.y = s.rot;
-    world.add(pg);
-    deskPlant(pg, i, (i % 2 ? 1 : -1) * (s.w / 2 - 0.18), -0.27, 0.75, POTS[(i >> 2) % 3]);
+    // a little plant in a back corner next to the monitor: seeded per desk so it is stable but varied
+    // (side, spot, kind, pot, size, turn; some desks get none)
+    const rnd = (n: number) => {
+      const v = Math.sin((i + 1) * 127.1 + n * 311.7) * 43758.5453;
+      return v - Math.floor(v);
+    };
+    if (rnd(0) > 0.12) {
+      const side = rnd(1) < 0.5 ? -1 : 1;
+      const px = side * (0.4 + rnd(2) * (s.w / 2 - 0.55));
+      const pz = -0.32 + rnd(3) * 0.1;
+      const pg = new THREE.Group();
+      pg.position.set(s.x, 0, s.z);
+      pg.rotation.y = s.rot;
+      const pl = new THREE.Group();
+      pl.position.set(px, 0.75, pz);
+      pl.rotation.y = rnd(4) * Math.PI * 2;
+      pl.scale.setScalar(0.85 + rnd(5) * 0.4);
+      pg.add(pl);
+      world.add(pg);
+      deskPlant(pl, Math.floor(rnd(6) * 4), 0, 0, 0, POTS[Math.floor(rnd(7) * 3)]);
+    }
     scene.add(root);
     root.updateMatrixWorld(true);
     blockers.push(tpl.box.clone().applyMatrix4(root.matrixWorld));
@@ -1085,7 +1286,10 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   leaf.castShadow = true;
   const handle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.03, 0.09), mat.steel);
   handle.position.set(doorW - 0.1, 1.0, 0);
-  door.add(leaf, handle);
+  // glass pane set into the upper part of the leaf (slightly proud of both faces)
+  const pane = new THREE.Mesh(new THREE.BoxGeometry(doorW - 0.3, 1.1, 0.06), mat.glass);
+  pane.position.set(doorW / 2, 1.3, 0);
+  door.add(leaf, pane, handle);
   door.position.set(ax(-3.9) - 0.5 + 0.03, 0, az(B.z1));
   scene.add(door);
 
@@ -1096,7 +1300,39 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   scene.add(paper);
   const printer = { stand: { x: ax(12.4), z: az(CZ - 1.25) }, yaw: 0, paper };
 
-  return { desks, blockers, roof: staticRoof, entrance: door, printer };
+  const meeting = { doorPos: { x: ax(20.65), z: az(CORR) }, center: { x: ax(23), z: az(6.0) }, seats: meetSeats };
+  // the strip south of the wall, east of the annex, is outside: block it so nobody walks out through the entrance doorway into thin air
+  blockers.push(new THREE.Box3(new THREE.Vector3(ax(ANNEX.x1), 0, OFFICE_D), new THREE.Vector3(OFFICE_W, 1.2, OFFICE_D + ANNEX_D)));
+  // numbered room labels (blue, model coordinates of the room centres)
+  const roomLabels = new THREE.Group();
+  scene.add(roomLabels);
+  [
+    [-7.5, 2.0], // Wassermelonen (places 1-7)
+    [-7.25, 11.2], // small meeting room (annex)
+    [-2.5, -3.2], // storage
+    [2.0, -3.2], // washroom
+    [7.25, -3.2], // kitchen
+    [14.5, -3.2], // archive
+    [22.0, -3.5], // dark room
+    [23.0, 6.0], // glass meeting room
+  ].forEach(([x, z], i) => {
+    const tex = canvasTex(128, 128, (g, w, h) => {
+      g.fillStyle = '#1f6fd0';
+      g.fillRect(0, 0, w, h);
+      g.fillStyle = '#fff';
+      g.font = 'bold 84px sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(String(i + 1), w / 2, h / 2 + 4);
+    });
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
+    sp.position.set(ax(x), 2.2, az(z));
+    sp.scale.set(0.6, 0.6, 1);
+    sp.renderOrder = 999;
+    roomLabels.add(sp);
+  });
+
+  return { desks, blockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: { x: (podSeats[0].x + podSeats[1].x) / 2, z: (podSeats[0].z + podSeats[1].z) / 2 + 0.6 }, seats: podSeats } };
 }
 
 /**

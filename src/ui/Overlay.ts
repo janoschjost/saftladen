@@ -72,7 +72,7 @@ export class Overlay {
       this.tipName.textContent = name;
       this.tipRole.textContent = role;
       if (portrait) {
-        this.tipImage.src = import.meta.env.BASE_URL + portrait;
+        this.tipImage.src = portrait.startsWith('data:') ? portrait : import.meta.env.BASE_URL + portrait;
         this.tipImage.hidden = false;
       } else {
         this.tipImage.hidden = true;

@@ -10,6 +10,8 @@ export interface FeedEntry {
 export interface FeedTile {
   variant: number;
   rect: DOMRect;
+  /** the part of the tile inside the panel (the panel clips while it opens/closes) */
+  clip: DOMRect;
 }
 
 /**
@@ -79,10 +81,16 @@ export class Feeds {
   tiles(): Array<FeedTile & { id: string }> {
     if (this.root.hidden) return [];
     const out: Array<FeedTile & { id: string }> = [];
+    const box = this.root.getBoundingClientRect();
     for (const [id, t] of this.tilesEls) {
       const rect = t.el.getBoundingClientRect();
       if (rect.width < 4 || rect.height < 4) continue;
-      out.push({ id, variant: t.variant, rect });
+      const l = Math.max(rect.left, box.left);
+      const r = Math.min(rect.right, box.right);
+      const tp = Math.max(rect.top, box.top);
+      const b = Math.min(rect.bottom, box.bottom);
+      if (r - l < 1 || b - tp < 1) continue;
+      out.push({ id, variant: t.variant, rect, clip: new DOMRect(l, tp, r - l, b - tp) });
     }
     return out;
   }

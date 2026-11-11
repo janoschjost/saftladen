@@ -7,6 +7,8 @@ export interface DogRig {
   legs: THREE.Object3D[]; // FL, FR, BL, BR
   tail: THREE.Object3D;
   headHeight: number;
+  /** head centre (z = forward) and radius to frame, in the root's unscaled units */
+  face: { y: number; z: number; r: number };
 }
 
 const DOGS = {
@@ -68,5 +70,5 @@ export function buildDog(kind: keyof typeof DOGS): DogRig {
   body.add(tail);
 
   root.scale.setScalar(d.size);
-  return { root, body, legs, tail, headHeight: 1.0 * d.size };
+  return { root, body, legs, tail, headHeight: 1.0 * d.size, face: { y: 0.68, z: 0.42, r: 0.3 } };
 }

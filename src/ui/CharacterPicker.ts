@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { team } from '../data/team';
 import { buildCharacter } from '../render/characterBuilder';
+import { buildCat } from '../render/catBuilder';
 import { buildDog } from '../render/dogBuilder';
 import { HOME_COUNT, HOME_LABELS, SPECIAL_HOME } from '../render/homeOffice';
 import { assignHomeRoom, homeOwnerOf, homeRoomOf } from '../data/homeAssignments';
@@ -185,17 +186,19 @@ export class CharacterPicker {
     });
     const group = new THREE.Group();
     group.add(rig.root);
-    if (m.dog) {
-      // the owner's dog sits beside them on the turntable
-      const dog = buildDog(m.dog);
-      dog.root.position.set(0.62, 0, 0.18);
-      dog.root.rotation.y = 0.5;
-      dog.root.traverse((o) => {
+    // the owner's pets stand beside them on the turntable: dog first, then the cats
+    const pets = [...(m.dog ? [buildDog(m.dog)] : []), ...(m.cats ?? []).map((c) => buildCat(c.kind))];
+    const slots: Array<[number, number, number]> = [[0.62, 0.18, 0.5], [0.5, -0.38, -0.3], [0.3, 0.5, 0.9]];
+    pets.forEach((pet, n) => {
+      const [x, z, ry] = slots[n % slots.length];
+      pet.root.position.set(x, 0, z);
+      pet.root.rotation.y = ry;
+      pet.root.traverse((o) => {
         if (o instanceof THREE.Mesh) o.castShadow = true;
       });
-      group.add(dog.root);
-    }
-    group.position.x = m.dog ? -0.28 : 0;
+      group.add(pet.root);
+    });
+    group.position.x = pets.length ? -0.28 : 0;
     this.figure = group;
     this.turntable.add(group);
     if (m.portrait) {

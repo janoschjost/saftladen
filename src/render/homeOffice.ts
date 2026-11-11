@@ -847,11 +847,11 @@ export class HomeOffice {
   }
 
   /** Draw into a rectangle of the main canvas (CSS pixels, y measured from the bottom). */
-  render(renderer: THREE.WebGLRenderer, x: number, y: number, w: number, h: number): void {
+  render(renderer: THREE.WebGLRenderer, x: number, y: number, w: number, h: number, clip?: [number, number, number, number]): void {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     renderer.setViewport(x, y, w, h);
-    renderer.setScissor(x, y, w, h);
+    renderer.setScissor(...(clip ?? [x, y, w, h]));
     renderer.render(this.scene, this.camera);
   }
 }

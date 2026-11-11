@@ -113,7 +113,7 @@ export class Presence {
     this.timer = between(CHECK);
     const leaving = this.people.filter((p) => p.presence === 'leaving').length;
     if (this.absent.length >= this.target || leaving >= 2) return;
-    const candidates = this.people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.task && !p.printJob);
+    const candidates = this.people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.task && !p.printJob && !p.foosJob && !p.vapeJob);
     if (!candidates.length) return;
     const p = candidates[Math.floor(Math.random() * candidates.length)];
     const home = Math.random() < HOME_SHARE && this.homeCount < MAX_HOME;

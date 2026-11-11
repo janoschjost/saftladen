@@ -19,6 +19,10 @@ export class NavGrid {
     for (let z = cz; z < cz + d; z++) for (let x = cx; x < cx + w; x++) if (this.inside(x, z)) this.blocked[z * this.cols + x] = 1;
   }
 
+  unblock(cx: number, cz: number): void {
+    if (this.inside(cx, cz)) this.blocked[cz * this.cols + cx] = 0;
+  }
+
   /** Blocks every cell overlapped by the world-space rectangle (touching edges do not count). */
   blockWorld(x0: number, z0: number, x1: number, z1: number): void {
     const e = 0.02;

@@ -1,4 +1,4 @@
-const groups = new Map<string, Array<(collapsed: boolean) => void>>();
+const groups = new Map<string, Array<(collapsed: boolean, animate?: boolean) => void>>();
 
 /** Adds a chevron button to a panel title that folds the panel's content away. The state is remembered. */
 /** Panels sharing a `group` behave like an accordion: only one is open at a time. */
@@ -6,8 +6,29 @@ export function makeCollapsible(root: HTMLElement, title: HTMLElement, key: stri
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'm-collapse';
-  const set = (collapsed: boolean) => {
+  let anim: Animation | null = null;
+  const set = (collapsed: boolean, animate = false) => {
+    const was = root.classList.contains('is-collapsed');
+    const first = root.getBoundingClientRect();
+    anim?.cancel();
     root.classList.toggle('is-collapsed', collapsed);
+    if (animate && was !== collapsed && !root.hidden && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const last = root.getBoundingClientRect();
+      // keep the content visible and clipped while the box grows or shrinks
+      root.classList.add('is-animating');
+      const a = root.animate(
+        { height: [`${first.height}px`, `${last.height}px`], width: [`${first.width}px`, `${last.width}px`] },
+        { duration: 300, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' },
+      );
+      anim = a;
+      const done = () => {
+        if (anim !== a) return;
+        anim = null;
+        root.classList.remove('is-animating');
+      };
+      a.onfinish = done;
+      a.oncancel = done;
+    }
     btn.setAttribute('aria-expanded', String(!collapsed));
     btn.setAttribute('aria-label', collapsed ? 'Aufklappen' : 'Zuklappen');
     try {
@@ -27,8 +48,8 @@ export function makeCollapsible(root: HTMLElement, title: HTMLElement, key: stri
   if (group) groups.set(group, [...siblings, set]);
   btn.addEventListener('click', () => {
     const collapse = !root.classList.contains('is-collapsed');
-    set(collapse);
-    if (!collapse) groups.get(group ?? '')?.forEach((other) => other !== set && other(true));
+    set(collapse, true);
+    if (!collapse) groups.get(group ?? '')?.forEach((other) => other !== set && other(true, true));
   });
   title.appendChild(btn);
   // only one panel of a group may start open

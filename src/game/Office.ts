@@ -49,14 +49,47 @@ export class Printer {
   }
 }
 
+/** One side of the foosball table. */
+export class FoosSpot {
+  occupant: Person | null = null;
+  constructor(
+    readonly stand: Vec2,
+    /** direction the player faces (yaw, 0 = +z) */
+    readonly yaw: number,
+  ) {}
+}
+
+/** Foosball table: two people play against each other, one per side. */
+export class Foosball {
+  constructor(readonly spots: [FoosSpot, FoosSpot]) {}
+
+  get free(): boolean {
+    return this.spots.every((s) => !s.occupant);
+  }
+
+  /** `a` and `b` walk to the table and play. False when it is busy or somebody can't play. */
+  start(a: Person, b: Person, nav: NavGrid): boolean {
+    if (!this.free || a === b) return false;
+    return a.startFoosball(nav, this.spots[0], b) && b.startFoosball(nav, this.spots[1], a);
+  }
+}
+
 /** Every desk of the office model becomes a workplace; the approach cell is the first free cell behind the chair. */
 export class Office {
   readonly desks: Desk[] = [];
   readonly printer: Printer | null;
+  readonly foosball: Foosball | null;
+  /** everybody who works here (filled by the game), used to find a foosball opponent */
+  readonly people: Person[] = [];
 
   constructor(model: OfficeModel, nav: NavGrid) {
     const stand = nav.nearestWalkable(model.printer.stand, 6);
     this.printer = stand ? new Printer(stand, model.printer.yaw, model.printer.paper) : null;
+    const spots = model.foosball.map((f) => {
+      const stand = nav.nearestWalkable({ x: f.x, z: f.z }, 3);
+      return stand ? new FoosSpot(stand, f.yaw) : null;
+    });
+    this.foosball = spots[0] && spots[1] ? new Foosball([spots[0], spots[1]]) : null;
     for (const d of model.desks) {
       let approach: Vec2 | null = null;
       for (const dist of [1.0, 1.25, 1.5, 1.8, 2.2]) {
@@ -69,6 +102,16 @@ export class Office {
       approach ??= nav.nearestWalkable({ x: d.seat.x + d.back.x * 1.2, z: d.seat.z + d.back.z * 1.2 }, 6);
       if (approach) this.desks.push(new Desk(this.desks.length + 1, d.seat, approach, d.yaw, d.rig));
     }
+  }
+
+  /** `p` asks somebody who is free to play foosball; false when the table is busy or nobody is around. */
+  challenge(p: Person, nav: NavGrid): boolean {
+    const f = this.foosball;
+    if (!f?.free) return false;
+    const pool = this.people.filter((o) => o !== p && o.inOffice && !o.held && !o.controlled && !o.talk && !o.meetJob && !o.printJob && !o.foosJob && !o.vapeJob);
+    if (!pool.length) return false;
+    const other = pool[Math.floor(Math.random() * pool.length)];
+    return f.start(p, other, nav);
   }
 
   desk(number: number): Desk | undefined {

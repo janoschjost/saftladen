@@ -5,19 +5,23 @@ export class Actions {
   private home = document.getElementById('actions-home') as HTMLButtonElement;
   private out = document.getElementById('actions-out') as HTMLButtonElement;
 
+  private follow = document.getElementById('actions-follow') as HTMLButtonElement;
   private steer = document.getElementById('actions-steer') as HTMLButtonElement;
 
-  constructor(onHome: () => void, onOut: () => void, onSteer: () => void) {
+  constructor(onHome: () => void, onOut: () => void, onSteer: () => void, onFollow: () => void) {
+    this.follow.addEventListener('click', onFollow);
     this.steer.addEventListener('click', onSteer);
     this.home.addEventListener('click', onHome);
     this.out.addEventListener('click', onOut);
   }
 
   /** `name` null hides the card. */
-  show(name: string | null, homeFull: boolean, steering = false): void {
+  show(name: string | null, homeFull: boolean, steering = false, following = false): void {
     this.root.hidden = !name;
     if (!name) return;
     if (this.name.textContent !== name) this.name.textContent = name;
+    this.follow.setAttribute('aria-pressed', String(following));
+    this.follow.textContent = following ? 'Folgen beenden (F)' : 'Folgen (F)';
     this.steer.setAttribute('aria-pressed', String(steering));
     this.steer.textContent = steering ? 'Steuern beenden' : 'Steuern (WASD)';
     this.home.disabled = homeFull;

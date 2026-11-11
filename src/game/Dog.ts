@@ -13,6 +13,8 @@ export interface PetOptions {
   id?: string;
   /** shown in the tooltip, e.g. "Office dog" / "Office cat" */
   label?: string;
+  /** profile image (data URL) shown in the tooltip */
+  portrait?: string | null;
   speed?: number;
   radius?: number;
   /** -1 left / 1 right of the owner (default random) */
@@ -24,6 +26,7 @@ export class Dog extends Walker {
   speed = 2.2;
   radius = 0.3;
   readonly label: string;
+  readonly portrait: string | null;
   root: THREE.Object3D;
   headHeight: number;
   id: string;
@@ -42,6 +45,7 @@ export class Dog extends Walker {
   ) {
     super(start);
     this.label = opts.label ?? 'Bürohund';
+    this.portrait = opts.portrait ?? null;
     this.speed = opts.speed ?? this.speed;
     this.radius = opts.radius ?? this.radius;
     this.side = opts.side ?? (Math.random() < 0.5 ? 1 : -1);

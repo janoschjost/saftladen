@@ -14,6 +14,8 @@ export interface CharacterRig {
   headHeight: number;
   /** only on `moody` looks: true = very happy face, false = very serious */
   setMood?: (happy: boolean) => void;
+  /** only on `vape` looks: the bendable forearm of the right arm, the glowing tip and the vapour puffs */
+  vape?: { elbow: THREE.Object3D; led: THREE.MeshBasicMaterial; puffs: THREE.Mesh[] };
 }
 
 /** A scale of 1 is this tall; `heightM` on a Look is converted relative to it. */
@@ -278,7 +280,49 @@ export function buildCharacter(look: Look): CharacterRig {
     return pivot;
   };
   const armL = mkArm(-1);
-  const armR = mkArm(1);
+  let armR: THREE.Object3D;
+  let vape: CharacterRig['vape'];
+  if (look.vape) {
+    // right arm in two parts (upper arm + forearm on an elbow pivot) so the hand can go to the mouth
+    const pivot = new THREE.Group();
+    pivot.position.set(0.23 * build + 0.085 + (ar - 1) * 0.07, 1.4, 0);
+    const seg = (d0: number, d1: number, origin: number): THREE.BufferGeometry[] => {
+      const out: THREE.BufferGeometry[] = [];
+      const sleeve = [d0, Math.min(d1, armLen)];
+      if (sleeve[1] > sleeve[0]) out.push(box(0.14 * ar, sleeve[1] - sleeve[0], 0.16 * ar, 0, -((sleeve[0] + sleeve[1]) / 2 - origin), 0, sleeveColor));
+      const arm = [Math.max(d0, armLen), d1];
+      if (arm[1] > arm[0]) out.push(box(0.115 * ar, arm[1] - arm[0], 0.13 * ar, 0, -((arm[0] + arm[1]) / 2 - origin), 0, skin));
+      return out;
+    };
+    pivot.add(mesh(seg(0, 0.3, 0)));
+    const elbow = new THREE.Group();
+    elbow.position.y = -0.3;
+    const device: THREE.BufferGeometry[] = [
+      ...seg(0.3, 0.6, 0.3),
+      box(0.04, 0.13, 0.04, 0, -0.32, 0, '#23262b'), // body
+      box(0.042, 0.03, 0.042, 0, -0.285, 0, '#c9a24a'), // gold ring
+      box(0.025, 0.04, 0.025, 0, -0.395, 0, '#d8d8d4'), // mouthpiece
+    ];
+    elbow.add(mesh(device));
+    const led = new THREE.MeshBasicMaterial({ color: 0x3a1a10 });
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.02), led);
+    tip.position.set(0, -0.345, 0.023);
+    elbow.add(tip);
+    pivot.add(elbow);
+    body.add(pivot);
+    armR = pivot;
+    const puffs: THREE.Mesh[] = [];
+    for (let i = 0; i < 5; i++) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0xf2f2f4, transparent: true, opacity: 0, depthWrite: false }));
+      m.visible = false;
+      m.userData.nonav = true;
+      root.add(m);
+      puffs.push(m);
+    }
+    vape = { elbow, led, puffs };
+  } else {
+    armR = mkArm(1);
+  }
 
   // ---- legs (pivot at hip)
   const shoe = new THREE.Color(look.bottom).getHSL({ h: 0, s: 0, l: 0 }).l > 0.6 ? SHOE_DARK : SHOE_LIGHT;
@@ -318,5 +362,5 @@ export function buildCharacter(look: Look): CharacterRig {
   const h = look.heightM ? look.heightM / REF_HEIGHT_M : look.height ?? 1;
   root.scale.setScalar(h);
 
-  return { root, body, legL, legR, kneeL, kneeR, armL, armR, headHeight: 1.95 * h, setMood };
+  return { root, body, legL, legR, kneeL, kneeR, armL, armR, headHeight: 1.95 * h, setMood, vape };
 }

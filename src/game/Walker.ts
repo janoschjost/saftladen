@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { NavGrid, Vec2 } from './NavGrid';
-import type { Conversation } from './Social';
+import type { Talk } from './Social';
 
 export type WalkerState = 'idle' | 'walk';
 
@@ -27,10 +27,13 @@ export abstract class Walker {
   /** Walker this one stays with (dog -> owner); excluded from avoidance and collision. */
   companion: Walker | null = null;
   private blockedTime = 0;
+  private stuckClock = 0;
+  private stuckFrom: Vec2 = { x: 0, z: 0 };
+  private stuckCount = 0;
   /** true while the user holds this walker with the mouse */
   held = false;
   /** conversation this walker is part of, if any */
-  talk: Conversation | null = null;
+  talk: Talk | null = null;
   speaking = false;
   /** seconds before this walker may join a new conversation */
   socialCooldown = 0;
@@ -122,8 +125,9 @@ export abstract class Walker {
 
     if (this.state === 'idle') {
       this.timer -= dt;
-      this.moving += (0 - this.moving) * Math.min(1, dt * 8);
       this.blockedTime = 0;
+      if (!this.talk && this.stepAside(dt, nav, others)) return;
+      this.moving += (0 - this.moving) * Math.min(1, dt * 8);
       if (this.talk) {
         // standing in a conversation: face the others
         const c = this.talk.center;
@@ -152,29 +156,44 @@ export abstract class Walker {
     let sx = 0;
     let sz = 0;
     let speedFactor = 1;
+    let back = 0;
+    let backSide = 1;
     for (const o of others) {
       if (o === this || o.away || this.ignores(o)) continue;
       const ox = o.pos.x - this.pos.x;
       const oz = o.pos.z - this.pos.z;
       const d = Math.hypot(ox, oz);
-      const reach = this.radius + o.radius + 0.9;
+      const reach = this.radius + o.radius + 1.7;
       if (d >= reach || d === 0) continue;
       const ahead = (ox * dx + oz * dz) / d; // 1 = straight ahead
-      if (ahead < -0.2) continue; // behind us
+      if (ahead < -0.5) continue; // behind us
       const k = 1 - d / reach;
       // lateral offset of the other relative to our heading: side > 0 means it is on our right
       const side = ox * dz - oz * dx;
       const dodge = side > 0 ? 1 : -1; // go to the opposite side of it
       // perpendicular to heading (left = (-dz, dx)); dodge > 0 means other is on right, so go left
-      sx += (-dz * dodge - ox / d * 0.3) * k * 2.2;
-      sz += (dx * dodge - oz / d * 0.3) * k * 2.2;
-      if (ahead > 0.6 && d < this.radius + o.radius + 0.35) speedFactor = Math.min(speedFactor, 0.25);
+      sx += (-dz * dodge - ox / d * 0.3) * k * 3.2;
+      sz += (dx * dodge - oz / d * 0.3) * k * 3.2;
+      if (ahead > 0.4 && d < this.radius + o.radius + 0.9) {
+        speedFactor = Math.min(speedFactor, Math.max(0.25, (d - this.radius - o.radius) / 0.9));
+        // nose to nose: back off a little instead of pushing through
+        if (d < this.radius + o.radius + 0.4) {
+          back = Math.max(back, 1 - (d - this.radius - o.radius) / 0.4);
+          backSide = side > 0 ? -1 : 1;
+        }
+      }
     }
     let mx = dx + sx;
     let mz = dz + sz;
     const ml = Math.hypot(mx, mz) || 1;
     mx /= ml;
     mz /= ml;
+    // avoidance must never steer us into a wall: fall back to the plain heading (or a pure slowdown)
+    if (!this.clear(nav, mx, mz)) {
+      mx = dx;
+      mz = dz;
+      if (!this.clear(nav, mx, mz)) speedFactor = Math.max(speedFactor, 0.6);
+    }
 
     // stuck for too long -> give up and pick something else
     this.blockedTime = speedFactor < 0.5 ? this.blockedTime + dt : 0;
@@ -186,6 +205,37 @@ export abstract class Walker {
       return;
     }
 
+    if (back > 0 && this.clear(nav, -dx, -dz)) {
+      // step backwards (and slightly sideways), keep facing the way we were going
+      const bs = this.speed * 0.5 * Math.min(1, back) * dt;
+      this.pos.x += (-dx - dz * backSide * 0.6) * bs;
+      this.pos.z += (-dz + dx * backSide * 0.6) * bs;
+      this.moving += (0.4 - this.moving) * Math.min(1, dt * 8);
+      this.phase -= dt * this.speed * 2;
+      return;
+    }
+
+    // no real progress for a while (wedged in a doorway / against furniture): re-plan, then give up
+    this.stuckClock += dt;
+    if (this.stuckClock >= 1.2) {
+      const moved = Math.hypot(this.pos.x - this.stuckFrom.x, this.pos.z - this.stuckFrom.z);
+      this.stuckClock = 0;
+      this.stuckFrom = { ...this.pos };
+      if (moved < this.speed * 0.25) {
+        const goal = this.path[this.path.length - 1];
+        if (++this.stuckCount >= 2 || !goal) {
+          this.stuckCount = 0;
+          this.path = [];
+          this.state = 'idle';
+          this.timer = 0.2 + Math.random() * 0.5;
+          return;
+        }
+        this.goTo(nav, goal);
+        return;
+      }
+      this.stuckCount = 0;
+    }
+
     const step = this.speed * speedFactor * dt;
     this.pos.x += mx * step;
     this.pos.z += mz * step;
@@ -194,6 +244,65 @@ export abstract class Walker {
     if (speedFactor > 0.3) this.turnTo(Math.atan2(mx, mz), dt);
     this.moving += (Math.min(1, speedFactor * 1.5) - this.moving) * Math.min(1, dt * 8);
     this.phase += dt * this.speed * speedFactor * 4.2;
+  }
+
+  /**
+   * Idle walker makes room: when someone walks towards us (or stands on us) shuffle sideways, out of their path.
+   * Returns true while stepping (replaces the idle animation for this step).
+   */
+  /** true if there is free floor (with body clearance) a short way in direction (dx,dz). */
+  private clear(nav: NavGrid, dx: number, dz: number): boolean {
+    const m = 0.3;
+    for (const k of [0.5, 1]) {
+      const c = nav.toCell({ x: this.pos.x + dx * m * k + dx * 0.15, z: this.pos.z + dz * m * k + dz * 0.15 });
+      if (!nav.walkable(c.cx, c.cz)) return false;
+    }
+    return true;
+  }
+
+  private stepAside(dt: number, nav: NavGrid, others: readonly Walker[]): boolean {
+    let ax = 0;
+    let az = 0;
+    for (const o of others) {
+      if (o === this || o.away || o.held || this.ignores(o)) continue;
+      const ox = this.pos.x - o.pos.x; // from them to us
+      const oz = this.pos.z - o.pos.z;
+      const d = Math.hypot(ox, oz);
+      const near = this.radius + o.radius + 1.2;
+      if (d >= near) continue;
+      if (o.state === 'walk') {
+        const hx = Math.sin(o.yaw);
+        const hz = Math.cos(o.yaw);
+        if (d > 1e-4 && (ox * hx + oz * hz) / d > -0.2) continue; // they are not heading at us
+        // sidestep perpendicular to their heading, to the side we are already on
+        const side = ox * hz - oz * hx;
+        const sgn = side >= 0 ? 1 : -1;
+        const k = 1 - d / near;
+        ax += hz * sgn * k * 2 + (d > 1e-4 ? (ox / d) * 0.3 : 0);
+        az += -hx * sgn * k * 2 + (d > 1e-4 ? (oz / d) * 0.3 : 0);
+      } else if (d < this.radius + o.radius && d > 1e-4 && !o.fixed) {
+        // two standing bodies overlap: drift apart
+        ax += ox / d;
+        az += oz / d;
+      }
+    }
+    const l = Math.hypot(ax, az);
+    if (l < 0.05) return false;
+    ax /= l;
+    az /= l;
+    // never shuffle into walls, shelves or door frames: try the mirrored side, else stay put
+    if (!this.clear(nav, ax, az)) {
+      if (this.clear(nav, -az, ax)) [ax, az] = [-az, ax];
+      else if (this.clear(nav, az, -ax)) [ax, az] = [az, -ax];
+      else return false;
+    }
+    const step = this.speed * 0.9 * dt;
+    this.pos.x += ax * step;
+    this.pos.z += az * step;
+    this.moving += (0.5 - this.moving) * Math.min(1, dt * 8);
+    this.phase += dt * this.speed * 2.5;
+    this.timer = Math.max(this.timer, 0.4); // don't wander off while shuffling
+    return true;
   }
 
   walkTo(nav: NavGrid, to: Vec2): void {
@@ -227,5 +336,7 @@ export abstract class Walker {
     const j = nav.cell * 0.3;
     this.path = path.map((p, i) => (i === path.length - 1 ? p : { x: p.x + (Math.random() - 0.5) * j, z: p.z + (Math.random() - 0.5) * j }));
     this.state = 'walk';
+    this.stuckClock = 0;
+    this.stuckFrom = { ...this.pos };
   }
 }

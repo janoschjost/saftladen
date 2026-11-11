@@ -22,6 +22,8 @@
         <button class="m-button" id="open-picker" type="button">Figuren</button>
         <button class="m-button" id="toggle-seats" type="button" aria-pressed="false">Plätze</button>
         <button class="m-button" id="toggle-names" type="button" aria-pressed="false">Namen zeigen</button>
+        <button class="m-button" id="toggle-settings" type="button" aria-pressed="false">Einstellungen</button>
+        <button class="m-button" id="toggle-dev" type="button" aria-pressed="false">Dev</button>
       </div>
     </header>
     <div class="l-dock">
@@ -29,6 +31,17 @@
         <h2 class="m-away__title">Nicht im Büro <span class="m-away__count" id="away-count"></span></h2>
         <ul class="m-away__list" id="away-list"></ul>
         <button class="m-button m-away__all" id="away-all" type="button">Alle zurück</button>
+      </aside>
+      <aside class="m-settings" id="settings" aria-label="Einstellungen" hidden>
+        <h2 class="m-settings__title">Einstellungen</h2>
+        <label class="m-settings__row"><input type="checkbox" id="setting-tables" checked /> Tische (Reihennummern)</label>
+        <label class="m-settings__row"><input type="checkbox" id="setting-seats" checked /> Platznummern</label>
+        <label class="m-settings__row"><input type="checkbox" id="setting-rooms" checked /> Raumnummern</label>
+      </aside>
+      <aside class="m-dev" id="dev" aria-label="Dev-Events" hidden>
+        <h2 class="m-settings__title">Dev-Events <span class="m-dev__hint">( ` )</span></h2>
+        <div id="dev-body"></div>
+        <p class="m-dev__status" id="dev-status" role="status"></p>
       </aside>
       <aside class="m-seats" id="seats" aria-label="Platzzuteilung" hidden>
         <h2 class="m-seats__title">Plätze</h2>
@@ -41,6 +54,7 @@
       </aside>
       <div class="m-actions" id="actions" hidden>
         <p class="m-actions__name" id="actions-name"></p>
+        <button class="m-button" id="actions-follow" type="button" aria-pressed="false">Folgen (F)</button>
         <button class="m-button" id="actions-steer" type="button" aria-pressed="false">Steuern (WASD)</button>
         <button class="m-button" id="actions-home" type="button">Homeoffice</button>
         <button class="m-button" id="actions-out" type="button">Rausgehen</button>

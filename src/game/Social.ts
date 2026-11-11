@@ -3,6 +3,13 @@ import type { Person } from './Person';
 
 export type ConversationKind = 'chat' | 'discussion';
 
+/** What a talking walker needs to know about its group (a Conversation, or a Meeting in the meeting room). */
+export interface Talk {
+  kind: ConversationKind;
+  center: Vec2;
+  members: Person[];
+}
+
 const LINK_DISTANCE = 1.7; // people closer than this count as "meeting"
 const MAX_GROUP = 6;
 const CHECK_INTERVAL = 0.5; // seconds between social checks
@@ -116,6 +123,25 @@ export class Social {
     return this.active.reduce((n, c) => n + c.members.length, 0);
   }
 
+  /** Dev: take one person out of whatever conversation they are in. */
+  leave(p: Person): void {
+    for (const c of this.active) {
+      const i = c.members.indexOf(p);
+      if (i < 0) continue;
+      c.members.splice(i, 1);
+      p.talk = null;
+      p.speaking = false;
+      p.socialCooldown = 8;
+    }
+  }
+
+  /** Dev: start a conversation right now (members must already have dropped what they were doing). */
+  start(group: Person[], center: Vec2, nav: NavGrid): Conversation {
+    const c = new Conversation(group, center, nav);
+    this.active.push(c);
+    return c;
+  }
+
   update(dt: number, people: readonly Person[], nav: NavGrid): void {
     this.active = this.active.filter((c) => {
       if (c.update(dt)) return true;
@@ -127,7 +153,7 @@ export class Social {
     if (this.checkTimer > 0) return;
     this.checkTimer = CHECK_INTERVAL;
 
-    const free = people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.task && !p.printJob && p.socialCooldown <= 0);
+    const free = people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.task && !p.printJob && !p.foosJob && !p.vapeJob && p.socialCooldown <= 0);
 
     // others may join a running conversation
     for (const c of this.active) {

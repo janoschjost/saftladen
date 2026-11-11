@@ -67,6 +67,10 @@ export class Seats {
     });
   }
 
+  setLabelsVisible(visible: boolean): void {
+    this.labels.classList.toggle('is-seat-labels-hidden', !visible);
+  }
+
   placeLabels(items: Array<{ number: number; x: number; y: number; hidden: boolean }>): void {
     for (const it of items) {
       const el = this.labelEls[it.number - 1];

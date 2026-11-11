@@ -64,5 +64,5 @@ export function buildCat(kind: CatKind = 'tabby'): DogRig {
   tail.add(mesh(t));
   body.add(tail);
 
-  return { root, body, legs, tail, headHeight: 0.62 };
+  return { root, body, legs, tail, headHeight: 0.62, face: { y: 0.43, z: 0.28, r: 0.15 } };
 }

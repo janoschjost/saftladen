@@ -464,6 +464,95 @@
         }
     }
 
+    .m-dev {
+        position: fixed;
+        top: 6rem;
+        right: 18.5rem;
+        z-index: 3;
+        width: 18rem;
+        max-height: calc(100vh - 8rem);
+        padding: 0.75rem;
+        overflow-y: auto;
+        border-radius: 1rem;
+        background: var(--color-ink);
+        box-shadow: var(--shadow-card);
+        color: white;
+
+        &[hidden] {
+            display: none;
+        }
+
+        &__hint {
+            opacity: 0.5;
+            font-weight: 400;
+        }
+
+        &__group {
+            margin: 0.75rem 0 0.25rem 0.25rem;
+            font-size: 0.75rem;
+            letter-spacing: 0.04em;
+            opacity: 0.6;
+            text-transform: uppercase;
+        }
+
+        .m-button {
+            padding: 0.4em 0.6em 0.3em;
+            font-size: 0.75rem;
+        }
+
+        &__buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.25rem;
+        }
+
+        &__status {
+            min-height: 1.25rem;
+            margin: 0.75rem 0.25rem 0;
+            font-size: 0.75rem;
+            opacity: 0.8;
+        }
+    }
+
+    .m-settings {
+        position: fixed;
+        top: 6rem;
+        right: 1.5rem;
+        z-index: 3;
+        width: 16rem;
+        padding: 0.75rem;
+        border-radius: 1rem;
+        background: var(--color-ink);
+        box-shadow: var(--shadow-card);
+        color: white;
+
+        &[hidden] {
+            display: none;
+        }
+
+        &__title {
+            margin: 0 0 0.5rem 0.25rem;
+            font-family: var(--font-family-heading);
+            font-size: 0.875rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        &__row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem;
+            font-size: 0.875rem;
+            cursor: pointer;
+        }
+    }
+
+    .is-seat-labels-hidden .m-seat-label {
+        display: none;
+    }
+
     .m-seat-label {
         position: absolute;
         left: 0;
@@ -780,6 +869,10 @@
         }
     }
 
+    .is-animating {
+        overflow: hidden;
+    }
+
     .m-feeds.is-collapsed {
         width: 18rem;
     }
@@ -788,9 +881,9 @@
         margin-bottom: 0;
     }
 
-    .m-away.is-collapsed .m-away__list,
-    .m-away.is-collapsed .m-away__all,
-    .m-feeds.is-collapsed .m-feeds__grid {
+    .m-away.is-collapsed:not(.is-animating) .m-away__list,
+    .m-away.is-collapsed:not(.is-animating) .m-away__all,
+    .m-feeds.is-collapsed:not(.is-animating) .m-feeds__grid {
         display: none;
     }
 
@@ -852,7 +945,8 @@
 
     /* buttons on dark panels are inverted */
     .m-actions .m-button,
-    .m-away .m-button {
+    .m-away .m-button,
+    .m-dev .m-button {
         border-color: white;
         color: white;
 

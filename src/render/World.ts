@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { OFFICE_D, OFFICE_W } from './officeModel';
+import { ANNEX_D, ANNEX_W, OFFICE_D, OFFICE_W } from './officeModel';
 
 export const WORLD = {
   width: OFFICE_W, // x, metres
-  depth: OFFICE_D, // z, metres
+  depth: OFFICE_D + ANNEX_D, // z, metres (base rectangle + small meeting room annex)
   slab: 0.8, // slab thickness below the floor
 };
 
@@ -11,7 +11,7 @@ export const WORLD = {
 export const NAV_CELL = 0.5;
 
 /** Mosaic parquet: squares of five strips, alternating direction (4 x 4 squares = 0.64 m per tile). */
-function parquetTexture(): THREE.CanvasTexture {
+function parquetTexture(w: number, d: number): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 256;
   const g = canvas.getContext('2d')!;
@@ -34,22 +34,29 @@ function parquetTexture(): THREE.CanvasTexture {
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(WORLD.width / 0.64, WORLD.depth / 0.64);
+  tex.repeat.set(w / 0.64, d / 0.64);
   tex.anisotropy = 8;
   return tex;
 }
 
 /** Parquet floor slab + soft light. Walls and furniture come from the office model (render/officeModel.ts). */
 export function buildWorld(scene: THREE.Scene): { sun: THREE.DirectionalLight } {
-  const { width: W, depth: D, slab } = WORLD;
+  const { width: W, slab } = WORLD;
+  const D = OFFICE_D;
 
   const side = new THREE.MeshLambertMaterial({ color: '#dcdcd8' });
-  const topMat = new THREE.MeshLambertMaterial({ map: parquetTexture() });
+  const topMat = new THREE.MeshLambertMaterial({ map: parquetTexture(W, D) });
   // BoxGeometry face order: +x, -x, +y, -y, +z, -z
   const floor = new THREE.Mesh(new THREE.BoxGeometry(W, slab, D), [side, side, topMat, side, side, side]);
   floor.position.set(W / 2, -slab / 2, D / 2);
   floor.receiveShadow = true;
   scene.add(floor);
+  // small meeting room annex outside the south wall
+  const annexTop = new THREE.MeshLambertMaterial({ map: parquetTexture(ANNEX_W, ANNEX_D) });
+  const annex = new THREE.Mesh(new THREE.BoxGeometry(ANNEX_W, slab, ANNEX_D), [side, side, annexTop, side, side, side]);
+  annex.position.set(ANNEX_W / 2, -slab / 2, D + ANNEX_D / 2);
+  annex.receiveShadow = true;
+  scene.add(annex);
 
   scene.add(new THREE.HemisphereLight('#ffffff', '#c9b8a4', 1.3));
   const sun = new THREE.DirectionalLight('#ffffff', 1.9);
