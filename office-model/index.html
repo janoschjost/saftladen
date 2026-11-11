@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Office Model</title>
+<style>
+    :root {
+        --color-ui-bg: rgba(20, 20, 22, 0.82);
+        --color-ui-text: white;
+        --color-ui-accent: #e9695c;
+        --color-sky: #dfe6ea;
+        --font-family-base: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    }
+    html, body { height: 100%; margin: 0; overflow: hidden; background: var(--color-sky); font-family: var(--font-family-base); }
+    canvas { display: block; }
+    .m-toolbar { position: fixed; top: 0.75rem; left: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.375rem; padding: 0.5rem; border-radius: 0.5rem; background: var(--color-ui-bg); color: var(--color-ui-text); font-size: 0.8125rem; align-items: center; }
+    .m-toolbar__button { padding: 0.375rem 0.75rem; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 0.25rem; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+    .m-toolbar__button.is-active { border-color: var(--color-ui-accent); background: var(--color-ui-accent); }
+    .m-toolbar__toggle { display: flex; gap: 0.25rem; align-items: center; margin-left: 0.5rem; }
+    .m-hint { position: fixed; bottom: 0.75rem; left: 0.75rem; max-width: 36rem; padding: 0.5rem 0.75rem; border-radius: 0.5rem; background: var(--color-ui-bg); color: var(--color-ui-text); font-size: 0.75rem; line-height: 1.4; }
+</style>
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div class="m-toolbar">
+    <button class="m-toolbar__button" data-mode="orbit">Orbit</button>
+    <button class="m-toolbar__button" data-mode="plan">Floor plan</button>
+    <button class="m-toolbar__button" data-mode="walk">Walk</button>
+    <label class="m-toolbar__toggle"><input type="checkbox" id="toggle-roof"> Roof</label>
+    <label class="m-toolbar__toggle"><input type="checkbox" id="toggle-labels" checked> Labels</label>
+</div>
+<div class="m-hint" id="hint"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ------------------------------------------------------------------
+   Coordinate system (meters): X = along main corridor (entrance -> far end),
+   Z = across building (negative = core side, positive = long window side), Y = up.
+   Building footprint: x -9.5..31.5, z -5.5..9.5  (41 x 15 m, all estimated from photos).
+------------------------------------------------------------------- */
+const B = { x0: -9.5, x1: 31.5, z0: -5.5, z1: 9.5 };
+const CORR = 2.2;       // corridor width (z 0..2.2)
+const H_LOW = 2.8;      // flat ceiling along window walls
+const H_CORE = 3.3;     // top of core box / text wall
+const BAND = 6.7;       // z where high folded roof ends and low window band begins
+const TEETH = [-5, 1.3, 7.9, 14.5, 21.1, 27.7]; // sawtooth roof fold lines (x)
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xdfe6ea);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8a7a68, 2.0));
+scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+const sun = new THREE.DirectionalLight(0xfff2dd, 1.4);
+sun.position.set(12, 30, 25);
+scene.add(sun);
+
+const world = new THREE.Group();   // everything except roof + labels
+const roof = new THREE.Group();
+const labels = new THREE.Group();
+scene.add(world, roof, labels);
+
+/* ---------- materials ---------- */
+const L = (color, o = {}) => new THREE.MeshLambertMaterial({ color, ...o });
+const mat = {
+    wall: L(0xf3f1ec), wallD: L(0xf3f1ec, { side: THREE.DoubleSide }),
+    black: L(0x1b1b1d), dark: L(0x2a2a2d), grey: L(0x9a9c9f), lightgrey: L(0xcfd0d0),
+    white: L(0xf7f6f2), ply: L(0xc98b47), plyLight: L(0xd9b47c), wood: L(0xc8935a), woodDark: L(0x7a4f2c),
+    steel: L(0xb9bcc0), green: L(0x2f6b2d), greenL: L(0x4c8a3a), pot: L(0x3a3a3c), terracotta: L(0xb5653c),
+    glass: new THREE.MeshLambertMaterial({ color: 0xbfe0ea, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false }),
+    frosted: new THREE.MeshLambertMaterial({ color: 0xd3e3e3, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false }),
+    glassBlock: L(0x4a5356), fabric: L(0x77787a), cardboard: L(0xb89468), crate: L(0x8d9499),
+    lampWarm: new THREE.MeshBasicMaterial({ color: 0xffd98a }), cage: L(0xe2b84f),
+};
+
+/* ---------- textures ---------- */
+function canvasTex(w, h, draw) {
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    draw(c.getContext('2d'), w, h);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
+    return t;
+}
+// mosaic parquet: squares of 5 strips, alternating direction (each square ~0.16 m)
+const parquet = canvasTex(256, 256, (g) => {
+    const shades = ['#3c2e21', '#46372a', '#514030', '#5b4936', '#4a3a2b', '#352a1f', '#63503b'];
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+        const horiz = (i + j) % 2 === 0;
+        for (let s = 0; s < 5; s++) {
+            g.fillStyle = shades[Math.floor(Math.random() * shades.length)];
+            if (horiz) g.fillRect(i * 64, j * 64 + s * 12.8, 64, 12.8);
+            else g.fillRect(i * 64 + s * 12.8, j * 64, 12.8, 64);
+        }
+        g.strokeStyle = 'rgba(0,0,0,0.25)'; g.strokeRect(i * 64, j * 64, 64, 64);
+    }
+});
+parquet.wrapS = parquet.wrapT = THREE.RepeatWrapping;
+parquet.repeat.set((B.x1 - B.x0) / 0.64, (B.z1 - B.z0) / 0.64);
+
+const slats = canvasTex(64, 128, (g, w, h) => {
+    g.fillStyle = '#f6f5f1'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#c9c9c6'; for (let y = 8; y < h; y += 16) g.fillRect(0, y, w, 2);
+});
+
+/* ---------- primitives ---------- */
+function box(w, h, d, x, y, z, m, ry = 0, parent = world) {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+    mesh.position.set(x, y + h / 2, z); mesh.rotation.y = ry; parent.add(mesh); return mesh;
+}
+function cyl(r1, r2, h, x, y, z, m, parent = world, seg = 16) {
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, h, seg), m);
+    mesh.position.set(x, y + h / 2, z); parent.add(mesh); return mesh;
+}
+function quad(pts, m, parent = world) {       // pts: 3 or 4 [x,y,z]
+    const g = new THREE.BufferGeometry();
+    const v = pts.length === 4 ? [0, 1, 2, 0, 2, 3] : [0, 1, 2];
+    g.setAttribute('position', new THREE.Float32BufferAttribute(v.flatMap(i => pts[i]), 3));
+    g.computeVertexNormals();
+    const mesh = new THREE.Mesh(g, m); parent.add(mesh); return mesh;
+}
+// axis-aligned wall segment between two points; y0..y1
+function seg(x1, z1, x2, z2, y0, y1, m = mat.wall, t = 0.12, parent = world) {
+    const len = Math.hypot(x2 - x1, z2 - z1);
+    if (len < 0.01 || y1 - y0 < 0.01) return;
+    return box(len, y1 - y0, t, (x1 + x2) / 2, y0, (z1 + z2) / 2, m, -Math.atan2(z2 - z1, x2 - x1), parent);
+}
+/* wall with openings. Wall must be axis aligned. openings: [{a,b,bottom=0,top=2.1,fill}] with a,b
+   in world coords along the wall's running axis. fill: 'glass' | 'frosted' | 'door' | undefined (open) */
+function wall(x1, z1, x2, z2, h = H_CORE, openings = [], o = {}) {
+    const m = o.mat || mat.wall, t = o.t || 0.12;
+    const alongX = Math.abs(z2 - z1) < 1e-6;
+    const P = (s) => alongX ? [s, z1] : [x1, s];
+    let s0 = alongX ? Math.min(x1, x2) : Math.min(z1, z2);
+    const s1 = alongX ? Math.max(x1, x2) : Math.max(z1, z2);
+    const put = (a, b, y0, y1, mm = m, tt = t) => seg(...P(a), ...P(b), y0, y1, mm, tt);
+    [...openings].sort((p, q) => p.a - q.a).forEach(op => {
+        const bottom = op.bottom || 0, top = op.top ?? 2.1;
+        put(s0, op.a, 0, h);
+        put(op.a, op.b, top, h);
+        if (bottom > 0) put(op.a, op.b, 0, bottom);
+        if (op.fill === 'glass') put(op.a, op.b, bottom, top, mat.glass, 0.03);
+        if (op.fill === 'frosted') put(op.a, op.b, bottom, top, mat.frosted, 0.03);
+        if (op.fill === 'door') put(op.a + 0.03, op.b - 0.03, 0, top - 0.03, mat.lightgrey, t + 0.03);
+        s0 = op.b;
+    });
+    put(s0, s1, 0, h);
+}
+// exterior window wall: parapet + glazing band with mullions + lintel
+function windowWall(x1, z1, x2, z2, o = {}) {
+    const h = o.h || H_LOW, sill = 0.85, top = 2.55, bay = 1.1;
+    seg(x1, z1, x2, z2, 0, sill, mat.wall, 0.3);
+    seg(x1, z1, x2, z2, top, h, mat.wall, 0.3);
+    seg(x1, z1, x2, z2, sill, top, mat.glass, 0.03);
+    seg(x1, z1, x2, z2, sill + 0.5, sill + 0.56, mat.white, 0.08);
+    const len = Math.hypot(x2 - x1, z2 - z1), n = Math.round(len / bay);
+    for (let i = 0; i <= n; i++) {
+        const f = i / n, wide = i % 4 === 0;
+        box(wide ? 0.22 : 0.07, top - sill, wide ? 0.3 : 0.1, x1 + (x2 - x1) * f, sill, z1 + (z2 - z1) * f, mat.white, -Math.atan2(z2 - z1, x2 - x1));
+    }
+}
+function label(text, x, y, z, size = 1, dark = true) {
+    const pad = 24, fs = 64;
+    const c = document.createElement('canvas'); const g = c.getContext('2d');
+    g.font = `700 ${fs}px Helvetica Neue, Arial, sans-serif`;
+    c.width = Math.ceil(g.measureText(text).width) + pad * 2; c.height = fs + pad * 2;
+    g.font = `700 ${fs}px Helvetica Neue, Arial, sans-serif`;
+    g.fillStyle = dark ? 'rgba(20,20,22,0.85)' : 'rgba(255,255,255,0.9)';
+    g.beginPath(); g.roundRect(0, 0, c.width, c.height, 18); g.fill();
+    g.fillStyle = dark ? '#fff' : '#111'; g.textBaseline = 'middle'; g.fillText(text, pad, c.height / 2 + 4);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+    const k = 0.0045 * size; sp.scale.set(c.width * k, c.height * k, 1);
+    sp.position.set(x, y, z); sp.renderOrder = 10; labels.add(sp); return sp;
+}
+
+/* ---------- furniture ---------- */
+function desk(x, z, rot = 0, o = {}) {       // 1.6 x 0.8, chair on local +Z, monitor at local -Z
+    const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rot; world.add(g);
+    box(1.6, 0.03, 0.8, 0, 0.72, 0, o.white ? mat.white : mat.black, 0, g);
+    for (const sx of [-0.74, 0.74]) for (const sz of [-0.34, 0.34]) box(0.05, 0.72, 0.05, sx, 0, sz, mat.lightgrey, 0, g);
+    box(0.58, 0.34, 0.03, 0, 0.86, -0.22, mat.black, 0, g);
+    box(0.06, 0.12, 0.06, 0, 0.75, -0.24, mat.black, 0, g);
+    if (!o.noChair) {
+        cyl(0.03, 0.03, 0.42, 0, 0.04, 0.75, mat.dark, g, 8);
+        cyl(0.28, 0.28, 0.04, 0, 0, 0.75, mat.dark, g, 5);
+        box(0.46, 0.07, 0.46, 0, 0.45, 0.75, mat.black, 0, g);
+        box(0.44, 0.5, 0.05, 0, 0.55, 0.98, mat.black, 0, g);
+    }
+    return g;
+}
+// open shelf unit (white boards, plywood edges look): w along local X
+function shelf(x, z, w, h, d = 0.4, rot = 0, fill = true) {
+    const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rot; world.add(g);
+    const levels = Math.max(2, Math.round(h / 0.4));
+    for (let i = 0; i <= levels; i++) box(w, 0.03, d, 0, Math.max(0.04, i * (h - 0.03) / levels), 0, mat.white, 0, g);
+    const bays = Math.max(1, Math.round(w / 0.8));
+    for (let i = 0; i <= bays; i++) box(0.03, h, d, -w / 2 + i * w / bays, 0, 0, mat.white, 0, g);
+    if (fill) {
+        const cols = [0x8c2f2a, 0xd9d6cf, 0x2e4a6b, 0xe0a13a, 0x222222, 0xf1efe9];
+        for (let i = 0; i < bays; i++) for (let l = 0; l < levels; l++) {
+            if ((i * 7 + l * 3) % 3 === 0) continue;
+            const bw = (w / bays) * (0.45 + ((i + l) % 3) * 0.15), lh = (h - 0.03) / levels;
+            box(bw, lh * 0.65, d * 0.7, -w / 2 + (i + 0.5) * w / bays, l * lh + 0.06, 0, L(cols[(i * 5 + l * 2) % cols.length]), 0, g);
+        }
+    }
+    return g;
+}
+function plant(x, z, h = 1.6, base = 0, spiky = false) {
+    cyl(0.2, 0.15, 0.32, x, base, z, spiky ? mat.terracotta : mat.pot);
+    cyl(0.03, 0.03, h * 0.5, x, base + 0.3, z, mat.woodDark, world, 6);
+    const n = spiky ? 9 : 6;
+    for (let i = 0; i < n; i++) {
+        const a = i * 2.4, r = spiky ? 0.25 : 0.22 + (i % 3) * 0.08;
+        const s = new THREE.Mesh(spiky ? new THREE.ConeGeometry(0.09, h * 0.6, 5) : new THREE.SphereGeometry(0.24 + (i % 2) * 0.08, 8, 6), i % 2 ? mat.green : mat.greenL);
+        s.position.set(x + Math.cos(a) * r, base + h * (spiky ? 0.75 : 0.5 + i * 0.09), z + Math.sin(a) * r);
+        if (spiky) { s.rotation.z = Math.cos(a) * -0.5; s.rotation.x = Math.sin(a) * 0.5; }
+        world.add(s);
+    }
+}
+function pendant(x, z, type = 'steel', bottom = 2.0, ceil = 3.6) {
+    cyl(0.008, 0.008, ceil - bottom - 0.3, x, bottom + 0.3, z, mat.black, world, 4);
+    if (type === 'steel') { cyl(0.06, 0.2, 0.3, x, bottom, z, mat.steel); }
+    if (type === 'black') { cyl(0.05, 0.28, 0.3, x, bottom, z, mat.black); }
+    if (type === 'cage') { cyl(0.06, 0.17, 0.3, x, bottom, z, mat.cage); }
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), mat.lampWarm); bulb.position.set(x, bottom + 0.05, z); world.add(bulb);
+}
+function coatRack(x, z, dark = true) {
+    cyl(0.2, 0.2, 0.04, x, 0, z, dark ? mat.black : mat.white);
+    cyl(0.025, 0.025, 1.75, x, 0, z, dark ? mat.black : mat.plyLight, world, 8);
+    box(0.45, 0.9, 0.3, x, 0.75, z, L(dark ? 0x2b2523 : 0xb9b3ab));
+}
+function deskRowZ(x, zs, chairSide, o) { zs.forEach(z => desk(x, z, chairSide > 0 ? Math.PI / 2 : -Math.PI / 2, o)); }
+
+/* =================================================================
+   FLOOR
+================================================================= */
+{
+    const g = new THREE.PlaneGeometry(B.x1 - B.x0, B.z1 - B.z0);
+    const f = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: parquet }));
+    f.rotation.x = -Math.PI / 2; f.position.set((B.x0 + B.x1) / 2, 0, (B.z0 + B.z1) / 2); world.add(f);
+    box(B.x1 - B.x0 + 0.6, 0.3, B.z1 - B.z0 + 0.6, (B.x0 + B.x1) / 2, -0.31, (B.z0 + B.z1) / 2, L(0x8f8f8c));
+}
+
+/* =================================================================
+   EXTERIOR WALLS
+================================================================= */
+wall(B.x0, B.z0, B.x1, B.z0, H_CORE, [], { t: 0.3 });                 // core-side long wall (solid, glass blocks high)
+windowWall(B.x0, B.z0, B.x0, B.z1);                                     // west end: Wassermelonen windows
+windowWall(B.x1, B.z0, B.x1, B.z1);                                     // east end windows
+wall(B.x0, B.z1, 7.5, B.z1, H_LOW, [{ a: -4.4, b: -3.4, fill: 'door' }], { t: 0.3 }); // solid part (stair core / entrance assumed)
+windowWall(7.5, B.z1, B.x1, B.z1);                                      // long window wall
+// glass-block strips (kitchen/dining, archive, NE corner)
+for (const [a, b] of [[4.3, 10.2], [11, 18], [27.2, 30.8]]) box(b - a, 0.7, 0.06, (a + b) / 2, 1.95, B.z0 + 0.18, mat.glassBlock);
+
+/* =================================================================
+   CORE (z < 0): text wall + rooms
+================================================================= */
+wall(-5, 0, 26, 0, H_CORE, [
+    { a: -3.0, b: -2.0 },                       // storage door (open)
+    { a: 2.5, b: 3.4, fill: 'door' },           // closed door under "RISCHE"
+    { a: 4.9, b: 5.8 },                         // kitchen/dining door
+    { a: 6.2, b: 9.5, top: 2.4, fill: 'glass' },// glazed panel into dining
+    { a: 14.4, b: 15.3 },                       // "Archiv"
+    { a: 18.5, b: 23, top: 2.5 },               // dark room, black curtain
+    { a: 23.4, b: 24.3, top: 2.2, fill: 'glass' } // booth glass door
+]);
+for (const x of [0, 4, 10.5, 18.5, 23]) wall(x, B.z0, x, 0, H_CORE);
+wall(26, B.z0, 26, 0, H_CORE);
+wall(23, -2.2, 26, -2.2, H_CORE);
+// big wall lettering
+{
+    const text = 'FRISCHE IDEEN, DIE WIRKEN', W = 15.2, Hh = 0.95;
+    const tex = canvasTex(4096, 256, (g, w, h) => {
+        g.clearRect(0, 0, w, h); g.fillStyle = '#111'; g.textBaseline = 'alphabetic';
+        g.font = '700 250px Helvetica Neue, Arial, sans-serif';
+        const widths = [...text].map(ch => g.measureText(ch).width);
+        const total = widths.reduce((a, b) => a + b, 0), track = (w - 20 - total) / (text.length - 1);
+        let x = 10; [...text].forEach((ch, i) => { g.fillText(ch, x, 218); x += widths[i] + track; });
+    });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(W, Hh), new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
+    m.position.set(0.3 + W / 2, 2.2 + Hh / 2, 0.07); world.add(m);
+}
+// VITAMIN 2 SESSIONS roll-up banner
+{
+    const tex = canvasTex(256, 512, (g, w, h) => {
+        const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#f08f7c'); gr.addColorStop(1, '#8fd3b4');
+        g.fillStyle = gr; g.fillRect(0, 0, w, h);
+        g.fillStyle = '#111'; g.font = '700 38px Helvetica Neue, Arial, sans-serif';
+        for (let i = 0; i < 9; i++) g.fillText(i % 2 ? 'SESSIONS  2' : 'VITAMIN  2', 14, 70 + i * 52);
+        g.fillStyle = '#b3243c'; g.beginPath(); g.arc(70, 250, 62, 0, 7); g.fill();
+    });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 2.0), new THREE.MeshBasicMaterial({ map: tex }));
+    m.position.set(-0.55, 1.05, 0.25); world.add(m);
+}
+// storage room (dark, boxes)
+for (let i = 0; i < 9; i++) box(0.6, 0.4 + (i % 3) * 0.25, 0.5, -4.4 + (i % 3) * 0.75, 0, -1.2 - Math.floor(i / 3) * 1.3, i % 2 ? mat.cardboard : mat.dark);
+// kitchen (x 4..10.5): fridge + counter line on west wall, dining table east
+box(0.62, 2.0, 0.65, 4.4, 0, -0.5, mat.white);
+box(0.62, 0.86, 3.6, 4.4, 0, -2.75, mat.white);
+box(0.66, 0.04, 3.6, 4.4, 0.86, -2.75, mat.woodDark);
+box(0.36, 0.55, 2.2, 4.26, 1.5, -2.2, mat.white);
+box(0.5, 0.42, 0.9, 4.42, 0.9, -1.7, mat.steel);           // espresso machine
+box(0.12, 2.6, 4.2, 4.07, 0, -3.0, mat.black);              // dark splash wall
+cyl(0.18, 0.18, 0.55, 5.3, 0, -5.1, mat.steel); cyl(0.2, 0.18, 0.5, 5.8, 0, -5.1, mat.grey);
+box(2.8, 0.05, 0.9, 8.1, 0.72, -3.6, mat.black);
+for (const sx of [-1.3, 1.3]) for (const sz of [-0.38, 0.38]) box(0.07, 0.72, 0.07, 8.1 + sx, 0, -3.6 + sz, mat.lightgrey);
+for (const sz of [-0.85, 0.85]) { box(2.8, 0.05, 0.35, 8.1, 0.42, -3.6 + sz, mat.black); for (const sx of [-1.3, 1.3]) box(0.07, 0.42, 0.3, 8.1 + sx, 0, -3.6 + sz, mat.lightgrey); }
+for (const x of [7.2, 8.1, 9.0]) pendant(x, -3.6, 'black', 1.55, 2.9);
+for (const x of [7.2, 8.0]) { cyl(0.17, 0.17, 0.05, x, 0.7, -0.55, mat.white); cyl(0.025, 0.025, 0.7, x, 0, -0.55, mat.steel, world, 8); }
+box(2.6, 0.05, 0.35, 7.8, 1.0, -0.25, mat.white);
+// archive: grey shelving
+for (const x of [11.4, 13.2, 15.0, 16.8]) { box(1.6, 2.0, 0.5, x, 0, -5.0, mat.grey); for (let i = 0; i < 3; i++) box(0.45, 0.28, 0.4, x - 0.5 + i * 0.5, 2.0, -5.0, mat.crate); }
+box(0.5, 2.0, 3.2, 17.9, 0, -2.4, mat.grey); box(0.5, 2.0, 2.4, 10.9, 0, -2.6, mat.grey);
+// dark room behind curtain
+box(4.3, 3.2, 0.05, 20.75, 0, B.z0 + 0.2, mat.black); box(0.05, 3.2, 5.2, 18.6, 0, -2.75, mat.black); box(0.05, 3.2, 3.1, 22.9, 0, -3.8, mat.black);
+box(4.3, 0.02, 5.3, 20.75, 0.005, -2.8, L(0x1a1a1a));
+box(1.6, 2.45, 0.12, 19.4, 0, -0.15, L(0x0c0c0d));           // curtain (drawn part)
+for (const x of [20.2, 21.0]) { cyl(0.18, 0.18, 0.05, x, 0.72, -3.4, mat.white); cyl(0.025, 0.025, 0.72, x, 0, -3.4, mat.steel, world, 8); }
+// booth interior + shelf niche on east face of core, pallet sofa
+box(0.9, 0.04, 0.5, 25.3, 0.74, -1.8, mat.white);
+shelf(26.28, -1.1, 1.9, 2.0, 0.4, Math.PI / 2);
+box(0.9, 0.3, 2.0, 26.6, 0, -4.2, mat.plyLight); box(0.9, 0.18, 2.0, 26.6, 0.3, -4.2, mat.fabric); box(0.25, 0.4, 0.5, 26.3, 0.48, -4.9, mat.black);
+
+/* =================================================================
+   WEST END: entry corridor, Wassermelonen room
+================================================================= */
+wall(-5, B.z0, -5, B.z1, 3.8, [
+    { a: 0.1, b: 2.1, top: 2.6, fill: 'glass' },                 // glass partition + glass door
+    { a: 3.6, b: 8.6, bottom: 0.9, top: 2.2 }                    // interior window lounge <-> Wassermelonen
+]);
+wall(-5, CORR, -0.5, CORR, 3.8);                                  // partition entry corridor | lounge (pod stands against it)
+// desks perpendicular to the west windows, shelf units between
+for (const z0 of [1.3, 4.6, 7.7]) {
+    desk(-8.3, z0 - 0.41, Math.PI); desk(-8.3, z0 + 0.41, 0);
+    shelf(-7.25, z0, 1.6, 1.15, 0.4, Math.PI / 2);
+    pendant(-8.3, z0, 'cage', 1.95, 2.8);
+    plant(-9.1, z0 + 1.5, 0.9, 0.85);
+}
+desk(-7.6, -4.9, Math.PI, { white: true });
+shelf(-5.9, -5.2, 1.0, 1.0, 0.35);
+coatRack(-5.5, -1.8, false);
+shelf(-7.5, 9.25, 2.4, 1.6, 0.35);
+plant(-5.6, -3.5, 1.5);
+
+/* =================================================================
+   LOUNGE: pod, foosball, reception counter, bunting
+================================================================= */
+{   // house-shaped pod: black shell, plywood interior, opens to +z
+    const g = new THREE.Group(); g.position.set(-1.9, 0, 3.2); world.add(g);
+    const w = 2.3, d = 1.7, eave = 1.75, rise = 0.95;
+    box(w, 0.14, d, 0, 0, 0, mat.ply, 0, g);
+    for (const s of [-1, 1]) { box(0.1, eave, d, s * (w / 2 - 0.05), 0, 0, mat.black, 0, g); box(0.03, eave, d - 0.1, s * (w / 2 - 0.12), 0.1, 0, mat.ply, 0, g); }
+    box(w, eave, 0.08, 0, 0, -d / 2 + 0.04, mat.black, 0, g); box(w - 0.2, eave, 0.03, 0, 0.1, -d / 2 + 0.1, mat.ply, 0, g);
+    const len = Math.hypot(w / 2, rise), ang = Math.atan2(rise, w / 2);
+    for (const s of [-1, 1]) {
+        const r = box(len + 0.08, 0.1, d, s * w / 4, eave + rise / 2 - 0.05, 0, mat.black, 0, g); r.rotation.z = -s * ang;
+        const r2 = box(len - 0.1, 0.03, d - 0.1, s * w / 4, eave + rise / 2 - 0.13, 0, mat.ply, 0, g); r2.rotation.z = -s * ang;
+    }
+    quad([[-w / 2, eave, -d / 2 + 0.1], [w / 2, eave, -d / 2 + 0.1], [0, eave + rise, -d / 2 + 0.1]], L(0xc98b47, { side: THREE.DoubleSide }), g);
+    box(w - 0.3, 0.45, 0.45, 0, 0.14, -d / 2 + 0.35, mat.black, 0, g); box(w - 0.3, 0.45, 0.1, 0, 0.59, -d / 2 + 0.17, mat.black, 0, g);
+    box(0.45, 0.45, 1.0, w / 2 - 0.4, 0.14, 0.2, mat.black, 0, g);
+    box(1.1, 0.04, 0.6, -0.25, 0.86, 0.15, mat.ply, 0, g); box(0.06, 0.72, 0.06, -0.25, 0.14, 0.15, mat.black, 0, g);
+    for (const x of [-0.5, -0.3, -0.1]) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), mat.lampWarm); b.position.set(x, 1.55 + x * 0.3, -0.3); g.add(b); }
+}
+plant(-4.3, 4.7, 2.2);
+{   // foosball table
+    const g = new THREE.Group(); g.position.set(2.2, 0, 5.6); g.rotation.y = 0.35; world.add(g);
+    box(1.45, 0.3, 0.78, 0, 0.6, 0, mat.wood, 0, g); box(1.3, 0.02, 0.66, 0, 0.9, 0, L(0x3f7d4a), 0, g);
+    for (const sx of [-0.6, 0.6]) for (const sz of [-0.3, 0.3]) box(0.09, 0.62, 0.09, sx, 0, sz, mat.black, 0, g);
+    for (let i = 0; i < 8; i++) {
+        const rx = -0.56 + i * 0.16;
+        const r = cyl(0.012, 0.012, 1.2, rx, 0, 0, mat.steel, g, 6); r.position.y = 0.97; r.rotation.x = Math.PI / 2;
+        for (const sz of [-1, 1]) box(0.035, 0.035, 0.12, rx, 0.95, sz * 0.62, mat.black, 0, g);
+        for (const pz of [-0.18, 0, 0.18]) if ((i + (pz > 0 ? 1 : 0)) % 3 !== 2) box(0.05, 0.1, 0.04, rx, 0.9, pz, i % 2 ? mat.white : L(0xd8322a), 0, g);
+    }
+}
+// reception counter (white, slatted front) dividing lounge from first desk row
+{
+    const m = new THREE.MeshLambertMaterial({ map: slats });
+    box(0.6, 1.12, 6.4, 4.5, 0, 5.9, m);
+    box(0.7, 0.05, 6.5, 4.5, 1.12, 5.9, mat.white);
+}
+// bunting + string lights
+function sagLine(a, b, n, sag, fn) { for (let i = 0; i <= n; i++) { const t = i / n; fn(new THREE.Vector3().lerpVectors(a, b, t).add(new THREE.Vector3(0, -sag * 4 * t * (1 - t), 0)), i); } }
+function bunting(a, b, colors) {
+    const dir = new THREE.Vector3().subVectors(b, a).setY(0).normalize().multiplyScalar(0.11);
+    const n = Math.round(a.distanceTo(b) / 0.3), pts = [];
+    sagLine(a, b, n, 0.35, (p, i) => {
+        pts.push(p);
+        quad([[p.x - dir.x, p.y, p.z - dir.z], [p.x + dir.x, p.y, p.z + dir.z], [p.x, p.y - 0.27, p.z]], new THREE.MeshBasicMaterial({ color: colors[i % colors.length], side: THREE.DoubleSide }));
+    });
+    world.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x333333 })));
+}
+function stringLights(a, b) {
+    const pts = []; sagLine(a, b, Math.round(a.distanceTo(b) / 0.5), 0.4, (p) => { pts.push(p); const s = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 5), mat.lampWarm); s.position.copy(p).y -= 0.04; world.add(s); });
+    world.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x111111 })));
+}
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const blues = [0x6f8ea3, 0x9fb7c4, 0x55707f, 0xb9c9cf], warm = [0xe58b4e, 0xf0b9a8, 0xe9d27a, 0x7fc0b0];
+bunting(V(-4.8, 3.5, 3.0), V(4.4, 3.3, 9.0), blues);
+bunting(V(-0.6, 3.6, 2.4), V(4.4, 3.2, 8.2), blues);
+bunting(V(-4.8, 3.6, 8.8), V(4.4, 3.4, 3.0), warm);
+bunting(V(-4.8, 3.3, 6.0), V(4.4, 3.5, 6.2), blues);
+stringLights(V(-4.8, 3.7, 9.0), V(4.4, 3.4, 2.6));
+stringLights(V(-4.8, 3.6, 4.0), V(4.4, 3.5, 7.4));
+stringLights(V(-2.0, 3.8, 2.4), V(1.0, 3.6, 9.2));
+
+/* =================================================================
+   OPEN OFFICE: three desk clusters between corridor and long window wall
+================================================================= */
+// Hashtag-Himbeeren (x 4.8..9.5)
+deskRowZ(5.3, [3.7, 5.3, 6.9, 8.5], 1);
+deskRowZ(8.95, [4.4, 6.0, 7.6], -1);
+box(0.42, 1.3, 5.4, 9.5, 0, 5.6, mat.white);                      // white divider units
+shelf(8.3, 2.75, 1.6, 1.3, 0.4);
+for (const z of [4.5, 7.2]) pendant(6.2, z, 'steel', 2.1, 4.2);
+// Kreative Kiwis (x 9.7..14.5)
+deskRowZ(11.6, [4.3, 5.9, 7.5], -1); deskRowZ(12.42, [4.3, 5.9, 7.5], 1);
+shelf(12.0, 3.1, 2.0, 1.3, 0.4);
+for (const z of [4.6, 7.0]) pendant(12.0, z, 'steel', 2.1, 4.2);
+box(0.25, 3.8, 0.25, 14.5, 0, 3.0, mat.white);                    // structural column
+box(0.45, 1.25, 4.8, 14.5, 0, 5.6, mat.white);                    // planter / divider wall
+seg(14.5, 5.2, 14.5, 8.0, 1.25, 2.1, mat.glass, 0.03);
+plant(14.5, 3.5, 1.9, 1.25, true); plant(14.5, 6.5, 0.9, 1.25, true);
+coatRack(14.1, 2.65);
+// Digitale Birnen (x 14.7..19.5)
+deskRowZ(16.6, [4.5, 6.1, 7.7], -1); deskRowZ(17.42, [4.5, 6.1, 7.7], 1);
+shelf(17.0, 3.2, 2.4, 1.3, 0.4);
+for (const z of [4.8, 7.2]) pendant(17.0, z, 'steel', 2.1, 4.2);
+plant(18.6, 8.9, 1.0, 0.85);
+// frosted glass wall on low cabinet (Birnen | glass room)
+box(0.45, 1.1, 7.0, 19.28, 0, 5.85, mat.white);
+seg(19.5, CORR, 19.5, B.z1, 1.1, 2.7, mat.frosted, 0.04);
+seg(19.5, CORR, 19.5, B.z1, 2.7, 2.8, mat.white, 0.1);
+box(0.3, 0.14, 0.5, 19.2, 1.1, 5.0, L(0xd8322a));
+
+/* =================================================================
+   GLASS ROOM (x 19.5..26.5) - interior not photographed
+================================================================= */
+wall(19.5, CORR, 26.5, CORR, H_CORE, [{ a: 20.2, b: 21.1 }]);
+seg(26.5, CORR, 26.5, B.z1, 0, 2.7, mat.frosted, 0.04);
+seg(26.5, CORR, 26.5, B.z1, 2.7, 2.8, mat.white, 0.1);
+box(0.1, 2.8, 0.1, 26.5, 0, CORR, mat.white);
+{   // year planner on corridor side
+    const tex = canvasTex(256, 128, (g, w, h) => { g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.strokeStyle = '#bbb'; for (let x = 8; x < w; x += 8) { g.beginPath(); g.moveTo(x, 6); g.lineTo(x, h - 6); g.stroke(); } for (let y = 6; y < h; y += 10) { g.beginPath(); g.moveTo(8, y); g.lineTo(w - 8, y); g.stroke(); } });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.9), new THREE.MeshBasicMaterial({ map: tex }));
+    m.position.set(23.6, 1.65, CORR - 0.07); m.rotation.y = Math.PI; world.add(m);
+}
+box(3.2, 0.05, 1.3, 23, 0.72, 6.0, mat.white); box(0.1, 0.72, 0.8, 21.9, 0, 6.0, mat.lightgrey); box(0.1, 0.72, 0.8, 24.1, 0, 6.0, mat.lightgrey);
+
+/* =================================================================
+   EAST END STRIP (x 26.5..31.5), full building depth
+================================================================= */
+deskRowZ(29.2, [3.4, 5.0], -1); deskRowZ(30.02, [3.4, 5.0], 1);
+deskRowZ(29.2, [7.0, 8.6], -1); deskRowZ(30.02, [7.0, 8.6], 1);
+deskRowZ(29.2, [-2.2, -3.8], -1); deskRowZ(30.02, [-2.2, -3.8], 1);
+shelf(28.6, 6.0, 1.0, 1.25, 0.4, Math.PI / 2, false); shelf(28.6, 2.6, 1.0, 1.25, 0.4, Math.PI / 2, false); shelf(28.9, -1.2, 1.0, 1.25, 0.4, 0, false);
+for (const z of [4.2, 7.8, -3.0]) pendant(29.6, z, 'black', 1.95, 2.8);
+box(0.8, 0.6, 0.45, 31.0, 0, 1.1, mat.lightgrey);                 // drawer cabinet at window
+coatRack(30.9, 0.1, true);
+plant(28.7, 5.2, 0.8, 1.25); plant(30.9, -0.9, 1.3); plant(29.0, 9.0, 1.1);
+
+/* =================================================================
+   ROOF / CEILINGS (toggle) - simplified sawtooth with clerestory glazing
+================================================================= */
+{
+    const rm = L(0xf4f2ee, { side: THREE.DoubleSide });
+    const flat = (x1, z1, x2, z2, y) => box(x2 - x1, 0.08, z2 - z1, (x1 + x2) / 2, y, (z1 + z2) / 2, rm, 0, roof);
+    flat(B.x0, B.z0, -5, B.z1, H_LOW);                    // Wassermelonen flat ceiling
+    flat(-5, BAND, B.x1, B.z1, H_LOW);                    // low band along long window wall
+    flat(27.7, B.z0, B.x1, BAND, H_LOW);                  // low band along east end
+    flat(-5, B.z0, 26, 0, H_CORE);                        // lid of core box
+    const lo = 3.8, hi = 5.5;
+    for (let i = 0; i < TEETH.length - 1; i++) {
+        const a = TEETH[i], b = TEETH[i + 1];
+        quad([[a, lo, B.z0], [b, hi, B.z0], [b, hi, BAND], [a, lo, BAND]], rm, roof);           // rising slope
+        box(0.25, 0.6, BAND - B.z0, b, 3.3, (B.z0 + BAND) / 2, rm, 0, roof);                    // beam
+        quad([[b, 3.9, B.z0], [b, 5.2, B.z0], [b, 5.2, BAND], [b, 3.9, BAND]], mat.glass, roof); // clerestory
+        quad([[b, 5.2, B.z0], [b, hi, B.z0], [b, hi, BAND], [b, 5.2, BAND]], rm, roof);
+        for (let z = B.z0; z <= BAND; z += 1.74) box(0.08, 1.3, 0.08, b, 3.9, z, mat.white, 0, roof);
+        quad([[a, H_LOW, BAND], [b, H_LOW, BAND], [b, hi, BAND], [a, lo, BAND]], rm, roof);     // fascia above low band
+        quad([[a, H_CORE, B.z0], [b, H_CORE, B.z0], [b, hi, B.z0], [a, lo, B.z0]], rm, roof);   // core-side gable
+    }
+    quad([[-5, H_LOW, B.z0], [-5, lo, B.z0], [-5, lo, BAND], [-5, H_LOW, BAND]], rm, roof);
+    // linear light along the corridor
+    box(TEETH.at(-1) + 5, 0.05, 0.08, (TEETH.at(-1) - 5) / 2, 3.45, 1.0, L(0x9a9da0), 0, roof);
+    // cable tray over lounge
+    box(9, 0.08, 0.4, -0.5, 3.55, 8.9, mat.grey, 0, roof);
+}
+
+/* =================================================================
+   LABELS
+================================================================= */
+[
+    ['Weitsichtige Wassermelonen', -7.3, 4.5], ['Storage', -2.5, -2.8], ['Entry corridor', -2.6, 1.1],
+    ['Lounge / Reception', 0.8, 7.6], ['Pod', -1.9, 3.3, 0.7], ['Foosball', 2.2, 5.6, 0.7],
+    ['? (closed door)', 2.0, -2.8, 0.8], ['Kitchen + Dining', 7.3, -2.2], ['Archiv', 14.5, -2.8],
+    ['Dark room (curtain) ?', 20.75, -2.8, 0.8], ['Booth', 24.5, -1.1, 0.7], ['Corridor', 12, 1.1],
+    ['Hashtag-Himbeeren', 7.1, 6.1], ['Kreative Kiwis', 12.0, 8.6], ['Digitale Birnen', 17.0, 8.8],
+    ['Glass room (meeting?)', 23, 7.6, 0.9], ['Organisierende Orangen ?', 29.2, 6.0, 0.8], ['Sofa corner', 28.3, -4.6, 0.7]
+].forEach(([t, x, z, s = 1]) => label(t, x, 2.3, z, s));
+
+/* =================================================================
+   CAMERAS / MODES
+================================================================= */
+const center = new THREE.Vector3((B.x0 + B.x1) / 2, 0, (B.z0 + B.z1) / 2);
+const persp = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.05, 300);
+const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
+ortho.position.set(center.x, 60, center.z); ortho.up.set(0, 0, -1); ortho.lookAt(center);
+const orbit = new OrbitControls(persp, renderer.domElement);
+orbit.target.copy(center); orbit.maxPolarAngle = Math.PI / 2 - 0.02; orbit.enableDamping = true;
+const planCtl = new OrbitControls(ortho, renderer.domElement);
+planCtl.target.copy(center); planCtl.enableRotate = false; planCtl.screenSpacePanning = true;
+planCtl.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+planCtl.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
+
+let mode = 'orbit', camera = persp, yaw = -0.9, pitch = -0.05;
+const walkPos = new THREE.Vector3(-3.8, 1.65, 8.3);
+const keys = {};
+const roofToggle = document.getElementById('toggle-roof'), labelToggle = document.getElementById('toggle-labels');
+const hints = {
+    orbit: 'Orbit: drag = rotate, right-drag = pan, wheel = zoom. Rough reconstruction from 30 photos - all dimensions estimated.',
+    plan: 'Floor plan: drag = pan, wheel = zoom. Top = core side (text wall), bottom = long window wall, left = entrance end.',
+    walk: 'Walk: W/A/S/D or arrow keys = move, drag = look, Shift = faster. No collisions.'
+};
+function fitOrtho() {
+    const a = innerWidth / innerHeight, w = (B.x1 - B.x0) + 4, h = (B.z1 - B.z0) + 4;
+    const half = Math.max(w / 2, (h / 2) * a);
+    ortho.left = -half; ortho.right = half; ortho.top = half / a; ortho.bottom = -half / a; ortho.updateProjectionMatrix();
+}
+function setMode(m) {
+    mode = m;
+    orbit.enabled = m === 'orbit'; planCtl.enabled = m === 'plan';
+    camera = m === 'plan' ? ortho : persp;
+    if (m === 'orbit') { persp.position.set(center.x - 4, 22, center.z + 22); orbit.target.copy(center); orbit.update(); }
+    if (m === 'walk') persp.rotation.order = 'YXZ'; else persp.rotation.order = 'XYZ';
+    roofToggle.checked = m === 'walk'; labelToggle.checked = m !== 'walk';
+    roof.visible = roofToggle.checked; labels.visible = labelToggle.checked;
+    document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('is-active', b.dataset.mode === m));
+    document.getElementById('hint').textContent = hints[m];
+}
+document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+roofToggle.addEventListener('change', () => (roof.visible = roofToggle.checked));
+labelToggle.addEventListener('change', () => (labels.visible = labelToggle.checked));
+addEventListener('keydown', e => (keys[e.code] = true));
+addEventListener('keyup', e => (keys[e.code] = false));
+let dragging = false;
+renderer.domElement.addEventListener('pointerdown', () => (dragging = true));
+addEventListener('pointerup', () => (dragging = false));
+addEventListener('pointermove', e => {
+    if (mode !== 'walk' || !dragging) return;
+    yaw -= e.movementX * 0.004; pitch = Math.max(-1.3, Math.min(1.3, pitch - e.movementY * 0.004));
+});
+addEventListener('resize', () => {
+    renderer.setSize(innerWidth, innerHeight);
+    persp.aspect = innerWidth / innerHeight; persp.updateProjectionMatrix(); fitOrtho();
+}, { passive: true });
+
+const clock = new THREE.Clock();
+function tick() {
+    const dt = Math.min(clock.getDelta(), 0.1);
+    if (mode === 'walk') {
+        const sp = (keys.ShiftLeft || keys.ShiftRight ? 6 : 2.5) * dt;
+        const f = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
+        const s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
+        if (keys.ArrowLeft) yaw += 1.6 * dt;
+        if (keys.ArrowRight) yaw -= 1.6 * dt;
+        walkPos.x += (-Math.sin(yaw) * f + Math.cos(yaw) * s) * sp;
+        walkPos.z += (-Math.cos(yaw) * f - Math.sin(yaw) * s) * sp;
+        walkPos.x = Math.max(B.x0 + 0.4, Math.min(B.x1 - 0.4, walkPos.x));
+        walkPos.z = Math.max(B.z0 + 0.4, Math.min(B.z1 - 0.4, walkPos.z));
+        persp.position.copy(walkPos); persp.rotation.set(pitch, yaw, 0);
+    } else if (mode === 'orbit') orbit.update(); else planCtl.update();
+    renderer.render(scene, camera);
+    requestAnimationFrame(tick);
+}
+fitOrtho();
+// optional deep link: #plan | #walk | #orbit, e.g. #walk@12,1.1,-1.57 (x,z,yaw)
+const [hm, hp] = location.hash.slice(1).split('@');
+setMode(['orbit', 'plan', 'walk'].includes(hm) ? hm : 'orbit');
+if (hp) { const [x, z, y] = hp.split(',').map(Number); walkPos.x = x; walkPos.z = z; if (!isNaN(y)) yaw = y; }
+tick();
+</script>
+</body>
+</html>
