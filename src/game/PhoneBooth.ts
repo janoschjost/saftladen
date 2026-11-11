@@ -19,6 +19,11 @@ export class PhoneBoothSession implements Talk {
   private stay = between(STAY);
   private ending = false;
 
+  /** seated on the stool and on the phone: the door stays shut */
+  get calling(): boolean {
+    return this.members[0]?.boothCall ?? false;
+  }
+
   constructor(
     person: Person,
     readonly center: Vec2,
@@ -55,6 +60,9 @@ export class PhoneBooth {
   readonly seat: MeetSeat | null = null;
   current: PhoneBoothSession | null = null;
   private timer = between(FIRST);
+  private closed = false;
+  /** called when the door should be shut (true, somebody is on a call) or released (false) */
+  onClosed: (closed: boolean) => void = () => {};
 
   constructor(
     private model: OfficeModel['phoneBooth'],
@@ -67,7 +75,7 @@ export class PhoneBooth {
   /** First free cell outside the door (in front of the stool), where people walk to before stepping in. */
   private approachFor(nav: NavGrid): Vec2 | null {
     const s = this.model.seat;
-    const front = { x: Math.sin(s.yaw), z: Math.cos(s.yaw) };
+    const front = { x: 0, z: 1 }; // the door is on the south side, whichever way the stool faces
     for (const dist of [1.9, 2.2, 1.6, 2.5]) {
       const c = nav.toCell({ x: s.x + front.x * dist, z: s.z + front.z * dist });
       if (nav.walkable(c.cx, c.cz)) return nav.center(c.cx, c.cz);
@@ -97,14 +105,35 @@ export class PhoneBooth {
     return session;
   }
 
+  /** The player dropped `person` on the stool: they sit down right away and take a call. False if the box is taken. */
+  sitIn(person: Person): boolean {
+    if (this.current || !this.seat || this.seat.occupant) return false;
+    const session = new PhoneBoothSession(person, this.seat.seat);
+    if (!person.sitDownAtMeeting(this.seat, session)) return false;
+    this.current = session;
+    return true;
+  }
+
+  get doorPos(): Vec2 {
+    return this.model.doorPos;
+  }
+
+  private setClosed(closed: boolean): void {
+    if (closed === this.closed) return;
+    this.closed = closed;
+    this.onClosed(closed);
+  }
+
   update(dt: number, people: readonly Person[], nav: NavGrid): void {
     if (this.current) {
       if (!this.current.update(dt)) {
         this.current = null;
         this.timer = between(PAUSE);
       }
+      this.setClosed(!!this.current?.calling);
       return;
     }
+    this.setClosed(false);
     this.timer -= dt;
     if (this.timer > 0) return;
     this.timer = 10;
