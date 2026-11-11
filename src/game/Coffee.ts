@@ -1,7 +1,7 @@
 import type { OfficeModel } from '../render/officeModel';
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { Person } from './Person';
-import type { ConversationKind, Talk } from './Social';
+import { nextSpeaker, type ConversationKind, type Talk } from './Social';
 
 /** Where one person stands in the kitchen coffee circle. */
 export interface CoffeeSpot {
@@ -29,6 +29,7 @@ export class CoffeeBreak implements Talk {
   text = '…';
   private time = 0;
   private speakerTimer = 0;
+  private previous: Person | null = null;
   private readonly stay = between(STAY);
 
   constructor(
@@ -58,8 +59,9 @@ export class CoffeeBreak implements Talk {
     if (this.phase === 'chat') {
       this.speakerTimer -= dt;
       if (this.speakerTimer <= 0) {
-        const others = this.members.filter((m) => m !== this.speaker);
-        this.speaker = others[Math.floor(Math.random() * others.length)] ?? this.speaker;
+        const next = nextSpeaker(this.members, this.speaker, this.previous);
+        this.previous = this.speaker;
+        this.speaker = next;
         this.speakerTimer = 2 + Math.random() * 3;
         this.text = BUBBLES[Math.floor(Math.random() * BUBBLES.length)];
         for (const m of this.members) m.speaking = m === this.speaker;

@@ -937,7 +937,12 @@
         font-size: 0.75rem;
         font-weight: 700;
         text-align: center;
+        transform-origin: 50% 100%;
         will-change: transform;
+
+        &.is-pop {
+            animation: bubble-pop 0.28s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+        }
 
         &[hidden] {
             display: none;
@@ -1700,5 +1705,17 @@
             width: auto;
             white-space: nowrap;
         }
+    }
+}
+
+@keyframes bubble-pop {
+    from {
+        scale: 0.4;
+        opacity: 0;
+    }
+
+    to {
+        scale: 1;
+        opacity: 1;
     }
 }

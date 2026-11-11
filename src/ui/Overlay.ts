@@ -53,8 +53,15 @@ export class Overlay {
         this.labels.appendChild(el);
         this.bubbleEls.set(it.id, el);
       }
+      const fresh = el.hidden || el.textContent !== it.text;
       if (el.textContent !== it.text) el.textContent = it.text;
       el.hidden = false;
+      if (fresh) {
+        // pop in again for every new line
+        el.classList.remove('is-pop');
+        void el.offsetWidth;
+        el.classList.add('is-pop');
+      }
       el.style.transform = `translate(${Math.round(it.x - el.offsetWidth / 2)}px, ${Math.round(it.y - el.offsetHeight - 6)}px)`;
     }
     for (const [id, el] of this.bubbleEls) if (!active.has(id)) el.hidden = true;

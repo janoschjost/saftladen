@@ -1,7 +1,7 @@
 import type { OfficeModel } from '../render/officeModel';
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { Person } from './Person';
-import type { ConversationKind, Talk } from './Social';
+import { nextSpeaker, type ConversationKind, type Talk } from './Social';
 
 /** A chair at the meeting table. */
 export interface MeetSeat {
@@ -33,6 +33,7 @@ export class Meeting implements Talk {
   text = '…';
   private time = 0;
   private speakerTimer = 0;
+  private previous: Person | null = null;
   private duration = between(SESSION);
   /** the door is shut and the doorway blocked: nobody else wanders in */
   closed = false;
@@ -68,8 +69,9 @@ export class Meeting implements Talk {
     if (this.phase === 'session') {
       this.speakerTimer -= dt;
       if (this.speakerTimer <= 0) {
-        const others = this.members.filter((m) => m !== this.speaker);
-        this.speaker = others[Math.floor(Math.random() * others.length)] ?? this.speaker;
+        const next = nextSpeaker(this.members, this.speaker, this.previous);
+        this.previous = this.speaker;
+        this.speaker = next;
         this.speakerTimer = 1.5 + Math.random() * 2.8;
         this.text = BUBBLES[Math.floor(Math.random() * BUBBLES.length)];
         for (const m of this.members) m.speaking = m === this.speaker;
@@ -105,10 +107,38 @@ export class Meeting implements Talk {
   }
 }
 
+/** People the player dropped on meeting chairs: once two or more sit there they chat with each other. */
+export class CasualChat implements Talk {
+  readonly kind: ConversationKind = 'chat';
+  speaker: Person;
+  text = '…';
+  private speakerTimer = 0;
+
+  constructor(
+    public members: Person[],
+    readonly center: Vec2,
+  ) {
+    this.speaker = members[0];
+  }
+
+  update(dt: number): void {
+    if (!this.members.includes(this.speaker)) this.speaker = this.members[0];
+    this.speakerTimer -= dt;
+    if (this.speakerTimer > 0) return;
+    const others = this.members.filter((m) => m !== this.speaker);
+    this.speaker = others[Math.floor(Math.random() * others.length)] ?? this.speaker;
+    this.speakerTimer = 1.5 + Math.random() * 2.8;
+    this.text = BUBBLES[Math.floor(Math.random() * BUBBLES.length)];
+    for (const m of this.members) m.speaking = m === this.speaker;
+  }
+}
+
 /** The glass meeting room: table seats, the doorway (blocked while a meeting is on) and the scheduler for meetings. */
 export class MeetingRoom {
   readonly seats: MeetSeat[] = [];
   current: Meeting | null = null;
+  /** the chat between people the player seated here (null while fewer than two sit) */
+  casual: CasualChat | null = null;
   private timer = between(FIRST_MEETING);
   private doorCell: { cx: number; cz: number };
   private sources = new Map<MeetSeat, ModelSeat>();
@@ -183,7 +213,32 @@ export class MeetingRoom {
     return m;
   }
 
+  /** Seated drop-ins (`meetJob.solo`) chat once there are two of them. */
+  private updateCasual(dt: number, people: readonly Person[]): void {
+    const sitters = people.filter((p) => p.meetJob?.solo !== undefined && p.meetJob.phase === 'sit' && !p.held);
+    if (sitters.length < 2) {
+      if (this.casual) {
+        for (const m of this.casual.members) {
+          m.speaking = false;
+          if (m.meetJob?.talk === this.casual) m.meetJob.talk = { kind: 'chat', center: { ...m.meetJob.seat.seat }, members: [m] };
+          if (m.talk === this.casual) m.talk = null;
+        }
+        this.casual = null;
+      }
+      return;
+    }
+    if (!this.casual) this.casual = new CasualChat(sitters, this.model.center);
+    const chat = this.casual;
+    for (const m of sitters) {
+      if (m.talk !== chat) m.talk = chat;
+      if (m.meetJob) m.meetJob.talk = chat;
+    }
+    chat.members = sitters;
+    chat.update(dt);
+  }
+
   update(dt: number, people: readonly Person[], nav: NavGrid): void {
+    this.updateCasual(dt, people);
     if (this.current) {
       if (!this.current.update(dt, nav)) {
         this.current = null;

@@ -907,20 +907,31 @@ export class Game {
       this.poseTired(w, r);
       if (r.vape) this.poseVape(w, r.vape, ph);
       if (r.phone) this.posePhone(w, r.phone);
-      if (w.talk && w.moving < 0.2 && !(w.sit > 0.5 && !w.speaking)) {
+      const talking = !!(w.talk || w.playerChat) && w.moving < 0.2 && !(w.sit > 0.5 && !w.speaking);
+      w.talkAmt += ((talking ? 1 : 0) - w.talkAmt) * 0.12;
+      w.speakAmt += ((talking && w.speaking ? 1 : 0) - w.speakAmt) * 0.15;
+      const ta = w.talkAmt;
+      const sa = w.speakAmt;
+      if (ta > 0.01) {
         const t = performance.now() / 1000 + w.phase;
-        const lively = w.talk.kind === 'discussion' ? 1 : 0.6;
-        if (w.speaking) {
-          // speaker: gesturing arms, little hops
-          r.armR.rotation.x = -0.9 + Math.sin(t * 8) * 0.55 * lively;
-          r.armL.rotation.x = -0.5 + Math.sin(t * 6.3 + 1) * 0.45 * lively;
-          r.body.position.y += Math.abs(Math.sin(t * 5)) * 0.03 * lively;
-        } else {
-          // listener: slow nod, arms mostly relaxed
-          r.armR.rotation.x = Math.sin(t * 1.5) * 0.06;
-          r.armL.rotation.x = -Math.sin(t * 1.5) * 0.06;
-          r.body.position.y += Math.max(0, Math.sin(t * 2.2)) * 0.02;
-        }
+        const lively = w.talk?.kind === 'discussion' ? 1 : 0.65;
+        // speaker: phrases of gestures (a slow envelope makes beats), a lean in and a sway towards the audience
+        const beat = 0.55 + 0.45 * Math.sin(t * 1.7);
+        const rs = -0.9 + Math.sin(t * 8) * 0.55 * lively * beat;
+        const ls = -0.5 + Math.sin(t * 6.3 + 1) * 0.45 * lively * (1.1 - beat * 0.6);
+        // listener: relaxed arms, slow nods, the odd tilt of the head
+        const rl = Math.sin(t * 1.5) * 0.06;
+        const ll = -Math.sin(t * 1.5) * 0.06;
+        r.armR.rotation.x = THREE.MathUtils.lerp(r.armR.rotation.x, THREE.MathUtils.lerp(rl, rs, sa), ta);
+        r.armL.rotation.x = THREE.MathUtils.lerp(r.armL.rotation.x, THREE.MathUtils.lerp(ll, ls, sa), ta);
+        r.armR.rotation.z += sa * (0.12 + Math.sin(t * 3.1) * 0.06) * lively;
+        r.armL.rotation.z -= sa * (0.1 + Math.sin(t * 2.7 + 1) * 0.05) * lively;
+        r.body.position.y += (sa * Math.abs(Math.sin(t * 5)) * 0.03 * lively + (1 - sa) * Math.max(0, Math.sin(t * 2.2)) * 0.02) * ta;
+        const nod = (1 - sa) * Math.max(0, Math.sin(t * 2.2 - 0.6)) * 0.07;
+        r.body.rotation.x += (sa * 0.05 + nod) * ta;
+        r.body.rotation.y = (sa * Math.sin(t * 1.3) * 0.14 + (1 - sa) * Math.sin(t * 0.6) * 0.04) * ta;
+      } else {
+        r.body.rotation.y = 0;
       }
       this.poseCup(w, r);
     } else if (w instanceof Dog) {
@@ -1000,7 +1011,7 @@ export class Game {
     let lids = tired;
     r.body.rotation.x = tired * 0.07 * (1 - w.sit * 0.5);
     r.body.position.y -= tired * 0.012 * (1 - w.sit);
-    const idle = w.moving < 0.2 && w.phoneAmt < 0.05 && !w.vapeJob && !w.foosAmt && !(w.talk && w.speaking);
+    const idle = w.moving < 0.2 && w.phoneAmt < 0.05 && !w.vapeJob && !w.foosAmt && !((w.talk || w.playerChat) && w.speaking);
     if (tired > 0.35 && idle) {
       // one yawn every ~25 s, each person on their own beat
       const t = (performance.now() / 1000 + w.phase * 9) % 25;
@@ -1143,8 +1154,9 @@ export class Game {
     const rep = this.reply;
     this.overlay.setBubbles([
       ...(rep && !rep.who.away ? [{ id: `reply-${rep.who.id}`, text: rep.text, ...this.project(rep.who, 0.55) }] : []),
-      ...this.social.active.filter((c) => c.phase === 'talk').map((c) => ({ id: c.speaker.id, text: c.text, ...this.project(c.speaker, 0.55) })),
+      ...this.social.active.filter((c) => c.phase !== 'gather' && c.text).map((c) => ({ id: c.speaker.id, text: c.text, ...this.project(c.speaker, 0.55) })),
       ...(coffee?.phase === 'chat' ? [{ id: coffee.speaker.id, text: coffee.text, ...this.project(coffee.speaker, 0.55) }] : []),
+      ...(this.meetingRoom.casual ? [{ id: this.meetingRoom.casual.speaker.id, text: this.meetingRoom.casual.text, ...this.project(this.meetingRoom.casual.speaker, 0.55) }] : []),
       ...(meet?.phase === 'session' ? [{ id: meet.speaker.id, text: meet.text, ...this.project(meet.speaker, 0.55) }] : []),
     ]);
     this.metaTimer -= 1 / 60;

@@ -41,6 +41,9 @@ export abstract class Walker {
   /** conversation this walker is part of, if any */
   talk: Talk | null = null;
   speaking = false;
+  /** render-side blend 0..1 of the conversation pose, and of the speaking gestures within it */
+  talkAmt = 0;
+  speakAmt = 0;
   /** seconds before this walker may join a new conversation */
   socialCooldown = 0;
   /** visual lift above the floor (eased in the render step) */
@@ -141,7 +144,8 @@ export abstract class Walker {
       this.moving += (0 - this.moving) * Math.min(1, dt * 8);
       if (this.talk) {
         // standing in a conversation: face the others
-        const c = this.talk.center;
+        const sp = this.talk.speaker;
+        const c = sp && (sp as Walker) !== this && sp.speaking ? sp.pos : this.talk.center;
         this.turnTo(Math.atan2(c.x - this.pos.x, c.z - this.pos.z), dt);
         return;
       }

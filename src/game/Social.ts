@@ -9,7 +9,19 @@ export interface Talk {
   kind: ConversationKind;
   center: Vec2;
   members: Person[];
+  /** who is talking right now (listeners turn towards them) */
+  speaker?: Person;
 }
+
+/** Pick who talks next: never the current speaker, and in groups the previous speaker answers more often than a random bystander. */
+export function nextSpeaker(members: readonly Person[], current: Person, previous: Person | null): Person {
+  const others = members.filter((m) => m !== current);
+  if (!others.length) return current;
+  if (previous && previous !== current && others.includes(previous) && Math.random() < 0.45) return previous;
+  return others[Math.floor(Math.random() * others.length)];
+}
+
+export const pick = <T>(list: readonly T[]): T => list[Math.floor(Math.random() * list.length)];
 
 const LINK_DISTANCE = 1.7; // people closer than this count as "meeting"
 const MAX_GROUP = 6;
@@ -27,15 +39,22 @@ const CROWD_LIMIT = 5;
 const CLEAR_DISTANCE = 4; // how far people walk off when they make room instead of talking
 const MIN_GROUP_SPACING = 3.2; // new conversations keep this far from running ones (no blobs of 10+ people)
 
-const BUBBLES_DISCUSSION = ['!', '?', '…', '!?', '…'];
+const BUBBLES_DISCUSSION = ['!', '?', '…', '!?', '…', 'Genau!', 'Aber…', 'Nein, so nicht.', 'Hmm.', 'Eben!', 'Wirklich?'];
+const BUBBLES_CHAT = ['…', 'Echt?', 'Haha', 'Stimmt.', 'Mhm', 'Ach ja…', 'Krass!', 'Na klar', 'Hm?', 'Ah, okay.'];
+const BUBBLES_BYE = ['Bis später!', 'Ciao!', 'Muss weiter.', 'Dann los!', 'Tschüss!', 'Bis gleich!'];
+const PAUSE = [0.25, 0.7]; // silence between two turns
+const BYE_TIME = 1.5;
 
 export class Conversation {
   members: Person[];
   kind: ConversationKind;
   center: Vec2;
-  phase: 'gather' | 'talk' = 'gather';
+  phase: 'gather' | 'talk' | 'bye' = 'gather';
   speaker: Person;
-  text = '…';
+  /** empty during the short pauses between turns */
+  text = '';
+  private previous: Person | null = null;
+  private byeTime = 0;
   private gatherTime = 0;
   private time = 0;
   private speakerTimer = 0;
@@ -97,16 +116,37 @@ export class Conversation {
       return true;
     }
 
+    if (this.phase === 'bye') {
+      this.byeTime -= dt;
+      return this.byeTime > 0;
+    }
+
     this.time += dt;
     this.speakerTimer -= dt;
     if (this.speakerTimer <= 0) {
-      const others = this.members.filter((m) => m !== this.speaker);
-      this.speaker = others[Math.floor(Math.random() * others.length)];
-      this.speakerTimer = 1.2 + Math.random() * 2.2;
-      this.text = this.kind === 'chat' ? '…' : BUBBLES_DISCUSSION[Math.floor(Math.random() * BUBBLES_DISCUSSION.length)];
+      if (this.text) {
+        // turn over: a short silence, then somebody else answers
+        this.text = '';
+        for (const m of this.members) m.speaking = false;
+        this.speakerTimer = PAUSE[0] + Math.random() * (PAUSE[1] - PAUSE[0]);
+      } else {
+        const next = nextSpeaker(this.members, this.speaker, this.previous);
+        this.previous = this.speaker;
+        this.speaker = next;
+        this.speakerTimer = 1.2 + Math.random() * 2;
+        this.text = pick(this.kind === 'chat' ? BUBBLES_CHAT : BUBBLES_DISCUSSION);
+        for (const m of this.members) m.speaking = m === this.speaker;
+      }
+    }
+    if (this.time >= this.duration) {
+      // wrap up: one last line, then everybody goes their way
+      this.phase = 'bye';
+      this.byeTime = BYE_TIME;
+      this.speaker = pick(this.members);
+      this.text = pick(BUBBLES_BYE);
       for (const m of this.members) m.speaking = m === this.speaker;
     }
-    return this.time < this.duration;
+    return true;
   }
 
   end(): void {

@@ -146,7 +146,7 @@ export class Person extends Walker {
   /** steering input in world space (direction on the floor, not normalised) */
   readonly steer = { x: 0, z: 0, run: false };
   /** the player (walk mode) is talking to this person: they stop and face `at` until `t` runs out */
-  playerChat: { t: number; at: Vec2 } | null = null;
+  playerChat: { t: number; total: number; at: Vec2 } | null = null;
   awayKind: AwayKind | null = null;
   /** seconds until this person comes back (counts down while `out`) */
   awayLeft = 0;
@@ -599,7 +599,8 @@ export class Person extends Walker {
     this.interrupt();
     this.path = [];
     this.state = 'idle';
-    this.playerChat = { t: seconds, at };
+    this.playerChat = { t: seconds, total: seconds, at };
+    this.speaking = true; // answers right away
     return true;
   }
 
@@ -610,10 +611,12 @@ export class Person extends Walker {
       chat.t -= dt;
       if (chat.t <= 0 || this.held || this.controlled || this.talk) {
         this.playerChat = null;
+        this.speaking = false;
         this.timer = 0.4 + Math.random();
       } else {
         this.state = 'idle';
         this.timer = 1;
+        this.speaking = chat.total - chat.t < 2.6; // answers first, then listens
         this.sit = Math.max(0, this.sit - dt * 4);
         this.moving += (0 - this.moving) * Math.min(1, dt * 8);
         this.turnTo(Math.atan2(chat.at.x - this.pos.x, chat.at.z - this.pos.z), dt);
@@ -635,7 +638,7 @@ export class Person extends Walker {
     if (this.coffeeJob) return this.controlCoffee(dt, nav);
     if (this.held && !this.task && !this.printJob && !this.foosJob && !this.vapeJob) {
       // carried by the player: sits down in the air while snapped to a chair, stands otherwise
-      const snap = this.snapDesk;
+      const snap = this.snapDesk ?? this.snapMeetSeat;
       this.sit += ((snap ? 1 : 0) - this.sit) * Math.min(1, dt * 10);
       if (snap) this.turnTo(snap.yaw, dt);
       this.moving += (0 - this.moving) * Math.min(1, dt * 8);
