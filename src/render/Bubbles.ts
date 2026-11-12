@@ -8,13 +8,24 @@ export interface BubbleSpec {
   head: THREE.Vector3;
 }
 
-/** Bubble texture layout in canvas px (drawn at 2x for crisp text). */
+/** Bubble layout in logical texture units; the canvas is drawn at `textureScale()` times this for crisp text. */
 const FONT_PX = 40;
 const BODY_H = 64;
 const PAD_X = 24;
 const TAIL_H = 16;
 const TAIL_W = 24;
 const MARGIN = 14; // room for the shadow
+/** cap on the texture scale, so long lines stay well inside the max texture size */
+const MAX_SCALE = 4;
+
+/**
+ * Canvas px per logical unit: enough that the body (BODY_H) has at least as many px as it covers device px at the
+ * largest screen size (`BUBBLE.maxPx` css px, plus the pop's overshoot), so the texture is never upscaled.
+ */
+function textureScale(): number {
+  const dpr = typeof window !== 'undefined' && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1;
+  return Math.min(MAX_SCALE, Math.max(1, Math.ceil((BUBBLE.maxPx * 1.1 * dpr) / BODY_H)));
+}
 
 interface Entry {
   sprite: THREE.Sprite;
@@ -22,6 +33,8 @@ interface Entry {
   canvas: HTMLCanvasElement;
   texture: THREE.CanvasTexture;
   text: string;
+  /** canvas px per logical unit the texture was drawn at */
+  res: number;
   /** body width / body height of the current texture */
   aspect: number;
   opacity: number;
@@ -50,6 +63,7 @@ export class Bubbles {
   /** Call once per rendered frame, after the walkers are posed. */
   update(specs: readonly BubbleSpec[], camera: THREE.Camera, width: number, height: number, dt: number): void {
     for (const e of this.entries.values()) e.active = false;
+    const res = textureScale();
     for (const s of specs) {
       let e = this.entries.get(s.id);
       if (e?.active) continue; // one bubble per id and frame, the first source wins
@@ -60,8 +74,10 @@ export class Bubbles {
       e.active = true;
       e.head.copy(s.head);
       if (e.text !== s.text) {
-        this.draw(e, s.text);
+        this.draw(e, s.text, res);
         e.age = 0; // pop again for every new line
+      } else if (e.res !== res) {
+        this.draw(e, s.text, res); // moved to a screen with another pixel ratio: same line, sharper or lighter texture
       }
       if (e.opacity === 0) e.age = 0;
     }
@@ -94,7 +110,7 @@ export class Bubbles {
       const size = sizes.get(id);
       e.lift = easeLift(e.lift, lifts.get(id) ?? 0, dt);
       const h = (size?.h ?? BUBBLE.height) * popScale(e.age);
-      const total = h / BODY_H;
+      const total = h / (BODY_H * e.res); // world metres per canvas px
       e.sprite.scale.set(e.canvas.width * total, e.canvas.height * total, 1);
       e.sprite.position.copy(e.head);
       e.sprite.position.y += BUBBLE.gap;
@@ -115,7 +131,7 @@ export class Bubbles {
         y: e.sprite.position.y,
         z: e.sprite.position.z,
         headY: e.head.y,
-        height: (e.sprite.scale.y * BODY_H) / e.canvas.height,
+        height: (e.sprite.scale.y * BODY_H * e.res) / e.canvas.height,
       }));
   }
 
@@ -123,18 +139,23 @@ export class Bubbles {
     const canvas = document.createElement('canvas');
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
+    // the hi-res texture is shrunk a lot when zoomed out: mipmaps keep the text smooth instead of shimmering (sprites
+    // always face the camera, so anisotropic filtering would add nothing)
+    texture.generateMipmaps = true;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
     // depth-tested against the office, but never writes depth, so bubbles don't cut holes into each other
     const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: true, depthWrite: false, fog: false, toneMapped: false });
     const sprite = new THREE.Sprite(material);
     sprite.raycast = () => {}; // not pickable: clicks go to the people below
     sprite.visible = false;
     this.scene.add(sprite);
-    return { sprite, material, canvas, texture, text: '', aspect: 1, opacity: 0, age: 0, lift: 0, head: new THREE.Vector3(), active: false };
+    return { sprite, material, canvas, texture, text: '', res: 1, aspect: 1, opacity: 0, age: 0, lift: 0, head: new THREE.Vector3(), active: false };
   }
 
   /** Redraws the bubble: a soft rounded body with a subtle shadow and a tail down to the head. */
-  private draw(e: Entry, text: string): void {
+  private draw(e: Entry, text: string, res: number): void {
     e.text = text;
+    e.res = res;
     if (!this.font) {
       const root = getComputedStyle(document.documentElement);
       this.ink = root.getPropertyValue('--color-ink').trim() || 'black';
@@ -143,16 +164,19 @@ export class Bubbles {
     const c = e.canvas;
     const g = c.getContext('2d')!;
     g.font = this.font;
-    const bodyW = Math.max(BODY_H * 1.15, Math.ceil(g.measureText(text).width) + PAD_X * 2);
+    // logical units (measureText ignores the transform)
+    const bodyW = Math.ceil(Math.max(BODY_H * 1.15, g.measureText(text).width + PAD_X * 2));
     const w = bodyW + MARGIN * 2;
     const h = BODY_H + TAIL_H + MARGIN * 2;
-    if (c.width !== w || c.height !== h) {
-      c.width = w;
-      c.height = h;
+    if (c.width !== w * res || c.height !== h * res) {
+      c.width = w * res;
+      c.height = h * res;
       // a new size needs a new GPU texture
       e.texture.dispose();
     }
-    g.clearRect(0, 0, w, h);
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, c.width, c.height);
+    g.setTransform(res, 0, 0, res, 0, 0);
     const x0 = MARGIN;
     const y0 = MARGIN - 4; // the shadow falls downwards, so the top margin can be smaller
     const r = BODY_H / 2;
@@ -171,8 +195,9 @@ export class Bubbles {
     g.closePath();
     g.save();
     g.shadowColor = 'rgba(0, 0, 0, 0.28)';
-    g.shadowBlur = 10;
-    g.shadowOffsetY = 3;
+    // shadows ignore the transform, so they are scaled by hand
+    g.shadowBlur = 10 * res;
+    g.shadowOffsetY = 3 * res;
     g.fillStyle = 'white';
     g.fill();
     g.restore();
