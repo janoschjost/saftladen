@@ -39,6 +39,7 @@ export interface Look {
   shorts?: boolean;
   vape?: boolean; // carries a vape and takes a drag now and then
   phone?: boolean; // often walks around the office on a phone call
+  nerf?: boolean; // owns a Nerf gun and shoots foam darts at colleagues on their break
   height?: number; // 1 = default
   build?: number; // 1 = default width
 }

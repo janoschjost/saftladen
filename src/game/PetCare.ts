@@ -13,6 +13,13 @@ const PERSON_GAP = { min: 35, max: 90 }; // seconds before the same person pets 
 
 const between = ({ min, max }: { min: number; max: number }) => min + random() * (max - min);
 
+/** Somebody on a break: in the office and up on their feet with nothing to do (no desk, talk, meeting, errand, ...). */
+export function onBreak(p: Person): boolean {
+  return (
+    p.inOffice && !p.task && !p.held && !p.controlled && !p.talk && !p.playerChat && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob && !p.snackLeft && !p.phoneJob && !p.run && !p.coffeeJob && !p.inMeeting
+  );
+}
+
 /** Passers-by stop to pet the office dogs and cats; pets bark / meow when somebody comes through the front door. */
 export class PetCare {
   /** called when somebody starts stroking a pet */
@@ -23,12 +30,6 @@ export class PetCare {
   private clock = 0;
   private next = new WeakMap<Person, number>();
 
-  private free(p: Person): boolean {
-    return (
-      p.inOffice && !p.task && !p.held && !p.controlled && !p.talk && !p.playerChat && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob && !p.snackLeft && !p.phoneJob && !p.run && !p.coffeeJob && !p.inMeeting
-    );
-  }
-
   update(dt: number, people: readonly Person[], pets: readonly Dog[], nav: NavGrid): void {
     this.clock += dt;
     this.timer -= dt;
@@ -37,7 +38,7 @@ export class PetCare {
     for (const dog of pets) {
       if (dog.away || dog.petted || dog.held || dog.fixed || dog.sleep > 0.3 || dog.petCooldown > 0) continue;
       for (const p of people) {
-        if ((this.next.get(p) ?? 0) > this.clock || !this.free(p)) continue;
+        if ((this.next.get(p) ?? 0) > this.clock || !onBreak(p)) continue;
         const own = p === dog.owner;
         if (!own && p.moving < 0.3) continue; // strangers have to be passing by
         if (Math.hypot(p.pos.x - dog.pos.x, p.pos.z - dog.pos.z) > REACH) continue;

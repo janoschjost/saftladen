@@ -216,6 +216,12 @@ export class Person extends Walker {
   petting = false;
   /** 0..1 eased petting pose */
   petAmt = 0;
+  /** Nerf skirmish (see Nerf.ts): stopped to aim the gun or to duck away from a dart; `nerfAmt` is the eased pose, `nerfKick` the recoil */
+  nerfOn = false;
+  nerfKind: 'aim' | 'duck' = 'aim';
+  nerfAmt = 0;
+  nerfKick = 0;
+  nerfClock = 0;
   /** back height (m) of the pet being stroked: sets how deep the crouch goes */
   petHeight = 0.4;
   /** last frame time of the pet pose (s), to ease it in real time */
@@ -1156,6 +1162,7 @@ export class Person extends Walker {
     this.state = 'idle';
     this.playerChat = { t: seconds, total: seconds, at };
     this.petting = false; // a chat cuts the petting short (`petDog` sets it again for its own stop)
+    this.nerfOn = false;
     this.speaking = true; // answers right away
     return true;
   }
@@ -1173,22 +1180,23 @@ export class Person extends Walker {
     if (this.unstick(dt, nav)) return true;
     if (this.presence !== 'in') {
       this.petting = false;
+      this.nerfOn = false;
       return this.controlPresence(dt, nav);
     }
     if (this.scripted) return this.controlScripted(dt, nav);
     const chat = this.playerChat;
-    if (!chat) this.petting = false;
+    if (!chat) this.petting = this.nerfOn = false;
     if (chat) {
       chat.t -= dt;
       if (chat.t <= 0 || this.held || this.controlled || this.talk) {
         this.playerChat = null;
-        this.petting = false;
+        this.petting = this.nerfOn = false;
         this.speaking = false;
         this.timer = 0.4 + random();
       } else {
         this.state = 'idle';
         this.timer = 1;
-        this.speaking = !this.petting && chat.total - chat.t < 2.6; // answers first, then listens
+        this.speaking = !this.petting && !this.nerfOn && chat.total - chat.t < 2.6; // answers first, then listens
         const seat = this.task?.phase === 'work' ? this.task.desk.seat : null;
         if (seat) {
           this.pos.x = seat.x;
@@ -1389,7 +1397,7 @@ export class Person extends Walker {
     this.controlled = true;
     this.steer.x = this.steer.z = 0;
     this.playerChat = null;
-    this.petting = false;
+    this.petting = this.nerfOn = false;
     this.speaking = false;
     if (!s.walk) {
       this.pos.x = this.prev.x = s.at.x;
