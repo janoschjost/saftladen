@@ -60,6 +60,20 @@ export type HomeRoom = (typeof HOME_ROOMS)[number];
 /** The usual breaks between typing spells in the home office. */
 export type HomeBreak = 'sip' | 'stretch' | 'think' | 'call' | 'wave' | 'away' | 'yawn' | 'game';
 
+/** A person's habitual working day (clock hours, 7.5 = 07:30). Every day gets some random jitter on top (see Presence.ts). */
+export interface Schedule {
+  /** usually walks in at this hour */
+  arrive: number;
+  /** usually heads home at this hour */
+  leave: number;
+  /** usually goes for lunch at this hour */
+  lunch: number;
+  /** 0..1 chance per day to stay on for a night shift (crunch / deadline) */
+  nightOwlChance: number;
+  /** does the night shift from the home office instead of the desk */
+  nightHome?: boolean;
+}
+
 export interface TeamMember {
   id: string;
   name: string;
@@ -85,4 +99,5 @@ export interface TeamMember {
   adhd?: boolean; // restless: short idle/work spells, fidgets
   homebody?: boolean; // works from home a lot and is never out on errands
   speed?: number; // walking speed override (default: random 1.0-1.5)
+  schedule: Schedule; // habitual office hours
 }

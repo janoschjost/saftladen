@@ -1,5 +1,5 @@
 import raw from './team.raw.json';
-import type { HomeBreak, HomeRoom, Look, SignatureMove, TeamMember } from './types';
+import type { HomeBreak, HomeRoom, Look, Schedule, SignatureMove, TeamMember } from './types';
 
 // skin tones
 const FAIR = '#f2d0b8';
@@ -123,6 +123,51 @@ const homebodies = new Set(['marco-hefti']);
 // people with ADHD: restless, short attention span (see Person.ts)
 const adhd = new Set(['delya-kohler', 'sandro-hagen']);
 
+/** Core office hours (08:00 - 17:30): whoever has no entry below keeps exactly these. */
+export const CORE_HOURS: Schedule = { arrive: 8, leave: 17.5, lunch: 12, nightOwlChance: 0.02 };
+
+// Habitual office hours per person (clock hours, 7.5 = 07:30); anything left out falls back to CORE_HOURS.
+// arrive / leave / lunch get a random jitter every day, nightOwlChance is the chance per day to stay on for a night shift.
+const schedules: Record<string, Partial<Schedule>> = {
+  'marco-hefti': { arrive: 9.5, leave: 18.5, lunch: 13 },
+  'donata-manser': { arrive: 8.5, leave: 17.5 },
+  'marco-rieser': { arrive: 9, leave: 18, lunch: 12.5, nightOwlChance: 0.3, nightHome: true },
+  'andrea-eichmann': { arrive: 7.5, leave: 17 },
+  'jeannine-zurcher': { arrive: 7, leave: 16, lunch: 11.5 },
+  'samuel-guttinger': { arrive: 7.25, leave: 17.5, lunch: 11.75 },
+  'jannik-stibi': { arrive: 8.25, leave: 17 },
+  'sandro-hagen': { arrive: 9.5, leave: 18.5, lunch: 12.75, nightOwlChance: 0.25 },
+  'philip-gygax': { arrive: 8, leave: 17.5 },
+  'oriana-pontieri': { arrive: 7, leave: 16.25, lunch: 11.5 },
+  'martin-fuchs': { arrive: 8.5, leave: 18, lunch: 12.5 },
+  'elia-vogt': { arrive: 9, leave: 18 },
+  'celine-buhler': { arrive: 8.75, leave: 17.25, lunch: 12.25 },
+  'devin-frei': { arrive: 7.5, leave: 16.5, lunch: 11.75 },
+  'alessandro-romeo': { arrive: 9.25, leave: 18.25, lunch: 12.75 },
+  'jeerapat-wang': { arrive: 7.75, leave: 16.75 },
+  'alyosha-krajnc': { arrive: 8, leave: 17 },
+  'fabian-bucher': { arrive: 7.75, leave: 18.5, lunch: 12.25, nightOwlChance: 0.25 },
+  'andrew-jelley': { arrive: 9.5, leave: 18.75, lunch: 13, nightOwlChance: 0.06 },
+  'larissa-lanker': { arrive: 8.5, leave: 17.25 },
+  'nina-vetsch': { arrive: 8.25, leave: 17.5, lunch: 12.25 },
+  'michael-eberle': { arrive: 7.5, leave: 17 },
+  'ramon-lenherr': { arrive: 8.75, leave: 18.5, lunch: 12.5, nightOwlChance: 0.06 },
+  'dominic-rechsteiner': { arrive: 7.25, leave: 16.5, lunch: 11.5 },
+  'milica-rakic': { arrive: 8, leave: 17.25 },
+  'rene-kappeler': { arrive: 7, leave: 17.5, lunch: 11.75 },
+  'delya-kohler': { arrive: 9.25, leave: 17.75, lunch: 12.5 },
+  'teresa-sutter': { arrive: 8.25, leave: 16.75 },
+  'jan-hasler': { arrive: 7.5, leave: 18.25, lunch: 12.25, nightOwlChance: 0.05 },
+  'linda-peter': { arrive: 8.5, leave: 17.5 },
+  'oscar-grob': { arrive: 7.75, leave: 16.5, lunch: 11.75 },
+  'jacqueline-graf': { arrive: 9, leave: 17.75, lunch: 12.75 },
+  'janosch-jost': { arrive: 9.5, leave: 19, lunch: 13, nightOwlChance: 0.08 },
+  'marianne-hofstetter': { arrive: 7.75, leave: 17.25 },
+  'nina-bauer': { arrive: 8, leave: 17.75, lunch: 12.25 },
+  'julia-renz': { arrive: 8.75, leave: 17.5, lunch: 12.5 },
+  'zlatko-pesic': { arrive: 9, leave: 17.5 },
+};
+
 export const team: TeamMember[] = raw.map((p) => ({
   id: p.id,
   name: p.name,
@@ -142,4 +187,5 @@ export const team: TeamMember[] = raw.map((p) => ({
   speed: speeds[p.id],
   adhd: adhd.has(p.id),
   homebody: homebodies.has(p.id),
+  schedule: { ...CORE_HOURS, ...schedules[p.id] },
 }));
