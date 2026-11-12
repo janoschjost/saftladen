@@ -47,6 +47,10 @@ const BAND = 6.7; // z where the high folded roof ends and the low window band b
 const TEETH = [-5, 1.3, 7.9, 14.5, 21.1, 27.7]; // sawtooth roof fold lines (x)
 const CUT = 1.2; // interior walls are solid up to here, see-through above
 const DOOR_MAX = 1.3; // openings up to this width are doors and keep their size when the plan is scaled
+const FRAME_LAP = 0.006; // door frame overlaps the glass around it by this much (m), so no faces are coplanar
+const POST_LAP = 0.004; // door handle posts reach this far (m) into the leaf
+const GLASS_SINK = 0.02; // glass panes standing on the floor reach this far (m) below it
+const LEAF_GAP = 0.006; // air gap (m) around a glass door leaf
 
 export interface DeskPlacement {
   rig: DeskRig;
@@ -367,6 +371,8 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     const s1 = alongX ? Math.max(ax(x1), ax(x2)) : Math.max(az(z1), az(z2));
     const put = (a: number, b: number, y0: number, y1: number, mm: Mat = mat.wall, tt = t) => {
       const [pa, pb] = [P(a), P(b)];
+      // see-through panes standing on the floor start just below it: their (double-sided) bottom face would z-fight with the floor
+      if ((mm === mat.glass || mm === mat.frosted) && y0 === 0) y0 = -GLASS_SINK;
       if (mm !== mat.wall || o.outer || EXACT) return seg(pa[0], pa[1], pb[0], pb[1], y0, y1, mm, tt);
       // wall plaster: solid below CUT, ghost above
       const lower = seg(pa[0], pa[1], pb[0], pb[1], y0, Math.min(y1, CUT), mm, tt);
@@ -382,11 +388,13 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
         const top = op.top ?? 2.1;
         put(s0, op.a, 0, hFull);
         if (op.frame) {
-          // frame: two jambs + head, fixed glass transom above up to the wall top
-          put(op.a, op.a + 0.05, 0, top + 0.05, mat.black, t + 0.02);
-          put(op.b - 0.05, op.b, 0, top + 0.05, mat.black, t + 0.02);
-          put(op.a, op.b, top, top + 0.05, mat.black, t + 0.02);
-          put(op.a, op.b, top + 0.05, hFull, mat.glass, op.flush ? t : 0.03);
+          // frame: two jambs + head, fixed glass transom above up to the wall top.
+          // No coplanar faces (they z-fight and flicker): the jambs reach a little into the neighbouring panes,
+          // the head sits between the jambs and the transom glass starts inside the head.
+          put(op.a - FRAME_LAP, op.a + 0.05, 0, top + 0.05, mat.black, t + 0.02);
+          put(op.b - 0.05, op.b + FRAME_LAP, 0, top + 0.05, mat.black, t + 0.02);
+          put(op.a + 0.05, op.b - 0.05, top, top + 0.05, mat.black, t + 0.02);
+          put(op.a, op.b, top + 0.05 - FRAME_LAP, hFull, mat.glass, op.flush ? t : 0.03);
         } else if (op.solidAbove) seg(...P(op.a), ...P(op.b), top, hFull, mat.wall, t);
         else put(op.a, op.b, top, hFull);
         if (bottom > 0) put(op.a, op.b, 0, bottom);
@@ -398,7 +406,9 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
           const W = op.b - op.a - 2 * inset;
           const H = top;
           const pivot = new THREE.Group();
-          const leaf = new THREE.Mesh(new THREE.BoxGeometry(W, H, glassDoor ? 0.03 : t), glassDoor ? mat.glass : mat.lightgrey);
+          // glass leaf: small air gap all round, so its edges are never coplanar with the frame, the wall or the floor (z-fighting)
+          const gap = glassDoor ? LEAF_GAP : 0;
+          const leaf = new THREE.Mesh(new THREE.BoxGeometry(W - 2 * gap, H - 2 * gap, glassDoor ? 0.03 : t), glassDoor ? mat.glass : mat.lightgrey);
           leaf.position.set(W / 2, H / 2, 0);
           leaf.castShadow = !glassDoor;
           pivot.add(leaf);
@@ -409,8 +419,9 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
             bar.position.set(W - 0.12, 1.0, side * (th + 0.04));
             pivot.add(bar);
             for (const px of [W - 0.19, W - 0.05]) {
-              const post = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.04), mat.steel);
-              post.position.set(px, 1.0, side * (th + 0.02));
+              // posts reach a little into the leaf: their end faces are not coplanar with the (see-through) leaf face
+              const post = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.04 + POST_LAP), mat.steel);
+              post.position.set(px, 1.0, side * (th + 0.02 - POST_LAP / 2));
               pivot.add(post);
             }
           }
