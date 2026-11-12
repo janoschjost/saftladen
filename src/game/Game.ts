@@ -72,6 +72,7 @@ export class Game {
   readonly sim!: Sim;
   private views!: Views;
   private roof!: THREE.Object3D;
+  private setRoof!: (visible: boolean) => void;
   private roofWanted = false;
   private editor!: RoomEditor;
   private overlay: Overlay;
@@ -212,11 +213,12 @@ export class Game {
     applySky(this.sim.tod, this.sky);
     this.deskLights = new DeskLights(this.scene, this.sim.office, this.sim.tod);
     this.easter = new Easter(this.scene);
-    this.roof = model.roof;
+    this.roof = model.roof; // renderPreviews hides it for a moment; the cords stay as they are
+    this.setRoof = model.setRoofVisible;
     this.entrance = model.entrance;
     this.meetingLight = new RoomLight(this.scene, model.meeting.lamp, this.sim.tod, () => this.sim.meetingRoom.occupants(this.sim.people));
     this.views = new Views(stage, this.drawer.renderer.domElement, this.sim.walkColliders, (mode) => {
-      this.roof.visible = mode === 'walk' ? true : mode === 'plan' || mode === 'third' ? false : this.roofWanted;
+      this.setRoof(mode === 'walk' ? true : mode === 'plan' || mode === 'third' ? false : this.roofWanted);
       if (mode !== 'third' && this.day && this.day.state !== 'waiting') this.endDay(false); // the player switched the camera away
       if (mode !== 'orbit') this.handBack(); // the camera is the player's again
       this.settings?.setView(mode);
@@ -546,7 +548,7 @@ export class Game {
       if (e.key.toLowerCase() === 'e' && this.views.mode === 'walk') this.interact();
       if (e.key.toLowerCase() === 'f') this.toggleFollow();
       if (e.key.toLowerCase() === 'n') this.overlay.toggleNames();
-      if (e.key.toLowerCase() === 'r' && (this.views.mode === 'iso' || this.views.mode === 'orbit')) this.roof.visible = this.roofWanted = !this.roofWanted;
+      if (e.key.toLowerCase() === 'r' && (this.views.mode === 'iso' || this.views.mode === 'orbit')) this.setRoof((this.roofWanted = !this.roofWanted));
       if (e.key.toLowerCase() === 'h' && this.selected instanceof Person) this.sim.presence.toggleHome(this.selected, this.sim.nav);
       if (e.key === 'Escape') {
         if (this.day) this.endDay();

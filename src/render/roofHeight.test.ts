@@ -27,4 +27,24 @@ describe('office.pendant-cords', () => {
     expect(pendantCords.length).toBeGreaterThan(10);
     for (const c of pendantCords) expect(c.top, `pendant at ${c.x}, ${c.z}`).toBeLessThanOrEqual(roofHeightAt(c.x, c.z) + 1e-9);
   });
+
+  it('roof off: every open-office cord ends at the same height (4.2), roof on: at the roof', () => {
+    const ctx: object = new Proxy(function () {}, { get: (_t, k) => (k === Symbol.toPrimitive ? () => 1 : k === 'width' ? 1 : ctx), apply: () => ctx, set: () => true });
+    vi.stubGlobal('document', { createElement: () => ({ width: 0, height: 0, getContext: () => ctx }) });
+    vi.stubGlobal('Image', class {});
+    const { pendantCords, setRoofVisible } = buildOffice(new THREE.Scene());
+    const open = pendantCords.filter((c) => c.noRoof);
+    expect(open.length).toBe(6);
+    // top of the cord that is shown: mesh centre + half its height
+    const shownTop = (c: (typeof open)[number]) => {
+      const m = [c.withRoof, c.noRoof!].find((o) => o.visible)!;
+      return m.position.y + (m.geometry as THREE.CylinderGeometry).parameters.height / 2;
+    };
+    setRoofVisible(false);
+    for (const c of open) expect(shownTop(c), `pendant at ${c.x}, ${c.z}`).toBeCloseTo(4.2);
+    setRoofVisible(true);
+    for (const c of open) expect(shownTop(c), `pendant at ${c.x}, ${c.z}`).toBeCloseTo(roofHeightAt(c.x, c.z));
+    // exactly one cord per pendant is shown
+    for (const c of open) expect([c.withRoof, c.noRoof!].filter((o) => o.visible).length).toBe(1);
+  });
 });
