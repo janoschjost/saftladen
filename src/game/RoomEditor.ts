@@ -76,6 +76,10 @@ export class RoomEditor {
     return this.active && !!this.hovered;
   }
 
+  get hasSelection(): boolean {
+    return !!this.selected;
+  }
+
   get dragging(): boolean {
     return !!this.drag;
   }

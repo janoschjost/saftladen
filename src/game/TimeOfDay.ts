@@ -34,6 +34,24 @@ export function hourOf(cycle: number): number {
   return 24;
 }
 
+/** Clock hour -> cycle position (inverse of `hourOf`). */
+export function cycleOfHour(hour: number): number {
+  const h = Math.min(24, Math.max(0, hour));
+  for (let i = 1; i < ANCHORS.length; i++) {
+    const [c1, h1] = ANCHORS[i];
+    if (h <= h1) {
+      const [c0, h0] = ANCHORS[i - 1];
+      return c0 + ((h - h0) / (h1 - h0)) * (c1 - c0);
+    }
+  }
+  return 1;
+}
+
+/** 0 = dark night .. 1 = full daylight at a clock hour. */
+export function daylightOf(hour: number): number {
+  return smooth(5, 8, hour) * (1 - smooth(17.5, 21, hour));
+}
+
 /** Day / night clock: drives the light, who is in the office and how tired everybody looks. */
 export class TimeOfDay {
   /** 0..1 position in the cycle (0 = midnight); the slider moves this */
@@ -70,7 +88,7 @@ export class TimeOfDay {
 
   private refresh(): void {
     this.hour = hourOf(this.cycle);
-    this.day = smooth(5, 8, this.hour) * (1 - smooth(17.5, 21, this.hour));
+    this.day = daylightOf(this.hour);
     if (!this.night && this.day < 0.35) this.night = true;
     else if (this.night && this.day > 0.55) this.night = false;
     this.tired = 0.08 + 0.92 * (1 - this.day);
