@@ -736,6 +736,36 @@ export class Game {
       });
     }
     devEvents.register({
+      id: 'pet-passage',
+      group: 'Tiere',
+      label: 'Tier in einen Durchgang setzen',
+      run: () => {
+        // a pet of a seated owner is put into the nearest passage: it gets up and lies down beside the owner again, out of the way
+        const pet = this.pets.find((d) => !d.away && !d.held && d.owner.inOffice && d.owner.sit > 0.5);
+        if (!pet) return null;
+        const { nav } = this;
+        const o = nav.toCell(pet.owner.pos);
+        let best: { x: number; z: number } | null = null;
+        let bestD = Infinity;
+        for (let dz = -8; dz <= 8; dz++) {
+          for (let dx = -8; dx <= 8; dx++) {
+            const cx = o.cx + dx;
+            const cz = o.cz + dz;
+            if (!nav.walkable(cx, cz) || this.traffic.passages.atIndex(cz * nav.cols + cx) < 0) continue;
+            const d = Math.hypot(dx, dz);
+            if (d >= 2 && d < bestD) {
+              bestD = d;
+              best = nav.center(cx, cz);
+            }
+          }
+        }
+        if (!best) return null;
+        pet.placeAt(best);
+        this.selected = pet;
+        return `${pet.name} liegt im Durchgang`;
+      },
+    });
+    devEvents.register({
       id: 'pod',
       group: 'Meetings',
       label: 'Zwei ins Holzhaus',
