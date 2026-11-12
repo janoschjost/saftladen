@@ -24,10 +24,15 @@ At the end, report: issue → PR link, plus the skipped issues and why.
 
 ## Pick
 
-Eligible: open, no `in progress` label, no assignee, no open PR linked to it, not labeled `question`, `wontfix`, `duplicate` or `invalid`.
+Eligible: open, no `in progress` label, unassigned **or assigned to you** (issues you opened with `scripts/issue.sh new` are assigned to you right away), no open PR linked to it, not labeled `question`, `wontfix`, `duplicate` or `invalid`. Issues assigned to other devs are theirs: skip them.
 
 ```sh
-gh issue list --state open --limit 100 --search "sort:created-asc -label:\"in progress\" no:assignee -label:question -label:wontfix -label:duplicate -label:invalid" --json number,title,labels
+F='sort:created-asc -label:"in progress" -label:question -label:wontfix -label:duplicate -label:invalid'
+{ gh issue list --state open --limit 100 --search "$F no:assignee" --json number,createdAt
+  gh issue list --state open --limit 100 --search "$F assignee:@me" --json number,createdAt
+} | jq -s 'add | sort_by(.createdAt) | map(.number)'
 # per candidate, must print 0 (no PR already closes it):
 gh issue view N --json closedByPullRequestsReferences -q '[.closedByPullRequestsReferences[]] | length'
 ```
+
+Issue numbers given as args are taken even if they are assigned to someone. Only a claim by another session (`scripts/issue.sh claim` exits 2), a linked open PR or a closed issue stops them.
