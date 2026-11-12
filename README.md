@@ -23,6 +23,7 @@ npm run fetch-team     # re-scrape https://vitamin2.ch/agentur (names, roles, po
 - `src/render/officeBuilder.ts` – monitor screen textures
 - `src/game/Office.ts` – every desk of the model is a workplace, desk claim/release
 - `src/game/` – fixed-step loop, A* nav grid, wandering people and dogs; people sometimes claim a desk, sit down, work, then stand up and wander again (`Person.ts`)
+- `src/game/Traffic.ts`, `Passages.ts` – crowd-aware routing; doorways, corridors and gaps between desks (found from the nav grid) carry one direction at a time: oncoming walkers wait beside the entrance, the two sides take turns, and whoever waits too long detours, gives way or finally pushes through
 - `src/game/Presence.ts`, `Door.ts` – ~1/3 of the team is out at any time: errands (walk out of the front door, back after 25-70 s) or home office (90-220 s). `H` sends the selected person home / back, `#homes` in the URL fills all 8 home offices
 - `src/data/homeAssignments.ts` – who owns which home office room (set per person in the character view, saved in localStorage; Marco has his own special room)
 - `src/render/homeOffice.ts` – 8 home office rooms seen through a webcam; drawn into the main canvas behind the feed tiles (`ui/Feeds.ts`); `ui/Roster.ts` lists who is not in the office
