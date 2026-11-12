@@ -1,4 +1,5 @@
 import type * as THREE from 'three';
+import type { PetVisits } from '../data/types';
 import type { DogRig } from '../render/dogBuilder';
 import { DOOR } from './Door';
 import type { NavGrid, Vec2 } from './NavGrid';
@@ -26,6 +27,8 @@ export interface PetOptions {
   radius?: number;
   /** -1 left / 1 right of the owner (default random) */
   side?: 1 | -1;
+  /** which days it comes to the office (default: every day) */
+  visits?: PetVisits;
 }
 
 /** Pets (dogs, cats) always stay with their owner: run to a spot beside them, wait, repeat. */
@@ -38,6 +41,9 @@ export class Dog extends Walker {
   headHeight: number;
   id: string;
   private side: number;
+  readonly visits: PetVisits | undefined;
+  /** rolled each morning (`Presence`): false = stays at home today and doesn't come in with the owner */
+  comesToday = true;
   private doorWait = 0;
   private outWait = 0;
   private headingOut = false;
@@ -99,6 +105,7 @@ export class Dog extends Walker {
     this.speed = opts.speed ?? this.speed;
     this.radius = opts.radius ?? this.radius;
     this.side = opts.side ?? (random() < 0.5 ? 1 : -1);
+    this.visits = opts.visits;
     this.root = rig.root;
     this.headHeight = rig.headHeight;
     this.id = opts.id ?? `dog-${owner.id}`;
@@ -151,7 +158,7 @@ export class Dog extends Walker {
 
   /** Appear on the porch at the same moment as the owner and walk in with them. */
   arriveWith(owner: Person): void {
-    if (!this.away || this.removed) return;
+    if (!this.away || this.removed || !this.comesToday) return;
     this.setAway(false);
     this.pos = { ...owner.lane.out, x: owner.lane.out.x + 0.2 };
     this.prev = { ...this.pos };
@@ -177,7 +184,7 @@ export class Dog extends Walker {
     }
     if (this.away) {
       // normally the pet appears together with the owner (`arriveWith`); this is only the fallback when the owner is in again
-      if (o.presence !== 'in') return true;
+      if (o.presence !== 'in' || !this.comesToday) return true;
       this.doorWait -= dt;
       if (this.doorWait > 0) return true;
       this.arriveWith(o);

@@ -87,6 +87,11 @@ export function registerSimEvents(sim: Sim): void {
         // called out and still could not stroke
         const pet = ofKind.find((d) => !d.away && !d.fixed && !d.petted && !d.held && isFree(d.owner) && !tiedUp(d.owner));
         if (!pet) {
+          // every pet of this kind stays home today: one comes in after all (with its owner, once they are in)
+          if (!ofKind.some((d) => d.comesToday)) {
+            const late = ofKind.find((d) => !d.removed);
+            if (late) late.comesToday = true;
+          }
           if (ofKind.some((d) => d.owner.inOffice)) return null; // an owner is in, just busy (or their pet is): try again in a moment
           // the owner is out or on the way out: call them back, the event is retried until they and the pet are in
           const out = ofKind.find((d) => d.owner.presence === 'out' || d.owner.presence === 'leaving')?.owner;
@@ -101,6 +106,18 @@ export function registerSimEvents(sim: Sim): void {
       },
     });
   }
+  events.register({
+    id: 'pet-owner',
+    group: 'Tiere',
+    label: 'Wer hat heute ein Tier dabei?',
+    run: () => {
+      const owner = people.find((p) => p.inOffice && p.pets.some((d) => d.comesToday && !d.away));
+      if (!owner) return null;
+      sim.point(owner);
+      const today = presence.petsToday.map((t) => `${t.pet} (${t.owner.split(' ')[0]})`);
+      return `Heute einmal im Büro: ${today.join(', ') || 'keine Tiere'}`;
+    },
+  });
   events.register({
     id: 'pet-passage',
     group: 'Tiere',

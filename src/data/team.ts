@@ -1,5 +1,5 @@
 import raw from './team.raw.json';
-import type { HomeBreak, HomeRoom, Look, Schedule, SignatureMove, TeamMember } from './types';
+import type { HomeBreak, HomeRoom, Look, PetVisits, Schedule, SignatureMove, TeamMember } from './types';
 
 // skin tones
 const FAIR = '#f2d0b8';
@@ -75,11 +75,22 @@ const dogNames: Record<string, string> = {
   'fabian-bucher': 'Mira',
 };
 
+// which days the dogs come to the office (0 = Monday): fixed days, now and then they stay home anyway
+const dogVisits: Record<string, PetVisits> = {
+  'ramon-lenherr': { days: [0, 2, 4], chance: 0.9 },
+  'janosch-jost': { days: [1, 3] },
+  'nina-vetsch': { days: [0, 1, 3], chance: 0.8 },
+  'fabian-bucher': { days: [2, 4], chance: 0.9 },
+};
+
+// the cats come along on a whim (no fixed days)
+const CAT_VISITS: PetVisits = { chance: 0.35 };
+
 // cats that follow their person around
 const cats: Record<string, NonNullable<TeamMember['cats']>> = {
   'donata-manser': [
-    { kind: 'tabby', name: 'Angus' },
-    { kind: 'tortie', name: 'Binx' },
+    { kind: 'tabby', name: 'Angus', visits: CAT_VISITS },
+    { kind: 'tortie', name: 'Binx', visits: CAT_VISITS },
   ],
 };
 
@@ -195,6 +206,7 @@ export const team: TeamMember[] = raw.map((p) => ({
   swimLook: swimLooks[p.id],
   dog: dogs[p.id],
   dogName: dogNames[p.id],
+  dogVisits: dogVisits[p.id],
   cats: cats[p.id],
   speed: speeds[p.id],
   adhd: adhd.has(p.id),

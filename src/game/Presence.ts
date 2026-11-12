@@ -6,6 +6,7 @@ import type { Person } from './Person';
 import type { TimeOfDay } from './TimeOfDay';
 import type { Weather } from './Weather';
 import { random } from './rng';
+import { petComesToday } from './petSchedule';
 
 /** Share of the people on duty that is out of the office at any time (errands + home office). */
 const ABSENT_SHARE = 0.36;
@@ -121,6 +122,11 @@ export class Presence {
     this.seenPicks = tod.picks;
   }
 
+  /** Weekday of the running working day, 0 = Monday (the clock's). */
+  get weekday(): number {
+    return this.tod.weekday;
+  }
+
   /** Clock hour of the running working day: 04:00 .. 28:00 (hours after midnight count on). */
   private get workHour(): number {
     const h = this.tod.hour % 24;
@@ -167,6 +173,7 @@ export class Presence {
     this.lunchers.clear();
     this.plans.clear();
     for (const p of this.people) this.plans.set(p, this.roll(p));
+    this.rollPets();
     if (random() >= CRUNCH.chance) return;
     const pool = this.people.filter((p) => !p.member.homebody && !this.plans.get(p)!.night && !this.plans.get(p)!.remote).sort(() => random() - 0.5);
     for (const p of pool.slice(0, Math.round(between(CRUNCH.people)))) {
@@ -174,6 +181,18 @@ export class Presence {
       plan.night = true;
       plan.end = Math.max(plan.leave + 1, between(NIGHT_END));
     }
+  }
+
+  /** Which pets come along today. A pet that is away while its owner is still in (night shift) stays away until the owner's next arrival. */
+  private rollPets(): void {
+    for (const p of this.people) {
+      for (const d of p.pets) d.comesToday = petComesToday(d.visits, this.weekday) && !(d.away && p.presence !== 'out');
+    }
+  }
+
+  /** Pets that come to the office today, with their owner (UI hint, and `__game.presence.petsToday` in the console). */
+  get petsToday(): Array<{ pet: string; owner: string }> {
+    return this.people.flatMap((p) => p.pets.filter((d) => d.comesToday).map((d) => ({ pet: d.name, owner: p.member.name })));
   }
 
   private planOf(p: Person): DayPlan {
