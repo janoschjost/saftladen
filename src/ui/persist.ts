@@ -2,9 +2,11 @@ import type { ViewSnapshot } from '../render/Views';
 
 const KEY = 'saftladen.state';
 
-/** What is remembered between visits: time of day, camera (all views) and the selected person. */
+/** What is remembered between visits: time of day, weekday, camera (all views) and the selected person. */
 export interface SavedState {
   cycle?: number;
+  /** 0 = Monday .. 6 = Sunday */
+  weekday?: number;
   view?: ViewSnapshot;
   selected?: string;
 }

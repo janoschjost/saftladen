@@ -5,7 +5,7 @@ import type { NavGrid } from './NavGrid';
 import type { AwayKind, Person } from './Person';
 import { transformsOnLeave } from './AlterEgo';
 import { Presence } from './Presence';
-import { hourOf, type TimeOfDay } from './TimeOfDay';
+import { cycleOf, hourOf, TimeOfDay } from './TimeOfDay';
 import type { Weather } from './Weather';
 import { setSeed } from './rng';
 
@@ -255,5 +255,69 @@ describe('presence', () => {
     for (const p of people) p.update(STEP);
     const home = people.filter((p) => p.awayKind === 'home' && p.presence === 'out').map((p) => p.homeVariant);
     expect(new Set(home).size).toBe(home.length);
+  });
+});
+
+describe('time jumps', () => {
+  /** The whole team at home at `hour` on a stopped clock; `run(seconds)` steps the simulation. */
+  function office(seed: number, hour: number) {
+    setSeed(seed);
+    const tod = new TimeOfDay();
+    tod.auto = false;
+    tod.setCycle(cycleOf(hour));
+    const people = team.map((m) => new Stub(m));
+    for (const p of people) p.startAway('off', 9999);
+    const presence = new Presence(people as unknown as Person[], tod, { raining: false } as Weather);
+    const nav = {} as NavGrid;
+    const run = (seconds: number) => {
+      for (let t = 0; t < seconds; t += STEP) {
+        presence.update(STEP, nav);
+        for (const p of people) p.update(STEP);
+      }
+    };
+    const plans = () => new Map(presence.schedule.map((s) => [s.id, s]));
+    return { tod, people, presence, run, plans };
+  }
+
+  it('time.jump: jumping into the working day brings the people on duty in through the door', () => {
+    const { tod, people, run, plans } = office(1, 23.5);
+    run(1);
+    expect(people.filter((p) => p.presence === 'in')).toHaveLength(0);
+    tod.jumpToHour(11);
+    run(120);
+    const today = plans();
+    const onDuty = people.filter((p) => today.get(p.id)!.arrive <= 11 && today.get(p.id)!.end > 11);
+    expect(onDuty.length).toBeGreaterThan(10);
+    // everybody on duty is in or out on an errand / in the home office, nobody is still waiting at home
+    for (const p of onDuty) expect(p.presence === 'out' && p.awayKind === 'off').toBe(false);
+    // the jump keeps today's plans
+    expect(plans()).toEqual(today);
+  });
+
+  it('time.jump: jumping to the night sends everybody off duty away at once', () => {
+    const { tod, people, run, plans } = office(2, 23.5);
+    tod.jumpToHour(11);
+    run(120);
+    expect(people.filter((p) => p.presence === 'in').length).toBeGreaterThan(5);
+    tod.jumpToHour(23.9);
+    run(STEP);
+    const today = plans();
+    for (const p of people) {
+      const plan = today.get(p.id)!;
+      const owl = plan.night && plan.end > 23.9;
+      if (!owl) expect(p.presence, p.id).not.toBe('in');
+    }
+  });
+
+  it('time.weekday: picking a day rolls fresh plans, a jump in time does not', () => {
+    const { tod, run, plans } = office(3, 10);
+    run(1);
+    const before = plans();
+    tod.jumpToHour(15);
+    run(1);
+    expect(plans()).toEqual(before);
+    tod.pickWeekday(3);
+    run(1);
+    expect(plans()).not.toEqual(before);
   });
 });
