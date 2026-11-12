@@ -68,3 +68,16 @@ test('dev.force: wc sends a person to a free cabin, nicht möglich when both are
   // the one already in a cabin cannot be sent again
   expect(await force(page, ids[0], 'wc')).toContain('nicht möglich');
 });
+
+test('dev.force: select marks people who are away, preselects one in the office, refusal names the reason (#105)', async ({ page }) => {
+  await page.keyboard.press('`');
+  const select = page.locator('#dev-people select');
+  const away = await read(page, (g) => g.people.filter((p: { inOffice: boolean }) => !p.inOffice).map((p: { member: { name: string } }) => p.member.name) as string[]);
+  for (const name of away) await expect(select.locator('option', { hasText: `${name} (nicht im Büro)` })).toHaveCount(1);
+  const inOfficeId = await read(page, (g) => g.people.find((p: { inOffice: boolean }) => p.inOffice).id as string);
+  expect(await select.inputValue()).toBe(inOfficeId);
+  if (away.length) {
+    const awayId = await read(page, (g) => g.people.find((p: { inOffice: boolean }) => !p.inOffice).id as string);
+    expect(await force(page, awayId, 'desk')).toContain('(nicht im Büro)');
+  }
+});
