@@ -32,6 +32,11 @@ export function installForceState(game: Game): void {
       g.presence.send(p, kind, g.nav);
       return p.presence !== 'in';
     },
+    wc: (p) => {
+      if (p.talk || !g.toilets.cabins.some((c: unknown) => !g.toilets.isOccupied(c))) return false;
+      drop(p);
+      return g.toilets.go(p, g.nav) === 'cabin';
+    },
     meeting: (group) => {
       if (g.meetingRoom.current) return false;
       group.forEach(drop);

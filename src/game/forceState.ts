@@ -1,7 +1,7 @@
 import { random } from './rng';
 
 /** States a dev can send a person into by hand (dev panel "Leute", `dev.forceState(id, state)`). */
-export const FORCE_STATES = ['desk', 'errand', 'home', 'meeting', 'break'] as const;
+export const FORCE_STATES = ['desk', 'errand', 'home', 'meeting', 'break', 'wc'] as const;
 export type ForceState = (typeof FORCE_STATES)[number];
 
 export const FORCE_LABELS: Record<ForceState, string> = {
@@ -10,6 +10,7 @@ export const FORCE_LABELS: Record<ForceState, string> = {
   home: 'Homeoffice',
   meeting: 'Meeting',
   break: 'Pause',
+  wc: 'WC',
 };
 
 /** Just the part of a person that forcing a state looks at. */
@@ -34,6 +35,8 @@ export interface ForceCtx<P extends ForcePerson> {
   /** `group[0]` is the person, the others are free people to keep them company */
   meeting(group: P[]): boolean;
   coffee(group: P[]): boolean;
+  /** a free WC cabin, no queue: false when both are taken */
+  wc(p: P): boolean;
 }
 
 /** Group size per group state: the person plus this many others. */
@@ -57,6 +60,9 @@ export function forceState<P extends ForcePerson>(ctx: ForceCtx<P>, personId: st
     case 'errand':
     case 'home':
       ok = ctx.away(p, kind);
+      break;
+    case 'wc':
+      ok = ctx.wc(p);
       break;
     default: {
       const others = ctx.people.filter((o) => o !== p && free(o)).sort(() => random() - 0.5);
