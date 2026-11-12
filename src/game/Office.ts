@@ -47,9 +47,9 @@ export class Desk {
     return this.rig.screen.material as THREE.Material;
   }
 
-  /** Kurt's picture on the monitor of the empty desk (see AlterEgo.kurtOnScreen). */
-  showKurt(portrait: string | null): void {
-    this.show(kurtScreenMaterial(portrait)); // a still picture: not animated, never redrawn
+  /** Kurt waving on the monitor of the empty desk (see AlterEgo.kurtOnScreen); animates like the other pictures while shown. */
+  showKurt(frames: HTMLCanvasElement[] | null): void {
+    this.show(kurtScreenMaterial(frames));
   }
 
   /** How full the mug on the desk is (0 = empty); null = no mug here. */

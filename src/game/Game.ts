@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { team } from '../data/team';
 import shippedSeats from '../data/seats.json';
 import { HOME_LABELS, HomeOffice, ROOM_COUNT, heldPoses, type ArmPose } from '../render/homeOffice';
-import { kurtPortrait } from '../render/kurtBuilder';
+import { kurtPortrait, kurtWave } from '../render/kurtBuilder';
 import { PoofFx } from '../render/poofFx';
 import { petPortrait } from '../render/petPortrait';
 import { SIT_DROP } from '../render/officeBuilder';
@@ -647,7 +647,7 @@ export class Game {
       if (!desk) continue;
       const on = kurtOnScreen({ hour: this.tod.hour, presence: p.presence, awayKind: p.awayKind, deskUsed: !!desk.occupant });
       if (on && !this.kurtScreens.has(p)) {
-        desk.showKurt(this.portraitOf(p, true));
+        desk.showKurt(kurtWave(p.member.look));
         this.kurtScreens.add(p);
       } else if (!on && this.kurtScreens.has(p)) {
         this.kurtScreens.delete(p);

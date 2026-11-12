@@ -37,13 +37,24 @@ test('kurt.home: Kurt in the home office feed and the roster, under his own name
   expect(errors).toEqual([]);
 });
 
-test('kurt.screen: Marco out of the office (not home office) at 11:00: his empty desk shows Kurt; home office: it does not', async ({ page }) => {
+test('kurt.screen: Marco out of the office (not home office) at 11:00: his empty desk shows Kurt waving; home office: it does not', async ({ page }) => {
   const errors = await openGame(page);
   await trigger(page, 'kurt-screen');
   await until(page, (g, id) => {
     const p = g.people.find((o: any) => o.id === id);
     return p.presence === 'out' && p.awayKind === 'errand' && !p.homeDesk.occupant && g.kurtScreens.has(p);
   }, ID, SLOW);
+  // Kurt moves on the screen: the picture changes over time
+  const shot = () =>
+    read(page, (g, id) => {
+      const d = g.people.find((o: any) => o.id === id).homeDesk;
+      const img = (d.screenMaterial.map.image as HTMLCanvasElement).getContext('2d')!.getImageData(0, 0, 192, 120).data;
+      let h = 0;
+      for (let i = 0; i < img.length; i += 7) h = (h * 31 + img[i]) | 0;
+      return h;
+    }, ID);
+  const a = await shot();
+  await expect.poll(shot, { timeout: SLOW }).not.toBe(a);
   await trigger(page, 'kurt-home');
   await until(page, (g, id) => {
     const p = g.people.find((o: any) => o.id === id);

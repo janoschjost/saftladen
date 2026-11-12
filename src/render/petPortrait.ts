@@ -10,10 +10,11 @@ export interface PortraitRig {
   face: { r: number; y: number; z: number };
 }
 
-/** Profile picture of a pet (or Kurt): its low-poly head, rendered once from a fresh rig and cached as a data URL. */
-export function petPortrait(key: string, build: () => PortraitRig): string | null {
-  const hit = cache.get(key);
-  if (hit) return hit;
+/**
+ * Renders a fresh rig, framed on its face, slightly from the side. `pose` runs before each of the `count` shots
+ * (frame index); every shot is copied onto its own canvas. Null without WebGL.
+ */
+function shoot<R extends PortraitRig>(build: () => R, count: number, pose?: (rig: R, i: number) => void): HTMLCanvasElement[] | null {
   try {
     renderer ??= new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(1);
@@ -33,12 +34,32 @@ export function petPortrait(key: string, build: () => PortraitRig): string | nul
     const target = new THREE.Vector3(0, f.y * k, f.z * k);
     cam.position.set(Math.sin(0.5) * dist, target.y + dist * 0.12, target.z + Math.cos(0.5) * dist); // slightly from the side, facing the front
     cam.lookAt(target);
-    renderer.render(scene, cam);
-    const url = renderer.domElement.toDataURL('image/png');
+    const shots: HTMLCanvasElement[] = [];
+    for (let i = 0; i < count; i++) {
+      pose?.(rig, i);
+      renderer.render(scene, cam);
+      const c = document.createElement('canvas');
+      c.width = c.height = SIZE;
+      c.getContext('2d')!.drawImage(renderer.domElement, 0, 0);
+      shots.push(c);
+    }
     scene.remove(rig.root);
-    cache.set(key, url);
-    return url;
+    return shots;
   } catch {
     return null;
   }
+}
+
+/** Profile picture of a pet (or Kurt): its low-poly head, rendered once from a fresh rig and cached as a data URL. */
+export function petPortrait(key: string, build: () => PortraitRig): string | null {
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const url = shoot(build, 1)?.[0].toDataURL('image/png') ?? null;
+  if (url) cache.set(key, url);
+  return url;
+}
+
+/** A short loop of a rig (e.g. Kurt waving on a monitor), rendered once: `count` frames, each posed by `pose`. */
+export function portraitFrames<R extends PortraitRig>(build: () => R, count: number, pose: (rig: R, i: number) => void): HTMLCanvasElement[] | null {
+  return shoot(build, count, pose);
 }

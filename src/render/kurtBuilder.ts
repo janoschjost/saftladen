@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Look } from '../data/types';
 import { buildCharacter, type CharacterRig } from './characterBuilder';
 import { box, merge, propMaterial } from './geo';
-import { petPortrait } from './petPortrait';
+import { petPortrait, portraitFrames } from './petPortrait';
 
 /**
  * Kompensiertier "Kurt", Marco's alter ego (#32): a low-poly anteater-ish critter with a spiky crest, ringed tail and
@@ -224,4 +224,35 @@ export function kurtPortrait(look: Look): string | null {
     rig.setAlter!(true);
     return { root: rig.root, face: { r: 0.4, y: 1.62, z: 0.12 } };
   });
+}
+
+/** Frames of the waving loop on Marco's monitor (#32). */
+export const KURT_WAVE_FRAMES = 12;
+let wave: HTMLCanvasElement[] | null | undefined;
+
+/**
+ * Kurt waving into the camera, rendered once from the 3D model: the forearm waves from the elbow (the home office
+ * wave pose), he bobs a little and the tail swings. Played in a loop on his office monitor.
+ */
+export function kurtWave(look: Look): HTMLCanvasElement[] | null {
+  if (wave !== undefined) return wave;
+  wave = portraitFrames(
+    () => {
+      const rig = buildCharacter(look);
+      addKurt(rig);
+      rig.setAlter!(true);
+      return Object.assign(rig, { face: { r: 0.62, y: 1.4, z: 0.1 } });
+    },
+    KURT_WAVE_FRAMES,
+    (rig, i) => {
+      const a = (i / KURT_WAVE_FRAMES) * Math.PI * 2;
+      rig.armR.rotation.set(-0.3, 0, 1.2);
+      rig.elbowR.rotation.set(0, 0, 1.5 + Math.sin(a * 2) * 0.4);
+      rig.armL.rotation.set(0, 0, -0.08);
+      rig.body.position.y = Math.abs(Math.sin(a)) * 0.03;
+      rig.body.rotation.z = Math.sin(a) * 0.04;
+      if (rig.tail) rig.tail.rotation.y = Math.sin(a) * 0.4;
+    },
+  );
+  return wave;
 }
