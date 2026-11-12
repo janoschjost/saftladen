@@ -33,7 +33,7 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
 
 ## Commits
 
-Small and logical. Short imperative subject in the style of `git log`. Commit, push and open PRs only on a branch, never on `main`. Never merge.
+Small and logical. Short imperative subject in the style of `git log`. Commit, push and open PRs only on a branch, never on `main`. Merge only when a dev explicitly tells you to, for that PR: checks green (or deliberately skipped), then `gh pr merge N --squash --delete-branch`. Never merge on your own initiative.
 
 ## FEATURES.md
 
