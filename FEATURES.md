@@ -12,12 +12,12 @@ Rules:
 - `view.orbit` Orbit view (default, `2`): drag rotates, right-drag pans, wheel zooms — `src/render/Views.ts`, e2e: `e2e/smoke.spec.ts`, url: `/#orbit` (#34, #38)
 - `view.iso` Iso view (`1`): orthographic, drag pans, eased wheel zoom, drag people to move them, follows a steered person — `src/render/IsoCamera.ts`, e2e: `e2e/smoke.spec.ts`, url: `/#iso` (#34, #38)
 - `view.plan` Plan view (`3`): top-down, pan/zoom, touch pan/pinch — `src/render/Views.ts`, e2e: `e2e/smoke.spec.ts`, url: `/#plan` (#34, #38)
-- `view.walk` Walk view (`4`): first person, WASD/arrows, Shift runs (FOV widens), head bob, nav-grid collision, click captures the mouse, `Esc` back to orbit — `src/render/Views.ts`, e2e: `e2e/smoke.spec.ts`, url: `/#walk` (#34, #38)
+- `view.walk` Walk view (`4`): first person, WASD/arrows, Shift runs (FOV widens), head bob, nav-grid collision, click captures the mouse, `Esc` back to the view it was entered from (key hints and button: `ui.mode-chrome`) — `src/render/Views.ts`, e2e: `e2e/smoke.spec.ts`, `e2e/controls.spec.ts`, url: `/#walk` (#34, #38, #63)
 - `view.walk-reticle` Walk mode crosshair with prompt; `E` or click opens/closes doors and talks to people — `src/ui/Overlay.ts`, `src/game/Game.ts`, url: `/#walk` (#38)
-- `view.third` Over-the-shoulder camera for day mode: mouse turns, wheel zooms 2.2–9 m, no view-bar button — `src/render/Views.ts`, url: `/?day` (#38)
+- `view.third` Over-the-shoulder camera for day mode: mouse turns, wheel zooms 2.2–9 m, no dock button — `src/render/Views.ts`, url: `/?day` (#38, #63)
 - `view.deeplinks` Hash deep links `#iso` `#orbit` `#plan` `#walk` `#walk@x,z,yaw`; the hash wins over the saved view — `src/render/Views.ts`, e2e: `e2e/smoke.spec.ts`, url: `/#walk@20,7,1.57` (#34, #38)
 - `view.persist` Camera of all views, view mode, time and selection are restored next visit (`saftladen.state`) — `src/ui/persist.ts`
-- `view.help` Collapsible controls panel, hints grouped per mode with mouse icons and keycaps — `src/render/Views.ts`
+- `view.help` Controls cheat sheet (palette entry `Steuerung`, closes with `Esc` or ×): hints grouped per mode with mouse icons and keycaps; the everyday keys are in the hint line (`ui.mode-chrome`) — `src/render/Views.ts`, `src/ui/Chrome.ts`, url: `/?seed=1&time=11#orbit` (#63)
 
 ## Keys (outside day mode)
 - `keys.names` `N` toggles name labels — `src/game/Game.ts`, e2e: `e2e/smoke.spec.ts` (#34)
@@ -25,14 +25,14 @@ Rules:
 - `keys.home` `H` sends the selected person to home office / back — `src/game/Game.ts`, `src/game/Presence.ts`, e2e: `e2e/office.spec.ts` (#34)
 - `keys.follow` `F` toggles camera follow of the selected walker — `src/game/Game.ts`
 - `keys.steer` `C` steers the selected person (WASD/arrows relative to camera, Shift runs 5.4 vs 2.2 m/s); one person at a time, only if in the office — `src/game/Game.ts`
-- `keys.escape` `Esc` ends the day and clears selection, follow and steering — `src/game/Game.ts`
-- `keys.dev` Backtick toggles the dev panel — `src/ui/DevPanel.ts`
+- `keys.escape` `Esc` steps back one layer, see `ui.esc-layers`; leaving the selection clears follow and steering, ending the day frees the person — `src/game/Game.ts`, e2e: `e2e/controls.spec.ts`, `e2e/modes.spec.ts` (#63)
+- `keys.dev` Backtick toggles the Dev tab of the side panel — `src/ui/DevPanel.ts`, e2e: `e2e/controls.spec.ts` (#63)
 - `keys.guard` Keys are ignored while typing in inputs; held keys are released on blur — `src/game/Game.ts`
 
 ## Selection and dragging
 - `select.click` Clicking a person or pet selects and follows it; clicking again deselects; a drag isn't a click — `src/game/Game.ts`
 - `select.tooltip` Hover/click tooltip with name, role, portrait — `src/ui/Overlay.ts`
-- `select.actions` Action card: follow, steer, send home (disabled with "Alle Homeoffices sind besetzt"), send out — `src/ui/Actions.ts`, e2e: `e2e/office.spec.ts` (#34)
+- `select.actions` Card of the selected person in the Leute tab (avatar, name, role, status) with Folgen, Steuern, Nach Hause (disabled with "Alle Homeoffices sind besetzt"), Raus; the same buttons hang on the person as the radial menu (`ui.radial`) — `src/ui/Actions.ts`, e2e: `e2e/office.spec.ts`, `e2e/controls.spec.ts`, url: `/?seed=1&time=8` (#34, #63)
 - `drag.person` People can be dragged; dropping inside a wall/desk moves them to the nearest free floor — `src/game/Game.ts`
 - `drag.chair` Dragging near a free chair snaps them on; they stay seated when dropped — `src/game/Game.ts`
 - `drag.meeting-chat` Dropping someone in the meeting room next to a person, or 2+ people on meeting chairs, starts a chat — `src/game/Meeting.ts`
@@ -53,7 +53,7 @@ Rules:
 - `presence.strings` All presence wording (leave vs return labels, roster status, action buttons) comes from one table; going out and coming back have separate labels — `src/i18n/strings.ts` (#8)
 - `presence.manual` Sending someone out/home by hand keeps them away until called back (max 10 min); hand-moved people are left alone by the night shift — `src/game/Presence.ts`
 - `presence.homes-hash` `#homes` fills all 8 home offices at start — `src/game/Presence.ts`, e2e: `e2e/office.spec.ts`, url: `/#homes` (#34, #38)
-- `presence.roster` Away roster: out / on the way / "zurück in …" countdown / Homeoffice; clicking a home-office person opens their feed — `src/ui/Roster.ts`, url: `/?seed=1&time=11&event=home` (#38)
+- `presence.roster` Leute tab roster: `Im Büro · n` with a status dot (Am Platz, Meeting, Kaffee, Gespräch, Unterwegs) and `Draussen · n` (out / on the way / "zurück in …" countdown / Homeoffice); a row selects the person, a home-office row opens its feed; the `n draussen` button with an avatar stack (top right) opens the tab — `src/ui/Roster.ts`, e2e: `e2e/controls.spec.ts`, url: `/?seed=1&time=11&event=home` (#38, #63)
 
 ## Desks and work
 - `desk.ownership` Every model desk is a numbered workplace with one owner; the owner asks a squatter to leave; others take a free desk nearby, preferring unowned ones — `src/game/Office.ts`, test: `src/game/Office.test.ts`
@@ -65,7 +65,7 @@ Rules:
 - `desk.screens-live` Working monitors are alive: code and text scroll, design shows a drifting selection, sheets move the cell cursor, charts get a sweeping marker, video a running playhead; content runs faster while the sitter works; shown pictures redraw at 10 fps on shared textures, hidden ones not — `src/render/screens.ts`, `src/game/Office.ts`, e2e: `e2e/screens.spec.ts`, url: `/?seed=1&time=11` (#15)
 - `place.meeting-tv` The meeting-room TV is black without a meeting; in a meeting it shows slides (60%) or stays off; on some lunch breaks (30%, 11:45–13:30) 2–4 people gather for a round of kart racing (bending road, item boxes, coins, rival, lap/position/item HUD); the players turn to the TV instead of each other — `src/render/screens.ts`, `src/game/Meeting.ts`, `src/render/officeModel.ts`, e2e: `e2e/screens.spec.ts`, url: `/?seed=1&time=11&event=meeting-kart` (#15)
 - `desk.lights` At night a warm lamp fades in over each occupied desk — `src/game/DeskLights.ts`, url: `/?seed=1&time=21` (#38)
-- `desk.seats` Fixed seat per person; seats panel with numbered labels and a per-person select; saved to localStorage, or to `src/data/seats.json` on the dev server — `src/ui/Seats.ts`, `src/game/Game.ts`
+- `desk.seats` Fixed seat per person; Plätze tab with numbered labels and a per-person select; saved to localStorage, or to `src/data/seats.json` on the dev server — `src/ui/Seats.ts`, `src/game/Game.ts`, e2e: `e2e/controls.spec.ts`, url: `/?seed=1&time=11` (#63)
 
 ## Errands and places in the office
 - `place.printer` Printer in the archive: one person at a time, paper shows while printing — `src/game/Person.ts`, `src/render/officeModel.ts`, e2e: `e2e/events.spec.ts`, url: `/?seed=1&time=11&event=printer` (#38)
@@ -115,11 +115,11 @@ Rules:
 - `pet.portrait` Pets get rendered low-poly head portraits — `src/render/petPortrait.ts`
 
 ## Time, weather, lights
-- `time.cycle` 24 h cycle in 600 real seconds, starts 10:00, night compressed; slider + clock + auto toggle (`saftladen.time.auto`) — `src/game/TimeOfDay.ts`, `src/ui/TimeControl.ts`
+- `time.cycle` 24 h cycle in 600 real seconds, starts 10:00, night compressed; clock chip + timeline strip (`ui.timeline`) with Auto / Pause (`saftladen.time.auto`), also a switch in the Umgebung tab — `src/game/TimeOfDay.ts`, `src/ui/Timeline.ts`, test: `src/ui/chromeRules.test.ts`, e2e: `e2e/controls.spec.ts`, url: `/?seed=1&time=11` (#63)
 - `time.light` Sun moves 06–20, warm when low, moonlight at night, sky fades dark — `src/game/TimeOfDay.ts`, url: `/?time=19#orbit` (#38)
 - `time.tired` Tiredness rises toward night — `src/game/TimeOfDay.ts`
-- `weather.auto` Auto weather: dry spells and showers, rain fades in/out; settings force Auto/Sonne/Regen — `src/game/Weather.ts`, `src/ui/Settings.ts`
-- `xmas.mode` Christmas mode: settings switch (`saftladen.settings.xmas`, default on in December); snowfall fading in/out, colder sky — `src/game/Christmas.ts`, `src/render/snowFx.ts`, `src/ui/Settings.ts`, e2e: `e2e/modes.spec.ts` (#34)
+- `weather.auto` Auto weather: dry spells and showers, rain fades in/out; the timeline strip forces Auto/Trocken/Regen (also palette entries) — `src/game/Weather.ts`, `src/ui/Settings.ts`, e2e: `e2e/controls.spec.ts`, url: `/?seed=1&time=11` (#63)
+- `xmas.mode` Christmas mode: switch in the Umgebung tab (`saftladen.settings.xmas`, default on in December; palette entry `Weihnachten`); snowfall fading in/out, colder sky — `src/game/Christmas.ts`, `src/render/snowFx.ts`, `src/ui/Settings.ts`, e2e: `e2e/modes.spec.ts`, url: `/?seed=1&time=11` (#34, #63)
 - `xmas.decor` Christmas trees with presents, blinking light strands along the walls, wreaths — `src/render/xmasDecor.ts`
 - `xmas.wear` Santa hats (variety by look) and scarves on everyone, tiny hats on pets — `src/render/xmasWear.ts`
 - `weather.fx` Rain streaks ending at roof height, dimmer at night; greyer light and overcast sky — `src/render/rainFx.ts`, `src/game/Game.ts`
@@ -138,7 +138,7 @@ Rules:
 - `office.deco` Bunting and string lights under the sawtooth roof — `src/render/officeModel.ts`
 - `office.mosquito` Easter egg: framed dead mosquito next to the meeting-room screen — `src/render/officeModel.ts`
 - `office.desk-props` Per desk: Apple keyboard/mouse, mesh chair, seeded plant — `src/render/officeModel.ts`
-- `office.labels` Settings panel toggles row/table labels, seat numbers, room numbers (`saftladen.settings`) — `src/ui/Settings.ts`
+- `office.labels` Umgebung tab toggles row/table labels, seat numbers, room numbers (`saftladen.settings`) — `src/ui/Settings.ts`, e2e: `e2e/controls.spec.ts`, url: `/?seed=1&time=11` (#63)
 - `office.parquet` Mosaic parquet slab — `src/render/World.ts`
 
 ## Room editor
@@ -156,7 +156,7 @@ Rules:
 - `home.adhd` ADHD extras (Delya, Sandro): fidget spinner, chair spin, snack run, pacing — `src/render/homeOffice.ts`
 - `home.coffee-hater` Coffee haters spit the coffee out and drink a can — `src/render/homeOffice.ts`
 - `home.vape` Vapers: glowing tip, puffs, room hazes over — `src/render/homeOffice.ts`
-- `home.feeds` Feed tiles: count, activity caption, click to enlarge (FLIP); office labels kept off the feeds; collapsible (`saftladen.feeds.collapsed`) — `src/ui/Feeds.ts`, `src/game/Game.ts`, url: `/#homes` (#38)
+- `home.feeds` Feed tiles: count, activity caption, click to enlarge (FLIP); office labels kept off the feeds; the tiles sit under the roster in the Leute tab and the scene shines through holes in the white panel — `src/ui/Feeds.ts`, `src/ui/SidePanel.ts`, `src/game/Game.ts`, e2e: `e2e/office.spec.ts`, url: `/#homes` (#38, #63)
 - `home.assign` Room assignment per person in the character view (`saftladen.homes`), one owner per regular room, own rooms fixed — `src/data/homeAssignments.ts`, `src/ui/CharacterPicker.ts`
 
 ## Characters
@@ -184,10 +184,16 @@ Rules:
 - `egg.backflip` Clicking a pet 5×: bark and backflip — `src/game/Easter.ts`
 
 ## Dev tools
-- `dev.events` Dev events registry + panel (meetings 2/4/6, errand, home office, vape, printer, rain …) with status / "nicht möglich"; console `dev.list()`, `dev.trigger(id)` — `src/game/DevEvents.ts`, `src/ui/DevPanel.ts`
+- `dev.events` Dev events registry + panel (meetings 2/4/6, errand, home office, vape, printer, rain …) with status / "nicht möglich"; console `dev.list()`, `dev.trigger(id)`; buttons in the Dev tab, every event also in the command palette — `src/game/DevEvents.ts`, `src/ui/DevPanel.ts`, e2e: `e2e/controls.spec.ts`, url: `/?seed=1&time=11` (#63)
 - `dev.params` Dev-only query params: `?day[=id]`, `?snack[=id]`, `&time=14`, `&follow`, `?seed=<n>`, `?event=<id>` (runs a dev event at start, retried until it can run; unknown id warns), `?test`; any of them exposes `window.__game` (the read-only hook of the Playwright tests; not in the production bundle) — `src/game/debugParams.ts`, e2e: `e2e/game.ts`, `e2e/events.spec.ts`, url: `/?seed=1&time=11&event=meeting-room` (#34, #38)
 - `dev.seed` One seedable random source for the simulation: same `?seed` → same start (plans, speeds, who is out); the console logs each page's seed. Per-frame visuals use their own stream — `src/game/rng.ts`, test: `src/game/rng.test.ts`, `src/game/Presence.test.ts`, url: `/?seed=1&time=11` (#29, #38)
-- `ui.panels` Side panels (settings, seats, dev, editor) close each other; dock panels (feeds, roster) behave as an accordion, honour reduced motion — `src/ui/exclusive.ts`, `src/ui/collapsible.ts`
+- `ui.dock` Bottom dock (`role=toolbar`, white glass): views Iso/Orbit/Grundriss/Rundgang (`1`–`4`, active one pressed), tools Leute, Ein Tag im Leben, Plätze, Namen (`N`), clock chip, power tools Raum bearbeiten (`E`) and Dev-Events; tooltips with label and key; hidden in Rundgang and Ein Tag im Leben; on phones the secondary tools collapse into a `…` button that opens the palette — `src/ui/Chrome.ts`, `index.html`, e2e: `e2e/controls.spec.ts`, url: `/?seed=1&time=11` (#63)
+- `ui.timeline` Clock chip (sun or moon, `HH:MM`) opens a strip above the dock: Auto / Pause, a 24 h track you drag or move with the keys (`aria-label="Tageszeit"`), event markers (Meeting 11:00, Mittag 12:30, Feierabend 17:30) that jump to their time, weather Auto/Trocken/Regen — `src/ui/Timeline.ts`, `src/ui/chromeRules.ts`, test: `src/ui/chromeRules.test.ts`, e2e: `e2e/controls.spec.ts`, url: `/?seed=1&time=11` (#63)
+- `ui.palette` `Cmd/Ctrl+K` or the `Befehle` button opens the command palette: search over views, Ein Tag im Leben, names, timeline, Weihnachten, weather, panel tabs, Figuren, `Steuerung`, every dev event and every person (selects and follows them); `↑↓` `↵` `Esc`, click outside closes, empty state "Nichts gefunden." — `src/ui/Palette.ts`, `src/ui/chromeRules.ts`, test: `src/ui/chromeRules.test.ts`, e2e: `e2e/controls.spec.ts`, url: `/?seed=1&time=11` (#63)
+- `ui.radial` Selecting a person or pet shows five round buttons around them (Folgen `F`, Steuern `C`, Home `H`, Raus, Info) that follow them; pressed state for follow/steer; pets get Folgen and Info; not in Rundgang, day mode or for away people; dashed ring on the floor; no pop animation with reduced motion — `src/ui/Radial.ts`, `src/game/Game.ts`, e2e: `e2e/controls.spec.ts`, url: `/?seed=1&time=11` (#63)
+- `ui.side-panel` One white panel on the right with five tabs (Leute, Plätze, Umgebung, Editor, Dev), never two at once; the camera viewport shrinks instead of being covered; bottom sheet under the tablet breakpoint; dock buttons and tabs toggle, `Esc` closes — `src/ui/SidePanel.ts`, `src/game/Game.ts`, e2e: `e2e/controls.spec.ts`, url: `/?seed=1&time=11` (#63)
+- `ui.mode-chrome` Controls follow the camera mode (visibility table in `chromeRules.ts`): mode badge on top, key hint line bottom left (changes with mode and selection), Grundriss has the editor tool column and draws people as dots, Rundgang shows only crosshair, interaction prompt, key hint that dims after 5 s with keys lighting while held, and `Esc Zurück zur Ansicht` — `src/ui/Chrome.ts`, `src/ui/chromeRules.ts`, test: `src/ui/chromeRules.test.ts`, e2e: `e2e/controls.spec.ts`, url: `/#plan` (#63)
+- `ui.esc-layers` `Esc` closes one layer per press: palette, selection (with follow and steering), timeline, side panel, then leaves Rundgang or ends Ein Tag im Leben — `src/ui/chromeRules.ts`, `src/game/Game.ts`, test: `src/ui/chromeRules.test.ts`, e2e: `e2e/controls.spec.ts`, url: `/?seed=1&time=11` (#63)
 
 ## Removed on purpose
 Replaced by later commits. Don't bring these back without an issue.

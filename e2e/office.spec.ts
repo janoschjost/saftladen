@@ -16,6 +16,8 @@ test('presence.homes-hash', async ({ page }) => {
   );
   // all eight regular rooms are taken (own rooms like the beach come on top)
   expect([...new Set(homes)].filter((v) => v < 8).sort()).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+  // the live feeds sit in the Leute tab
+  await page.locator('#toggle-people').click();
   await expect(page.locator('#feeds')).toBeVisible();
 });
 
@@ -61,11 +63,15 @@ test('select.actions + keys.home: select, send home, call back', async ({ page }
     await page.keyboard.press('Escape');
   }
   expect(picked).not.toBeNull();
+  // the radial menu hangs on the person; the card with the same buttons is in the Leute tab
+  await expect(page.locator('#radial')).toBeVisible();
+  await page.locator('#radial [data-act="info"]').click();
   await expect(page.locator('#actions')).toBeVisible();
 
   // a home office is free: the button is enabled
   expect(await read(page, (g) => g.presence.homeFull)).toBe(false);
   await expect(page.locator('#actions-home')).toBeEnabled();
+  await expect(page.locator('#radial [data-act="home"]')).toBeEnabled();
 
   // the game refuses while the person is busy (a chat may start in the meantime): press again until they set off
   await expect(async () => {

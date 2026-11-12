@@ -3,7 +3,7 @@ import { openGame, read, until } from './game';
 
 test('load', async ({ page }) => {
   const errors = await openGame(page);
-  await expect(page.locator('#stage canvas')).toBeVisible();
+  await expect(page.locator('canvas.l-canvas')).toBeVisible();
   await expect(page.locator('body')).not.toHaveClass(/is-loading/);
   expect(await read(page, (g) => g.people.length)).toBeGreaterThan(10);
   // the loop runs: the simulation advances

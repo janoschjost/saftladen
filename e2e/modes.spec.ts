@@ -37,7 +37,8 @@ test('day.menu + day.flow: play a day as Jan', async ({ page }) => {
 test('xmas.mode', async ({ page }) => {
   await openGame(page);
   const start = await read(page, (g) => g.xmas.on);
-  await page.locator('#toggle-settings').click();
+  await page.locator('#toggle-people').click();
+  await page.locator('#tab-env').click();
   const toggle = page.locator('#setting-xmas');
   await expect(toggle).toBeVisible();
 

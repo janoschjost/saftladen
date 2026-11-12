@@ -32,7 +32,7 @@ CI runs build and Vitest on every push. The Playwright job costs about 5 Actions
 - `src/data/team.ts` – hand-annotated look per person (hair, glasses, beard, clothes) derived from the portraits
 - `src/render/characterBuilder.ts` – builds the low-poly character from a `Look`
 - `src/render/officeModel.ts` – the office itself (walls, rooms, desks, furniture, roof), ported from `office-model/index.html`; also yields the desk placements and walking blockers
-- `src/render/Views.ts` – view modes: Orbit (2, default), Iso (1), Plan (3), Walk (4, WASD + drag to look, collides with the nav grid; roof shown); deep links `#orbit`, `#plan`, `#walk@x,z,yaw`
+- `src/render/Views.ts` – view modes: Orbit (2, default), Iso (1), Plan (3), Walk (4, WASD + drag to look, collides with the nav grid; roof shown); deep links `#orbit`, `#plan`, `#walk@x,z,yaw`. The canvas fills the window, the camera only draws into the scene area next to the side panel (`Game.resize`)
 - `src/render/World.ts`, `IsoCamera.ts` – parquet slab, light, iso camera (drag = pan, wheel = zoom)
 - `office-model/index.html` – standalone first-person 3D viewer of the same office (reference)
 - `src/render/officeBuilder.ts` – monitor screen textures
@@ -43,5 +43,7 @@ CI runs build and Vitest on every push. The Playwright job costs about 5 Actions
 - `src/data/homeAssignments.ts` – who owns which home office room (set per person in the character view, saved in localStorage; Marco has his own special room)
 - `src/render/homeOffice.ts` – 8 home office rooms seen through a webcam; drawn into the main canvas behind the feed tiles (`ui/Feeds.ts`); `ui/Roster.ts` lists who is not in the office
 - `src/ui/Overlay.ts` – tooltip (hover/click) and name labels (N)
+- `src/ui/chromeRules.ts` – the pure rules of the controls (visibility per camera mode, what Esc closes first, palette search), tested in `chromeRules.test.ts`; `Chrome.ts` applies them to the DOM
+- `src/ui/SidePanel.ts` (the one panel, five tabs; the camera viewport shrinks by its width), `Timeline.ts` (clock strip), `Palette.ts` (Cmd/Ctrl+K), `Radial.ts` (buttons around the selected person); the bottom dock is plain markup in `index.html` styled in `src/scss/_chrome.scss`
 
 New team members: run `fetch-team`, then add a look for the new id in `src/data/team.ts`.
