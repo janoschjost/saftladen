@@ -31,6 +31,11 @@ export class Radial {
     }
   }
 
+  /** pixels from the ring's centre to the top edge of its highest button */
+  get extent(): number {
+    return this.root.offsetHeight / 2 + parseFloat(getComputedStyle(document.documentElement).fontSize) * 2;
+  }
+
   get visible(): boolean {
     return !this.root.hidden;
   }

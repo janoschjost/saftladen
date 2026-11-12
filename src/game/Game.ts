@@ -585,16 +585,16 @@ export class Game {
 
   private dotMaterials: { plain: THREE.MeshBasicMaterial; picked: THREE.MeshBasicMaterial } | null = null;
 
-  /** Plan view draws every person as a dot (the selected one in mint). */
+  /** Plan view rings every person (the selected one in mint), so they stay visible on the dark floor and the character shows through. */
   private dotsUpdate(): void {
     const on = this.views.mode === 'plan';
     if (!on && !this.dots.size) return;
     if (!this.dotMaterials) {
       const css = getComputedStyle(document.documentElement);
-      const mat = (variable: string) => new THREE.MeshBasicMaterial({ color: css.getPropertyValue(variable).trim(), depthTest: false });
-      this.dotMaterials = { plain: mat('--color-ink'), picked: mat('--color-accent') };
+      const mat = (variable: string) => new THREE.MeshBasicMaterial({ color: variable ? css.getPropertyValue(variable).trim() : 'white', depthTest: false });
+      this.dotMaterials = { plain: mat(''), picked: mat('--color-accent') };
     }
-    const geometry = (this.dotGeometry ??= new THREE.CircleGeometry(0.4, 20).rotateX(-Math.PI / 2));
+    const geometry = (this.dotGeometry ??= new THREE.RingGeometry(0.45, 0.62, 28).rotateX(-Math.PI / 2));
     for (const p of this.people) {
       let dot = this.dots.get(p);
       if (!dot) {
@@ -611,7 +611,7 @@ export class Game {
       if (dot.material !== mat) dot.material = mat;
     }
   }
-  private dotGeometry: THREE.CircleGeometry | null = null;
+  private dotGeometry: THREE.RingGeometry | null = null;
 
   /** Esc closes one layer: palette, selection, timeline, side panel, then Rundgang / the day (see `escLayer`). */
   private escape(): void {
@@ -714,7 +714,7 @@ export class Game {
     this.viewW = Math.max(1, w - inset.right);
     this.viewH = Math.max(1, h - inset.bottom);
     // too narrow for the hint line beside the dock: it moves up under the title
-    document.body.classList.toggle('is-scene-tight', this.viewW < 1340);
+    document.body.classList.toggle('is-scene-tight', this.viewW < 1600);
     this.stage.style.width = `${this.viewW}px`;
     this.stage.style.height = `${this.viewH}px`;
     this.renderer.setSize(w, h);
@@ -1991,10 +1991,16 @@ export class Game {
       );
     } else this.radial.update(null);
     this.dotsUpdate();
+    // the name tag sits above the radial ring, not inside it
+    const tip = (w: Walker): { x: number; y: number } => {
+      if (!this.radial.visible || w !== sel) return this.project(w);
+      const ring = this.project(w, w instanceof Person ? -0.6 : -0.12);
+      return { x: ring.x, y: ring.y - this.radial.extent };
+    };
     if (active instanceof Person) {
-      this.overlay.showTooltip(active.member.name, active.member.role, active.member.portrait, this.project(active));
+      this.overlay.showTooltip(active.member.name, active.member.role, active.member.portrait, tip(active));
     } else if (active instanceof Dog) {
-      this.overlay.showTooltip(active.name, '',active.portrait, this.project(active));
+      this.overlay.showTooltip(active.name, '',active.portrait, tip(active));
     } else {
       this.overlay.hideTooltip();
     }
