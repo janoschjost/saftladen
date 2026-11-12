@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { box, merge, propMaterial } from './geo';
+import { buildPetWear } from './xmasWear';
 
 export interface DogRig {
   root: THREE.Group;
@@ -74,6 +75,7 @@ export function buildDog(kind: DogKind): DogRig {
     }
   }
   body.add(mesh(parts));
+  body.add(buildPetWear(0.6, 0.77, 0.34));
 
   const legs: THREE.Object3D[] = [];
   for (const [x, z] of [[-0.1, 0.22], [0.1, 0.22], [-0.1, -0.22], [0.1, -0.22]] as const) {

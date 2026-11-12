@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Look } from '../data/types';
 import { tattooOverlay, type TattooKind } from './tattoo';
 import { box, frame, merge, propMaterial } from './geo';
+import { buildPersonWear } from './xmasWear';
 
 export interface CharacterRig {
   root: THREE.Group;
@@ -273,6 +274,7 @@ export function buildCharacter(look: Look): CharacterRig {
   }
   const torsoMesh = mesh(torso);
   body.add(torsoMesh);
+  body.add(buildPersonWear(look)); // christmas hat + scarf (hidden unless christmas mode is on)
   if (look.print) body.add(chestPrint(look.print.text, look.print.color, build));
 
   // tired face: dark bags under the eyes, eyelids that sag over the top of the eyes

@@ -64,7 +64,7 @@ const dogs: Record<string, TeamMember['dog']> = {
 
 // dog names
 const dogNames: Record<string, string> = {
-  'ramon-lenherr': 'Tala',
+  'ramon-lenherr': 'Thala',
   'janosch-jost': 'Ellie',
   'nina-vetsch': 'Harry',
   'fabian-bucher': 'Mira',

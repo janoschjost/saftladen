@@ -27,6 +27,7 @@ import { Easter } from './Easter';
 import { Dog } from './Dog';
 import { PetCare } from './PetCare';
 import { Weather } from './Weather';
+import { Christmas } from './Christmas';
 import { RainFx } from '../render/rainFx';
 import { loadState, saveState } from '../ui/persist';
 import { DOOR } from './Door';
@@ -75,6 +76,7 @@ export class Game {
   private weather = new Weather();
   private petCare = new PetCare();
   private rainFx!: RainFx;
+  private xmas!: Christmas;
   private settings!: Settings;
   /** pets (dogs and cats), cached */
   private pets: Dog[] = [];
@@ -161,6 +163,7 @@ export class Game {
     this.timeControl = new TimeControl(this.tod);
     applySky(this.tod, this.sky);
     this.rainFx = new RainFx(this.scene);
+    this.xmas = new Christmas(this.scene);
     const model = (this.model = buildOffice(this.scene));
     // the editor puts the furniture where the saved layout wants it, before anything is derived from its position
     this.editor = new RoomEditor(this.scene, model.items, WORLD, () => this.relayout());
@@ -217,7 +220,8 @@ export class Game {
         model.rowLabels.visible = state.tables;
         model.roomLabels.visible = state.rooms;
         this.seats.setLabelsVisible(state.seats);
-      this.weather.mode = state.weather;
+      this.weather.mode = state.xmas ? 'sun' : state.weather; // it snows instead of raining
+      this.xmas.set(state.xmas);
     });
 
     this.ring = new THREE.Mesh(
@@ -596,6 +600,7 @@ export class Game {
     this.weather.update(dt);
     const r = this.weather.rain;
     this.rainFx.update(dt, r, 1 - this.tod.day);
+    this.xmas.update(dt, this.tod.day, this.scene.background as THREE.Color, this.sky.sun);
     if (r > 0) {
       this.sky.sun.intensity *= 1 - 0.45 * r;
       this.sky.hemi.intensity *= 1 - 0.1 * r;

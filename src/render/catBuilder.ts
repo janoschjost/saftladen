@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { DogRig } from './dogBuilder';
 import { box, merge, propMaterial } from './geo';
+import { buildPetWear } from './xmasWear';
 
 export type CatKind = 'tabby' | 'tortie';
 
@@ -44,6 +45,7 @@ export function buildCat(kind: CatKind = 'tabby'): DogRig {
     parts.push(box(0.012, 0.1, 0.16, -0.087, 0.27, 0.04, c.stripe));
   }
   body.add(mesh(parts));
+  body.add(buildPetWear(0.38, 0.47, 0.25));
 
   const legs: THREE.Object3D[] = [];
   for (const [x, z] of [[-0.05, 0.15], [0.05, 0.15], [-0.05, -0.15], [0.05, -0.15]] as const) {
