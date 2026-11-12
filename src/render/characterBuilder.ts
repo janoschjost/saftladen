@@ -36,6 +36,12 @@ export interface CharacterRig {
   /** handheld console held in both hands in front of the chest (hidden until a day task plays it); `screen` is its lit display */
   gameboy: THREE.Object3D;
   gameboyScreen: THREE.MeshBasicMaterial;
+  /** the person's own look, one group per bone; an alter ego (see kurtBuilder.ts) hides them and shows its own */
+  skin: THREE.Object3D[];
+  /** only with an alter-ego skin added: shows it (true) or the person's own look (false) */
+  setAlter?: (on: boolean) => void;
+  /** only with an alter-ego skin added: the tail, swayed while walking */
+  tail?: THREE.Object3D;
 }
 
 /** A scale of 1 is this tall; `heightM` on a Look is converted relative to it. */
@@ -150,6 +156,15 @@ export function buildCharacter(look: Look): CharacterRig {
   const root = new THREE.Group();
   const body = new THREE.Group();
   root.add(body);
+  // the look goes into one group per bone, so an alter ego can swap it out and keep every prop and pose
+  const skinGroups: THREE.Object3D[] = [];
+  const skinOf = (bone: THREE.Object3D): THREE.Group => {
+    const g = new THREE.Group();
+    bone.add(g);
+    skinGroups.push(g);
+    return g;
+  };
+  const bodySkin = skinOf(body);
 
   const build = look.build ?? 1;
   const skin = look.skin;
@@ -273,9 +288,9 @@ export function buildCharacter(look: Look): CharacterRig {
     torso.push(box(0.3, 0.025, 0.2, 0, 1.75, look.capBack ? -0.3 : 0.3, look.cap));
   }
   const torsoMesh = mesh(torso);
-  body.add(torsoMesh);
-  body.add(buildPersonWear(look)); // christmas hat + scarf (hidden unless christmas mode is on)
-  if (look.print) body.add(chestPrint(look.print.text, look.print.color, build));
+  bodySkin.add(torsoMesh);
+  bodySkin.add(buildPersonWear(look)); // christmas hat + scarf (hidden unless christmas mode is on)
+  if (look.print) bodySkin.add(chestPrint(look.print.text, look.print.color, build));
 
   // tired face: dark bags under the eyes, eyelids that sag over the top of the eyes
   const skinDark = mix(skin, '#4a3040', 0.28);
@@ -287,14 +302,14 @@ export function buildCharacter(look: Look): CharacterRig {
     bagMat,
   );
   bags.visible = false;
-  body.add(bags);
+  bodySkin.add(bags);
   const lids = [-0.09, 0.09].map((x) => {
     const pivot = new THREE.Group();
     pivot.position.set(x, 1.632, 0.206);
     const m = new THREE.Mesh(merge([box(0.082, 0.036, 0.012, 0, -0.018, 0, skinDark)]), propMaterial);
     pivot.add(m);
     pivot.visible = false;
-    body.add(pivot);
+    bodySkin.add(pivot);
     return pivot;
   });
   const setTired = (amount: number) => {
@@ -329,7 +344,7 @@ export function buildCharacter(look: Look): CharacterRig {
     ];
     const happyMesh = mesh(happy);
     const seriousMesh = mesh(serious);
-    body.add(happyMesh, seriousMesh);
+    bodySkin.add(happyMesh, seriousMesh);
     setMood = (isHappy) => {
       happyMesh.visible = isHappy;
       seriousMesh.visible = !isHappy;
@@ -359,16 +374,17 @@ export function buildCharacter(look: Look): CharacterRig {
       tattoo = look.tattooDark ? 'dark' : look.tattoo === 'both' ? 'script' : 'vine';
     }
     if (look.wristbands && side === -1) look.wristbands.forEach((col, i) => span(0.563 - i * 0.03, 0.587 - i * 0.03, 0.125 * ar, 0.14 * ar, col));
-    pivot.add(mesh(upper));
+    skinOf(pivot).add(mesh(upper));
     const elbow = new THREE.Group();
     elbow.position.y = -ELBOW;
-    elbow.add(mesh(fore));
+    const foreSkin = skinOf(elbow);
+    foreSkin.add(mesh(fore));
     if (tattoo) {
       // on the bare forearm below the elbow, so it bends along
       const len = 0.6 - Math.max(armLen, ELBOW);
       const ov = tattooOverlay(0.115 * ar, len, 0.13 * ar, side, tattoo);
       ov.position.y = -(0.6 - len / 2 - ELBOW);
-      elbow.add(ov);
+      foreSkin.add(ov);
     }
     pivot.add(elbow);
     body.add(pivot);
@@ -487,10 +503,10 @@ export function buildCharacter(look: Look): CharacterRig {
     } else {
       shin.push(box(0.2, 0.1, 0.32, 0, -0.35, 0.05, shoe));
     }
-    pivot.add(mesh(thigh));
+    skinOf(pivot).add(mesh(thigh));
     const knee = new THREE.Group();
     knee.position.y = -0.4;
-    knee.add(mesh(shin));
+    skinOf(knee).add(mesh(shin));
     pivot.add(knee);
     root.add(pivot);
     return { pivot, knee };
@@ -501,5 +517,5 @@ export function buildCharacter(look: Look): CharacterRig {
   const h = look.heightM ? look.heightM / REF_HEIGHT_M : look.height ?? 1;
   root.scale.setScalar(h);
 
-  return { root, body, legL, legR, kneeL, kneeR, armL, armR, elbowL, elbowR, handset, headHeight: 1.95 * h, setTired, setMood, vape, phone, cup, chips, chip, gameboy, gameboyScreen };
+  return { root, body, legL, legR, kneeL, kneeR, armL, armR, elbowL, elbowR, handset, headHeight: 1.95 * h, setTired, setMood, vape, phone, cup, chips, chip, gameboy, gameboyScreen, skin: skinGroups };
 }
