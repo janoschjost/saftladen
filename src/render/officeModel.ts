@@ -1587,7 +1587,6 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   desk(-7.6, -4.9, 0, { white: true }); // desk 7, flipped 180°
   shelf(-5.9, -5.2, 1.0, 1.0, 0.35);
   coatRack(-5.6, 5.0); // Wassermelonen: by the interior window to the lounge
-  coatRack(0.1, 1.8); // entry corridor: at the end of the lounge partition
   // small meeting room (annex south of the doorway): after the photos "GL Sizi" - solid navy south wall with TV above a grey futon,
   // white rounded coffee table, two grey armchairs facing each other, industrial pendant, curtain + radiator at the west windows,
   // planning board on the east wall
