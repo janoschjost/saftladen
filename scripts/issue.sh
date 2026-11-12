@@ -5,6 +5,8 @@
 #                                   open an issue assigned to you, print its number; a model adds the model:<x> label
 #   scripts/issue.sh claim N        claim issue N and assign it to you; exit 0 = ours, exit 2 = taken by someone else
 #   scripts/issue.sh release N "<reason>"   hand a claimed issue back
+#   scripts/issue.sh ask N "<questions>"     park N until a dev answers: comment + `question` label (releases a claim)
+#   scripts/issue.sh block N "<reason>"      park N until a dependency (e.g. a PR) is merged: comment + `blocked` label
 #
 # Label + assignee make a claim visible. The lock is the claim comment: GitHub orders comments by creation
 # time, so the earliest claim comment after the last release wins a race between two sessions.
@@ -16,6 +18,18 @@ RELEASE="🔓 release"
 
 ensure_label() {
   gh label create "$LABEL" --color FBCA04 --description "Claimed by an agent session, PR coming" >/dev/null 2>&1 || true
+}
+
+# park issue $1 under label $2 with comment $3; a claim held on it is released
+park() {
+  gh label create question --color D876E3 --description "Waiting on a dev's answer; remove the label once answered" >/dev/null 2>&1 || true
+  gh label create blocked --color B60205 --description "Waits on another issue or PR; agents re-check it each run" >/dev/null 2>&1 || true
+  gh issue comment "$1" --body "$3" >/dev/null
+  gh issue edit "$1" --add-label "$2" >/dev/null
+  if [ -n "$(winner "$1")" ]; then
+    gh issue comment "$1" --body "$RELEASE — parked as $2" >/dev/null
+    gh issue edit "$1" --remove-label "$LABEL" --remove-assignee @me >/dev/null
+  fi
 }
 
 # token of the first claim comment after the latest release (empty if none)
@@ -65,8 +79,20 @@ case "$cmd" in
     gh issue edit "$n" --remove-label "$LABEL" --remove-assignee @me >/dev/null
     echo "released #$n"
     ;;
+  ask)
+    n=${2:?issue number}; q=${3:?questions}
+    park "$n" question "❓ Open questions, waiting on a dev (answer here, then remove the \`question\` label):
+
+$q"
+    echo "#$n waits on a dev answer"
+    ;;
+  block)
+    n=${2:?issue number}; reason=${3:?reason}
+    park "$n" blocked "⏸ Blocked: $reason"
+    echo "#$n is blocked"
+    ;;
   *)
-    sed -n '2,11p' "$0" >&2
+    sed -n '2,13p' "$0" >&2
     exit 1
     ;;
 esac
