@@ -208,6 +208,10 @@ export class Person extends Walker {
   petting = false;
   /** 0..1 eased petting pose */
   petAmt = 0;
+  /** back height (m) of the pet being stroked: sets how deep the crouch goes */
+  petHeight = 0.4;
+  /** last frame time of the pet pose (s), to ease it in real time */
+  petClock = 0;
   awayKind: AwayKind | null = null;
   /** seconds until this person comes back (counts down while `out`) */
   awayLeft = 0;
@@ -1034,8 +1038,9 @@ export class Person extends Walker {
   }
 
   /** Stops and strokes a pet at `at` for a few seconds. False when busy (desk, meeting, call, …). */
-  petDog(at: Vec2, seconds: number): boolean {
+  petDog(at: Vec2, seconds: number, petHeight = 0.4): boolean {
     if (!this.talkTo(at, seconds, false)) return false;
+    this.petHeight = petHeight;
     this.petting = true;
     this.speaking = false;
     return true;

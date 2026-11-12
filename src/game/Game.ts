@@ -44,6 +44,7 @@ import { Person } from './Person';
 import { Presence } from './Presence';
 import { strings } from '../i18n/strings';
 import { RoomEditor } from './RoomEditor';
+import { CROUCH_SECONDS, PET_HEIGHT, petPose, smooth } from './petPose';
 import { Social } from './Social';
 import { TimeOfDay, applySky, type SkyRig } from './TimeOfDay';
 import { Traffic } from './Traffic';
@@ -693,6 +694,22 @@ export class Game {
         return 'Besprechung beendet';
       },
     });
+    for (const kind of ['dog', 'cat'] as const) {
+      devEvents.register({
+        id: `pet-${kind}`,
+        group: 'Tiere',
+        label: kind === 'dog' ? 'Hund streicheln' : 'Katze streicheln',
+        run: () => {
+          const pet = this.pets.find((d) => !d.away && d.isCat === (kind === 'cat') && d.owner.inOffice && !d.owner.held && !d.owner.controlled);
+          if (!pet) return null;
+          const p = pet.owner;
+          drop(p);
+          if (!p.petDog(pet.pos, 30, PET_HEIGHT[kind])) return null;
+          pet.petBy(p, 30, this.nav);
+          return `${p.member.name.split(' ')[0]} streichelt ${pet.name}`;
+        },
+      });
+    }
     devEvents.register({
       id: 'pod',
       group: 'Meetings',
@@ -1424,18 +1441,22 @@ export class Game {
     });
   }
 
-  /** Stroking a pet: bent forward, one hand stroking. Eases out as soon as the petting ends or is cut short (picked up, walking off, a talk). */
+  /** Stroking a pet: a crouch (legs, hips, a little spine), head down at the animal, one hand stroking. Eases in and out (~0.4 s) and ends as soon as the petting does or is cut short (picked up, walking off, a talk). */
   private posePet(w: Person, r: Person['rig']): void {
-    const on = w.petting && w.moving < 0.2 && !w.held;
-    w.petAmt += ((on ? 1 : 0) - w.petAmt) * 0.12;
-    if (w.petAmt < 0.005) w.petAmt = 0;
-    const a = w.petAmt;
-    if (a <= 0) return;
-    const t = performance.now() / 1000 + w.phase;
-    r.body.rotation.x += 0.45 * a;
-    r.body.position.y -= 0.06 * a;
-    r.armR.rotation.x = THREE.MathUtils.lerp(r.armR.rotation.x, -0.45 + Math.sin(t * 7) * 0.18, a);
-    r.armL.rotation.x = THREE.MathUtils.lerp(r.armL.rotation.x, -0.15, a);
+    const on = w.petting && w.moving < 0.2 && !w.held && w.sit < 0.05;
+    const now = performance.now() / 1000;
+    const dt = Math.min(0.1, Math.max(0, now - w.petClock));
+    w.petClock = now;
+    w.petAmt = Math.min(1, Math.max(0, w.petAmt + (on ? 1 : -1) * (dt / CROUCH_SECONDS)));
+    if (w.petAmt <= 0) return;
+    const p = petPose(smooth(w.petAmt), w.petHeight, now + w.phase, w.root.scale.y);
+    r.legL.rotation.x = r.legR.rotation.x = -p.thigh;
+    r.kneeL.rotation.x = r.kneeR.rotation.x = p.knee;
+    r.legL.position.y = r.legR.position.y = 0.8 - p.drop;
+    r.body.position.y -= p.drop;
+    r.body.rotation.x += p.spine;
+    r.armR.rotation.x = THREE.MathUtils.lerp(r.armR.rotation.x, p.armStroke, smooth(w.petAmt));
+    r.armL.rotation.x = THREE.MathUtils.lerp(r.armL.rotation.x, p.armRest, smooth(w.petAmt));
   }
 
   /** The upper body leans around the hips, not around the feet: keeps the torso on the legs however far it bends. */
