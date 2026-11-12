@@ -15,7 +15,8 @@ test('dev.force: console / hook sends a person to a meeting, then the sim goes o
   expect(await force(page, id, 'meeting')).toContain('Meeting');
   await until(page, (g, pid) => g.meetingRoom.current?.members.some((p: { id: string }) => p.id === pid), id, 30_000);
   // meeting room is taken now: a second request changes nothing and says so
-  const other = await read(page, (g, pid) => g.people.find((p: { inOffice: boolean; id: string }) => p.inOffice && p.id !== pid).id as string, id);
+  // somebody who is not part of the running meeting (the group is picked at random)
+  const other = await read(page, (g) => g.people.find((p: { inOffice: boolean; talk: unknown }) => p.inOffice && !g.meetingRoom.current.members.includes(p)).id as string);
   expect(await force(page, other, 'meeting')).toContain('nicht möglich');
   expect(await read(page, (g, pid) => g.meetingRoom.current.members.some((p: { id: string }) => p.id === pid), other)).toBe(false);
 });
@@ -23,7 +24,7 @@ test('dev.force: console / hook sends a person to a meeting, then the sim goes o
 test('dev.force: panel People section has a button per state and shows "nicht möglich"', async ({ page }) => {
   await page.keyboard.press('`');
   const section = page.locator('#dev-people');
-  await expect(section.locator('button')).toHaveCount(5);
+  await expect(section.locator('button')).toHaveCount(6);
   await section.locator('button[data-state="meeting"]').click();
   await section.locator('button[data-state="meeting"]').click();
   // second click: one person's already in the room or room is taken; either way a status is shown
@@ -52,4 +53,16 @@ test('dev.force: desk, errand and coffee break take effect', async ({ page }) =>
   await until(page, (g, id) => g.kitchen.current?.members?.some((p: { id: string }) => p.id === id) ?? !!g.kitchen.current, ids[2]);
   // away person: nothing possible
   expect(await force(page, ids[1], 'desk')).toContain('nicht möglich');
+});
+
+test('dev.force: wc sends a person to a free cabin, nicht möglich when both are taken', async ({ page }) => {
+  const ids = await read(page, (g) => g.people.filter((p: { inOffice: boolean }) => p.inOffice).map((p: { id: string }) => p.id) as string[]);
+  expect(await force(page, ids[0], 'wc')).toContain('WC');
+  expect(await force(page, ids[1], 'wc')).toContain('WC');
+  await until(page, (g) => g.toilets.cabins.every((c: { session: unknown }) => c.session));
+  // both cabins taken: no queue, nothing changes
+  expect(await force(page, ids[2], 'wc')).toContain('nicht möglich');
+  expect(await read(page, (g) => g.toilets.queue.length)).toBe(0);
+  // the one already in a cabin cannot be sent again
+  expect(await force(page, ids[0], 'wc')).toContain('nicht möglich');
 });
