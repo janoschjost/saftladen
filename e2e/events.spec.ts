@@ -43,3 +43,25 @@ test('pet.crouch (cat) (?event=pet-cat)', async ({ page }) => {
   await until(page, (g) => g.people.some((p: { petAmt: number; rig: { legL: { rotation: { x: number } } } }) => p.petAmt > 0.9 && p.rig.legL.rotation.x < -0.4), undefined, 40_000);
   expect(errors).toEqual([]);
 });
+
+// the lettered doors under the wall lettering; `moved` = how far its letters are from their laid-out place (m + rad)
+type Letter = { x: number; y: number; mesh: { position: { x: number; y: number }; rotation: { z: number } } };
+type LetteredDoor = { open: number; moved: number };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const letteredDoors = (g: any): LetteredDoor[] =>
+  g.doors.states
+    .filter((s: { rig: { letters?: Letter[] } }) => s.rig.letters?.length)
+    .map((s: { open: number; rig: { letters: Letter[] } }) => ({
+      open: s.open,
+      moved: Math.max(...s.rig.letters.map((l) => Math.abs(l.mesh.position.x - l.x) + Math.abs(l.mesh.position.y - l.y) + Math.abs(l.mesh.rotation.z))),
+    }));
+
+test('office.door-lettering (?event=door-lettering): letters move with the door and settle back when it closes', async ({ page }) => {
+  const errors = await openGame(page, '', undefined, 'event=door-lettering');
+  const doors = () => read(page, letteredDoors);
+  expect((await doors()).length).toBeGreaterThan(0);
+  await expect.poll(async () => (await doors()).some((d) => d.open > 0.9 && d.moved > 0.01), { timeout: 45_000 }).toBe(true);
+  await page.evaluate(() => (window as unknown as { dev: { trigger: (id: string) => string } }).dev.trigger('door-lettering'));
+  await expect.poll(async () => (await doors()).some((d) => d.open < 0.001 && d.moved < 0.001), { timeout: 45_000 }).toBe(true);
+  expect(errors).toEqual([]);
+});

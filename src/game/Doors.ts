@@ -1,4 +1,5 @@
 import { DOOR_SWING, type DoorRig } from '../render/officeModel';
+import { letterOffset, stepLetterSpring, type LetterSpring } from './doorLetters';
 import { random } from './rng';
 
 /** how close somebody has to be to push a door open (metres) */
@@ -15,6 +16,8 @@ interface State {
   reroll: number;
   /** shut and kept shut (a meeting is going on behind it) */
   locked: boolean;
+  /** drives the lettering on the leaf (if any): follows `open` with a little lag and wobble */
+  letters: LetterSpring;
 }
 
 const pickRest = (): number => {
@@ -26,12 +29,13 @@ const nextReroll = (): number => 30 + random() * 90;
 /** Interior doors: swing open when somebody walks through, otherwise rest closed, ajar or propped open. */
 export class Doors {
   private states: State[];
+  private letteredOpen = false;
 
   constructor(rigs: DoorRig[]) {
     this.states = rigs.map((rig) => {
       const rest = pickRest();
-      const s = { rig, open: rest, rest, hold: 0, reroll: random() * 90, locked: false };
-      this.apply(s);
+      const s = { rig, open: rest, rest, hold: 0, reroll: random() * 90, locked: false, letters: { x: rest, v: 0 } };
+      this.apply(s, 0);
       return s;
     });
   }
@@ -52,7 +56,7 @@ export class Doors {
       if (s.locked) s.hold = 0;
       const target = s.locked ? 0 : s.hold > 0 ? 1 : s.rest;
       s.open += (target - s.open) * Math.min(1, dt * (target > s.open ? 5 : 3));
-      this.apply(s);
+      this.apply(s, dt);
     }
   }
 
@@ -97,7 +101,28 @@ export class Doors {
     if (best) best.locked = locked;
   }
 
-  private apply(s: State): void {
+  /** Swings every door under the wall lettering open (first call), or shut again (next call); dev event / feature URL for #10. */
+  toggleLettered(): boolean {
+    const open = (this.letteredOpen = !this.letteredOpen);
+    for (const s of this.states) {
+      if (!s.rig.letters?.length || s.locked) continue;
+      s.rest = open ? 1 : 0;
+      s.hold = 0;
+      s.reroll = 60;
+    }
+    return open;
+  }
+
+  private apply(s: State, dt: number): void {
     s.rig.pivot.rotation.y = s.rig.base + s.rig.swing * s.open * DOOR_SWING;
+    const letters = s.rig.letters;
+    if (!letters?.length) return;
+    stepLetterSpring(s.letters, s.open, dt);
+    for (const l of letters) {
+      const o = letterOffset(l.i, s.letters);
+      l.mesh.position.x = l.x + o.x;
+      l.mesh.position.y = l.y + o.y;
+      l.mesh.rotation.z = o.rot;
+    }
   }
 }

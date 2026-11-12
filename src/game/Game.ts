@@ -877,6 +877,13 @@ export class Game {
       },
     });
 
+    devEvents.register({
+      id: 'door-lettering',
+      group: 'Aktionen',
+      label: 'Beschriftete Türen auf / zu',
+      run: () => (this.doors.toggleLettered() ? 'Beschriftete Türen gehen auf' : 'Beschriftete Türen gehen zu'),
+    });
+
     const away = (kind: 'errand' | 'home') => () => {
       const p = pickFree(1)[0];
       if (!p || (kind === 'home' && this.presence.homeFull)) return null;
