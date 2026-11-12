@@ -102,3 +102,14 @@ test('place.meeting-lamp (?event=meeting-room, time slider jumps)', async ({ pag
   await until(page, (g) => g.sim.tod.hour < 12 && g.meetingLight.level === 0, undefined, 60_000);
   expect(errors).toEqual([]);
 });
+
+test('pet.today-hint (?event=pet-owner): the tooltip of an owner says which pet came along today', async ({ page }) => {
+  const errors = await openGame(page, '', undefined, 'event=pet-owner');
+  await until(page, (g) => g.selected?.pets?.some((d: { comesToday: boolean; away: boolean }) => d.comesToday && !d.away));
+  const pets = await read(page, (g) => g.selected.pets.filter((d: { comesToday: boolean }) => d.comesToday).map((d: { name: string }) => d.name));
+  await expect(page.locator('#tooltip-role')).toContainText(`heute mit ${pets.join(' und ')}`);
+  // pets that stay home are away all day
+  const home = await read(page, (g) => g.pets.filter((d: { comesToday: boolean; away: boolean }) => !d.comesToday && !d.away).length);
+  expect(home).toBe(0);
+  expect(errors).toEqual([]);
+});

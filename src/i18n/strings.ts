@@ -62,6 +62,10 @@ export const strings = {
       errand: (n: number) => `${n} weg`,
       home: (n: number) => `${n} im Homeoffice`,
     },
+    /** owner tooltip: the pets they brought along today */
+    pets: {
+      with: (names: string[]) => `heute mit ${names.join(' und ')}`,
+    },
     /** dev panel + status messages */
     event: {
       group: 'Anwesenheit',
