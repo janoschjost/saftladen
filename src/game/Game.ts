@@ -23,6 +23,7 @@ import { Settings } from '../ui/Settings';
 import { TimeControl } from '../ui/TimeControl';
 import { devEvents } from './DevEvents';
 import { DeskLights } from './DeskLights';
+import { CoatRacks } from './CoatRacks';
 import { Easter } from './Easter';
 import { Dog } from './Dog';
 import { PetCare } from './PetCare';
@@ -87,6 +88,7 @@ export class Game {
   private persistTimer = 2;
   private sky!: SkyRig;
   private deskLights!: DeskLights;
+  private coatRacks!: CoatRacks;
   private easter!: Easter;
   private timeControl!: TimeControl;
   private feeds = new Feeds();
@@ -242,6 +244,8 @@ export class Game {
     this.pets = this.walkers.filter((w): w is Dog => w instanceof Dog);
     this.presence = new Presence(this.people, this.tod, this.weather);
     this.presence.seed();
+    this.coatRacks = new CoatRacks(model.coatRacks, this.people);
+    this.coatRacks.update();
     for (const w of this.walkers) if (w instanceof Dog && w.owner.presence === 'out') w.sendAway(); // pets of people who start away
     this.bind();
     this.resize();
@@ -574,6 +578,7 @@ export class Game {
       this.saveSession();
     }
     this.deskLights.update(dt);
+    this.coatRacks.update();
     this.timeControl.sync();
     this.views.update(dt);
     this.updateHomes(dt);

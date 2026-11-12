@@ -62,6 +62,8 @@ export interface OfficeModel {
   desks: DeskPlacement[];
   /** every piece of furniture the room editor can move (desks included) */
   items: RoomItem[];
+  /** coat stands with their hooks */
+  coatRacks: CoatRackRig[];
   /** footprints (game space) that block walking, for the nav grid: architecture + the items where they stand right now */
   blockers(): THREE.Box3[];
   /** ceiling, beams, clerestory, bunting, string lights (hidden by default) */
@@ -89,6 +91,20 @@ export interface OfficeModel {
 }
 
 type Mat = THREE.Material;
+
+/** One hook of a coat stand: where a coat hangs and which way it faces (away from the pole; yaw, 0 = +z). */
+export interface CoatHook {
+  at: THREE.Vector3;
+  yaw: number;
+}
+/** A coat stand in the scene: `root` moves with the room item, the hooks are in its space. */
+export interface CoatRackRig {
+  root: THREE.Object3D;
+  pegs: CoatHook[];
+}
+/** Height of a coat stand and the number of hook arms around its pole. */
+const STAND_H = 1.8;
+const HOOKS = 6;
 
 /** A swinging door leaf: `pivot.rotation.y = base + swing * open * DOOR_SWING` (open = 0 closed .. 1 wide open). */
 export interface DoorRig {
@@ -156,6 +172,13 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     anchors: ItemAnchor[];
   }
   const drafts: ItemDraft[] = [];
+  /** coat stands: the item they belong to, their group (model pose) and the hooks in the group's space */
+  interface CoatRackSpec {
+    draft: ItemDraft;
+    group: THREE.Group;
+    pegs: CoatHook[];
+  }
+  const rackSpecs: CoatRackSpec[] = [];
   const draftStack: ItemDraft[] = [];
   const usedIds = new Set<string>();
   const uniqueId = (id: string): string => {
@@ -648,13 +671,37 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     bulb.position.set(gx(x), bottom + 0.05, gz(z));
     world.add(bulb);
   }
-  function coatRack(x: number, z: number, dark = true): void {
-    item('coat-rack', at('coat-rack', x, z), 'Garderobe', () => coatRackParts(x, z, dark));
+  /**
+   * Freestanding coat stand, as in the office: heavy round base, slim pole, a ring of short hook arms near the top
+   * (alternating in height). The coats on the hooks come and go with the people (see `CoatRacks`), so only the
+   * hooks are recorded here.
+   */
+  function coatRack(x: number, z: number): void {
+    item('coat-rack', at('coat-rack', x, z), 'Garderobe', () => coatRackParts(x, z));
   }
-  function coatRackParts(x: number, z: number, dark = true): void {
-    cyl(0.2, 0.2, 0.04, x, 0, z, dark ? mat.black : mat.white);
-    cyl(0.025, 0.025, 1.75, x, 0, z, dark ? mat.black : mat.plyLight, world, 8);
-    box(0.45, 0.9, 0.3, x, 0.75, z, L(dark ? 0x2b2523 : 0xb9b3ab));
+  function coatRackParts(x: number, z: number): void {
+    const g = new THREE.Group();
+    g.position.set(gx(x), 0, gz(z));
+    world.add(g);
+    cyl(0.25, 0.26, 0.035, 0, 0, 0, mat.black, g, 24);
+    cyl(0.05, 0.2, 0.03, 0, 0.035, 0, mat.black, g, 24);
+    cyl(0.02, 0.02, STAND_H, 0, 0, 0, mat.black, g, 8);
+    cyl(0.03, 0.03, 0.03, 0, STAND_H, 0, mat.black, g, 8); // cap
+    const spec: CoatRackSpec = { draft: draftStack[draftStack.length - 1], group: g, pegs: [] };
+    for (let i = 0; i < HOOKS; i++) {
+      const a = (i / HOOKS) * Math.PI * 2 + 0.4;
+      const y = STAND_H - (i % 2 ? 0.22 : 0.08);
+      const dx = Math.sin(a);
+      const dz = Math.cos(a);
+      // arm: out of the pole, then curving up into a knob
+      chairRod(g, [0, y - 0.05, 0], [dx * 0.09, y - 0.03, dz * 0.09], 0.011, mat.black);
+      chairRod(g, [dx * 0.09, y - 0.03, dz * 0.09], [dx * 0.13, y + 0.03, dz * 0.13], 0.011, mat.black);
+      const knob = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 6), mat.black);
+      knob.position.set(dx * 0.13, y + 0.035, dz * 0.13);
+      g.add(knob);
+      spec.pegs.push({ at: new THREE.Vector3(dx * 0.11, y, dz * 0.11), yaw: a });
+    }
+    rackSpecs.push(spec);
   }
   function deskRowZ(x: number, zs: number[], chairSide: number, o: { white?: boolean; w?: number; stand?: boolean } = {}): void {
     if (DEBUG_ROW_LABELS) {
@@ -1528,7 +1575,8 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   }
   desk(-7.6, -4.9, 0, { white: true }); // desk 7, flipped 180°
   shelf(-5.9, -5.2, 1.0, 1.0, 0.35);
-  coatRack(-5.5, -1.8, false);
+  coatRack(-5.6, 5.0); // Wassermelonen: by the interior window to the lounge
+  coatRack(0.1, 1.8); // entry corridor: at the end of the lounge partition
   // small meeting room (annex south of the doorway): after the photos "GL Sizi" - solid navy south wall with TV above a grey futon,
   // white rounded coffee table, two grey armchairs facing each other, industrial pendant, curtain + radiator at the west windows,
   // planning board on the east wall
@@ -1829,7 +1877,6 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     box(0.08, 0.1, DZ1 - DZ0, GX, 2.7, (DZ0 + DZ1) / 2, mat.white); // top rail
     plant(12.483 - DW / 4, 3.7, 1.9, 1.25, true);
     plant(12.483 - DW / 4, 6.7, 0.9, 1.25, true);
-    coatRack(12.083, 2.65);
   }, 'Trennwand Kiwis');
   // Digitale Birnen (x 14.7..19.5)
   within(15.884, 6.1, () => {
@@ -2015,9 +2062,9 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     shelf(26.06 + 0.175, CZ + 0.06 - 0.75, 1.0, 1.1, 0.35, Math.PI / 2); // cupboard behind seat 30: against the east face of the core wall (x 26), south end 0.25 north of its corner so the hallway stays free
     pendant(29.7, -3.7, 'black', 1.95, 2.8);
   });
-  coatRack(31.9, -1.4, false); // white coat stand near the window
+  coatRack(11.72, 3.0); // next to the white planter divider, south of its column (as in the photo)
+  coatRack(26.8, 1.8); // east end of the hallway: at the corner of the glass room
   item('cabinet', at('cabinet', 31.9, 1.1), 'Rollkorpus', () => box(0.8, 0.6, 0.45, 31.9, 0, 1.1, mat.lightgrey)); // drawer cabinet at window
-  coatRack(32.1, 0.1, true);
   plant(32.1, -0.9, 1.3);
   plant(27.1, 9.0, 1.1);
 
@@ -2074,6 +2121,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
 
   // movable furniture: one merged scene object per item, placed at its pivot (centre of the footprint)
   const items: RoomItem[] = [];
+  const coatRacks: CoatRackRig[] = [];
   for (const d of drafts) {
     const inner = new THREE.Group();
     inner.add(...d.objs);
@@ -2085,9 +2133,14 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     const outer = new THREE.Group();
     outer.add(inner);
     inner.position.copy(pivot).negate();
+    // coat hooks relative to the holder, so the coats move and turn with the item
+    const rack = rackSpecs.find((r) => r.draft === d);
+    outer.updateMatrixWorld(true); // `inner` sits at -pivot, so "world" is the holder's space here
+    const pegs = rack?.pegs.map((p) => ({ at: rack.group.localToWorld(p.at.clone()), yaw: p.yaw }));
     const holder = mergeStatic(outer, false);
     holder.position.copy(pivot);
     scene.add(holder);
+    if (rack && pegs) coatRacks.push({ root: holder, pegs });
     const hasSeat = d.anchors.length > 0;
     items.push(new RoomItem(d.id, d.kind, d.label, holder, { x: pivot.x, z: pivot.z, yaw: 0 }, local, bounds.translate(pivot.clone().negate()), d.anchors, !hasSeat));
   }
@@ -2229,7 +2282,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     roomLabels.add(sp);
   });
 
-  return { desks, items, blockers: allBlockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter, machine: kitchenMachine, stands: kitchenStands, table: tableSeats }, phoneBooth: { seat: boothSeat, doorPos: { x: ax(23.75), z: az(CZ) } } };
+  return { desks, items, coatRacks, blockers: allBlockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter, machine: kitchenMachine, stands: kitchenStands, table: tableSeats }, phoneBooth: { seat: boothSeat, doorPos: { x: ax(23.75), z: az(CZ) } } };
 }
 
 /**
