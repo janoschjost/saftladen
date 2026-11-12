@@ -29,6 +29,7 @@ const VAPE_LOWER = 3.0;
 const VAPE_END = 5.2;
 const FOOS_CHANCE = 0.03; // chance per decision to challenge somebody to foosball
 const FOOS_TIME = { min: 25, max: 50 }; // seconds of one game
+const FOOS_APPROACH = 90; // seconds both players may take to reach the table (from the far end of the office it takes about 45)
 const PHONE_CHANCE = 0.4; // chance per decision (phone people only) to take a call while walking around
 const PHONE_TIME = { min: 30, max: 80 }; // seconds of one call
 const PHONE_PACE_CHANCE = 0.5; // chance that a call is spent pacing up and down one path instead of wandering
@@ -1418,7 +1419,7 @@ export class Person extends Walker {
     }
     if (job.phase === 'approach') {
       job.age += dt;
-      if (job.age > 40) {
+      if (job.age > FOOS_APPROACH) {
         this.cancelFoos();
         return false;
       }
@@ -1441,7 +1442,7 @@ export class Person extends Walker {
     if (job.phase === 'ready') {
       job.age += dt;
       if (other.phase !== 'approach') job.phase = 'play';
-      else if (job.age > 40) this.cancelFoos();
+      else if (job.age > FOOS_APPROACH) this.cancelFoos();
       return true;
     }
     // play: ease onto the exact spot
