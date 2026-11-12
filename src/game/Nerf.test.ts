@@ -29,7 +29,7 @@ class Stub {
   root = { scale: { y: 1 } };
   playerChat: { t: number; total: number; at: { x: number; z: number } } | null = null;
   nerfOn = false;
-  nerfKind: 'aim' | 'duck' = 'aim';
+  nerfKind: 'aim' | 'duck' | 'shrug' | 'watch' = 'aim';
   nerfKick = 0;
   speaking = false;
   constructor(
@@ -130,6 +130,9 @@ describe('play.nerf', () => {
     expect(nerf.start(a as unknown as Person, b as unknown as Person)).toBe(true);
     expect(a.nerfOn).toBe(true);
     expect(a.playerChat?.at).toEqual({ x: 9, z: 5 });
+    // the target stops and looks at the shooter, so the dart flies at somebody standing there
+    expect(b.nerfOn).toBe(true);
+    expect(b.playerChat?.at).toEqual({ x: 5, z: 5 });
     run(nerf, [a, b], 1.2);
     expect(nerf.darts.length).toBe(1);
     expect(scene.children.length).toBe(1);

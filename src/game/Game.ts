@@ -1571,7 +1571,14 @@ export class Game {
       r.armL.rotation.z = lerp(r.armL.rotation.z, 0.25, a);
       r.elbowL.rotation.x = lerp(r.elbowL.rotation.x, -0.9, a);
       r.body.rotation.x += (-0.04 - 0.1 * kick) * a;
-    } else {
+    } else if (w.nerfKind === 'shrug') {
+      for (const [arm, elbow, side] of [[r.armL, r.elbowL, -1], [r.armR, r.elbowR, 1]] as const) {
+        arm.rotation.x = lerp(arm.rotation.x, -0.5, a);
+        arm.rotation.z = lerp(arm.rotation.z, side * 0.5, a);
+        elbow.rotation.x = lerp(elbow.rotation.x, -1.3, a);
+      }
+      r.body.rotation.x += -0.03 * a;
+    } else if (w.nerfKind === 'duck') {
       const p = petPose(a, 0.3, now + w.phase, w.root.scale.y);
       for (const [hip, knee, l] of [[r.legL, r.kneeL, p.legL], [r.legR, r.kneeR, p.legR]] as const) {
         hip.rotation.set(l.rx, l.ry, 0, LEG_ORDER);

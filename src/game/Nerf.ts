@@ -175,6 +175,11 @@ export class Nerf {
   start(a: Person, b: Person): boolean {
     if (a === b || this.fights.some((f) => f.shooter === a || f.target === a || f.shooter === b || f.target === b)) return false;
     if (!this.aim(a, b, AIM + 1)) return false;
+    // the target notices and stands still, facing the shooter, so the dart really flies at them
+    if (!this.watch(b, a, AIM + 1.5)) {
+      this.stop(a);
+      return false;
+    }
     this.fights.push({ shooter: a, target: b, stage: 'aim', t: 0, flight: 0, hit: false, shots: 0, react: 'ignore' });
     return true;
   }
@@ -210,6 +215,20 @@ export class Nerf {
       return;
     }
     this.timer = between(GAP);
+  }
+
+  /** `p` stops and looks at `from`, no pose (a skirmish target waiting for the dart). */
+  private watch(p: Person, from: Person, seconds: number): boolean {
+    if (!p.talkTo({ x: from.pos.x, z: from.pos.z }, seconds, false)) return false;
+    p.nerfKind = 'watch';
+    p.nerfOn = true;
+    p.speaking = false;
+    return true;
+  }
+
+  private stop(p: Person): void {
+    p.playerChat = null;
+    p.nerfOn = false;
   }
 
   /** Stops `a`, turns them to `b` and raises the gun. */
@@ -274,6 +293,7 @@ export class Nerf {
     f.stage = 'fly';
     f.t = 0;
     if (s.playerChat) s.playerChat.t = Math.max(s.playerChat.t, shot.t + AFTER);
+    if (t.nerfOn && t.playerChat) t.playerChat.t = Math.max(t.playerChat.t, shot.t + 0.5);
   }
 
   /** The dart reaches its target: ducks, answers or shrugs it off. */
@@ -285,6 +305,13 @@ export class Nerf {
     f.t = 0;
     if (f.react === 'back') {
       if (!this.aim(t, s, AIM + 1)) f.react = 'ignore';
+    } else if (f.react === 'ignore') {
+      // a visible shrug
+      if (t.talkTo({ x: s.pos.x, z: s.pos.z }, AFTER + 0.4, false)) {
+        t.nerfKind = 'shrug';
+        t.nerfOn = true;
+        t.speaking = false;
+      }
     } else if (f.react === 'duck') {
       if (t.talkTo({ x: s.pos.x, z: s.pos.z }, DUCK + 0.4, false)) {
         t.nerfKind = 'duck';

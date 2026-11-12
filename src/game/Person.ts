@@ -218,7 +218,7 @@ export class Person extends Walker {
   petAmt = 0;
   /** Nerf skirmish (see Nerf.ts): stopped to aim the gun or to duck away from a dart; `nerfAmt` is the eased pose, `nerfKick` the recoil */
   nerfOn = false;
-  nerfKind: 'aim' | 'duck' = 'aim';
+  nerfKind: 'aim' | 'duck' | 'shrug' | 'watch' = 'aim';
   nerfAmt = 0;
   nerfKick = 0;
   nerfClock = 0;

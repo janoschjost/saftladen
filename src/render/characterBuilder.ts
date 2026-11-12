@@ -458,10 +458,11 @@ export function buildCharacter(look: Look): CharacterRig {
   let gun: THREE.Object3D | undefined;
   if (look.nerf) {
     gun = mesh([
-      box(0.05, 0.17, 0.06, -0.03, -0.36, 0, '#f08a2a'), // body
-      box(0.028, 0.12, 0.03, -0.03, -0.5, 0.01, '#2f7fd0'), // barrel
-      box(0.032, 0.02, 0.034, -0.03, -0.565, 0.01, '#e8553d'), // muzzle
-      box(0.04, 0.05, 0.07, -0.03, -0.32, -0.055, '#2a2c33'), // grip
+      box(0.09, 0.28, 0.1, -0.03, -0.4, 0.0, '#ff7a1a'), // chunky body
+      box(0.06, 0.22, 0.06, -0.03, -0.66, 0.02, '#ffd81f'), // barrel
+      box(0.07, 0.04, 0.07, -0.03, -0.79, 0.02, '#e8302d'), // muzzle
+      box(0.065, 0.12, 0.05, -0.03, -0.42, 0.09, '#1f7fe0'), // magazine
+      box(0.05, 0.09, 0.07, -0.03, -0.33, -0.08, '#2a2c33'), // grip
     ]);
     gun.visible = false;
     elbowR.add(gun);
