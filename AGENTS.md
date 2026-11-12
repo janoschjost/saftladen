@@ -17,7 +17,7 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
    `npm run dev` in a worktree picks the next free port from 5174 (the main checkout keeps 5173).
 4. **Implement.** Read the issue and all of its comments. Follow `README.md` and the existing code. Keep the change scoped to the issue.
 5. **Done means:**
-   - `npm run build` passes.
+   - `npm run build` passes. CI (`.github/workflows/ci.yml`) runs build and tests on every PR; a red check is not done.
    - Tests for the acceptance criteria are added and pass. (No test setup yet → skip this point until one exists.)
    - Every criterion has been checked in the running app.
    - `FEATURES.md` is updated: add or change the lines for this issue, ending with `(#N)`. Every line you touched still works.
