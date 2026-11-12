@@ -62,7 +62,7 @@ export interface OfficeModel {
   desks: DeskPlacement[];
   /** every piece of furniture the room editor can move (desks included) */
   items: RoomItem[];
-  /** wall-mounted wardrobes with their pegs */
+  /** coat stands with their hooks */
   coatRacks: CoatRackRig[];
   /** footprints (game space) that block walking, for the nav grid: architecture + the items where they stand right now */
   blockers(): THREE.Box3[];
@@ -92,17 +92,19 @@ export interface OfficeModel {
 
 type Mat = THREE.Material;
 
-/** A wardrobe in the scene: `root` moves with the room item, the pegs (hang points) are in its space. */
+/** One hook of a coat stand: where a coat hangs and which way it faces (away from the pole; yaw, 0 = +z). */
+export interface CoatHook {
+  at: THREE.Vector3;
+  yaw: number;
+}
+/** A coat stand in the scene: `root` moves with the room item, the hooks are in its space. */
 export interface CoatRackRig {
   root: THREE.Object3D;
-  /** direction the wardrobe looks into the room, in `root` space (yaw, 0 = +z) */
-  yaw: number;
-  pegs: THREE.Vector3[];
+  pegs: CoatHook[];
 }
-/** Height of the pegs, their spacing along the rail and how far the hang point is from the wall. */
-const PEG_Y = 1.6;
-const PEG_GAP = 0.3;
-const PEG_OUT = 0.1;
+/** Height of a coat stand and the number of hook arms around its pole. */
+const STAND_H = 1.8;
+const HOOKS = 6;
 
 /** A swinging door leaf: `pivot.rotation.y = base + swing * open * DOOR_SWING` (open = 0 closed .. 1 wide open). */
 export interface DoorRig {
@@ -170,11 +172,11 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     anchors: ItemAnchor[];
   }
   const drafts: ItemDraft[] = [];
-  /** wardrobes: the item they belong to, their group (model pose) and the pegs in the group's space */
+  /** coat stands: the item they belong to, their group (model pose) and the hooks in the group's space */
   interface CoatRackSpec {
     draft: ItemDraft;
     group: THREE.Group;
-    pegs: THREE.Vector3[];
+    pegs: CoatHook[];
   }
   const rackSpecs: CoatRackSpec[] = [];
   const draftStack: ItemDraft[] = [];
@@ -255,8 +257,6 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     lampWarm: new THREE.MeshBasicMaterial({ color: 0xffd98a }),
     cage: L(0xe2b84f),
   };
-  /** things lying on the wardrobes (hats, shoes) */
-  const rackMats = { navy: L(0x27375e), mustard: L(0xd9a336), red: L(0xb5362f), white: L(0xece8df), leather: L(0x7a4f2c) };
 
   /* ---------- textures ---------- */
   function canvasTex(w: number, h: number, draw: (g: CanvasRenderingContext2D, w: number, h: number) => void): THREE.CanvasTexture {
@@ -672,64 +672,36 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     world.add(bulb);
   }
   /**
-   * Wall-mounted wardrobe: a wooden rail with a row of pegs, a hat shelf above and a shoe rack below.
-   * (x, z) = centre of the rail on the wall face (model coordinates), `face` = quarter turns of the direction it
-   * looks into the room (0 = +z, 1 = +x, 2 = -z, 3 = -x). The jackets on the pegs come and go with the people
-   * (see `CoatRacks`), so only the pegs are recorded here.
+   * Freestanding coat stand, as in the office: heavy round base, slim pole, a ring of short hook arms near the top
+   * (alternating in height). The coats on the hooks come and go with the people (see `CoatRacks`), so only the
+   * hooks are recorded here.
    */
-  function coatRack(x: number, z: number, face: 0 | 1 | 2 | 3, pegs = 6): void {
-    item('coat-rack', at('coat-rack', x, z), 'Garderobe', () => coatRackParts(x, z, face, pegs));
+  function coatRack(x: number, z: number): void {
+    item('coat-rack', at('coat-rack', x, z), 'Garderobe', () => coatRackParts(x, z));
   }
-  function coatRackParts(x: number, z: number, face: 0 | 1 | 2 | 3, pegs: number): void {
+  function coatRackParts(x: number, z: number): void {
     const g = new THREE.Group();
     g.position.set(gx(x), 0, gz(z));
-    g.rotation.y = (face * Math.PI) / 2;
     world.add(g);
-    const W = pegs * PEG_GAP + 0.12;
-    // rail on the wall + pegs with an upturned tip
-    box(W, 0.16, 0.025, 0, PEG_Y - 0.09, 0.0125, mat.ply, 0, g);
+    cyl(0.25, 0.26, 0.035, 0, 0, 0, mat.black, g, 24);
+    cyl(0.05, 0.2, 0.03, 0, 0.035, 0, mat.black, g, 24);
+    cyl(0.02, 0.02, STAND_H, 0, 0, 0, mat.black, g, 8);
+    cyl(0.03, 0.03, 0.03, 0, STAND_H, 0, mat.black, g, 8); // cap
     const spec: CoatRackSpec = { draft: draftStack[draftStack.length - 1], group: g, pegs: [] };
-    for (let i = 0; i < pegs; i++) {
-      const u = (i - (pegs - 1) / 2) * PEG_GAP;
-      box(0.035, 0.035, 0.12, u, PEG_Y - 0.03, 0.085, mat.black, 0, g);
-      box(0.035, 0.075, 0.03, u, PEG_Y - 0.03, 0.14, mat.black, 0, g);
-      spec.pegs.push(new THREE.Vector3(u, PEG_Y, PEG_OUT));
+    for (let i = 0; i < HOOKS; i++) {
+      const a = (i / HOOKS) * Math.PI * 2 + 0.4;
+      const y = STAND_H - (i % 2 ? 0.22 : 0.08);
+      const dx = Math.sin(a);
+      const dz = Math.cos(a);
+      // arm: out of the pole, then curving up into a knob
+      chairRod(g, [0, y - 0.05, 0], [dx * 0.09, y - 0.03, dz * 0.09], 0.011, mat.black);
+      chairRod(g, [dx * 0.09, y - 0.03, dz * 0.09], [dx * 0.13, y + 0.03, dz * 0.13], 0.011, mat.black);
+      const knob = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 6), mat.black);
+      knob.position.set(dx * 0.13, y + 0.035, dz * 0.13);
+      g.add(knob);
+      spec.pegs.push({ at: new THREE.Vector3(dx * 0.11, y, dz * 0.11), yaw: a });
     }
     rackSpecs.push(spec);
-    // hat shelf on two brackets, with a cap, a beanie and a box on it
-    const SHELF_Y = PEG_Y + 0.2;
-    box(W, 0.03, 0.3, 0, SHELF_Y, 0.15, mat.ply, 0, g);
-    for (const s of [-1, 1]) box(0.03, 0.12, 0.24, s * (W / 2 - 0.08), SHELF_Y - 0.12, 0.12, mat.black, 0, g);
-    const top = SHELF_Y + 0.03;
-    const capX = -W / 2 + 0.24;
-    box(0.2, 0.1, 0.2, capX, top, 0.13, rackMats.navy, 0, g); // cap
-    box(0.2, 0.02, 0.09, capX, top, 0.26, rackMats.navy, 0, g); // its brim
-    box(0.19, 0.13, 0.19, 0.05, top, 0.15, rackMats.mustard, 0, g); // beanie
-    box(0.07, 0.07, 0.07, 0.05, top + 0.13, 0.15, mat.white, 0, g); // its pompom
-    box(0.34, 0.16, 0.24, W / 2 - 0.26, top, 0.14, mat.cardboard, 0, g);
-    // shoe rack: two boards between side panels, a few pairs of shoes
-    const D = 0.3;
-    for (const s of [-1, 1]) box(0.03, 0.42, D, s * (W / 2 - 0.015), 0, D / 2, mat.black, 0, g);
-    const boards = [0.1, 0.4];
-    for (const y of boards) box(W - 0.06, 0.02, D, 0, y, D / 2, mat.ply, 0, g);
-    const shoeMats = [rackMats.white, mat.black, rackMats.red, rackMats.navy, rackMats.leather, rackMats.mustard];
-    // seeded per wardrobe, so the shoes are varied but stable
-    const rnd = (n: number) => {
-      const v = Math.sin(x * 12.9898 + z * 78.233 + n * 37.719) * 43758.5453;
-      return v - Math.floor(v);
-    };
-    boards.forEach((y, row) => {
-      for (let i = 0; i < pegs; i++) {
-        if (rnd(i + row * 31) < 0.3) continue; // empty spot
-        const u = (i - (pegs - 1) / 2) * PEG_GAP + (rnd(i + row * 17 + 5) - 0.5) * 0.04;
-        const m = shoeMats[Math.floor(rnd(i * 7 + row * 3 + 1) * shoeMats.length)];
-        const boot = rnd(i + row * 13 + 9) < 0.25;
-        for (const s of [-1, 1]) {
-          box(0.085, 0.07, 0.24, u + s * 0.055, y + 0.02, D / 2, m, 0, g);
-          if (boot) box(0.085, 0.13, 0.1, u + s * 0.055, y + 0.09, D / 2 - 0.07, m, 0, g);
-        }
-      }
-    });
   }
   function deskRowZ(x: number, zs: number[], chairSide: number, o: { white?: boolean; w?: number; stand?: boolean } = {}): void {
     if (DEBUG_ROW_LABELS) {
@@ -1603,8 +1575,8 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   }
   desk(-7.6, -4.9, 0, { white: true }); // desk 7, flipped 180°
   shelf(-5.9, -5.2, 1.0, 1.0, 0.35);
-  coatRack(-5.06, -1.95, 3, 5); // Wassermelonen: on the wall to the storage room
-  coatRack(-0.85, CZ + 0.06, 0); // entry corridor: on the text wall, between the storage door and the lettering
+  coatRack(-5.6, 5.0); // Wassermelonen: by the interior window to the lounge
+  coatRack(0.1, 1.8); // entry corridor: at the end of the lounge partition
   // small meeting room (annex south of the doorway): after the photos "GL Sizi" - solid navy south wall with TV above a grey futon,
   // white rounded coffee table, two grey armchairs facing each other, industrial pendant, curtain + radiator at the west windows,
   // planning board on the east wall
@@ -2090,8 +2062,8 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     shelf(26.06 + 0.175, CZ + 0.06 - 0.75, 1.0, 1.1, 0.35, Math.PI / 2); // cupboard behind seat 30: against the east face of the core wall (x 26), south end 0.25 north of its corner so the hallway stays free
     pendant(29.7, -3.7, 'black', 1.95, 2.8);
   });
-  coatRack(16.9, CZ + 0.06, 0); // hallway: on the text wall east of the archive door, past the lettering
-  for (const x of [27.65, 31.75]) coatRack(x, B.z0 + 0.15, 0, 3); // east room: two short ones on the north wall, either side of the desks
+  coatRack(11.72, 3.0); // next to the white planter divider, south of its column (as in the photo)
+  coatRack(26.8, 1.8); // east end of the hallway: at the corner of the glass room
   item('cabinet', at('cabinet', 31.9, 1.1), 'Rollkorpus', () => box(0.8, 0.6, 0.45, 31.9, 0, 1.1, mat.lightgrey)); // drawer cabinet at window
   plant(32.1, -0.9, 1.3);
   plant(27.1, 9.0, 1.1);
@@ -2161,14 +2133,14 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     const outer = new THREE.Group();
     outer.add(inner);
     inner.position.copy(pivot).negate();
-    // wardrobe pegs relative to the holder, so the jackets move and turn with the item
+    // coat hooks relative to the holder, so the coats move and turn with the item
     const rack = rackSpecs.find((r) => r.draft === d);
     outer.updateMatrixWorld(true); // `inner` sits at -pivot, so "world" is the holder's space here
-    const pegs = rack?.pegs.map((p) => rack.group.localToWorld(p.clone()));
+    const pegs = rack?.pegs.map((p) => ({ at: rack.group.localToWorld(p.at.clone()), yaw: p.yaw }));
     const holder = mergeStatic(outer, false);
     holder.position.copy(pivot);
     scene.add(holder);
-    if (rack && pegs) coatRacks.push({ root: holder, yaw: rack.group.rotation.y, pegs });
+    if (rack && pegs) coatRacks.push({ root: holder, pegs });
     const hasSeat = d.anchors.length > 0;
     items.push(new RoomItem(d.id, d.kind, d.label, holder, { x: pivot.x, z: pivot.z, yaw: 0 }, local, bounds.translate(pivot.clone().negate()), d.anchors, !hasSeat));
   }

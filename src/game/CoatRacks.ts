@@ -1,19 +1,19 @@
 import * as THREE from 'three';
 import { buildJacket } from '../render/jacketBuilder';
-import type { CoatRackRig } from '../render/officeModel';
+import type { CoatHook, CoatRackRig } from '../render/officeModel';
 import type { Person } from './Person';
 
 interface Peg {
   rack: CoatRackRig;
-  at: THREE.Vector3;
+  hook: CoatHook;
   owner: Person | null;
 }
 
 const v = new THREE.Vector3();
 
 /**
- * The wardrobes follow the day: whoever is in the office has their jacket on a peg, whoever is out (errand, home
- * office, gone for the night) or on the way out has taken it along. People use the wardrobe closest to their desk.
+ * The coat stands follow the day: whoever is in the office has their coat on a hook, whoever is out (errand, home
+ * office, gone for the night) or on the way out has taken it along. People use the stand closest to their desk.
  */
 export class CoatRacks {
   private pegs: Peg[] = [];
@@ -26,7 +26,7 @@ export class CoatRacks {
     private racks: readonly CoatRackRig[],
     private people: readonly Person[],
   ) {
-    for (const rack of racks) for (const at of rack.pegs) this.pegs.push({ rack, at, owner: null });
+    for (const rack of racks) for (const hook of rack.pegs) this.pegs.push({ rack, hook, owner: null });
   }
 
   /** Number of jackets on the pegs right now. */
@@ -45,7 +45,7 @@ export class CoatRacks {
 
   private hang(p: Person): void {
     const peg = this.freePeg(p);
-    if (!peg) return; // every peg is taken: the jacket stays over the chair, so to speak
+    if (!peg) return; // every hook is taken: the coat stays over the chair, so to speak
     let jacket = this.jackets.get(p);
     if (!jacket) this.jackets.set(p, (jacket = buildJacket(p.member)));
     peg.owner = p;
@@ -53,8 +53,8 @@ export class CoatRacks {
     this.last.set(p, peg);
     const group = jacket.parent ?? new THREE.Group();
     group.add(jacket);
-    group.position.copy(peg.at);
-    group.rotation.y = peg.rack.yaw;
+    group.position.copy(peg.hook.at);
+    group.rotation.y = peg.hook.yaw;
     peg.rack.root.add(group);
   }
 
@@ -64,7 +64,7 @@ export class CoatRacks {
     this.jackets.get(p)?.parent?.removeFromParent();
   }
 
-  /** The peg used last if it is free, else a free one on the nearest wardrobe that has room. */
+  /** The hook used last if it is free, else a free one on the nearest stand that has room. */
   private freePeg(p: Person): Peg | null {
     const last = this.last.get(p);
     if (last && !last.owner) return last;
