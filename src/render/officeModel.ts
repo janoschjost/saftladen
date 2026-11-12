@@ -778,20 +778,22 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   /* =================================================================
      CORE (z < 0): text wall + rooms
   ================================================================= */
-  wall(-5, CZ, 26, CZ, H_CORE, [
+  wall(-5, CZ, 26.06, CZ, H_CORE, [
     { a: -3.0, b: -2.0, door: 1 }, // storage door
     { a: 2.5, b: 3.4, door: 1 }, // door under "RISCHE"
     { a: 4.9, b: 5.8, door: 1 }, // kitchen/dining door
     { a: 6.2, b: 9.5, top: 1.64, fill: 'glass', flush: true, solidAbove: true, grow: 0.04 }, // glazed panel into dining: glass up to the bottom of the lettering (Y0), solid wall behind the text above
     { a: 14.4, b: 15.3, door: 1 }, // "Archiv"
-    { a: 18.5, b: 23, top: 2.5 }, // dark room, black curtain
+    { a: 18.56, b: 23, top: 2.5 }, // dark room, black curtain (jamb flush with the east face of the x=18.5 wall)
     { a: 23.25, b: 24.25, top: 2.2, fill: 'glass', door: -1 }, // booth glass door, opens outwards (into the hallway)
+    { a: 24.56, b: 26.06, top: 2.5 }, // east of the booth: second curtain opening (west jamb flush with the booth's east wall, runs on to the east curtain)
   ]);
-  for (const x of [0, 4, 10.5, 18.5]) wall(x, B.z0, x, CZ, H_CORE);
-  wall(23, -2.2, 23, CZ, H_CORE); // east of the dark room: only the booth vestibule part remains
-  wall(26, B.z0, 26, CZ, H_CORE);
-  wall(23, -2.2, 24.5, -2.2, H_CORE); // photo booth (x 23..24.5): back wall
-  wall(24.5, -2.2, 24.5, CZ, H_CORE); // photo booth: east wall
+  for (const x of [0, 4, 10.5]) wall(x, B.z0, x, CZ, H_CORE);
+  wall(18.5, B.z0, 18.5, CZ + 0.06, H_CORE); // west wall of the photo studio: runs to the south face of the hallway wall (flush)
+  wall(23, -2.2 - 0.06, 23, CZ + 0.06, H_CORE); // east of the dark room: only the booth vestibule part remains; runs to the south face of the hallway wall (flush, the half beside the curtain opening would otherwise end on the wall centre line)
+  // no wall at x=26 any more: the studio's east side is the black curtain only (see 'Vorhang Ost')
+  wall(23 - 0.06, -2.2, 24.5 + 0.06, -2.2, H_CORE); // photo booth (x 23..24.5): back wall, runs to the outer faces of the side walls (flush corners)
+  wall(24.5, -2.2 - 0.06, 24.5, CZ + 0.06, H_CORE); // photo booth: east wall, runs to the outer face of the back wall and the south face of the hallway wall
   // big wall lettering in the corporate font (Apercu): it starts low enough to run over the closed door and the
   // glazed panel; over open doorways the part below the door head (OPEN_TOP) is masked out
   {
@@ -1339,10 +1341,6 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
         const m = rbox(0.22, 2.7, 0.08, ax(23.05 + i * 0.21), 0, az(B.z0) + 0.28 + (i % 2) * 0.05, i % 2 ? mat.black : mat.dark);
         m.userData.nonav = true;
       }
-      for (let i = 0; i < 14; i++) {
-        const m = rbox(0.08, 2.7, 0.22, ax(25.8) - (i % 2) * 0.05, 0, az(-5.2 + i * 0.21), i % 2 ? mat.black : mat.dark);
-        m.userData.nonav = true;
-      }
     });
 
     // backdrop roll on ceiling hooks, white paper hanging down, green core at the end
@@ -1505,14 +1503,45 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   }
   // dark room behind the curtain
   // room 7 = photo studio (from the photos): white walls in the west half, black curtain along the east half
-  slab(18.6, 22.9, B.z0, B.z0, 0, 3.2, mat.wall, 0.05).position.z = az(B.z0) + 0.2;
-  slab(22.9, 25.9, B.z0, B.z0, 0, 3.2, mat.black, 0.05).position.z = az(B.z0) + 0.2;
-  slab(18.6, 18.6, B.z0 + 0.15, CZ - 0.15, 0, EXACT ? 3.2 : CUT, mat.wall, 0.05);
-  slab(25.9, 25.9, B.z0 + 0.15, CZ - 0.15, 0, EXACT ? 3.2 : CUT, mat.black, 0.05);
-  slab(24.5, 25.9, -2.25, CZ - 0.15, 0.005, 0.025, L(0x1a1a1a)); // floor beside the booth
-  slab(18.6, 22.9, B.z0 + 0.15, CZ - 0.15, 0.005, 0.025, L(0x1a1a1a));
-  slab(22.9, 25.9, B.z0 + 0.15, -2.25, 0.005, 0.025, L(0x1a1a1a)); // floor of the extension
-  within(19.4, 0, () => box(1.6, EXACT ? 2.45 : CUT, 0.12, 19.4, 0, CZ - 0.15, L(0x0c0c0d)), 'Vorhang'); // curtain (drawn part)
+  slab(18.56, 22.9, B.z0, B.z0, 0, 3.2, mat.wall, 0.05).position.z = az(B.z0) + 0.2;
+  slab(22.9, 25.99, B.z0, B.z0, 0, 3.2, mat.black, 0.05).position.z = az(B.z0) + 0.2;
+  slab(18.585, 18.585, B.z0 + 0.15, CZ - 0.06, 0, EXACT ? 3.2 : CUT, mat.wall, 0.05); // white lining directly on the east face (18.56) of the west wall, from the north wall to the hallway wall
+  slab(26, 26, B.z0 + 0.15, CZ + 0.06, 0, EXACT ? 2.5 : CUT, mat.black, 0.03); // opaque backing of the east curtain, replaces the wall
+  if (EXACT) slab(26, 26, B.z0 + 0.15, CZ + 0.06, 2.5, H_CORE, mat.wall, 0.12); // normal wall above the curtain, like the south side
+  slab(24.5, 26, -2.25, CZ - 0.06, 0.005, 0.025, L(0x1a1a1a)); // floor beside the booth
+  slab(18.56, 22.9, B.z0 + 0.15, CZ - 0.06, 0.005, 0.025, L(0x1a1a1a));
+  slab(22.9, 26, B.z0 + 0.15, -2.25, 0.005, 0.025, L(0x1a1a1a)); // floor of the extension
+  // curtain across the doorway, drawn to the west: a rail over the whole opening and a gathered black drape (vertical folds that alternate in depth)
+  within(19.4, 0, () => {
+    const CH = EXACT ? 2.45 : CUT;
+    box(4.5, 0.03, 0.04, 20.75, CH + 0.03, CZ - 0.15, mat.steel); // rail
+    const folds = 20;
+    for (let i = 0; i < folds; i++) {
+      const x = 18.565 + ((i + 0.5) * 1.6) / folds;
+      box(1.6 / folds + 0.02, CH, 0.05, x, 0, CZ - 0.15 + (i % 2 ? 0.04 : -0.04), i % 2 ? mat.black : mat.dark);
+    }
+    for (let i = 0; i < folds; i += 2) box(0.025, 0.04, 0.04, 18.565 + ((i + 0.5) * 1.6) / folds, CH - 0.01, CZ - 0.15, mat.steel); // rings
+  }, 'Vorhang');
+  // the same curtain (same height, rail, folds) east of the booth in the hallway wall and along the whole east wall of the studio
+  within(25.2, -1.15, () => {
+    const CH = EXACT ? 2.45 : CUT;
+    const fold = (x: number, z: number, wx: number, wz: number, i: number): void => {
+      box(wx, CH, wz, x, 0, z, i % 2 ? mat.black : mat.dark);
+    };
+    box(1.47, 0.03, 0.04, 25.295, CH + 0.03, CZ - 0.15, mat.steel); // rail, south part
+    const nS = 15;
+    for (let i = 0; i < nS; i++) fold(24.56 + ((i + 0.5) * 1.47) / nS, CZ - 0.15 + (i % 2 ? 0.04 : -0.04), 1.47 / nS + 0.02, 0.05, i);
+    const z0 = B.z0 + 0.15;
+    const z1 = CZ - 0.06; // all the way to the north face of the hallway wall: the curtain wraps the south-east corner into the south part
+    const nE = 42;
+    // the curtain is the partition between the studio and the east room, so it is folded on both sides of its backing panel (x = 26)
+    for (const side of [-1, 1]) {
+      const ze = side > 0 ? CZ + 0.06 : z1; // the east-room side runs on to the south face of the hallway wall (flush); the studio side wraps into the south part
+      const n = side > 0 ? 46 : nE;
+      box(0.04, 0.03, ze - z0, 26 + side * 0.075, CH + 0.03, (z0 + ze) / 2, mat.steel); // rail
+      for (let i = 0; i < n; i++) fold(26 + side * (0.075 + (i % 2 ? 0.03 : -0.03)), z0 + ((i + 0.5) * (ze - z0)) / n, 0.05, (ze - z0) / n + 0.02, i + (side > 0 ? 1 : 0));
+    }
+  }, 'Vorhang Ost');
   // two white bar stools in front of the pallet bar
   within(24.4, -4.0, () => {
     for (const z of [-4.4, -3.6]) {
@@ -1553,7 +1582,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       box(0.38, 0.05, 0.3, 23.95, 0.68, -1.65, mat.black);
     });
   }
-  within(26, -1.1, () => shelf(26.28, -1.1, 1.9, 2.0, 0.4, Math.PI / 2));
+  within(26, -1.9, () => shelf(26.36, CZ + 0.06 - 0.95, 1.9, 2.0, 0.4, Math.PI / 2)); // against the east curtain (folds reach x 26.13), south end flush with the south face of the CZ wall
   within(26, -4.2, () => {
     box(0.9, 0.3, 2.0, 26.6, 0, -4.2, mat.plyLight);
     box(0.9, 0.18, 2.0, 26.6, 0.3, -4.2, mat.fabric);
@@ -2081,7 +2110,6 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     const NW = 1.85; // tables 10 + 11: desks 1.85 wide (was 1.6), first one against the north wall
     deskRowZ(29.3, [-5.3 + NW / 2, -5.3 + NW * 1.5], -1, { ...SS, w: NW });
     deskRowZ(30.1, [-5.3 + NW / 2, -5.3 + NW * 1.5], 1, { ...SS, w: NW });
-    shelf(26.06 + 0.175, CZ + 0.06 - 0.75, 1.0, 1.1, 0.35, Math.PI / 2); // cupboard behind seat 30: against the east face of the core wall (x 26), south end 0.25 north of its corner so the hallway stays free
     pendant(29.7, -3.7, 'black', 1.95, 2.8);
   });
   coatRack(11.72, 3.0); // next to the white planter divider, south of its column (as in the photo)
