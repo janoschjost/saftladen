@@ -768,6 +768,8 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     windowWall(B.x1, B.z0, B.x1, B.z1); // east end windows
     wall(B.x0, B.z1, 7.5, B.z1, H_LOW, [{ a: -6.7, b: -5.6, door: -1 }, { a: -4.3, b: -2.3 }], { t: 0.3, outer: true }); // solid part, 2 m double doorway (the two wings are dynamic, see `entrance`)
     windowWall(7.5, B.z1, B.x1, B.z1); // long window wall
+  // porch platform in front of the entrance, so people stepping out / arriving do not stand in thin air
+  slab(-4.75, -1.85, B.z1 + 0.15, B.z1 + 2.5, -0.15, 0.02, L(0x8f8f94));
   }
   for (const [a, b] of [
     [4.3, 10.2],
@@ -2241,9 +2243,6 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   });
   staticRoof.visible = false;
   scene.add(staticRoof);
-
-  // porch platform in front of the entrance, so people stepping out / arriving do not stand in thin air
-  slab(-4.75, -1.85, B.z1 + 0.15, B.z1 + 2.5, -0.15, 0.02, L(0x8f8f94));
 
   // entrance double door: two wings (not merged, so each swings open on its own when somebody walks through)
   const wingW = 1.0; // two wings fill the doorway (model x -4.3 .. -2.3) exactly
