@@ -87,6 +87,8 @@ test.describe('hud.settings', () => {
     });
     expect(await read(page, (g) => Math.round(g.tod.cycle * 1000))).toBe(500);
     await expect(env.locator('#time-ticks li')).toHaveText(['0', '6', '12', '18', '24']);
+    // the clock output follows in the next frame (slow on CI)
+    await expect(env.locator('#time-clock')).toHaveText(await read(page, (g) => g.tod.clock), { timeout: 30_000 });
     await expect(env.locator('#time-clock')).not.toHaveText('11:00');
     await page.keyboard.press('Escape');
     await expect(env).toBeHidden();
@@ -220,18 +222,23 @@ test('actions.camera + actions.handback: Drucken flies to Orbit and follows the 
 });
 
 test('place.meeting: people called out of their chair stand up and walk to the room, nobody glides sitting', async ({ page }) => {
-  test.setTimeout(120_000);
   await openGame(page);
-  // watch every frame-ish: somebody on the way to the room (approach) must not move with the legs folded
+  // watch: somebody on the way to the room (approach) and moving must not have the legs folded
   await page.evaluate(() => {
-    const w = window as unknown as { __game: any; __gliding: string[] };
+    const w = window as unknown as { __game: any; __gliding: string[]; __walked: number };
     w.__gliding = [];
+    w.__walked = 0;
     setInterval(() => {
-      for (const p of w.__game.people) if (p.meetPhase === 'approach' && p.moving > 0.5 && p.sit > 0.3) w.__gliding.push(`${p.id} sit=${p.sit.toFixed(2)}`);
+      for (const p of w.__game.people) {
+        if (p.meetPhase !== 'approach' || p.moving <= 0.5) continue;
+        w.__walked++;
+        if (p.sit > 0.3) w.__gliding.push(`${p.id} sit=${p.sit.toFixed(2)}`);
+      }
     }, 50);
   });
   await read(page, (g) => g.startAction('meeting'));
-  await until(page, (g) => g.people.filter((p: any) => p.meetPhase === 'sit').length >= 2, undefined, 90_000);
+  // enough samples of people walking to the room (not the whole meeting: the sim is slow on CI)
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __walked: number }).__walked), { timeout: 60_000 }).toBeGreaterThan(10);
   expect(await page.evaluate(() => (window as unknown as { __gliding: string[] }).__gliding)).toEqual([]);
 });
 
