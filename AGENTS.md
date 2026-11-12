@@ -25,9 +25,10 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
    ```sh
    git fetch origin && git rebase origin/main && npm run build
    git push -u origin HEAD
-   gh pr create --base main --title "<imperative summary>" --body "<see below>"
+   gh pr create --base main --assignee @me --title "<imperative summary>" --body "<see below>"
    cd <repo root> && git worktree remove .worktrees/issue-N
    ```
+   `--assignee @me` assigns the PR to the dev whose `gh` login runs the session.
    The PR body starts with `Closes #N` on its own line, so merging closes the issue. Then come `## What changed`, `## Acceptance criteria` (checked, with how each was verified) and optionally `## Notes`. See `gh pr view 23`.
 
 ## Commits

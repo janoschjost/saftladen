@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Claim protocol for GitHub issues, shared by every agent session (and humans).
 #
-#   scripts/issue.sh new "<title>" <bug|enhancement> [body]   open an issue, print its number
-#   scripts/issue.sh claim N        claim issue N; exit 0 = ours, exit 2 = taken by someone else
+#   scripts/issue.sh new "<title>" <bug|enhancement> [body]   open an issue assigned to you, print its number
+#   scripts/issue.sh claim N        claim issue N and assign it to you; exit 0 = ours, exit 2 = taken by someone else
 #   scripts/issue.sh release N "<reason>"   hand a claimed issue back
 #
 # Label + assignee make a claim visible. The lock is the claim comment: GitHub orders comments by creation
@@ -31,7 +31,7 @@ cmd=${1:-}
 case "$cmd" in
   new)
     title=${2:?title}; label=${3:?label (bug|enhancement)}; body=${4:-}
-    url=$(gh issue create --title "$title" --label "$label" --body "${body:-Opened by an agent session.}")
+    url=$(gh issue create --title "$title" --label "$label" --assignee @me --body "${body:-Opened by an agent session.}")
     echo "${url##*/}"
     ;;
   claim)
