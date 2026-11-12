@@ -6,13 +6,13 @@ export const HOUR = 11;
 
 /**
  * Opens the game with the read-only test hook (`?test` exposes `window.__game`, dev server only) and waits until it
- * is up: hook there, loader gone. Returns the console errors and uncaught exceptions seen so far (and later).
+ * is up: hook there, loader gone. `query` adds dev params, e.g. `event=coffee`. Returns the console errors and uncaught exceptions seen so far (and later).
  */
-export async function openGame(page: Page, hash = '', hour = HOUR): Promise<string[]> {
+export async function openGame(page: Page, hash = '', hour = HOUR, query = ''): Promise<string[]> {
   const errors: string[] = [];
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(`/?test&seed=${SEED}&time=${hour}${hash ? `#${hash}` : ''}`);
+  await page.goto(`/?test&seed=${SEED}&time=${hour}${query ? `&${query}` : ''}${hash ? `#${hash}` : ''}`);
   // generous: CI renders WebGL in software, the first frames there take seconds
   await page.waitForFunction(() => !!window.__game, undefined, { timeout: 30_000 });
   await expect(page.locator('#loader')).toHaveCount(0, { timeout: 30_000 });
