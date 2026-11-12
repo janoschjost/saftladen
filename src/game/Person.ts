@@ -1007,6 +1007,7 @@ export class Person extends Walker {
     this.path = [];
     this.state = 'idle';
     this.playerChat = { t: seconds, total: seconds, at };
+    this.petting = false; // a chat cuts the petting short (`petDog` sets it again for its own stop)
     this.speaking = true; // answers right away
     return true;
   }

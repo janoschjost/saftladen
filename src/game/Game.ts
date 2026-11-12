@@ -55,6 +55,7 @@ const SEATS_KEY = 'saftladen.seats';
 const STEER_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
 const OVERCAST = new THREE.Color('#8c95a3'); // sky colour in the rain
 const MAX_FRAME = 0.25; // avoid spiral of death after tab switches
+const HIP_HEIGHT = 0.8; // hip pivots of the character rig: the upper body bends here
 
 export class Game {
   private renderer: THREE.WebGLRenderer;
@@ -75,6 +76,7 @@ export class Game {
   private tod = new TimeOfDay();
   private weather = new Weather();
   private petCare = new PetCare();
+  private hip = new THREE.Vector3();
   private rainFx!: RainFx;
   private xmas!: Christmas;
   private settings!: Settings;
@@ -1215,6 +1217,11 @@ export class Game {
     if (w instanceof Person) {
       const r = w.rig;
       const sit = w.sit;
+      // every frame starts from the neutral rig: additive poses below (`+=`) must never carry over from the last frame
+      r.body.rotation.set(0, 0, 0);
+      r.body.position.set(0, 0, 0);
+      r.armL.rotation.set(0, 0, 0);
+      r.armR.rotation.set(0, 0, 0);
       // standing: walk cycle (knees bend while a leg swings forward); sitting: thighs flat, shins down
       r.legL.rotation.x = swing * (1 - sit) - 1.5 * sit;
       r.legR.rotation.x = -swing * (1 - sit) - 1.5 * sit;
@@ -1277,21 +1284,13 @@ export class Game {
         r.body.rotation.y = 0;
       }
       this.poseReaction(w, r);
+      this.posePet(w, r);
       this.poseCup(w, r);
       this.poseSnack(w, r);
       this.poseEmote(w, r);
       this.poseEaster(w, r);
       this.poseGameboy(w, r);
-      w.petAmt += ((w.petting && w.moving < 0.2 ? 1 : 0) - w.petAmt) * 0.12;
-      if (w.petAmt > 0.01) {
-        // bent forward, one hand stroking
-        const a = w.petAmt;
-        const t = performance.now() / 1000 + w.phase;
-        r.body.rotation.x += 0.45 * a;
-        r.body.position.y -= 0.06 * a;
-        r.armR.rotation.x = THREE.MathUtils.lerp(r.armR.rotation.x, -0.45 + Math.sin(t * 7) * 0.18, a);
-        r.armL.rotation.x = THREE.MathUtils.lerp(r.armL.rotation.x, -0.15, a);
-      }
+      this.hinge(r);
     } else if (w instanceof Dog) {
       const r = w.rig;
       const s = Math.sin(ph * 1.6) * 0.8 * w.moving;
@@ -1371,6 +1370,28 @@ export class Game {
       sp.scale.set(sc, sc, 1);
       sp.material.opacity = Math.sin(k * Math.PI) * amt;
     });
+  }
+
+  /** Stroking a pet: bent forward, one hand stroking. Eases out as soon as the petting ends or is cut short (picked up, walking off, a talk). */
+  private posePet(w: Person, r: Person['rig']): void {
+    const on = w.petting && w.moving < 0.2 && !w.held;
+    w.petAmt += ((on ? 1 : 0) - w.petAmt) * 0.12;
+    if (w.petAmt < 0.005) w.petAmt = 0;
+    const a = w.petAmt;
+    if (a <= 0) return;
+    const t = performance.now() / 1000 + w.phase;
+    r.body.rotation.x += 0.45 * a;
+    r.body.position.y -= 0.06 * a;
+    r.armR.rotation.x = THREE.MathUtils.lerp(r.armR.rotation.x, -0.45 + Math.sin(t * 7) * 0.18, a);
+    r.armL.rotation.x = THREE.MathUtils.lerp(r.armL.rotation.x, -0.15, a);
+  }
+
+  /** The upper body leans around the hips, not around the feet: keeps the torso on the legs however far it bends. */
+  private hinge(r: Person['rig']): void {
+    const hip = this.hip.set(0, HIP_HEIGHT, 0).applyEuler(r.body.rotation);
+    r.body.position.x -= hip.x;
+    r.body.position.y += HIP_HEIGHT - hip.y;
+    r.body.position.z -= hip.z;
   }
 
   /** Tired people: heavy eyelids, dark eye bags, a slouch and a yawn now and then (hand over the mouth). */
