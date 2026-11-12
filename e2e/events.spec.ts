@@ -41,11 +41,11 @@ test('dev.event: unknown id only warns, the game starts normally', async ({ page
   expect(errors).toEqual([]);
 });
 
-// Donata (cats) is out with seed 1, so the cat case uses seed 2
+// Donata (cats) is out with seeds 1 and 2, so the cat case uses seed 3
 test('pet.crouch (cat) (?event=pet-cat)', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto('/?test&seed=2&time=11&event=pet-cat');
+  await page.goto('/?test&seed=3&time=11&event=pet-cat');
   await page.waitForFunction(() => !!window.__game, undefined, { timeout: 30_000 });
   await until(page, (g) => g.people.some((p: { petAmt: number; rig: { legL: { rotation: { x: number } } } }) => p.petAmt > 0.9 && p.rig.legL.rotation.x < -0.4), undefined, 40_000);
   expect(errors).toEqual([]);
