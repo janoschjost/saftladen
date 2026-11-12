@@ -764,12 +764,15 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   ================================================================= */
   wall(B.x0, B.z0, B.x1, B.z0, H_CORE, [], { t: 0.3, outer: true }); // core-side long wall
   windowWall(B.x0, B.z0, B.x0, B.z1); // west end: Wassermelonen windows
+  // corner posts: the 0.3 m walls meet on their centre lines, which leaves a 0.15 m notch on the outside of every corner
+  const corner = (x: number, z: number, h: number): void => void rbox(0.3, h, 0.3, ax(x), 0, az(z), mat.wall);
+  corner(B.x0, B.z0, H_CORE);
   if (EXACT) {
+    corner(B.x1, B.z0, H_CORE);
+    corner(B.x1, B.z1, H_LOW);
     windowWall(B.x1, B.z0, B.x1, B.z1); // east end windows
     wall(B.x0, B.z1, 7.5, B.z1, H_LOW, [{ a: -6.7, b: -5.6, door: -1 }, { a: -4.3, b: -2.3 }], { t: 0.3, outer: true }); // solid part, 2 m double doorway (the two wings are dynamic, see `entrance`)
     windowWall(7.5, B.z1, B.x1, B.z1); // long window wall
-    // porch platform in front of the entrance, so people stepping out / arriving do not stand in thin air
-    slab(-4.75, -1.85, B.z1 + 0.15, B.z1 + 2.5, -0.15, 0.02, L(0x8f8f94));
   }
   for (const [a, b] of [
     [4.3, 10.2],
@@ -1597,8 +1600,8 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   const MX = (B.x0 + ANNEX.x1) / 2; // room centre line (x)
   const SZ = AZ - 0.15; // inner face of the south wall
   windowWall(B.x0, B.z1, B.x0, AZ); // west: windows
-  wall(B.x0, AZ, ANNEX.x1, AZ, H_LOW, [], { t: 0.3, outer: true }); // south: solid, the sofa stands against it
-  wall(ANNEX.x1, B.z1, ANNEX.x1, AZ, 3.8, [], { t: 0.3, outer: true });
+  wall(B.x0 - 0.15, AZ, ANNEX.x1 + 0.15, AZ, H_LOW, [], { t: 0.3, outer: true }); // south (runs to the outer faces so the corners close flush): solid, the sofa stands against it
+  wall(ANNEX.x1, B.z1, ANNEX.x1, AZ + 0.15, 3.8, [], { t: 0.3, outer: true });
   const navy = L(0x1c2030);
   const RW = ANNEX.x1 - B.x0 - 0.3; // clear room width
   box(RW, H_LOW, 0.03, MX, 0, SZ - 0.015, navy); // dark painted back wall
@@ -1911,15 +1914,15 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     plant(mx(X - DW / 4), 6.7, 0.9, BASE_H, true);
   }
   // frosted glass wall on low cabinet (Birnen | glass room)
-  slab(19.06, 19.5, CORR + 0.15, B.z1, 0, 1.1, mat.white);
-  segM(19.5, CORR, 19.5, B.z1, 1.1, 2.7, mat.frosted, 0.04);
+  slab(19.06, 19.5, CORR, B.z1, 0, 1.1, mat.white); // starts on the corridor wall line, flush with the wall (no gap beside the door)
+  segM(19.5, CORR, 19.5, B.z1, 0, 2.7, mat.frosted, 0.04); // glass runs down to the floor on the meeting-room side (the cabinet stands against its west face)
   segM(19.5, CORR, 19.5, B.z1, 2.7, 2.8, mat.white, 0.1);
   item('box', 'red-box', 'Rote Kiste', () => box(0.3, 0.14, 0.5, 19.2, 1.1, 5.0, L(0xd8322a)));
 
   /* =================================================================
      GLASS ROOM (x 19.5..26.5) - interior not photographed
   ================================================================= */
-  wall(19.5, CORR, 26.5, CORR, H_CORE, [{ a: 20.2, b: 21.1, door: 1 }]);
+  wall(19.5 - 0.05, CORR, 26.5 + 0.05, CORR, H_CORE, [{ a: 20.2, b: 21.1, door: 1 }]); // ends flush with the outer faces of the 0.1 m top rails of the glass walls
   segM(26.5, CORR, 26.5, B.z1, 0, 2.7, mat.frosted, 0.04);
   segM(26.5, CORR, 26.5, B.z1, 2.7, 2.8, mat.white, 0.1);
   rbox(0.1, 2.8, 0.1, ax(26.5), 0, az(CORR), mat.white);
