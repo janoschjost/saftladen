@@ -40,6 +40,7 @@ import { NavGrid } from './NavGrid';
 import { Office } from './Office';
 import { Person } from './Person';
 import { Presence } from './Presence';
+import { strings } from '../i18n/strings';
 import { RoomEditor } from './RoomEditor';
 import { Social } from './Social';
 import { TimeOfDay, applySky, type SkyRig } from './TimeOfDay';
@@ -737,7 +738,7 @@ export class Game {
         run: () => {
           if (!p.inOffice) {
             this.presence.callBack(p);
-            return `${first} war nicht im Büro, wurde zurückgerufen: nochmal klicken, sobald er da ist`;
+            return strings.presence.event.calledBack(first);
           }
           if (p.held) return null;
           drop(p);
@@ -756,7 +757,7 @@ export class Game {
         run: () => {
           if (!p.inOffice) {
             this.presence.callBack(p);
-            return `${first} war nicht im Büro, wurde zurückgerufen: nochmal klicken, sobald er da ist`;
+            return strings.presence.event.calledBack(first);
           }
           if (p.held) return null;
           drop(p);
@@ -820,10 +821,10 @@ export class Game {
       if (!p || (kind === 'home' && this.presence.homeFull)) return null;
       this.release(p);
       this.presence.send(p, kind, this.nav);
-      return `${p.member.name.split(' ')[0]} geht ${kind === 'home' ? 'ins Homeoffice' : 'raus'}`;
+      return strings.presence.event.leaves[kind](p.member.name.split(' ')[0]);
     };
-    devEvents.register({ id: 'errand', group: 'Anwesenheit', label: 'Jemand geht raus', run: away('errand') });
-    devEvents.register({ id: 'home', group: 'Anwesenheit', label: 'Jemand ins Homeoffice', run: away('home') });
+    devEvents.register({ id: 'errand', group: strings.presence.event.group, label: strings.presence.event.someoneLeaves.errand, run: away('errand') });
+    devEvents.register({ id: 'home', group: strings.presence.event.group, label: strings.presence.event.someoneLeaves.home, run: away('home') });
     devEvents.register({
       id: 'rain',
       group: 'Wetter',
@@ -845,11 +846,11 @@ export class Game {
     });
     devEvents.register({
       id: 'all-back',
-      group: 'Anwesenheit',
-      label: 'Alle zurück',
+      group: strings.presence.event.group,
+      label: strings.presence.panel.callAllBack,
       run: () => {
         this.presence.callAllBack();
-        return 'Alle kommen zurück';
+        return strings.presence.event.allReturn;
       },
     });
   }
@@ -910,7 +911,7 @@ export class Game {
     this.dayHud.setMeter(null);
     const absent = [person, ...needs].filter((p) => !p.inOffice);
     if (absent.length) {
-      this.dayHud.setStatus(`${absent.map((p) => p.member.name.split(' ')[0]).join(' und ')} kommt gleich ins Büro …`);
+      this.dayHud.setStatus(strings.presence.event.arriving(absent.map((p) => p.member.name.split(' ')[0])));
       absent.forEach((p) => this.presence.callBack(p));
     }
   }
@@ -1715,12 +1716,12 @@ export class Game {
       const home = absent.filter((p) => p.awayKind === 'home').length;
       const inside = this.people.filter((p) => p.presence === 'in').length;
       const pets = this.walkers.filter((w) => w instanceof Dog && !w.away).length;
-      const meta = [this.tod.clock, `${inside} im Büro`];
+      const meta = [this.tod.clock, strings.presence.count.inOffice(inside)];
       if (this.weather.rain > 0.3) meta.push('Regen');
       if (this.presence.lunch) meta.push('Mittagspause');
       if (absent.length) {
-        if (absent.length - home > 0) meta.push(`${absent.length - home} weg`);
-        if (home > 0) meta.push(`${home} im Homeoffice`);
+        if (absent.length - home > 0) meta.push(strings.presence.count.errand(absent.length - home));
+        if (home > 0) meta.push(strings.presence.count.home(home));
       }
       meta.push(`${pets} Tiere`);
       if (working) meta.push(`${working} arbeiten`);
@@ -1738,7 +1739,7 @@ export class Game {
             name: p.member.name,
             portrait: p.member.portrait,
             kind: p.awayKind === 'home' ? ('home' as const) : ('errand' as const),
-            moving: p.presence !== 'out',
+            phase: p.presence === 'leaving' ? ('leave' as const) : p.presence === 'returning' ? ('return' as const) : ('out' as const),
             left: p.awayLeft,
           }))
           .sort((a, b) => Number(a.kind === 'home') - Number(b.kind === 'home') || a.left - b.left),
