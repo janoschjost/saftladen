@@ -40,6 +40,7 @@ import { NavGrid } from './NavGrid';
 import { Office } from './Office';
 import { Person } from './Person';
 import { Presence } from './Presence';
+import { strings } from '../i18n/strings';
 import { RoomEditor } from './RoomEditor';
 import { Social } from './Social';
 import { TimeOfDay, applySky, type SkyRig } from './TimeOfDay';
@@ -55,6 +56,7 @@ const SEATS_KEY = 'saftladen.seats';
 const STEER_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
 const OVERCAST = new THREE.Color('#8c95a3'); // sky colour in the rain
 const MAX_FRAME = 0.25; // avoid spiral of death after tab switches
+const HIP_HEIGHT = 0.8; // hip pivots of the character rig: the upper body bends here
 
 export class Game {
   private renderer: THREE.WebGLRenderer;
@@ -75,6 +77,7 @@ export class Game {
   private tod = new TimeOfDay();
   private weather = new Weather();
   private petCare = new PetCare();
+  private hip = new THREE.Vector3();
   private rainFx!: RainFx;
   private xmas!: Christmas;
   private settings!: Settings;
@@ -260,6 +263,7 @@ export class Game {
     this.nav.clear();
     for (const b of this.model.blockers()) this.nav.blockWorld(b.min.x, b.min.z, b.max.x, b.max.z);
     this.nav.sealUnreachable(CORRIDOR_POINT);
+    this.traffic.rebuild();
   }
 
   /** The room editor moved furniture: new nav grid, then desks, seats and standing spots follow. */
@@ -737,7 +741,7 @@ export class Game {
         run: () => {
           if (!p.inOffice) {
             this.presence.callBack(p);
-            return `${first} war nicht im Büro, wurde zurückgerufen: nochmal klicken, sobald er da ist`;
+            return strings.presence.event.calledBack(first);
           }
           if (p.held) return null;
           drop(p);
@@ -756,7 +760,7 @@ export class Game {
         run: () => {
           if (!p.inOffice) {
             this.presence.callBack(p);
-            return `${first} war nicht im Büro, wurde zurückgerufen: nochmal klicken, sobald er da ist`;
+            return strings.presence.event.calledBack(first);
           }
           if (p.held) return null;
           drop(p);
@@ -820,10 +824,10 @@ export class Game {
       if (!p || (kind === 'home' && this.presence.homeFull)) return null;
       this.release(p);
       this.presence.send(p, kind, this.nav);
-      return `${p.member.name.split(' ')[0]} geht ${kind === 'home' ? 'ins Homeoffice' : 'raus'}`;
+      return strings.presence.event.leaves[kind](p.member.name.split(' ')[0]);
     };
-    devEvents.register({ id: 'errand', group: 'Anwesenheit', label: 'Jemand geht raus', run: away('errand') });
-    devEvents.register({ id: 'home', group: 'Anwesenheit', label: 'Jemand ins Homeoffice', run: away('home') });
+    devEvents.register({ id: 'errand', group: strings.presence.event.group, label: strings.presence.event.someoneLeaves.errand, run: away('errand') });
+    devEvents.register({ id: 'home', group: strings.presence.event.group, label: strings.presence.event.someoneLeaves.home, run: away('home') });
     devEvents.register({
       id: 'rain',
       group: 'Wetter',
@@ -845,11 +849,11 @@ export class Game {
     });
     devEvents.register({
       id: 'all-back',
-      group: 'Anwesenheit',
-      label: 'Alle zurück',
+      group: strings.presence.event.group,
+      label: strings.presence.panel.callAllBack,
       run: () => {
         this.presence.callAllBack();
-        return 'Alle kommen zurück';
+        return strings.presence.event.allReturn;
       },
     });
   }
@@ -910,7 +914,7 @@ export class Game {
     this.dayHud.setMeter(null);
     const absent = [person, ...needs].filter((p) => !p.inOffice);
     if (absent.length) {
-      this.dayHud.setStatus(`${absent.map((p) => p.member.name.split(' ')[0]).join(' und ')} kommt gleich ins Büro …`);
+      this.dayHud.setStatus(strings.presence.event.arriving(absent.map((p) => p.member.name.split(' ')[0])));
       absent.forEach((p) => this.presence.callBack(p));
     }
   }
@@ -1165,11 +1169,17 @@ export class Game {
         const a = ws[i];
         const b = ws[j];
         if (a.away || b.away || a.ignores(b) || a.fixed || b.fixed) continue;
-        const dx = b.pos.x - a.pos.x;
-        const dz = b.pos.z - a.pos.z;
+        let dx = b.pos.x - a.pos.x;
+        let dz = b.pos.z - a.pos.z;
         const min = (a.radius + b.radius) * 1.1;
-        const d2 = dx * dx + dz * dz;
-        if (d2 >= min * min || d2 === 0) continue;
+        let d2 = dx * dx + dz * dz;
+        if (d2 >= min * min) continue;
+        if (d2 < 1e-8) {
+          // exactly on top of each other (same destination spot): part them in a fixed direction per pair
+          dx = Math.cos(i * 2.4 + j) * 1e-3;
+          dz = Math.sin(i * 2.4 + j) * 1e-3;
+          d2 = dx * dx + dz * dz;
+        }
         const d = Math.sqrt(d2);
         const push = ((min - d) / d) * 0.5;
         const wa = a.held ? 0 : b.held ? 2 : 1;
@@ -1215,6 +1225,11 @@ export class Game {
     if (w instanceof Person) {
       const r = w.rig;
       const sit = w.sit;
+      // every frame starts from the neutral rig: additive poses below (`+=`) must never carry over from the last frame
+      r.body.rotation.set(0, 0, 0);
+      r.body.position.set(0, 0, 0);
+      r.armL.rotation.set(0, 0, 0);
+      r.armR.rotation.set(0, 0, 0);
       // standing: walk cycle (knees bend while a leg swings forward); sitting: thighs flat, shins down
       r.legL.rotation.x = swing * (1 - sit) - 1.5 * sit;
       r.legR.rotation.x = -swing * (1 - sit) - 1.5 * sit;
@@ -1277,21 +1292,13 @@ export class Game {
         r.body.rotation.y = 0;
       }
       this.poseReaction(w, r);
+      this.posePet(w, r);
       this.poseCup(w, r);
       this.poseSnack(w, r);
       this.poseEmote(w, r);
       this.poseEaster(w, r);
       this.poseGameboy(w, r);
-      w.petAmt += ((w.petting && w.moving < 0.2 ? 1 : 0) - w.petAmt) * 0.12;
-      if (w.petAmt > 0.01) {
-        // bent forward, one hand stroking
-        const a = w.petAmt;
-        const t = performance.now() / 1000 + w.phase;
-        r.body.rotation.x += 0.45 * a;
-        r.body.position.y -= 0.06 * a;
-        r.armR.rotation.x = THREE.MathUtils.lerp(r.armR.rotation.x, -0.45 + Math.sin(t * 7) * 0.18, a);
-        r.armL.rotation.x = THREE.MathUtils.lerp(r.armL.rotation.x, -0.15, a);
-      }
+      this.hinge(r);
     } else if (w instanceof Dog) {
       const r = w.rig;
       const s = Math.sin(ph * 1.6) * 0.8 * w.moving;
@@ -1371,6 +1378,28 @@ export class Game {
       sp.scale.set(sc, sc, 1);
       sp.material.opacity = Math.sin(k * Math.PI) * amt;
     });
+  }
+
+  /** Stroking a pet: bent forward, one hand stroking. Eases out as soon as the petting ends or is cut short (picked up, walking off, a talk). */
+  private posePet(w: Person, r: Person['rig']): void {
+    const on = w.petting && w.moving < 0.2 && !w.held;
+    w.petAmt += ((on ? 1 : 0) - w.petAmt) * 0.12;
+    if (w.petAmt < 0.005) w.petAmt = 0;
+    const a = w.petAmt;
+    if (a <= 0) return;
+    const t = performance.now() / 1000 + w.phase;
+    r.body.rotation.x += 0.45 * a;
+    r.body.position.y -= 0.06 * a;
+    r.armR.rotation.x = THREE.MathUtils.lerp(r.armR.rotation.x, -0.45 + Math.sin(t * 7) * 0.18, a);
+    r.armL.rotation.x = THREE.MathUtils.lerp(r.armL.rotation.x, -0.15, a);
+  }
+
+  /** The upper body leans around the hips, not around the feet: keeps the torso on the legs however far it bends. */
+  private hinge(r: Person['rig']): void {
+    const hip = this.hip.set(0, HIP_HEIGHT, 0).applyEuler(r.body.rotation);
+    r.body.position.x -= hip.x;
+    r.body.position.y += HIP_HEIGHT - hip.y;
+    r.body.position.z -= hip.z;
   }
 
   /** Tired people: heavy eyelids, dark eye bags, a slouch and a yawn now and then (hand over the mouth). */
@@ -1715,12 +1744,12 @@ export class Game {
       const home = absent.filter((p) => p.awayKind === 'home').length;
       const inside = this.people.filter((p) => p.presence === 'in').length;
       const pets = this.walkers.filter((w) => w instanceof Dog && !w.away).length;
-      const meta = [this.tod.clock, `${inside} im Büro`];
+      const meta = [this.tod.clock, strings.presence.count.inOffice(inside)];
       if (this.weather.rain > 0.3) meta.push('Regen');
       if (this.presence.lunch) meta.push('Mittagspause');
       if (absent.length) {
-        if (absent.length - home > 0) meta.push(`${absent.length - home} weg`);
-        if (home > 0) meta.push(`${home} im Homeoffice`);
+        if (absent.length - home > 0) meta.push(strings.presence.count.errand(absent.length - home));
+        if (home > 0) meta.push(strings.presence.count.home(home));
       }
       meta.push(`${pets} Tiere`);
       if (working) meta.push(`${working} arbeiten`);
@@ -1738,7 +1767,7 @@ export class Game {
             name: p.member.name,
             portrait: p.member.portrait,
             kind: p.awayKind === 'home' ? ('home' as const) : ('errand' as const),
-            moving: p.presence !== 'out',
+            phase: p.presence === 'leaving' ? ('leave' as const) : p.presence === 'returning' ? ('return' as const) : ('out' as const),
             left: p.awayLeft,
           }))
           .sort((a, b) => Number(a.kind === 'home') - Number(b.kind === 'home') || a.left - b.left),

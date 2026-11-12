@@ -1,4 +1,5 @@
 import type { NavGrid, Vec2 } from './NavGrid';
+import { Passages } from './Passages';
 import type { Walker } from './Walker';
 
 const RADIUS = 1.3; // how far a body's presence is felt (metres)
@@ -7,6 +8,8 @@ const LOOKAHEAD = 2; // waypoints of each walking body that also count
 const REBUILD = 0.2; // seconds between density rebuilds
 const CLAIM_TTL = 8; // seconds a picked destination stays reserved
 const CLAIM_RADIUS = 1.6;
+const PASSAGE_LOAD = 2; // standing around in a doorway or corridor counts like two bodies on the spot
+const SHUN_COST = 40; // extra path cost per cell of a passage that is to be bypassed
 
 interface Footprint {
   idx: number[];
@@ -24,7 +27,8 @@ interface Claim {
  * The traffic director: one shared picture of where everybody is and is heading.
  * - `route` plans paths on a density-weighted grid, so routes bend around crowds before anyone gets stuck.
  * - `wanderSpot` / `openSpotNear` hand out destinations away from crowds and from spots already picked by others.
- * Walkers keep their own local steering (sidestepping, slowing); the director only decides where and which way.
+ * - `passages` lets only one direction at a time through doorways, corridors and other narrow spots.
+ * Walkers keep their own local steering (sidestepping, slowing); the director only decides where, which way and who goes first.
  */
 export class Traffic {
   private density: Float32Array;
@@ -32,12 +36,20 @@ export class Traffic {
   private claims: Claim[] = [];
   private clock = REBUILD;
   private bodies: readonly Walker[] = [];
+  readonly passages: Passages;
 
   constructor(private nav: NavGrid) {
     this.density = new Float32Array(nav.cols * nav.rows);
+    this.passages = new Passages(nav);
+  }
+
+  /** The walkable floor changed (furniture moved): find the narrow passages again. */
+  rebuild(): void {
+    this.passages.rebuild();
   }
 
   update(dt: number, walkers: readonly Walker[]): void {
+    this.passages.tick(dt, walkers);
     for (const c of this.claims) c.ttl -= dt;
     this.claims = this.claims.filter((c) => c.ttl > 0 && !c.by.away);
     this.bodies = walkers;
@@ -86,15 +98,25 @@ export class Traffic {
     return self.companion ? [self, self.companion] : [self];
   }
 
-  /** Crowd-aware path for `self`. `avoid` scales how much crowds are shunned (0 = plain shortest path). */
-  route(self: Walker, to: Vec2, avoid = 3): Vec2[] {
-    if (avoid <= 0) return this.nav.findPath(self.pos, to);
+  /**
+   * Crowd-aware path for `self`. `avoid` scales how much crowds are shunned (0 = plain shortest path).
+   * With `shun`, the cells of that passage are made very expensive, so the route takes another way if there is one.
+   */
+  route(self: Walker, to: Vec2, avoid = 3, shun = -1): Vec2[] {
+    if (avoid <= 0 && shun < 0) return this.nav.findPath(self.pos, to);
     const mine = this.others(self);
     this.apply(mine, -1);
     const cost = new Float32Array(this.density.length);
-    for (let i = 0; i < cost.length; i++) cost[i] = Math.max(0, this.density[i]) * avoid;
+    for (let i = 0; i < cost.length; i++) cost[i] = Math.max(0, this.density[i]) * avoid + (shun >= 0 && this.passages.atIndex(i) === shun ? SHUN_COST : 0);
     this.apply(mine, 1);
     return this.nav.findPath(self.pos, to, cost);
+  }
+
+  /** A route to `to` that does not use `passage` at all, or null if there is no other way. */
+  detour(self: Walker, to: Vec2, passage: number): Vec2[] | null {
+    if (this.passages.at(self.pos) === passage) return null;
+    const path = this.route(self, to, 3, passage);
+    return path.length && !this.passages.crosses(path, passage) ? path : null;
   }
 
   private claimed(p: Vec2, self: Walker): number {
@@ -107,7 +129,7 @@ export class Traffic {
     const { cx, cz } = this.nav.toCell(p);
     const own = this.prints.get(self)?.idx.indexOf(cz * this.nav.cols + cx) ?? -1;
     const mine = own >= 0 ? this.prints.get(self)!.val[own] : 0;
-    return Math.max(0, this.density[cz * this.nav.cols + cx] - mine) + this.claimed(p, self) * 0.8;
+    return Math.max(0, this.density[cz * this.nav.cols + cx] - mine) + this.claimed(p, self) * 0.8 + (this.passages.at(p) >= 0 ? PASSAGE_LOAD : 0);
   }
 
   /** How many bodies (people and pets, not away or held) stand within `r` of `p`. */
@@ -154,7 +176,7 @@ export class Traffic {
         const { cx, cz } = this.nav.toCell(q);
         if (!this.nav.walkable(cx, cz)) continue;
         const c = this.nav.center(cx, cz);
-        const score = Math.max(0, this.density[cz * this.nav.cols + cx]) + this.claimed(c, group[0]) * 0.8 + d * 0.15;
+        const score = Math.max(0, this.density[cz * this.nav.cols + cx]) + this.claimed(c, group[0]) * 0.8 + d * 0.15 + (this.passages.at(c) >= 0 ? PASSAGE_LOAD : 0);
         if (score < bestScore) {
           bestScore = score;
           best = c;
