@@ -25,6 +25,7 @@ import { Toilets } from './Toilets';
 import { Traffic } from './Traffic';
 import { Walker } from './Walker';
 import { Weather } from './Weather';
+import { Welcome } from './Welcome';
 import { random } from './rng';
 
 const BODY_RADIUS = 0.2; // how close to a wall a walker may get (nav cells are 0.5 m)
@@ -72,6 +73,8 @@ export class Sim {
   readonly tod = new TimeOfDay();
   readonly weather = new Weather();
   readonly petCare = new PetCare();
+  /** the team welcoming a remote worker who came to the office */
+  readonly welcome = new Welcome();
   private stands: (w: Walker) => boolean;
 
   constructor({ scene = new THREE.Scene(), cycle, seats = {}, homes = false, portrait = () => null, stands = () => false, prepare }: SimOptions = {}) {
@@ -187,6 +190,7 @@ export class Sim {
       w.update(dt, this.nav, this.walkers);
     }
     this.social.update(dt, this.people, this.nav, this.traffic);
+    this.welcome.update(dt, this.people, this.presence, this.social);
     this.petCare.update(dt, this.people, this.pets, this.nav);
     this.meetingRoom.update(dt, this.people, this.nav, this.tod.hour);
     this.pod.update(dt, this.people, this.nav);

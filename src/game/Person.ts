@@ -274,7 +274,7 @@ export class Person extends Walker {
   emoteAmt = 0;
   emoteDir: 1 | -1 = 1;
   /** body language during a talk (laugh, shrug, point, ...); `t` runs from a small negative delay up to `dur` */
-  reaction: { kind: Reaction; t: number; dur: number } | null = null;
+  reaction: { kind: Reaction; t: number; dur: number; free?: boolean } | null = null;
   private emoteIn = EMOTE_GAP.min + random() * (EMOTE_GAP.max - EMOTE_GAP.min);
   /** walking to / sitting in the meeting room */
   meetJob: MeetJob | null = null;
@@ -676,7 +676,7 @@ export class Person extends Walker {
     if (this.drinkAmt < 0.005) this.drinkAmt = 0;
     this.updateEmote(dt);
     const rc = this.reaction;
-    if (rc && ((rc.t += dt) >= rc.dur || !this.talk || this.moving > 0.3)) this.reaction = null;
+    if (rc && ((rc.t += dt) >= rc.dur || (!this.talk && !rc.free) || this.moving > 0.3)) this.reaction = null;
     super.update(dt, nav, others);
     this.clock += dt;
     if (this.rig.setMood && (this.moodTimer -= dt) <= 0) {
@@ -724,6 +724,12 @@ export class Person extends Walker {
   react(kind: Reaction, delay = 0): void {
     if (!this.talk || this.held || this.controlled) return;
     this.reaction = { kind, t: -delay, dur: REACTION_TIME[kind] };
+  }
+
+  /** A welcome gesture (cheer, wave) that needs no conversation: for greeting somebody who just came in. */
+  welcome(kind: Reaction, delay = 0): void {
+    if (this.presence !== 'in' || this.held || (this.controlled && !this.scripted)) return;
+    this.reaction = { kind, t: -delay, dur: REACTION_TIME[kind] * 1.6, free: true };
   }
 
   /** Free to do a little gesture: sitting at the desk working, or standing around doing nothing. */
