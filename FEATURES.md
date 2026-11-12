@@ -80,6 +80,8 @@ Rules:
 - `place.pod` Wooden pod: two people now and then sit on the benches together — `src/game/Pod.ts`, e2e: `e2e/events.spec.ts`, url: `/?seed=1&time=11&event=pod` (#38)
 - `place.booth` Phone booth: one person on the stool, door shut during the call — `src/game/PhoneBooth.ts`, e2e: `e2e/events.spec.ts`, url: `/?seed=1&time=11&event=phone-booth` (#38)
 - `place.meeting` Meetings in the glass room (2/4/6, TV shows slides or stays off): seats side chairs first, door shut and doorway blocked, stragglers give up, leave together; speaker gestures, listeners nod — `src/game/Meeting.ts`, `src/game/Game.ts`, e2e: `e2e/events.spec.ts`, url: `/?seed=1&time=11&event=meeting-room` (#38)
+- `place.toilet` WC cabins in the washroom (orange, yellow): now and then somebody goes, sits on the toilet and plays the Game Boy (same handheld pose as the day task), the odd ♪ / ! bubble; random stay 20–50 s; door locked and the light above it red while occupied, green when free — `src/game/Toilets.ts`, `src/render/officeModel.ts`, test: `src/game/Toilets.test.ts`, e2e: `e2e/events.spec.ts`, url: `/?seed=1&time=11&event=toilet` (#17)
+- `place.toilet-queue` An occupied cabin is never entered by a second person: they take the other cabin, else wait in front of the cabins (at most 2) and go in when one frees, or give up after 25–45 s — `src/game/Toilets.ts`, test: `src/game/Toilets.test.ts`, e2e: `e2e/events.spec.ts`, url: `/?seed=1&time=11&event=toilet&event=toilet&event=toilet` (#17)
 
 ## Social
 - `social.start` Groups may start talking: pairs rarely, bigger groups almost always; friends more readily; at a quiet spot, not in a crowd — `src/game/Social.ts`
@@ -101,7 +103,7 @@ Rules:
 - `door.auto` Interior doors swing open within 1.25 m and stay open 0.9 s after — `src/game/Doors.ts`
 - `door.rest` At rest closed / ajar / propped, rerolled every 30–120 s — `src/game/Doors.ts`
 - `door.player` Walk-mode player can toggle the door they face; the choice holds a while — `src/game/Doors.ts`
-- `door.lock` Doors locked during a meeting or booth call — `src/game/Doors.ts`, url: `/?seed=1&time=11&event=meeting-room` (#38)
+- `door.lock` Doors locked during a meeting, booth call or while somebody sits on the toilet — `src/game/Doors.ts`, url: `/?seed=1&time=11&event=meeting-room` (#38, #17)
 
 ## Pets
 - `pet.roster` Dogs Tala (Ramon), Ellie (Janosch), Harry (Nina), Mira (terrier, Fabian); cats Angus and Binx (Donata) — `src/data/team.ts`

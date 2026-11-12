@@ -15,6 +15,7 @@ const cases: [string, string, (g: any) => unknown][] = [
   ['pet.crouch (dog)', 'pet-dog', (g) => g.people.some((p: { petAmt: number; rig: { legL: { rotation: { x: number } } } }) => p.petAmt > 0.9 && p.rig.legL.rotation.x < -0.4)],
   ['place.printer', 'printer', (g) => g.people.some((p: { printJob?: unknown }) => p.printJob)],
   ['place.foosball', 'foosball', (g) => g.people.filter((p: { foosJob?: unknown }) => p.foosJob).length === 2],
+  ['place.toilet', 'toilet', (g) => g.toilets.cabins.some((c: { session?: unknown }) => c.session)],
 ];
 
 for (const [id, event, reached] of cases) {
@@ -69,5 +70,33 @@ test('office.door-lettering (?event=door-lettering): letters move with the door 
   await expect.poll(async () => (await doors()).some((d) => d.open > 0.9 && d.moved > 0.01), { timeout: 45_000 }).toBe(true);
   await page.evaluate(() => (window as unknown as { dev: { trigger: (id: string) => string } }).dev.trigger('door-lettering'));
   await expect.poll(async () => (await doors()).some((d) => d.open < 0.001 && d.moved < 0.001), { timeout: 45_000 }).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Cabin = { session: { seated: boolean; person: any } | null };
+
+// Sitting down and the handheld pose need the walk to the washroom (minutes in software WebGL): covered by Toilets.test.ts
+test('place.toilet: the cabin is taken at once, its light turns red (?event=toilet)', async ({ page }) => {
+  const errors = await openGame(page, '', undefined, 'event=toilet');
+  // the light follows on the next simulation step
+  await until(page, (g) => g.toilets.cabins.some((c: Cabin, i: number) => c.session && g.model.toilets.cabins[i].sign.color.getHex() === 0xe0342c), undefined, 30_000);
+  const state = await read(page, (g) => {
+    const i = g.toilets.cabins.findIndex((c: Cabin) => c.session);
+    const c = g.toilets.cabins[i];
+    return { sign: g.model.toilets.cabins[i].sign.color.getHex(), occupant: c.seat.occupant === c.session.person };
+  });
+  expect(state).toEqual({ sign: 0xe0342c, occupant: true });
+  expect(errors).toEqual([]);
+});
+
+test('place.toilet-queue: both cabins taken, the third person waits in front (?event=toilet ×3)', async ({ page }) => {
+  const errors = await openGame(page, '', undefined, 'event=toilet&event=toilet&event=toilet');
+  await until(page, (g) => g.toilets.queue.length === 1 && g.toilets.cabins.every((c: Cabin) => c.session), undefined, 30_000);
+  const ok = await read(page, (g) => {
+    const waiting = g.toilets.queue[0].person;
+    return g.toilets.cabins.every((c: Cabin) => c.session!.person !== waiting) && !waiting.inMeeting;
+  });
+  expect(ok).toBe(true);
   expect(errors).toEqual([]);
 });
