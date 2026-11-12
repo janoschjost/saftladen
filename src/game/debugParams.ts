@@ -8,6 +8,7 @@ import { getSeed, setSeed } from './rng';
  *   &follow           camera follows the person (orbit view)
  *   ?day              starts "Ein Tag im Leben" as Jan Hasler; ?day=<person-id> for somebody else
  *   ?seed=<n>         seeds the random numbers (see rng.ts): same seed, same start. The console logs every page's seed.
+ *   ?test             only exposes `window.__game` (read-only test hook for the Playwright tests in e2e/)
  * Example: http://localhost:5173/?snack&time=14&follow
  */
 
@@ -21,7 +22,7 @@ export function applySeedParam(): void {
 
 export function applyDebugParams(game: Game): void {
   const q = new URLSearchParams(location.search);
-  if (!q.has('snack') && !q.has('time') && !q.has('day') && !q.has('seed')) return;
+  if (!['snack', 'time', 'day', 'seed', 'test'].some((k) => q.has(k))) return;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const g = game as any;
   (window as unknown as { __game: Game }).__game = game;
