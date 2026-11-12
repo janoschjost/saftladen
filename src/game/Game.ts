@@ -315,6 +315,19 @@ export class Game {
       registerDevSection(overlaySection(this.debug));
       // console: dev.overlay('grid' | 'states' | 'paths', true)
       Object.assign((window as unknown as { dev: object }).dev, { overlay: (kind: OverlayKind, on = true) => this.debug?.set(kind, on) });
+      registerDevSection(
+        castSection({
+          list: () => [...this.people.map((p) => ({ id: p.id, name: p.member.name.split(' ')[0], kind: 'person' as const })), ...this.pets.map((d) => ({ id: d.id, name: d.name, kind: 'pet' as const }))],
+          removed: () => this.sim.removedIds,
+          set: (id, removed) => this.setRemoved(id, removed),
+        }),
+      );
+      // console: dev.remove('jan-hasler'), dev.restore('jan-hasler'), dev.removed()
+      Object.assign((window as unknown as { dev: object }).dev, {
+        remove: (id: string) => this.setRemoved(id, true),
+        restore: (id: string) => this.setRemoved(id, false),
+        removed: () => this.sim.removedIds,
+      });
     }
     this.registerViewEvents();
     new DevPanel(this.events);
@@ -784,6 +797,28 @@ export class Game {
         return this.weather.raining ? 'Es regnet' : 'Der Regen hört auf';
       },
     });
+  }
+
+  /**
+   * Dev: takes a person or pet out of the sim (what they do ends cleanly, they vanish) or brings them back into it.
+   * Returns a status text, or null for an unknown id. Not saved: a reload brings everybody back.
+   */
+  setRemoved(id: string, removed: boolean): string | null {
+    const who = this.walkers.find((w) => w.id === id);
+    if (removed && who) {
+      // what the player holds on to lets go first
+      if (this.selected === who) this.selected = null;
+      if (this.followed === who) this.followed = null;
+      if (this.dragged === who) this.dragged = null;
+      if (who instanceof Person) {
+        if (this.day?.person === who) this.endDay(false);
+        this.release(who);
+        who.playerChat = null;
+        who.petting = false;
+        who.snackLeft = 0;
+      }
+    }
+    return this.sim.setRemoved(id, removed);
   }
 
   /** Walk mode: do what the crosshair points at (open / close a door, talk to somebody). */

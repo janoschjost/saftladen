@@ -128,6 +128,9 @@ export class Dog extends Walker {
     return !this.script && this.pos.z > DOOR.z;
   }
 
+  /** dev: taken out of the sim, stays hidden (also when the owner comes in) until restored */
+  removed = false;
+
   /** Disappear (together with the owner, or when the owner is gone already). Does nothing when already away. */
   sendAway(): void {
     this.outWait = 0;
@@ -148,7 +151,7 @@ export class Dog extends Walker {
 
   /** Appear on the porch at the same moment as the owner and walk in with them. */
   arriveWith(owner: Person): void {
-    if (!this.away) return;
+    if (!this.away || this.removed) return;
     this.setAway(false);
     this.pos = { ...owner.lane.out, x: owner.lane.out.x + 0.2 };
     this.prev = { ...this.pos };
@@ -159,6 +162,11 @@ export class Dog extends Walker {
   /** Pets leave through the door with their owner and come back after them. */
   protected override control(dt: number, nav: NavGrid): boolean {
     const o = this.owner;
+    if (this.removed) {
+      this.petted = null;
+      this.sendAway();
+      return true;
+    }
     if (o.presence === 'out' && !this.away) {
       // owner is gone: keep running to the door and leave too (give up after a while)
       this.outWait += dt;
