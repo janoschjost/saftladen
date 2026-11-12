@@ -17,7 +17,7 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
    `npm run dev` in a worktree picks the next free port from 5174 (the main checkout keeps 5173).
 4. **Implement.** Read the issue and all of its comments. Follow `README.md` and the existing code. Keep the change scoped to the issue.
 5. **Done means:**
-   - `npm run build` passes. CI (`.github/workflows/ci.yml`) runs build and tests on every PR; a red check is not done.
+   - `npm run build` passes. CI (`.github/workflows/ci.yml`) runs build and Vitest on every PR; a red check is not done. The e2e tests run on CI only with the `e2e` label, so run them locally.
    - `npm test` and `npm run test:e2e` pass, and new or changed behavior has a test named after the `FEATURES.md` id:
      - logic → Vitest, `*.test.ts` next to the code. Logic a test needs is pulled apart from rendering; randomness comes from `src/game/rng.ts` (`setSeed` in tests), never `Math.random()`.
      - interactions and UI (keys, hashes, panels, parts working together) → Playwright, `e2e/*.spec.ts`, reading the game through the `?test` hook (see README).

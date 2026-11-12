@@ -2,8 +2,9 @@ name: CI
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
     paths-ignore: ['**/*.md']
+  workflow_dispatch:
   push:
     branches: [main]
     paths-ignore: ['**/*.md']
@@ -12,12 +13,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # label events in their own group: adding any label must not cancel a running build
+  group: ci-${{ github.ref }}-${{ github.event.action == 'labeled' && 'label' || 'run' }}
   cancel-in-progress: true
 
 jobs:
   check:
     name: Build and test
+    if: github.event.action != 'labeled'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -30,10 +33,11 @@ jobs:
       - run: npm run build
       - run: npm test --if-present
 
-  # Playwright costs minutes: only on PRs that are ready for review (main is only reached through them)
+  # Playwright costs ~5 Actions minutes per run: only on PRs labeled `e2e` (runs again on each push while the label
+  # is on) or when started by hand. Locally `npm run test:e2e` is mandatory before every PR (AGENTS.md).
   e2e:
     name: E2E (Playwright)
-    if: github.event_name == 'pull_request' && !github.event.pull_request.draft
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'e2e')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
