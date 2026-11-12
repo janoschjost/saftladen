@@ -8,6 +8,7 @@ import { petPortrait } from '../render/petPortrait';
 import { HOME_COUNT, HOME_LABELS, HomeOffice, ROOM_COUNT, heldPoses, type ArmPose } from '../render/homeOffice';
 import { SIT_DROP } from '../render/officeBuilder';
 import { Views, type ViewMode } from '../render/Views';
+import { Bubbles } from '../render/Bubbles';
 import { DayHud } from '../ui/DayHud';
 import { DAY_STORIES } from '../data/dayStories';
 import { formatTime, type DayCtx, type DayTask } from './Day';
@@ -141,6 +142,9 @@ export class Game {
   private aim: { text: string; act: () => void } | null = null;
   /** reply bubble above the person the player talked to */
   private reply: { who: Person; text: string; t: number } | null = null;
+  /** speech bubbles in the scene (read by the e2e tests: `__game.bubbles.state`) */
+  private bubbles = new Bubbles(this.scene);
+  private bubbleClock = performance.now();
   private keys = new Set<string>();
   /** Shift is down (fallback when the Shift keydown went missing, e.g. pressed before the window had focus) */
   private shift = false;
@@ -1799,6 +1803,16 @@ export class Game {
     return new Map(this.office.desks.filter((d) => d.owner).map((d) => [d.number, d.owner!.id]));
   }
 
+  /** World point on top of the walker's head, following the posed body (sitting, leaning, hopping). */
+  private headTop(w: Walker): THREE.Vector3 {
+    w.root.updateMatrixWorld(true);
+    if (w instanceof Dog) return w.rig.body.localToWorld(new THREE.Vector3(0, w.rig.face.y + w.rig.face.r, w.rig.face.z));
+    // rig heights are in metres; the body's local units are unscaled
+    const s = w.root.scale.y || 1;
+    if (w instanceof Person) return w.rig.body.localToWorld(new THREE.Vector3(0, w.rig.headHeight / s, 0));
+    return w.root.localToWorld(new THREE.Vector3(0, w.headHeight / s, 0));
+  }
+
   private project(w: Walker, extra = 0.25): { x: number; y: number } {
     const v = new THREE.Vector3(w.root.position.x, w.headHeight + extra, w.root.position.z).project(this.views.camera);
     if (v.z > 1 || v.z < -1) return { x: -9999, y: -9999 }; // behind the camera
@@ -1831,17 +1845,27 @@ export class Game {
     const meet = this.meetingRoom.current;
     const coffee = this.kitchen.current;
     const rep = this.reply;
-    this.overlay.setBubbles([
-      ...(this.easter.angry && !this.easter.angry.who.away ? [{ id: `angry-${this.easter.angry.who.id}`, text: this.easter.angry.text, ...this.project(this.easter.angry.who, 0.55) }] : []),
-      ...(rep && !rep.who.away ? [{ id: `reply-${rep.who.id}`, text: rep.text, ...this.project(rep.who, 0.55) }] : []),
-      ...this.social.active.filter((c) => c.phase !== 'gather' && c.text).map((c) => ({ id: c.speaker.id, text: c.text, ...this.project(c.speaker, 0.55) })),
-      ...(coffee?.phase === 'chat' ? [{ id: coffee.speaker.id, text: coffee.text, ...this.project(coffee.speaker, 0.55) }] : []),
-      ...(this.meetingRoom.casual ? [{ id: this.meetingRoom.casual.speaker.id, text: this.meetingRoom.casual.text, ...this.project(this.meetingRoom.casual.speaker, 0.55) }] : []),
-      ...this.pets
-        .filter((d) => !d.away && (d.barkT > 0 || (d.petted && d.happy > 0.5)))
-        .map((d) => ({ id: `pet-${d.id}`, text: d.barkT > 0 ? (d.isCat ? 'Miau!' : 'Wuff!') : '♥', ...this.project(d, 0.35) })),
-      ...(meet?.phase === 'session' ? [{ id: meet.speaker.id, text: meet.text, ...this.project(meet.speaker, 0.55) }] : []),
-    ]);
+    const say = (id: string, text: string, who: Walker) => ({ id, text, head: this.headTop(who) });
+    const now = performance.now();
+    const bubbleDt = Math.min(0.1, (now - this.bubbleClock) / 1000);
+    this.bubbleClock = now;
+    this.bubbles.update(
+      [
+        ...(this.easter.angry && !this.easter.angry.who.away ? [say(`angry-${this.easter.angry.who.id}`, this.easter.angry.text, this.easter.angry.who)] : []),
+        ...(rep && !rep.who.away ? [say(`reply-${rep.who.id}`, rep.text, rep.who)] : []),
+        ...this.social.active.filter((c) => c.phase !== 'gather' && c.text).map((c) => say(c.speaker.id, c.text, c.speaker)),
+        ...(coffee?.phase === 'chat' ? [say(coffee.speaker.id, coffee.text, coffee.speaker)] : []),
+        ...(this.meetingRoom.casual ? [say(this.meetingRoom.casual.speaker.id, this.meetingRoom.casual.text, this.meetingRoom.casual.speaker)] : []),
+        ...this.pets
+          .filter((d) => !d.away && (d.barkT > 0 || (d.petted && d.happy > 0.5)))
+          .map((d) => say(`pet-${d.id}`, d.barkT > 0 ? (d.isCat ? 'Miau!' : 'Wuff!') : '♥', d)),
+        ...(meet?.phase === 'session' ? [say(meet.speaker.id, meet.text, meet.speaker)] : []),
+      ],
+      this.views.camera,
+      window.innerWidth,
+      window.innerHeight,
+      bubbleDt,
+    );
     this.metaTimer -= 1 / 60;
     if (this.metaTimer <= 0) {
       this.metaTimer = 0.5;
