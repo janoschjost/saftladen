@@ -86,7 +86,7 @@ Rules:
 - `social.join` Others join running talks; turn-taking with pauses and a wrap-up line — `src/game/Social.ts`
 - `social.leave` Newcomer greets, a bored member says bye (least close first), topic drifts, the group closes the gap — `src/game/Social.ts`
 - `social.friendship` Friendship grows per talk and fades slowly; seeded by same job or both owning a dog; friends talk longer and seek each other out — `src/game/Social.ts`
-- `social.bubbles` Wordless bubbles (… 😄 ? ! !? ♪, 👋 join/leave, 💡 new topic) with matching body reaction; discussions show more ! / !? — `src/game/Chatter.ts`, `src/ui/Overlay.ts`
+- `social.bubbles` Wordless bubbles (… 😄 ? ! !? ♪, 👋 join/leave, 💡 new topic) with matching body reaction; discussions show more ! / !?. Every bubble (talks, coffee, meetings, replies, easter egg, pets) is a 3D sprite on the speaker's head with a tail, the same small gap seated or standing; depth-tested (hidden behind walls, furniture and the roof), world-sized within a readable min/max screen size, neighbours stack instead of overlapping, fades in/out and pops on each new line — `src/game/Chatter.ts`, `src/render/Bubbles.ts`, `src/render/bubbleLayout.ts`, test: `src/render/bubbleLayout.test.ts`, e2e: `e2e/bubbles.spec.ts`, url: `/?seed=1&time=11&event=meeting-room` (#95)
 - `social.crowd` Too many people in one spot: no chat starts, they clear out — `src/game/Social.ts`, `src/game/Walker.ts`
 - `social.walk-talk` Walk mode talk: person stops, faces the player and replies, unless busy — `src/game/Game.ts`, `src/game/Person.ts`
 
