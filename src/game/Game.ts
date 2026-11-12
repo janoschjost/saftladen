@@ -585,6 +585,7 @@ export class Game {
     }
     this.deskLights.update(dt);
     this.coatRacks.update();
+    this.office.updateScreens(dt);
     this.timeControl.sync();
     this.views.update(dt);
     this.updateHomes(dt);

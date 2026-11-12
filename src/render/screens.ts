@@ -317,7 +317,29 @@ const media: Draw[] = [
 
 const SETS: Record<ScreenKind, Draw[]> = { code, design, data, sheet, docs, media };
 
-const cache = new Map<string, THREE.MeshBasicMaterial>();
+/** One shared texture per kind + picture: the still picture, plus the canvas the GPU texture shows. */
+interface Entry {
+  kind: ScreenKind;
+  mat: THREE.MeshBasicMaterial;
+  tex: THREE.CanvasTexture;
+  live: HTMLCanvasElement;
+  base: HTMLCanvasElement;
+  /** desks showing this picture right now; unused pictures aren't redrawn */
+  uses: number;
+  /** animation clock, runs faster while somebody types */
+  t: number;
+  seed: number;
+}
+
+const cache = new Map<string, Entry>();
+const byMat = new Map<THREE.Material, Entry>();
+
+const mk = (): HTMLCanvasElement => {
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  return c;
+};
 
 /** How many different pictures exist for a kind. */
 export const screenVariants = (kind: ScreenKind): number => SETS[kind].length;
@@ -327,16 +349,171 @@ export function screenMaterial(kind: ScreenKind, variant: number): THREE.MeshBas
   const set = SETS[kind];
   const v = ((Math.floor(variant) % set.length) + set.length) % set.length;
   const key = `${kind}:${v}`;
-  let m = cache.get(key);
-  if (!m) {
-    const canvas = document.createElement('canvas');
-    canvas.width = W;
-    canvas.height = H;
-    set[v](canvas.getContext('2d')!, seeded(0x9e3779b1 ^ (v * 7919) ^ kind.length * 131 ^ kind.charCodeAt(0) * 17));
-    const tex = new THREE.CanvasTexture(canvas);
+  let e = cache.get(key);
+  if (!e) {
+    const seed = 0x9e3779b1 ^ (v * 7919) ^ kind.length * 131 ^ kind.charCodeAt(0) * 17;
+    const base = mk();
+    set[v](base.getContext('2d')!, seeded(seed));
+    const live = mk();
+    live.getContext('2d')!.drawImage(base, 0, 0);
+    const tex = new THREE.CanvasTexture(live);
     tex.colorSpace = THREE.SRGBColorSpace;
-    m = new THREE.MeshBasicMaterial({ map: tex });
-    cache.set(key, m);
+    const mat = new THREE.MeshBasicMaterial({ map: tex });
+    e = { kind, mat, tex, live, base, uses: 0, t: (seed >>> 8) % 97, seed };
+    cache.set(key, e);
+    byMat.set(mat, e);
   }
-  return m;
+  return e.mat;
+}
+
+/** A desk starts (+1) or stops (-1) showing this material; only shown pictures animate. */
+export function useScreen(mat: THREE.Material, delta: 1 | -1): void {
+  const e = byMat.get(mat);
+  if (e) e.uses = Math.max(0, e.uses + delta);
+}
+
+const TICK = 1 / 10; // screens redraw 10x a second, not every frame
+let acc = 0;
+
+/** Animates shown screens at a low frame rate. `typing` = materials whose sitter is working right now (content moves faster). */
+export function tickScreens(dt: number, typing: ReadonlySet<THREE.Material>): void {
+  acc += dt;
+  if (acc < TICK) return;
+  const step = Math.min(acc, 0.5);
+  acc = 0;
+  for (const e of cache.values()) {
+    if (e.uses <= 0) continue;
+    e.t += step * (typing.has(e.mat) ? 1 : 0.25);
+    const c = e.live.getContext('2d')!;
+    paint(c, e);
+    e.tex.needsUpdate = true;
+  }
+}
+
+const HEAD = 10; // title / toolbar strip that stays put while the content moves
+
+/** Redraws the base picture and animates on top of it. */
+function paint(c: Ctx, e: Entry): void {
+  const { t, base } = e;
+  c.drawImage(base, 0, 0);
+  switch (e.kind) {
+    case 'code':
+    case 'docs': {
+      // content scrolls up in lines, wraps around; a cursor blinks at the bottom
+      const off = Math.floor(t * 7) % (H - HEAD);
+      c.drawImage(base, 0, HEAD + off, W, H - HEAD - off, 0, HEAD, W, H - HEAD - off);
+      c.drawImage(base, 0, HEAD, W, off, 0, H - off, W, off);
+      if (Math.floor(t * 2) % 2 === 0) rect(c, e.kind === 'code' ? '#e6e9f2' : '#1c2430', 54 + (Math.floor(t * 3) % 6) * 6, 92, 3, 5);
+      break;
+    }
+    case 'design': {
+      // selection box and cursor drifting over the artboard
+      const x = 40 + (Math.sin(t * 0.9) * 0.5 + 0.5) * 80;
+      const y = 22 + (Math.cos(t * 0.7) * 0.5 + 0.5) * 60;
+      c.strokeStyle = '#3b82f6';
+      c.lineWidth = 1;
+      c.strokeRect(Math.round(x) + 0.5, Math.round(y) + 0.5, 34, 18);
+      rect(c, '#3b82f6', x - 1, y - 1, 3, 3);
+      rect(c, '#3b82f6', x + 33, y + 17, 3, 3);
+      rect(c, '#ffffff', x + 40, y + 24, 5, 5);
+      break;
+    }
+    case 'data': {
+      // a sweeping marker over the charts, one bar pulses
+      const x = 8 + ((t * 14) % (W - 16));
+      rect(c, 'rgba(59,130,246,0.25)', x, 42, 3, 70);
+      rect(c, 'rgba(242,169,59,0.45)', 14 + (Math.floor(t * 1.5) % 9) * 12, 96, 8, 10);
+      break;
+    }
+    case 'sheet': {
+      // the selected cell hops around, formula bar blinks
+      const cx = 20 + (Math.floor(t * 1.3) % 6) * 28;
+      const cy = 19 + (Math.floor(t * 0.9) % 11) * 8;
+      c.strokeStyle = '#217346';
+      c.lineWidth = 1;
+      c.strokeRect(cx + 0.5, cy + 0.5, 27, 7);
+      if (Math.floor(t * 2) % 2 === 0) rect(c, '#1c2430', cx + 4, cy + 2, 2, 4);
+      break;
+    }
+    case 'media': {
+      // playhead runs along the timeline / feed highlights one post after another
+      const x = 6 + ((t * 10) % (W - 12));
+      rect(c, '#ffffff', x, 68, 1, 48);
+      const k = Math.floor(t * 0.8) % 9;
+      c.strokeStyle = '#ffffff';
+      c.lineWidth = 1;
+      c.strokeRect(30 + (k % 3) * 46 - 0.5, 16 + Math.floor(k / 3) * 34 - 0.5, 43, 31);
+      break;
+    }
+  }
+}
+
+/** The meeting-room TV: a Mario-Kart-like race, always running. Own texture, redrawn at the same low rate. */
+export function raceMaterial(): THREE.MeshBasicMaterial {
+  if (race) return race.mat;
+  const live = mk();
+  const tex = new THREE.CanvasTexture(live);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.MeshBasicMaterial({ map: tex });
+  race = { mat, tex, live, t: 0, acc: 0 };
+  drawRace(live.getContext('2d')!, 0);
+  tex.needsUpdate = true;
+  return mat;
+}
+
+let race: { mat: THREE.MeshBasicMaterial; tex: THREE.CanvasTexture; live: HTMLCanvasElement; t: number; acc: number } | null = null;
+
+/** Advances the race; called once per frame, redraws at 10 fps. */
+export function tickRace(dt: number): void {
+  if (!race) return;
+  race.t += dt;
+  race.acc += dt;
+  if (race.acc < TICK) return;
+  race.acc = 0;
+  drawRace(race.live.getContext('2d')!, race.t);
+  race.tex.needsUpdate = true;
+}
+
+function drawRace(c: Ctx, t: number): void {
+  const horizon = 44;
+  const sky = c.createLinearGradient(0, 0, 0, horizon);
+  sky.addColorStop(0, '#5fb8ff');
+  sky.addColorStop(1, '#bfe6ff');
+  c.fillStyle = sky;
+  c.fillRect(0, 0, W, horizon);
+  rect(c, '#4b9a52', 0, 30, 60, 14); // hills
+  rect(c, '#3f8747', 110, 34, 82, 10);
+  const bend = Math.sin(t * 0.5) * 50; // the road swings left and right
+  for (let y = horizon; y < H; y++) {
+    const d = (y - horizon) / (H - horizon); // 0 far .. 1 near
+    const z = 1 / (d + 0.04);
+    const stripe = Math.floor(z * 0.9 - t * 9) % 2 === 0;
+    const cx = W / 2 + bend * (1 - d) * (1 - d);
+    const half = 12 + d * 78;
+    rect(c, stripe ? '#58b04e' : '#4da245', 0, y, W, 1);
+    rect(c, stripe ? '#e5546c' : '#ffffff', cx - half - 5 * d - 2, y, half * 2 + 10 * d + 4, 1); // kerbs
+    rect(c, stripe ? '#6e7480' : '#656b77', cx - half, y, half * 2, 1);
+    if (Math.floor(z * 0.45 - t * 4.5) % 2 === 0) rect(c, '#f2f2f2', cx - 1 - d * 2, y, 2 + d * 4, 1); // centre line
+  }
+  // the kart: wobbles, red cap, tyres
+  const kx = W / 2 + Math.sin(t * 1.3) * 22 - Math.cos(t * 0.5) * 8;
+  const ky = 92 + Math.sin(t * 9) * 1;
+  rect(c, '#222', kx - 14, ky + 12, 8, 6);
+  rect(c, '#222', kx + 6, ky + 12, 8, 6);
+  rect(c, '#e5342c', kx - 11, ky + 2, 22, 12);
+  rect(c, '#ffd23a', kx - 11, ky + 8, 22, 2);
+  rect(c, '#f2c9a0', kx - 4, ky - 5, 8, 7);
+  rect(c, '#e5342c', kx - 5, ky - 9, 10, 4);
+  // a rival kart further up
+  const rx = W / 2 + Math.sin(t * 0.8 + 2) * 16 + Math.sin(t * 0.5) * 6;
+  rect(c, '#3b82f6', rx - 5, 62, 10, 6);
+  rect(c, '#222', rx - 6, 66, 3, 3);
+  rect(c, '#222', rx + 3, 66, 3, 3);
+  // hud: lap + position
+  rect(c, 'rgba(0,0,0,0.45)', 4, 4, 34, 10);
+  rect(c, '#ffd23a', 7, 7, 8 + (Math.floor(t / 14) % 3) * 6, 4);
+  rect(c, 'rgba(0,0,0,0.45)', W - 26, 4, 22, 14);
+  rect(c, '#ffffff', W - 22, 8, 3, 6);
+  rect(c, '#ffffff', W - 14, 8, 6, 2);
+  rect(c, '#ffffff', W - 14, 12, 6, 2);
 }

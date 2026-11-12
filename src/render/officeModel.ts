@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Vec2 } from '../game/NavGrid';
 import { screenOffMaterial, type DeskRig } from './officeBuilder';
+import { raceMaterial } from './screens';
 import { RoomItem, type ItemAnchor } from './roomItem';
 
 /**
@@ -1998,7 +1999,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     // wall-mounted display on the door wall: white frame, black screen, white header box above, facing into the room
     item('tv', 'meeting-tv', 'Fernseher', () => {
       box(2.2, 1.25, 0.06, 23, 0.9, 2.3, mat.white);
-      box(2.08, 1.13, 0.01, 23, 0.96, 2.335, L(0x15191c));
+      box(2.08, 1.13, 0.01, 23, 0.96, 2.335, raceMaterial()); // Mario-Kart-like race, animated by Office.updateScreens
       box(2.3, 0.16, 0.14, 23, 2.15, 2.28, mat.white);
     });
     // easter egg: framed dead bug on the wall left of the screen

@@ -1,6 +1,6 @@
 import type * as THREE from 'three';
 import { screenOffMaterial, type DeskRig } from '../render/officeBuilder';
-import { screenMaterial, type ScreenKind } from '../render/screens';
+import { screenMaterial, tickScreens, tickRace, useScreen, type ScreenKind } from '../render/screens';
 import type { DeskPlacement, OfficeModel } from '../render/officeModel';
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { Person } from './Person';
@@ -30,7 +30,17 @@ export class Desk {
   }
 
   setScreen(on: boolean, show?: { kind: ScreenKind; variant: number }): void {
-    this.rig.screen.material = on && show ? screenMaterial(show.kind, show.variant) : screenOffMaterial();
+    const old = this.rig.screen.material as THREE.Material;
+    const next = on && show ? screenMaterial(show.kind, show.variant) : screenOffMaterial();
+    if (old === next) return;
+    useScreen(old, -1);
+    useScreen(next, 1);
+    this.rig.screen.material = next;
+  }
+
+  /** The lit material on this monitor (the dark one while off). */
+  get screenMaterial(): THREE.Material {
+    return this.rig.screen.material as THREE.Material;
   }
 
   /** How full the mug on the desk is (0 = empty); null = no mug here. */
@@ -120,6 +130,14 @@ export class Office {
       this.desks.push(desk);
       this.placements.set(desk, d);
     }
+  }
+
+  /** Moves the pictures on the monitors (and the TV race); content runs faster while its sitter works. */
+  updateScreens(dt: number): void {
+    const typing = new Set<THREE.Material>();
+    for (const d of this.desks) if (d.occupant?.working) typing.add(d.screenMaterial);
+    tickScreens(dt, typing);
+    tickRace(dt);
   }
 
   /** First free cell behind the chair. */

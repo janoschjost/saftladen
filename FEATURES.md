@@ -62,6 +62,8 @@ Rules:
 - `desk.chair-call-vape` Phone people take calls and vapers take drags in the chair — `src/game/Person.ts`, url: `/?seed=1&time=11&event=vape-fabian-bucher` (#38)
 - `desk.gestures` Idle gestures every 12–38 s: yawn, stretch, head scratch, look around — `src/game/Game.ts`
 - `desk.screens` Monitors show role-based content (code, design, data, sheet, docs, media), stable per person — `src/render/screens.ts`, `src/data/screens.ts`
+- `desk.screens-live` Working monitors are alive: code and text scroll, design shows a drifting selection, sheets move the cell cursor, charts get a sweeping marker, video a running playhead; content runs faster while the sitter works; shown pictures redraw at 10 fps on shared textures, hidden ones not — `src/render/screens.ts`, `src/game/Office.ts`, e2e: `e2e/screens.spec.ts`, url: `/?seed=1&time=11` (#15)
+- `place.meeting-tv` The meeting-room TV plays a Mario-Kart-like race (road bends, kart, rival, lap HUD) — `src/render/screens.ts`, `src/render/officeModel.ts`, url: `/?seed=1&time=11&event=meeting-room` (#15)
 - `desk.lights` At night a warm lamp fades in over each occupied desk — `src/game/DeskLights.ts`, url: `/?seed=1&time=21` (#38)
 - `desk.seats` Fixed seat per person; seats panel with numbered labels and a per-person select; saved to localStorage, or to `src/data/seats.json` on the dev server — `src/ui/Seats.ts`, `src/game/Game.ts`
 
