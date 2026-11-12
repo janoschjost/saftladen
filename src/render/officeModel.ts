@@ -124,6 +124,16 @@ export interface DoorRig {
   /** leaf size */
   width: number;
   height: number;
+  /** pieces of the wall lettering on this leaf (#10): `Doors` moves them with the swing, base pose = laid out flush */
+  letters?: DoorLetter[];
+}
+/** One letter's piece of the lettering on a door leaf; `x` / `y` are its laid-out position in the pivot's space. */
+export interface DoorLetter {
+  mesh: THREE.Object3D;
+  /** index of the letter in the text: picks its own way of moving */
+  i: number;
+  x: number;
+  y: number;
 }
 export const DOOR_SWING = 1.6;
 
@@ -885,7 +895,9 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     const lettered = doors.filter((rig) => Math.abs(rig.center.z - az(CZ)) < 0.01 && rig.center.x > ax(X0) && rig.center.x < ax(X1) && rig.height > Y0 + 0.02);
     const pxPerM = 4096 / 15.2;
     const FONT = '700 250px Apercu, "Helvetica Neue", Helvetica, Arial, sans-serif';
-    const draw = (g: CanvasRenderingContext2D, w: number, h: number) => {
+    /** where each letter sits in the canvas (0..1 of its width), refreshed on every draw */
+    const glyphs: Array<{ i: number; x0: number; x1: number }> = [];
+    const draw = (g: CanvasRenderingContext2D, w: number, h: number, mask = true) => {
       g.clearRect(0, 0, w, h);
       g.fillStyle = '#0d0d0f';
       g.textBaseline = 'alphabetic';
@@ -898,29 +910,61 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       const total = widths.reduce((a, b) => a + b, 0);
       const track = (w - 20 - total) / (text.length - 1);
       let x = 10;
+      glyphs.length = 0;
       [...text].forEach((ch, i) => {
         g.fillText(ch, x, 232);
+        // each letter owns its advance plus half the tracking on both sides: the slices tile the line without gaps
+        if (ch !== ' ') glyphs.push({ i, x0: (x - track / 2) / w, x1: (x + widths[i] + track / 2) / w });
         x += widths[i] + track;
       });
+      if (!mask) return;
       const maskH = ((Y0 + Hh - OPEN_TOP) / Hh) * h; // canvas y of OPEN_TOP
       for (const rig of lettered) g.clearRect(((rig.center.x - rig.width / 2 - ax(X0)) / W) * w, maskH, (rig.width / W) * w, h - maskH);
     };
     const tex = canvasTex(Math.round(W * pxPerM), 256, draw);
+    // the leaves need the letters the wall texture masks out over the doors: same text, unmasked
+    const leafSrc = canvasTex(Math.round(W * pxPerM), 256, (g, w, h) => draw(g, w, h, false));
+    // on each door leaf the lettering is cut into one piece per letter (clipped to the leaf), so the letters can
+    // move on their own when the door swings (#10); rebuilt once the font is in, since the letters shift then
     const leafTex: THREE.Texture[] = [];
-    for (const rig of lettered) {
-      const lt = tex.clone();
-      lt.repeat.set(rig.width / W, (rig.height - Y0) / Hh);
-      lt.offset.set((rig.center.x - rig.width / 2 - ax(X0)) / W, 0);
-      leafTex.push(lt);
-      const lh = rig.height - Y0;
-      const part = new THREE.Mesh(new THREE.PlaneGeometry(rig.width, lh), new THREE.MeshBasicMaterial({ map: lt, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
-      part.position.set(rig.width / 2, Y0 + lh / 2, FLOAT); // door leaf is as thick as the wall (0.12), so its face is flush with the wall face
-      rig.pivot.add(part);
-    }
+    const buildLeafLetters = () => {
+      for (const t of leafTex.splice(0)) t.dispose();
+      for (const rig of lettered) {
+        for (const l of rig.letters ?? []) {
+          l.mesh.removeFromParent();
+          ((l.mesh as THREE.Mesh).geometry as THREE.BufferGeometry).dispose();
+          ((l.mesh as THREE.Mesh).material as THREE.Material).dispose();
+        }
+        rig.letters = rig.letters ?? [];
+        rig.letters.length = 0; // same array: Doors keeps a reference to it
+        const lx0 = rig.center.x - rig.width / 2 - ax(X0); // leaf span, metres from the start of the lettering
+        const lx1 = lx0 + rig.width;
+        const lh = rig.height - Y0;
+        for (const gl of glyphs) {
+          const a = Math.max(lx0, gl.x0 * W);
+          const b = Math.min(lx1, gl.x1 * W);
+          if (b - a < 0.005) continue;
+          const lt = leafSrc.clone();
+          lt.repeat.set((b - a) / W, lh / Hh);
+          lt.offset.set(a / W, 0);
+          leafTex.push(lt);
+          const part = new THREE.Mesh(new THREE.PlaneGeometry(b - a, lh), new THREE.MeshBasicMaterial({ map: lt, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+          const x = (a + b) / 2 - lx0;
+          const y = Y0 + lh / 2;
+          part.position.set(x, y, FLOAT); // door leaf is as thick as the wall (0.12), so its face is flush with the wall face
+          rig.pivot.add(part);
+          rig.letters.push({ mesh: part, i: gl.i, x, y });
+        }
+      }
+    };
+    buildLeafLetters();
     document.fonts?.load(FONT).then(() => {
-      const c = tex.image as HTMLCanvasElement;
-      draw(c.getContext('2d')!, c.width, c.height);
-      tex.needsUpdate = true;
+      for (const [t, mask] of [[tex, true], [leafSrc, false]] as const) {
+        const c = t.image as HTMLCanvasElement;
+        draw(c.getContext('2d')!, c.width, c.height, mask);
+        t.needsUpdate = true;
+      }
+      buildLeafLetters();
       for (const t of leafTex) t.needsUpdate = true;
     });
     const m = new THREE.Mesh(new THREE.PlaneGeometry(W, Hh), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 })); // polygon offset pulls it towards the camera: no z-fighting flicker with the wall
