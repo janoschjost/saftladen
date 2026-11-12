@@ -10,6 +10,22 @@ Invoking this skill authorizes everything the `AGENTS.md` workflow does for the 
 
 Args: `$ARGUMENTS`. Issue numbers restrict the run to those issues; a label filters by that label. Empty = every eligible issue, oldest first.
 
+## Clean up first
+
+Once per run, from the main checkout, drop leftovers of earlier sessions: records of deleted worktrees, and local branches whose PR is merged. A branch is only deleted if no worktree uses it and its tip is still the merged PR's head, so unpushed work survives.
+
+```sh
+git fetch --prune origin && git worktree prune
+gh pr list --state merged --limit 100 --json headRefName,headRefOid -q '.[] | "\(.headRefName) \(.headRefOid)"' |
+while read -r b oid; do
+  [ "$(git rev-parse -q --verify "refs/heads/$b")" = "$oid" ] || continue
+  git worktree list --porcelain | grep -qx "branch refs/heads/$b" && continue
+  git branch -D "$b"
+done
+```
+
+Leftover worktree folders of abandoned sessions are not removed automatically: list them with `git worktree list` in the report.
+
 ## Loop
 
 Repeat until no eligible issue is left:
