@@ -278,8 +278,11 @@ export abstract class Walker {
       sz += (dx * dodge - oz / d * 0.3) * k * 3.2;
       if (ahead > 0.4 && d < this.radius + o.radius + 0.9) {
         speedFactor = Math.min(speedFactor, Math.max(yielding ? 0.6 : 0.25, (d - this.radius - o.radius) / 0.9));
-        // nose to nose: back off a little instead of pushing through (only from somebody walking, and not if they wait for us: walk around those)
-        if (!yielding && o.state === 'walk' && d < this.radius + o.radius + 0.4) {
+        // nose to nose: back off a little instead of pushing through (only from somebody walking, and not if they wait for us: walk around those).
+        // If they come at us too, only one of the two backs off; the other edges past. Both backing off creep apart ever
+        // slower, come back and stay in each other's way for good
+        const mutual = (-ox * Math.sin(o.yaw) - oz * Math.cos(o.yaw)) / d > 0.4;
+        if (!yielding && o.state === 'walk' && d < this.radius + o.radius + 0.4 && !(mutual && this.id < o.id)) {
           back = Math.max(back, 1 - (d - this.radius - o.radius) / 0.4);
           backSide = side > 0 ? -1 : 1;
         }
