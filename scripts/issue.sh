@@ -7,6 +7,7 @@
 #   scripts/issue.sh release N "<reason>"   hand a claimed issue back
 #   scripts/issue.sh ask N "<questions>"     park N until a dev answers: comment + `question` label (releases a claim)
 #   scripts/issue.sh block N "<reason>"      park N until a dependency (e.g. a PR) is merged: comment + `blocked` label
+#   scripts/issue.sh refined N "<summary>"   N is ready for agents: comment, drop `question`/`blocked` (releases a claim)
 #
 # Label + assignee make a claim visible. The lock is the claim comment: GitHub orders comments by creation
 # time, so the earliest claim comment after the last release wins a race between two sessions.
@@ -26,8 +27,13 @@ park() {
   gh label create blocked --color B60205 --description "Waits on another issue or PR; agents re-check it each run" >/dev/null 2>&1 || true
   gh issue comment "$1" --body "$3" >/dev/null
   gh issue edit "$1" --add-label "$2" >/dev/null
+  unclaim "$1" "parked as $2"
+}
+
+# release a claim held on issue $1 (if any), with reason $2
+unclaim() {
   if [ -n "$(winner "$1")" ]; then
-    gh issue comment "$1" --body "$RELEASE — parked as $2" >/dev/null
+    gh issue comment "$1" --body "$RELEASE — $2" >/dev/null
     gh issue edit "$1" --remove-label "$LABEL" --remove-assignee @me >/dev/null
   fi
 }
@@ -91,8 +97,21 @@ $q"
     park "$n" blocked "⏸ Blocked: $reason"
     echo "#$n is blocked"
     ;;
+  refined)
+    n=${2:?issue number}; summary=${3:?summary}
+    gh issue comment "$n" --body "✅ Refined, ready for agents:
+
+$summary" >/dev/null
+    for l in question blocked; do
+      if gh issue view "$n" --json labels -q '.labels[].name' | grep -qx "$l"; then
+        gh issue edit "$n" --remove-label "$l" >/dev/null
+      fi
+    done
+    unclaim "$n" "refined"
+    echo "#$n is ready"
+    ;;
   *)
-    sed -n '2,13p' "$0" >&2
+    sed -n '2,14p' "$0" >&2
     exit 1
     ;;
 esac
