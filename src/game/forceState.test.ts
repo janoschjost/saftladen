@@ -12,6 +12,7 @@ function ctx(people: ForcePerson[], over: Partial<ForceCtx<ForcePerson>> = {}) {
     away: (p, k) => (calls.push(`${k} ${p.id}`), true),
     meeting: (g) => (calls.push(`meeting ${g.map((p) => p.id).join(',')}`), true),
     coffee: (g) => (calls.push(`coffee ${g.map((p) => p.id).join(',')}`), true),
+    wc: (p) => (calls.push(`wc ${p.id}`), true),
     ...over,
   };
   return { c, calls };
@@ -28,6 +29,8 @@ describe('dev.forceState (dev.force)', () => {
     expect(forceState(c, 'a', 'home')).toContain('Homeoffice');
     expect(forceState(c, 'a', 'meeting')).toContain('Meeting');
     expect(forceState(c, 'a', 'break')).toContain('Pause');
+    expect(forceState(c, 'a', 'wc')).toBe('a: WC');
+    expect(calls[5]).toBe('wc a');
     expect(calls[0]).toBe('desk a');
     expect(calls[3].startsWith('meeting a,')).toBe(true);
     expect(calls[3].split(' ')[1].split(',')).toHaveLength(4);
@@ -37,7 +40,7 @@ describe('dev.forceState (dev.force)', () => {
   it('person who is away or busy: not possible, nothing changes', () => {
     for (const over of [{ inOffice: false }, { held: true }, { controlled: true }]) {
       const { c, calls } = ctx([person('a', over), person('b')]);
-      for (const s of ['desk', 'errand', 'home', 'meeting', 'break']) expect(forceState(c, 'a', s)).toBeNull();
+      for (const s of ['desk', 'errand', 'home', 'meeting', 'break', 'wc']) expect(forceState(c, 'a', s)).toBeNull();
       expect(calls).toEqual([]);
     }
   });
@@ -59,6 +62,11 @@ describe('dev.forceState (dev.force)', () => {
     expect(forceState(c, 'a', 'meeting')).toBeNull();
     expect(forceState(c, 'a', 'desk')).toBeNull();
     expect(forceState(c, 'a', 'home')).toBeNull();
+  });
+
+  it('wc: both cabins taken is not possible', () => {
+    const { c } = ctx([person('a')], { wc: () => false });
+    expect(forceState(c, 'a', 'wc')).toBeNull();
   });
 
   it('unknown person or state only reports', () => {
