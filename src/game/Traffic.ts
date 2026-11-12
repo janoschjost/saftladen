@@ -11,6 +11,8 @@ const CLAIM_TTL = 8; // seconds a picked destination stays reserved
 const CLAIM_RADIUS = 1.6;
 const PASSAGE_LOAD = 2; // standing around in a doorway or corridor counts like two bodies on the spot
 const SHUN_COST = 40; // extra path cost per cell of a passage that is to be bypassed
+const LYING_COST = 25; // extra path cost per cell next to a lying pet: walk around it when there is a way
+const LYING_REACH = 0.7; // metres around a lying body whose cells cost extra (its radius plus a passer-by's)
 
 interface Footprint {
   idx: number[];
@@ -59,6 +61,8 @@ export class Traffic {
     this.clock = 0;
     this.density.fill(0);
     this.prints.clear();
+    this.nav.clearSoft();
+    for (const w of walkers) if (!w.away && !w.held && w.obstacle) this.nav.markSoft(w.pos, LYING_REACH, LYING_COST);
     for (const w of walkers) {
       if (w.away || w.held) continue;
       const fp: Footprint = { idx: [], val: [] };

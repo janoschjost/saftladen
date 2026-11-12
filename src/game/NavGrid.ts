@@ -7,6 +7,8 @@ export interface Vec2 {
 /** Uniform walkability grid (1 cell = `cell` metres) with 8-way A*. */
 export class NavGrid {
   private blocked: Uint8Array;
+  /** extra path cost per cell that still lets walkers through (a pet lying there), see `markSoft` */
+  private soft: Float32Array;
 
   constructor(
     readonly cols: number,
@@ -14,6 +16,27 @@ export class NavGrid {
     readonly cell = 1,
   ) {
     this.blocked = new Uint8Array(cols * rows);
+    this.soft = new Float32Array(cols * rows);
+  }
+
+  /** Makes every cell whose centre lies within `r` of p cost `cost` extra to enter: routes bend around it, but it stays walkable. */
+  markSoft(p: Vec2, r: number, cost: number): void {
+    const { cx, cz } = this.toCell(p);
+    const reach = Math.ceil(r / this.cell);
+    for (let dz = -reach; dz <= reach; dz++) {
+      for (let dx = -reach; dx <= reach; dx++) {
+        if (!this.inside(cx + dx, cz + dz)) continue;
+        const c = this.center(cx + dx, cz + dz);
+        if (Math.hypot(c.x - p.x, c.z - p.z) >= r) continue;
+        const i = (cz + dz) * this.cols + cx + dx;
+        this.soft[i] = Math.max(this.soft[i], cost);
+      }
+    }
+  }
+
+  /** Drops all soft costs (they are marked again from the current bodies). */
+  clearSoft(): void {
+    this.soft.fill(0);
   }
 
   block(cx: number, cz: number, w = 1, d = 1): void {
@@ -175,7 +198,8 @@ export class NavGrid {
 
   /**
    * Returns waypoints (cell centres) from the start cell to the goal cell, excluding the start.
-   * `cost` (cols*rows, optional) adds a penalty for entering each cell, so routes bend around crowds.
+   * `cost` (cols*rows, optional) adds a penalty for entering each cell, so routes bend around crowds; soft costs
+   * (`markSoft`, e.g. lying pets) always count.
    */
   findPath(from: Vec2, to: Vec2, cost?: Float32Array): Vec2[] {
     const s = this.toCell(from);
@@ -213,7 +237,7 @@ export class NavGrid {
           // no corner cutting
           if (dx && dz && (!this.walkable(cx + dx, cz) || !this.walkable(cx, cz + dz))) continue;
           const ni = idx(nx, nz);
-          const ng = gScore[cur] + (dx && dz ? Math.SQRT2 : 1) + (cost ? cost[ni] : 0);
+          const ng = gScore[cur] + (dx && dz ? Math.SQRT2 : 1) + (cost ? cost[ni] : 0) + this.soft[ni];
           if (ng < gScore[ni]) {
             gScore[ni] = ng;
             came[ni] = cur;
