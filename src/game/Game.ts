@@ -24,6 +24,9 @@ import { Overlay } from '../ui/Overlay';
 import { Roster } from '../ui/Roster';
 import { Seats } from '../ui/Seats';
 import { DevPanel } from '../ui/DevPanel';
+import { registerDevSection } from '../ui/devSections';
+import { overlaySection } from '../ui/devOverlays';
+import { DebugOverlays, type OverlayKind } from './DebugOverlays';
 import { Settings } from '../ui/Settings';
 import { TimeControl } from '../ui/TimeControl';
 import { devEvents } from './DevEvents';
@@ -140,6 +143,8 @@ export class Game {
   /** the camera trails this walker (follow mode) */
   private followed: Walker | null = null;
   private dragStart = { x: 0, y: 0 };
+  /** dev only: debug overlays (nav grid, state labels, paths), see the dev panel */
+  debug: DebugOverlays | null = null;
   private dragged: Walker | null = null;
   private steered: Person | null = null;
   /** "Ein Tag im Leben": the person the player plays; `waiting` until they are (back) in the office */
@@ -298,6 +303,12 @@ export class Game {
     this.ring.visible = false;
     this.scene.add(this.ring);
 
+    if (import.meta.env.DEV) {
+      this.debug = new DebugOverlays(this.scene);
+      registerDevSection(overlaySection(this.debug));
+      // console: dev.overlay('grid' | 'states' | 'paths', true)
+      Object.assign((window as unknown as { dev: object }).dev, { overlay: (kind: OverlayKind, on = true) => this.debug?.set(kind, on) });
+    }
     new DevPanel();
     this.registerDevEvents();
     this.now = new NowChip(
@@ -1558,6 +1569,7 @@ export class Game {
     }
     this.updateHover();
     this.updateOverlay();
+    if (import.meta.env.DEV) this.debug?.update(this.clock, this.walkers, this.nav, this.views.camera);
     if (this.previews.length) this.renderPreviews();
     if (this.draw) this.renderer.render(this.scene, this.views.camera);
   }

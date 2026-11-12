@@ -1,3 +1,4 @@
+import { OVERLAY_KINDS, type OverlayKind } from './DebugOverlays';
 import { devEvents } from './DevEvents';
 import type { Game } from './Game';
 import { getSeed, setSeed } from './rng';
@@ -14,6 +15,7 @@ import { cycleOf } from './TimeOfDay';
  *                     repeat it for several (?event=rain&event=coffee). FEATURES.md links each feature to such a URL.
  *   ?action=<id>      starts an Aktionen card (`src/data/actions.ts`, e.g. ?action=printer) or any dev event like the
  *                     sheet does: the camera flies in Orbit to the person it moves; retried until it can run
+ *   ?overlay=<kind>   switches a debug overlay on at start: grid | states | paths (repeat for several)
  *   ?test             for the Playwright tests in e2e/: exposes `window.__game` (read the state), time stands still
  *                     (only `__game.advance(seconds)` moves the game, so nothing changes between two steps of a
  *                     test) and the office is not drawn (the tests render WebGL in software). ?test&draw draws it.
@@ -30,7 +32,7 @@ export function applySeedParam(): void {
 
 export function applyDebugParams(game: Game): void {
   const q = new URLSearchParams(location.search);
-  if (!['snack', 'time', 'day', 'seed', 'test', 'event', 'action'].some((k) => q.has(k))) return;
+  if (!['snack', 'time', 'day', 'seed', 'test', 'event', 'action', 'overlay'].some((k) => q.has(k))) return;
   const g = game as any;
   (window as unknown as { __game: Game }).__game = game;
 
@@ -42,6 +44,10 @@ export function applyDebugParams(game: Game): void {
   if (q.has('day')) game.startDay(q.get('day') || 'jan-hasler');
   for (const id of q.getAll('event')) runEvent(game, id);
   for (const id of q.getAll('action')) runAction(game, id);
+  for (const kind of q.getAll('overlay')) {
+    if (OVERLAY_KINDS.includes(kind as OverlayKind)) g.debug?.set(kind as OverlayKind, true);
+    else console.warn(`[debug] no overlay "${kind}", use ${OVERLAY_KINDS.join(' | ')}`);
+  }
   if (!q.has('snack')) return;
 
   const id = q.get('snack') || 'jan-hasler';

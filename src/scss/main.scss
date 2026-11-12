@@ -2987,6 +2987,14 @@
         font-size: 0.75rem;
         white-space: nowrap;
         will-change: transform;
+
+        &--debug {
+            padding: 0.0625rem 0.375rem;
+            background: var(--color-warn);
+            color: black;
+            font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+            font-size: 0.6875rem;
+        }
     }
 
     .m-tooltip {
