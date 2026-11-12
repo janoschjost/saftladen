@@ -181,6 +181,16 @@ export abstract class Walker {
     return true;
   }
 
+  /** Lies on the floor for a while (a pet beside its seated owner): routes go around it (see `Traffic.update`). */
+  get obstacle(): boolean {
+    return false;
+  }
+
+  /** Walking, but held up by somebody in its way. */
+  get stuck(): boolean {
+    return this.state === 'walk' && this.blockedTime > 0.3 && this.path.length > 0;
+  }
+
   /** Standing in front of a narrow passage until the oncoming traffic is through. */
   get yielding(): boolean {
     return this.state === 'walk' && this.gateWait > 0.1;
@@ -477,7 +487,7 @@ export abstract class Walker {
       const oz = this.pos.z - o.pos.z;
       const d = Math.hypot(ox, oz);
       // a walker stuck behind people (waiting) asks bystanders in its lane to clear out, from further away
-      const stuck = o.state === 'walk' && o.blockedTime > 0.3 && o.path.length > 0;
+      const stuck = o.stuck;
       const near = this.radius + o.radius + (stuck ? 2.4 : 1.2);
       if (d >= near) continue;
       if (o.state === 'walk') {

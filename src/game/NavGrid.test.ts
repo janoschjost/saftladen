@@ -66,4 +66,14 @@ describe('move.astar', () => {
     expect([g.randomWalkable(), g.randomWalkable(), g.randomWalkable()]).toEqual(a);
     for (const c of a) expect(g.walkable(c.cx, c.cz)).toBe(true);
   });
+
+  it('soft cost (a lying pet) bends the route around it but keeps the cells walkable (#26)', () => {
+    const g = new NavGrid(10, 3);
+    g.markSoft(at(5, 0), 0.6, 25);
+    expect(cells(g, g.findPath(at(0, 0), at(9, 0)))).not.toContainEqual({ cx: 5, cz: 0 });
+    g.block(0, 1, 10, 2); // only row 0 left
+    expect(cells(g, g.findPath(at(0, 0), at(9, 0)))).toContainEqual({ cx: 5, cz: 0 });
+    g.clearSoft();
+    expect(g.walkable(5, 0)).toBe(true);
+  });
 });

@@ -108,6 +108,7 @@ Rules:
 ## Pets
 - `pet.roster` Dogs Tala (Ramon), Ellie (Janosch), Harry (Nina), Mira (terrier, Fabian); cats Angus and Binx (Donata) — `src/data/team.ts`
 - `pet.owner` Pets stay beside their owner, lie down when the owner sits, sleep after 12 s, sometimes switch sides; leave and return with the owner: they arrive and vanish together with the owner (materialise effect), not walking ahead; a pet that reaches the door first waits on the porch until the owner is out — `src/game/Dog.ts`, `src/game/Presence.ts`, test: `src/game/Dog.test.ts`, url: `/?seed=1&time=11&event=pet-errand` (#41, #72)
+- `pet.make-way` Pets keep the way free: lying down beside the seated owner they pick a free spot out of passages (doorways, corridors, gaps between desks), tucked against furniture if possible; walkers' routes go around a lying pet when there is another way; a pet in the way of somebody held up gets up and moves off their route (not back there for a while). Same for cats — `src/game/petSpot.ts`, `src/game/Dog.ts`, `src/game/Traffic.ts`, `src/game/NavGrid.ts`, test: `src/game/petSpot.test.ts`, `src/game/NavGrid.test.ts`, url: `/?seed=1&time=11&event=pet-passage` (#26)
 - `pet.petting` Passers-by within 1.5 m may stop and pet a pet (trots over, wags, happy hops); cooldowns per pet and per person — `src/game/PetCare.ts`
 - `pet.announce` Awake pets bark/meow when someone comes in the front door — `src/game/PetCare.ts`
 - `pet.player` The player's person can pet a pet — `src/game/Person.ts`

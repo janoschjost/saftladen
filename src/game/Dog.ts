@@ -1,14 +1,19 @@
 import type * as THREE from 'three';
 import type { DogRig } from '../render/dogBuilder';
 import { DOOR } from './Door';
-import type { NavGrid } from './NavGrid';
+import type { NavGrid, Vec2 } from './NavGrid';
 import type { Person } from './Person';
 import { Walker } from './Walker';
+import { inLane, lieSpot } from './petSpot';
 import { random } from './rng';
 
 const FOLLOW_DISTANCE = 1.4; // dog starts running when the owner is further away than this
 const HEEL_DISTANCE = 0.9; // where the dog tries to end up
 const SLEEP_AFTER = 12; // seconds lying beside a seated owner before dozing off
+const LIE_REACH = 1.6; // a lying spot is at most this far from the seated owner ...
+const LIE_REACH_FAR = 3.2; // ... unless the seat is boxed in by furniture
+const CLEARED_FOR = 40; // seconds a spot the pet had to clear for somebody stays off limits
+const YIELD_NEAR = 2.4; // metres within which a held-up walker makes the pet get out of its way
 
 export interface PetOptions {
   /** unique walker id (defaults to `dog-<owner>`) */
@@ -42,6 +47,10 @@ export class Dog extends Walker {
   /** 0 awake .. 1 asleep (after lying a while beside the seated owner) */
   sleep = 0;
   private lying = 0;
+  /** where the pet lies down while the owner sits (out of passages), null = not picked yet */
+  private bed: Vec2 | null = null;
+  /** spots the pet had to clear for somebody: it does not lie there again for a while */
+  private cleared: { at: Vec2; t: number }[] = [];
   /** somebody is petting this pet: it trots over, stands still and wags */
   petted: { by: Person; t: number } | null = null;
   /** 0..1 eased "being petted" amount (wagging, hopping) */
@@ -62,6 +71,17 @@ export class Dog extends Walker {
     const a = Math.atan2(this.pos.x - person.pos.x, this.pos.z - person.pos.z);
     const spot = nav.nearestWalkable({ x: person.pos.x + Math.sin(a) * 0.65, z: person.pos.z + Math.cos(a) * 0.65 }, 3);
     if (spot) this.goTo(nav, spot);
+  }
+
+  /** Puts the pet down at `p` (dev event): it picks its lying spot afresh from there. */
+  placeAt(p: Vec2): void {
+    this.pos = { ...p };
+    this.prev = { ...p };
+    this.path = [];
+    this.state = 'idle';
+    this.bed = null;
+    this.lie = 0;
+    this.timer = 1;
   }
 
   /** Woof / meow at the door. */
@@ -89,6 +109,11 @@ export class Dog extends Walker {
     this.timer = 0;
     this.companion = owner;
     owner.pets.push(this);
+  }
+
+  /** Lying beside the seated owner: walkers' routes go around it. */
+  override get obstacle(): boolean {
+    return !this.away && this.lie > 0.5;
   }
 
   override get fixed(): boolean {
@@ -198,10 +223,14 @@ export class Dog extends Walker {
     // while walking, re-target if the owner moved away from the current goal
     if (this.state === 'walk' && this.owner.presence === 'in' && !this.petted) {
       const goal = this.path[this.path.length - 1];
-      if (!goal || Math.hypot(this.owner.pos.x - goal.x, this.owner.pos.z - goal.z) > FOLLOW_DISTANCE * 1.5) {
+      const toBed = !!goal && !!this.bed && Math.hypot(this.bed.x - goal.x, this.bed.z - goal.z) < 0.01;
+      if (!goal || (!toBed && Math.hypot(this.owner.pos.x - goal.x, this.owner.pos.z - goal.z) > FOLLOW_DISTANCE * 1.5)) {
         this.decide(nav);
       }
     }
+    if (this.cleared.length) this.cleared = this.cleared.filter((c) => (c.t -= dt) > 0);
+    if (this.owner.sit <= 0.5 || this.owner.presence !== 'in') this.bed = null;
+    this.giveWay(nav, others);
     super.update(dt, nav, others);
     this.happy += ((this.petted && this.state !== 'walk' ? 1 : 0) - this.happy) * Math.min(1, dt * 5);
     if (this.barkT > 0) this.barkT -= dt;
@@ -215,10 +244,72 @@ export class Dog extends Walker {
     this.sleep += ((asleep ? 1 : 0) - this.sleep) * Math.min(1, dt * (asleep ? 1 : 6));
   }
 
+  /**
+   * Somebody is held up and we stand (or lie) in their way: get up and move to a free spot off their route and out of
+   * passages (we do not lie there again for a while). Without such a spot the usual shuffling aside (`stepAside`) does it.
+   */
+  private giveWay(nav: NavGrid, others: readonly Walker[]): void {
+    if (this.state !== 'idle' || this.away || this.script || this.petted || this.held || this.owner.presence !== 'in') return;
+    const w = others.find(
+      (o) =>
+        o !== this &&
+        !o.away &&
+        !this.ignores(o) &&
+        o.stuck &&
+        Math.hypot(o.pos.x - this.pos.x, o.pos.z - this.pos.z) < YIELD_NEAR &&
+        inLane(this.pos, this.radius, o.pos, o.path, o.radius + 0.1),
+    );
+    if (!w) return;
+    if (!this.cleared.some((c) => Math.hypot(c.at.x - this.pos.x, c.at.z - this.pos.z) < 0.3)) this.cleared.push({ at: { ...this.pos }, t: CLEARED_FOR });
+    const avoid = [...this.cleared.map((c) => c.at), w.pos, ...w.path];
+    const spot = lieSpot(nav, this.passageAt(), this.owner.pos, this.pos, LIE_REACH, avoid);
+    if (!spot) return;
+    if (this.bed) this.bed = spot;
+    this.goTo(nav, spot);
+  }
+
+  private passageAt(): ((p: Vec2) => number) | null {
+    const passages = this.traffic?.passages;
+    return passages ? (p) => passages.at(p) : null;
+  }
+
+  /** The spot to lie down at beside the seated owner: never in a passage, nor where we had to make way before. */
+  private pickBed(nav: NavGrid): Vec2 | null {
+    const o = this.owner;
+    const a = o.yaw + (this.side * Math.PI) / 2;
+    const ideal = { x: o.pos.x + Math.sin(a) * HEEL_DISTANCE, z: o.pos.z + Math.cos(a) * HEEL_DISTANCE };
+    const avoid = this.cleared.map((c) => c.at);
+    const near = lieSpot(nav, this.passageAt(), o.pos, ideal, LIE_REACH, avoid);
+    if (near) return near;
+    // boxed in (no free floor close to the seat): the nearest free floor a bit further off, still out of the passages
+    const free = nav.nearestWalkable(ideal, 8);
+    return free && lieSpot(nav, this.passageAt(), o.pos, free, LIE_REACH_FAR, avoid);
+  }
+
   protected decide(nav: NavGrid): void {
     const o = this.owner;
     const dx = o.pos.x - this.pos.x;
     const dz = o.pos.z - this.pos.z;
+    if (o.sit > 0.5 && o.presence === 'in') {
+      this.bed ??= this.pickBed(nav);
+      const bed = this.bed;
+      if (bed && Math.hypot(bed.x - this.pos.x, bed.z - this.pos.z) > 0.3) {
+        this.goTo(nav, bed);
+        if (this.state !== 'walk') {
+          // cannot get there (yet: e.g. still standing in the owner's seat): pick again in a moment
+          this.cleared.push({ at: bed, t: 2 });
+          this.bed = null;
+        }
+        this.timer = 0.15;
+        return;
+      }
+      if (bed) {
+        this.turnTo(Math.atan2(dx, dz), 0.3);
+        this.timer = 0.2;
+        return;
+      }
+      // no free spot off the passages: fall back to the plain heel spot
+    }
     if (Math.hypot(dx, dz) > FOLLOW_DISTANCE) {
       // aim for a point beside/behind the owner, relative to their facing
       const a = o.yaw + Math.PI + this.side * 0.9;
