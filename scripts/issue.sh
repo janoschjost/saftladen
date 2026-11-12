@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Claim protocol for GitHub issues, shared by every agent session (and humans).
 #
-#   scripts/issue.sh new "<title>" <bug|enhancement> [body]   open an issue assigned to you, print its number
+#   scripts/issue.sh new "<title>" <bug|enhancement> [body] [haiku|sonnet|opus]
+#                                   open an issue assigned to you, print its number; a model adds the model:<x> label
 #   scripts/issue.sh claim N        claim issue N and assign it to you; exit 0 = ours, exit 2 = taken by someone else
 #   scripts/issue.sh release N "<reason>"   hand a claimed issue back
 #
@@ -30,8 +31,14 @@ winner() {
 cmd=${1:-}
 case "$cmd" in
   new)
-    title=${2:?title}; label=${3:?label (bug|enhancement)}; body=${4:-}
-    url=$(gh issue create --title "$title" --label "$label" --assignee @me --body "${body:-Opened by an agent session.}")
+    title=${2:?title}; label=${3:?label (bug|enhancement)}; body=${4:-}; model=${5:-}
+    labels=(--label "$label")
+    case "$model" in
+      "") ;;
+      haiku|sonnet|opus) labels+=(--label "model:$model") ;;
+      *) echo "model must be haiku, sonnet or opus" >&2; exit 1 ;;
+    esac
+    url=$(gh issue create --title "$title" "${labels[@]}" --assignee @me --body "${body:-Opened by an agent session.}")
     echo "${url##*/}"
     ;;
   claim)
@@ -59,7 +66,7 @@ case "$cmd" in
     echo "released #$n"
     ;;
   *)
-    sed -n '2,10p' "$0" >&2
+    sed -n '2,11p' "$0" >&2
     exit 1
     ;;
 esac
