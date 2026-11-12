@@ -30,6 +30,7 @@ import { PetCare } from './PetCare';
 import { Weather } from './Weather';
 import { Christmas } from './Christmas';
 import { RainFx } from '../render/rainFx';
+import { SpawnFx } from '../render/spawnFx';
 import { loadState, saveState } from '../ui/persist';
 import { DOOR_LANES } from './Door';
 import { Doors } from './Doors';
@@ -46,7 +47,7 @@ import { RoomEditor } from './RoomEditor';
 import { Social } from './Social';
 import { TimeOfDay, applySky, type SkyRig } from './TimeOfDay';
 import { Traffic } from './Traffic';
-import type { Walker } from './Walker';
+import { Walker } from './Walker';
 import { random } from './rng';
 
 const STEP = 1 / 60; // fixed simulation step
@@ -81,6 +82,7 @@ export class Game {
   private petCare = new PetCare();
   private hip = new THREE.Vector3();
   private rainFx!: RainFx;
+  private spawnFx!: SpawnFx;
   private xmas!: Christmas;
   private settings!: Settings;
   /** pets (dogs and cats), cached */
@@ -169,6 +171,7 @@ export class Game {
     this.timeControl = new TimeControl(this.tod);
     applySky(this.tod, this.sky);
     this.rainFx = new RainFx(this.scene);
+    this.spawnFx = new SpawnFx(this.scene);
     this.xmas = new Christmas(this.scene);
     const model = (this.model = buildOffice(this.scene));
     // the editor puts the furniture where the saved layout wants it, before anything is derived from its position
@@ -248,6 +251,7 @@ export class Game {
     this.coatRacks = new CoatRacks(model.coatRacks, this.people);
     this.coatRacks.update();
     for (const w of this.walkers) if (w instanceof Dog && w.owner.presence === 'out') w.sendAway(); // pets of people who start away
+    Walker.animate = true; // from now on arrivals and departures get a show
     this.bind();
     this.resize();
     // back to where the last visit ended (a deep link in the URL wins over the saved camera)
@@ -572,6 +576,7 @@ export class Game {
     this.tod.update(dt);
     applySky(this.tod, this.sky);
     this.updateEaster(dt);
+    this.updateSpawnFx(dt);
     this.updateWeather(dt);
     this.updateArrivals();
     if ((this.persistTimer -= dt) <= 0) {
@@ -588,6 +593,16 @@ export class Game {
     if (this.reply && (this.reply.t -= dt) <= 0) this.reply = null;
     this.render(this.acc / STEP);
     this.renderFeeds();
+  }
+
+  /** Materialise show for everybody who arrives or leaves. */
+  private updateSpawnFx(dt: number): void {
+    for (const w of this.walkers) {
+      w.stepFx(dt);
+      const e = w.takeFx();
+      if (e) this.spawnFx.burst(w.pos.x, w.pos.z, e, w.headHeight * w.root.scale.y);
+    }
+    this.spawnFx.update(dt);
   }
 
   /** Hidden gags: disco lights, a person who has had enough of the clicking. */
@@ -1211,7 +1226,7 @@ export class Game {
   }
 
   private render(alpha: number): void {
-    for (const w of this.walkers) if (!w.away) this.pose(w, alpha);
+    for (const w of this.walkers) if (!w.away || w.fx > 0) this.pose(w, alpha);
     this.updateHover();
     this.updateOverlay();
     this.renderer.render(this.scene, this.views.camera);

@@ -125,6 +125,10 @@ export class Dog extends Walker {
       return true;
     }
     if (this.script) {
+      if (this.fx < 1 && !this.away) {
+        this.moving += (0 - this.moving) * Math.min(1, dt * 8); // still materialising: wait for the show
+        return true;
+      }
       if (!this.runScript(dt) && o.presence !== 'in') this.sendAway(); // reached the porch
       return true;
     }

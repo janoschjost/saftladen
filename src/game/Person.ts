@@ -449,6 +449,11 @@ export class Person extends Walker {
           this.abortLeaving();
           return false;
         }
+        if (this.fx < 1) {
+          // still materialising: stand there until the show is over, then walk in
+          this.moving += (0 - this.moving) * Math.min(1, dt * 8);
+          return true;
+        }
         if (this.runScript(dt)) return true;
         this.presence = 'in';
         this.awayKind = null;
