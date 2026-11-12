@@ -1046,22 +1046,31 @@ export class Game {
       },
     });
     // Kurt (#32): Marco goes home as Kurt (spin, poof, out of the door), or to the home office as Kurt; back after two minutes
-    const kurt = (kind: 'off' | 'home') => () => {
+    // Kurt (#32): Marco goes home as Kurt (spin, poof, out of the door); or right away in the home office as Kurt, or out on
+    // an errand (his empty desk shows Kurt from 08:30 to 17:00); back after two minutes
+    const kurt = (kind: 'off' | 'home' | 'errand') => () => {
       const p = this.people.find((o) => o.member.alterEgo);
       if (!p) return null;
-      if (p.presence === 'out') {
+      if (kind === 'off' && p.presence === 'out') {
         this.presence.callBack(p); // the next try (e.g. `?event=` retries) sends him off again
         return null;
       }
-      if (p.presence !== 'in' || p.held || p.controlled) return null;
-      this.release(p);
-      drop(p);
-      if (!this.presence.goHome(p, kind, this.nav, 120)) return null;
-      if (kind === 'home') p.homeAlter = true;
+      if (p.presence === 'leaving' || p.presence === 'returning' || p.held || p.controlled) return null;
+      if (p.presence === 'in') {
+        this.release(p);
+        drop(p);
+      }
+      if (kind === 'off') {
+        if (!this.presence.goHome(p, this.nav, 120)) return null;
+      } else {
+        this.presence.awayNow(p, kind, 120);
+        if (kind === 'home') p.homeAlter = true;
+      }
       return strings.alterEgo.event[kind];
     };
     devEvents.register({ id: 'kurt-walkout', group: strings.presence.event.group, label: strings.alterEgo.label.off, run: kurt('off') });
     devEvents.register({ id: 'kurt-home', group: strings.presence.event.group, label: strings.alterEgo.label.home, run: kurt('home') });
+    devEvents.register({ id: 'kurt-screen', group: strings.presence.event.group, label: strings.alterEgo.label.errand, run: kurt('errand') });
     devEvents.register({
       id: 'all-back',
       group: strings.presence.event.group,

@@ -294,13 +294,19 @@ export class Presence {
     p.leaveOffice(nav, kind, 600);
   }
 
-  /** Dev events: off home (`off`) or to the home office as if their day went that way (an alter ego transforms); back after `seconds`. */
-  goHome(p: Person, kind: 'off' | 'home', nav: NavGrid, seconds: number): boolean {
+  /** Dev event: off home as if their day ended (an alter ego spins and walks out as itself); back after `seconds`. */
+  goHome(p: Person, nav: NavGrid, seconds: number): boolean {
     if (!this.free(p)) return false;
-    if (kind === 'home') p.homeVariant = this.freeVariant(p);
     this.overridden.add(p);
-    p.leaveOffice(nav, kind, seconds, transformsOnLeave(p.member, kind === 'off' ? 'end' : 'home'));
+    p.leaveOffice(nav, 'off', seconds, transformsOnLeave(p.member, 'end'));
     return true;
+  }
+
+  /** Dev events: straight out of the office (no walk to the door), into the home office or on an errand; back after `seconds`. */
+  awayNow(p: Person, kind: 'home' | 'errand', seconds: number): void {
+    this.overridden.add(p);
+    if (kind === 'home') p.homeVariant = this.freeVariant(p);
+    p.startAway(kind, seconds);
   }
 
   /** Bring somebody back to the office. */

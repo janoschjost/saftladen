@@ -59,8 +59,8 @@ export const strings = {
   /** Kompensiertier Kurt, Marco's alter ego (#32) */
   alterEgo: {
     role: 'Kompensiertier',
-    label: { off: 'Marco geht als Kurt heim', home: 'Kurt im Homeoffice' },
-    event: { off: 'Marco dreht sich und geht als Kurt heim', home: 'Marco geht als Kurt ins Homeoffice' },
+    label: { off: 'Marco geht als Kurt heim', home: 'Kurt im Homeoffice', errand: 'Marco unterwegs (Kurt am Bildschirm)' },
+    event: { off: 'Marco dreht sich und geht als Kurt heim', home: 'Marco arbeitet als Kurt im Homeoffice', errand: 'Marco ist unterwegs, sein Bildschirm zeigt Kurt' },
   },
 } as const;
 
