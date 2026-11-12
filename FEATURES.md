@@ -137,7 +137,7 @@ Rules:
 - `office.coat-stands` Freestanding coat stands (round base, pole, hook arms; room-editor item `coat-rack`); no stand in the entrance. A person's long draped coat hangs on a hook exactly while they are in, on the stand nearest their desk, same hook again when free — `src/render/officeModel.ts`, `src/game/CoatRacks.ts`, `src/render/jacketBuilder.ts`, e2e: `e2e/office.spec.ts` (#4, #34)
 - `office.deco` Bunting and string lights under the sawtooth roof — `src/render/officeModel.ts`
 - `office.mosquito` Easter egg: framed dead mosquito next to the meeting-room screen — `src/render/officeModel.ts`
-- `office.desk-props` Per desk: Apple keyboard/mouse, mesh chair, seeded plant — `src/render/officeModel.ts`
+- `office.desk-props` Per desk: Apple keyboard/mouse, mesh chair, seeded plant, and 2–4 seeded clutter props (paper and notes, personal items, tech, snacks) that never overlap the gear or each other, always visible, merged into one static group per desk; craft room, photo studio and home office desks have none — `src/render/officeModel.ts`, `src/render/deskClutter.ts`, test: `src/render/deskClutter.test.ts`, url: `/?seed=1&time=11#iso` (#69)
 - `office.labels` Settings panel toggles row/table labels, seat numbers, room numbers (`saftladen.settings`) — `src/ui/Settings.ts`
 - `office.parquet` Mosaic parquet slab — `src/render/World.ts`
 

@@ -3,6 +3,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { Vec2 } from '../game/NavGrid';
 import { screenOffMaterial, type DeskRig } from './officeBuilder';
 import { tvMaterial } from './screens';
+import { planClutter, type DeskProp, type DeskPlantSpot } from './deskClutter';
+import { seeded } from '../game/rng';
 import { RoomItem, type ItemAnchor } from './roomItem';
 
 /**
@@ -615,6 +617,72 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
           const horiz = i % 2 === 0;
           rbox(horiz ? 0.035 : 0.014, h, horiz ? 0.014 : 0.035, x + Math.cos(a) * 0.03, b, z + Math.sin(a) * 0.03, i % 2 ? mat.greenL : mat.green, 0, parent);
         }
+    }
+  }
+
+  /** Small desk props (paper, personal items, tech, snacks), flat on the desk top (y 0.752), in the local space of `parent`. */
+  function deskProp(parent: THREE.Object3D, p: DeskProp, bright: Mat): void {
+    const g = new THREE.Group();
+    g.position.set(p.x, 0.752, p.z);
+    g.rotation.y = p.rot;
+    parent.add(g);
+    const b = (w: number, h: number, d: number, x: number, y: number, z: number, m: Mat, ry = 0) => rbox(w, h, d, x, y, z, m, ry, g);
+    const c = (r: number, h: number, x: number, y: number, z: number, m: Mat, seg = 10) => cyl(r, r, h, x, y, z, m, g, seg);
+    switch (p.kind) {
+      case 'paper':
+        b(0.15, 0.012, 0.2, 0, 0, 0, mat.white);
+        b(0.15, 0.008, 0.2, 0.012, 0.012, 0.008, mat.lightgrey, 0.12);
+        b(0.15, 0.006, 0.2, -0.008, 0.02, -0.006, mat.white, -0.1);
+        break;
+      case 'notebook':
+        b(0.13, 0.018, 0.18, 0, 0, 0, bright);
+        b(0.12, 0.01, 0.17, 0.004, 0.018, 0, mat.white);
+        break;
+      case 'sticky':
+        b(0.06, 0.006, 0.06, 0, 0, 0, mat.flowerYellow);
+        b(0.06, 0.002, 0.06, 0.03, 0.006, 0.02, mat.flowerPink, 0.5);
+        break;
+      case 'pen':
+        b(0.012, 0.012, 0.14, 0, 0, 0, bright, 0.4);
+        break;
+      case 'frame':
+        b(0.09, 0.11, 0.012, 0, 0, 0, mat.woodDark);
+        b(0.07, 0.09, 0.004, 0, 0.01, 0.007, bright);
+        break;
+      case 'figurine':
+        c(0.025, 0.012, 0, 0, 0, mat.dark);
+        b(0.03, 0.045, 0.03, 0, 0.012, 0, bright);
+        b(0.026, 0.026, 0.026, 0, 0.057, 0, mat.flowerYellow);
+        break;
+      case 'headphones':
+        b(0.05, 0.03, 0.045, -0.06, 0, 0, mat.black);
+        b(0.05, 0.03, 0.045, 0.06, 0, 0, mat.black);
+        b(0.17, 0.012, 0.02, 0, 0.03, 0, mat.dark);
+        break;
+      case 'bottle':
+        c(0.032, 0.2, 0, 0, 0, mat.steel, 10);
+        c(0.014, 0.03, 0, 0.2, 0, mat.dark, 8);
+        break;
+      case 'phone':
+        b(0.075, 0.008, 0.15, 0, 0, 0, mat.black);
+        b(0.065, 0.001, 0.135, 0, 0.008, 0, mat.dark);
+        break;
+      case 'charger':
+        b(0.04, 0.03, 0.04, 0, 0, 0, mat.white);
+        b(0.006, 0.006, 0.12, 0, 0, 0.08, mat.white, 0.3);
+        break;
+      case 'snack':
+        b(0.05, 0.012, 0.11, 0, 0, 0, mat.woodDark);
+        b(0.052, 0.002, 0.04, 0, 0.012, 0.02, bright);
+        break;
+      case 'wrapper':
+        b(0.05, 0.006, 0.035, 0, 0, 0, mat.steel, 0.5);
+        b(0.03, 0.01, 0.03, 0.01, 0, 0.01, bright, -0.3);
+        break;
+      case 'cup':
+        cyl(0.034, 0.026, 0.085, 0, 0, 0, mat.white, g, 10);
+        cyl(0.036, 0.036, 0.012, 0, 0.07, 0, mat.lightgrey, g, 10);
+        break;
     }
   }
 
@@ -2221,6 +2289,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       const v = Math.sin((i + 1) * 127.1 + n * 311.7) * 43758.5453;
       return v - Math.floor(v);
     };
+    let plantSpot: DeskPlantSpot | null = null;
     if (rnd(0) > 0.12) {
       const side = rnd(1) < 0.5 ? -1 : 1;
       const px = side * (0.4 + rnd(2) * (s.w / 2 - 0.55));
@@ -2231,10 +2300,18 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       pl.position.set(px, 0.75, pz);
       pl.rotation.y = rnd(4) * Math.PI * 2;
       pl.scale.setScalar(0.85 + rnd(5) * 0.4);
+      plantSpot = { x: px, z: pz, r: 0.09 * pl.scale.x };
       pg.add(pl);
       deskPlant(pl, Math.floor(rnd(6) * 4), 0, 0, 0, POTS[Math.floor(rnd(7) * 3)]);
       root.add(mergeStatic(pg, false));
     }
+    // clutter (paper, personal items, tech, snacks): fixed per desk, kept clear of keyboard, mouse, monitor, plant and mug,
+    // merged into one static group per desk
+    const clutter = new THREE.Group();
+    const crnd = seeded(7919 * (i + 1));
+    const accents = [mat.flowerPink, mat.flowerYellow, mat.cactus, mat.terracotta, mat.succ];
+    for (const p of planClutter(crnd, s.w, plantSpot)) deskProp(clutter, p, accents[Math.floor(crnd() * accents.length)]);
+    root.add(mergeStatic(clutter, false));
     // the coffee mug that comes and goes with whoever works here (right of the mouse, where the sitter's hand ends up)
     const mug = new THREE.Group();
     mug.position.set(0.47, 0.75, 0.22);
