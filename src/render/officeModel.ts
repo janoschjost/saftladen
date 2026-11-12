@@ -1796,41 +1796,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     deskRowZ(9.492, ROW3, 1, ROW3_OPT);
     shelf(9.08, 2.65, 2.0, 1.3, 0.4);
     for (const z of [4.6, 7.0]) pendant(9.08, z, 'steel', 2.1, 4.2);
-    // planter / divider wall: deep enough for a plant on the west half, cupboards in both faces, glass on the east half fills the whole gap above (behind seat 18)
-    const DW = 0.9;
-    const DZ0 = CORR + 0.15; // wall runs the full depth of the glass meeting room (corridor partition .. south wall)
-    const DZ1 = B.z1;
-    const COL = 0.25;
-    // structural column at the corridor end: west face flush with the cupboard doors, east face flush with the glass
-    const colW0 = 12.483 - DW / 2 - 0.02;
-    const colW1 = 12.483 + DW / 4 + 0.015;
-    box(colW1 - colW0, 3.8, COL, (colW0 + colW1) / 2, 0, DZ0 + COL / 2, mat.white);
-    box(DW, 1.25, DZ1 - DZ0, 12.483, 0, (DZ0 + DZ1) / 2, mat.white);
-    const doors = 7;
-    const dw = (DZ1 - DZ0 - COL) / doors;
-    for (let i = 0; i < doors; i++) {
-      const dz = DZ0 + COL + (i + 0.5) * dw;
-      for (const f of [-1, 1]) {
-        if ((f === -1 && (i === 1 || i === 4)) || (f === 1 && (i === 2 || i === 5))) {
-          // open cupboard: dark back panel with 3 shelves (Regale)
-          const fx = 12.483 + f * (DW / 2);
-          // shelf frame is 0.02 thick so its front is flush with the closed doors (face + 0.02)
-          box(0.01, 1.0, dw - 0.04, fx + f * 0.005, 0.1, dz, mat.dark);
-          for (const sy of [0.1, 0.43, 0.76, 1.09]) box(0.02, 0.03, dw - 0.04, fx + f * 0.01, sy, dz, mat.lightgrey);
-          for (const sz of [-1, 1]) box(0.02, 1.02, 0.03, fx + f * 0.01, 0.1, dz + (sz * (dw - 0.07)) / 2, mat.lightgrey);
-          continue;
-        }
-        box(0.02, 1.0, dw - 0.04, 12.483 + f * (DW / 2 + 0.01), 0.1, dz, mat.lightgrey); // cupboard door
-        box(0.03, 0.12, 0.02, 12.483 + f * (DW / 2 + 0.03), 0.9, dz + dw * 0.35, mat.black); // handle
-      }
-    }
-    const GX = 12.483 + DW / 4; // glass sits on the east half
-    seg(gx(GX), gz(DZ0), gx(GX), gz(DZ1), 1.25, 2.7, mat.glass, 0.03);
-    box(0.08, 0.1, DZ1 - DZ0, GX, 2.7, (DZ0 + DZ1) / 2, mat.white); // top rail
-    plant(12.483 - DW / 4, 3.7, 1.9, 1.25, true);
-    plant(12.483 - DW / 4, 6.7, 0.9, 1.25, true);
-    coatRack(12.083, 2.65);
-  }, 'Trennwand Kiwis');
+  });
   // Digitale Birnen (x 14.7..19.5)
   within(15.884, 6.1, () => {
     deskRowZ(15.474, ROW3, -1, ROW3_OPT);
@@ -1839,6 +1805,52 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     for (const z of [4.8, 7.2]) pendant(15.884, z, 'steel', 2.1, 4.2);
     plant(18.6, 8.9, 1.0, 0.85);
   });
+  // planter / divider wall between Kreative Kiwis (graphic) and Digitale Birnen (digital): an item of its own, built in
+  // game coordinates so it always spans the whole desk zone (corridor line .. window wall), also when the plan is scaled.
+  // Deep enough for a plant on the west half, cupboards in both faces, glass on the east half up to the top rail.
+  {
+    const DW = 0.9; // depth of the cabinet base
+    const BASE_H = 1.25;
+    const TOP = 2.7; // underside of the top rail (rail top = 2.8, the low ceiling)
+    const COL = 0.25; // structural column at the corridor end
+    const FACE = 0.02; // cupboard doors stand this proud of the base
+    const X = (ax(9.08) + (9.492 - 9.08) + ax(15.884) + (15.474 - 15.884)) / 2; // centred between the facing desk rows of both teams
+    const Z0 = az(CORR) + 0.15; // same start line as the Birnen | glass room cabinet
+    const ZC = Z0 + COL; // south face of the column: base, glass and rail butt against it (no overlapping faces)
+    const ZP = az(B.z1) - 0.15; // inner face of the window wall (parapet / lintel)
+    const ZG = az(B.z1) - 0.02; // just short of the window pane: closes the gap above the parapet without touching the glass
+    const GX = X + DW / 4; // glass sits on the east half
+    const colW = X - DW / 2 - FACE; // column: west face flush with the cupboard doors, east face flush with the glass
+    const colE = GX + 0.015;
+    const mx = (g: number) => g / SCALE + B.x0; // game x -> model x (plant / coat rack take model coordinates)
+    item('divider', 'divider-kiwis-birnen', 'Trennwand Kiwis | Birnen', () => {
+      rbox(colE - colW, 3.8, COL, (colW + colE) / 2, 0, Z0 + COL / 2, mat.white);
+      rbox(X + DW / 2 - colE, BASE_H, COL, (colE + X + DW / 2) / 2, 0, Z0 + COL / 2, mat.white); // base next to the column
+      rbox(DW, BASE_H, ZG - ZC, X, 0, (ZC + ZG) / 2, mat.white);
+      const doors = 7;
+      const dw = (ZP - ZC) / doors;
+      for (let i = 0; i < doors; i++) {
+        const dz = ZC + (i + 0.5) * dw;
+        for (const f of [-1, 1]) {
+          const fx = X + f * (DW / 2);
+          if ((f === -1 && (i === 1 || i === 4)) || (f === 1 && (i === 2 || i === 5))) {
+            // open cupboard: dark back panel with 3 shelves; the frame is as thick as the closed doors, so the fronts are flush
+            rbox(0.01, 1.0, dw - 0.04, fx + f * 0.005, 0.1, dz, mat.dark);
+            for (const sy of [0.1, 0.43, 0.76, 1.09]) rbox(FACE, 0.03, dw - 0.04, fx + f * 0.01, sy, dz, mat.lightgrey);
+            for (const sz of [-1, 1]) rbox(FACE, 1.02, 0.03, fx + f * 0.01, 0.1, dz + (sz * (dw - 0.07)) / 2, mat.lightgrey);
+            continue;
+          }
+          rbox(FACE, 1.0, dw - 0.04, fx + f * 0.01, 0.1, dz, mat.lightgrey); // cupboard door
+          rbox(0.03, 0.12, 0.02, fx + f * 0.03, 0.9, dz + dw * 0.35, mat.black); // handle
+        }
+      }
+      seg(GX, ZC, GX, ZG, BASE_H, TOP, mat.glass, 0.03);
+      rbox(0.08, 0.1, ZP - ZC, GX, TOP, (ZC + ZP) / 2, mat.white); // top rail, column .. lintel
+    });
+    plant(mx(X - DW / 4), 3.7, 1.9, BASE_H, true);
+    plant(mx(X - DW / 4), 6.7, 0.9, BASE_H, true);
+    coatRack(mx(colW - 0.05 - 0.225), 2.65); // free-standing just west of the column
+  }
   // frosted glass wall on low cabinet (Birnen | glass room)
   slab(19.06, 19.5, CORR + 0.15, B.z1, 0, 1.1, mat.white);
   segM(19.5, CORR, 19.5, B.z1, 1.1, 2.7, mat.frosted, 0.04);
