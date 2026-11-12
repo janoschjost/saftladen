@@ -35,10 +35,10 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
    The PR body starts with `Closes #N` on its own line, so merging closes the issue. Then come `## What changed`, `## Try it`, `## Acceptance criteria` (checked, with how each was verified) and optionally `## Notes`. `## Try it` has one clickable link per added or changed `FEATURES.md` line: its id and `http://localhost:5173` + its `url:`, e.g. `- place.meeting: http://localhost:5173/?seed=1&time=11&event=meeting-room`. Lines without a URL: say how to see them. See `gh pr view 23`.
 7. **Watch CI.** Wait for the PR's checks, then clean up only once they are green.
    ```sh
-   gh pr checks --watch --fail-fast   # "no checks reported" right after the push: wait a few seconds, retry
+   gh pr checks --watch --fail-fast
    cd ../saftladen && git worktree remove ../saftladen-issue-N
    ```
-   Red → read the log (`gh run view --log-failed`), fix in the worktree, push, watch again. Keep the worktree until the checks pass.
+   Red → read the log (`gh run view --log-failed`), fix in the worktree, push, watch again. Keep the worktree until the checks pass. "no checks reported" right after the push: wait a few seconds and retry. A PR that only changes `*.md` files gets no checks at all (`paths-ignore` in `ci.yml`), so remove its worktree right away.
 
 ## Commits
 
