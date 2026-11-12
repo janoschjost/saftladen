@@ -28,15 +28,32 @@ Leftover worktree folders of abandoned sessions are not removed automatically: l
 
 ## Loop
 
-Repeat until no eligible issue is left:
+Repeat until no eligible PR or issue is left:
 
+0. **Fix reviewed PRs first:** an open PR labeled `changes requested` and not `in progress`/`in review` comes before any issue (see **Review fixes**).
 1. **Pick** the next eligible issue (see below).
 2. Run the **`AGENTS.md` workflow** for it, steps 2–7: claim → worktree → implement → done → PR → CI green. Claim exits 2 → go back to 1. A `model:*` label hands this step to a subagent (see **Model labels**).
 3. Once the PR's checks are green and its worktree is removed, go straight back to 1. Don't wait for review or merge.
 
 Park an issue instead of working it when it is unclear or needs a product decision (`scripts/issue.sh ask N "<questions>"`), or depends on an unmerged PR or open issue (`scripts/issue.sh block N "<reason, naming #M>"`). Both work before or after claiming; they release a claim. For any other reason to give up after claiming, release it (`scripts/issue.sh release`).
 
-At the end, report: issue → PR link (plus the model, if a label picked one), and the skipped issues and why.
+At the end, report: fixed PRs, issue → PR link (plus the model, if a label picked one), and the skipped issues and why.
+
+## Review fixes
+
+`/review-pr` labels a PR `changes requested` when a dev found problems in it. Oldest first:
+
+```sh
+gh pr list --state open --search 'sort:created-asc label:"changes requested" -label:"in progress" -label:"in review"' --json number -q '.[].number'
+```
+
+1. `scripts/issue.sh claim P` (PR number; exit 2 → next).
+2. Worktree on the PR branch: `git fetch origin && git worktree add ../saftladen-pr-P -B <headRefName> origin/<headRefName>`, `npm ci`. A worktree that already has the branch (`git worktree list`) → use that one and `git reset --hard origin/<headRefName>` if it has no unpushed commits.
+3. Read the latest review and its line comments (`gh pr view P --comments`, `gh api repos/{owner}/{repo}/pulls/P/comments`) and the linked issue. Fix every finding, within the issue's scope. A finding that needs a product decision → ask on the PR, leave the label, release.
+4. Same done checks as `AGENTS.md` step 5, then rebase on `origin/main` if behind, `git push --force-with-lease`.
+5. Comment on the PR what was fixed per finding (reply to line comments: `gh api repos/{owner}/{repo}/pulls/P/comments/<id>/replies -f body=...`), `gh pr edit P --remove-label "changes requested"`, `scripts/issue.sh release P "fixed review findings"`, watch CI like `AGENTS.md` step 7, remove the worktree.
+
+The dev re-checks with `/review-pr P`. A `model:*` label on the PR's issue picks the model as in **Model labels**.
 
 ## Model labels
 
