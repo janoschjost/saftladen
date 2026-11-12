@@ -1,3 +1,4 @@
+import { awayStatus, strings, type AwayPhase } from '../i18n/strings';
 import { makeCollapsible } from './collapsible';
 
 export interface AwayEntry {
@@ -5,13 +6,13 @@ export interface AwayEntry {
   name: string;
   portrait: string | null;
   kind: 'errand' | 'home';
-  /** still on the way out / on the way back */
-  moving: boolean;
+  /** on the way out, gone, or on the way back in */
+  phase: AwayPhase;
   /** seconds until they are back */
   left: number;
 }
 
-const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+const t = strings.presence;
 
 /** "Not in the office" list: who is out and who works from home. Clicking a home-office person opens their live feed. */
 export class Roster {
@@ -25,8 +26,13 @@ export class Roster {
     private onBack: (id: string) => void,
     onAll: () => void,
   ) {
-    (document.getElementById('away-all') as HTMLElement).addEventListener('click', onAll);
-    makeCollapsible(this.root, this.root.querySelector('.m-away__title') as HTMLElement, 'saftladen.away.collapsed', 'dock');
+    const all = document.getElementById('away-all') as HTMLElement;
+    const title = this.root.querySelector('.m-away__title') as HTMLElement;
+    this.root.setAttribute('aria-label', t.panel.title);
+    title.prepend(`${t.panel.title} `);
+    all.textContent = t.panel.callAllBack;
+    all.addEventListener('click', onAll);
+    makeCollapsible(this.root, title, 'saftladen.away.collapsed', 'dock');
   }
 
   update(entries: AwayEntry[]): void {
@@ -65,8 +71,8 @@ export class Roster {
         const back = document.createElement('button');
         back.type = 'button';
         back.className = 'm-away__back';
-        back.title = 'Zurück ins Büro holen';
-        back.setAttribute('aria-label', `${e.name.split(' ')[0]} zurückholen`);
+        back.title = t.panel.callBack;
+        back.setAttribute('aria-label', t.panel.callBackName(e.name.split(' ')[0]));
         back.innerHTML = '<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M10 6H2.5M5.5 3 2.5 6l3 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
         back.addEventListener('click', () => this.onBack(e.id));
         li.append(el, back);
@@ -78,9 +84,9 @@ export class Roster {
         row.kind = e.kind;
         row.el.dataset.kind = e.kind;
         row.el.classList.toggle('is-home', e.kind === 'home');
-        row.el.title = e.kind === 'home' ? 'Arbeitet im Homeoffice: klicken für Livebild' : 'Kurz weg, gleich zurück';
+        row.el.title = t.hint[e.kind];
       }
-      const text = e.kind === 'home' ? (e.moving ? 'Geht nach Hause' : 'Homeoffice') : e.moving ? 'Geht raus' : `Weg · zurück in ${fmt(e.left)}`;
+      const text = awayStatus(e.kind, e.phase, e.left);
       if (row.status.textContent !== text) row.status.textContent = text;
     }
     this.root.hidden = entries.length === 0;

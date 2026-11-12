@@ -1,3 +1,7 @@
+import { strings } from '../i18n/strings';
+
+const t = strings.presence.command;
+
 /** Small card for the selected person: send them to the home office or out of the door. */
 export class Actions {
   private root = document.getElementById('actions') as HTMLElement;
@@ -11,6 +15,8 @@ export class Actions {
   constructor(onHome: () => void, onOut: () => void, onSteer: () => void, onFollow: () => void) {
     this.follow.addEventListener('click', onFollow);
     this.steer.addEventListener('click', onSteer);
+    this.home.textContent = t.home;
+    this.out.textContent = t.errand;
     this.home.addEventListener('click', onHome);
     this.out.addEventListener('click', onOut);
   }
@@ -25,6 +31,6 @@ export class Actions {
     this.steer.setAttribute('aria-pressed', String(steering));
     this.steer.textContent = steering ? 'Steuern beenden' : 'Steuern (WASD)';
     this.home.disabled = homeFull;
-    this.home.title = homeFull ? 'Alle Homeoffices sind besetzt' : '';
+    this.home.title = homeFull ? t.homeFull : '';
   }
 }
