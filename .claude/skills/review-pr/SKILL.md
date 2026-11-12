@@ -1,0 +1,62 @@
+---
+name: review-pr
+description: Guide a dev through reviewing a PR of this repo in the running app - check out the PR in a worktree, start its dev server, walk through each feature URL step by step with what to look for, collect the dev's findings and post them on the PR (or as new issues), then offer to merge. Use when asked to review, test or check a PR.
+argument-hint: "<PR number>"
+---
+
+# Review a PR
+
+Interactive: the dev looks at the app and judges, you prepare, guide and write. Never post, label or merge without the dev having seen it.
+
+Invoking this skill authorizes a worktree for the PR, `npm ci`, a dev server, claiming and releasing the PR, labels, review comments and new issues the dev confirmed. It merges only after the dev answers yes to the merge question. It never pushes code: fixes are `/tackle-issues`' job.
+
+PR: `$ARGUMENTS` (no number → list `gh pr list` and ask which one).
+
+## 1. Claim and set up
+
+```sh
+scripts/issue.sh claim N "in review"     # exit 2 → someone reviews or fixes it right now: tell the dev who, stop
+git fetch origin
+b=$(gh pr view N --json headRefName -q .headRefName)
+git worktree add ../saftladen-pr-N "origin/$b" --detach   # exists already → cd there and `git checkout --detach origin/$b`
+cd ../saftladen-pr-N && npm ci
+```
+
+Start `npm run dev` in the worktree with the Bash tool's `run_in_background`, and read the port from its output (`Local: http://localhost:<port>/`, 5174 or the next free one). Every link below uses that port, never 5173 (that is the dev's main checkout).
+
+## 2. Overview
+
+Read the PR (`gh pr view N --json title,body,files,statusCheckRollup,mergeable`), its diff, the linked issue (`Closes #M`) with all comments, and the `FEATURES.md` lines the PR adds or changes. Tell the dev in a few lines: what the issue asked for, what changed, CI status, conflicts with `main`.
+
+## 3. Walk through
+
+Build the steps from the issue's acceptance criteria, the PR's `## Try it` links and its `FEATURES.md` changes. One step per thing to check, in a sensible order. Each step:
+
+- the link: `http://localhost:<port>` + the `url:` (or how to get there without one)
+- what to do: keys, clicks, how long to wait, where to look
+- what to look for: the expected result, taken from the criterion, plus what would count as broken
+
+Then ask with `AskUserQuestion`: `OK`, `Problem` (the dev describes it under "Other" or in the follow-up) or `Skip`. On a problem, ask enough to make it actionable (what was seen, expected, how to reproduce), and note whether it is part of this issue (→ PR) or something else (→ new issue). One step per question so the dev can test in between.
+
+Then one **regression** step: the existing `FEATURES.md` lines whose files the PR touches, each with its link, checked together.
+
+## 4. Feedback
+
+Show the dev every finding as it will be posted and let them edit or drop each.
+
+- **Part of this PR** → one review with event `COMMENT` (the dev can't approve or request changes on PRs opened from their own account). Attach a finding to a file and line when the diff shows where it comes from, otherwise put it in the review body:
+  ```sh
+  gh api repos/{owner}/{repo}/pulls/N/reviews --input review.json
+  # {"event":"COMMENT","body":"...","comments":[{"path":"src/...","line":42,"side":"RIGHT","body":"..."}]}
+  ```
+  Then `gh pr edit N --add-label "changes requested"` (create the label once if missing: `gh label create "changes requested" --color D93F0B --description "Review found problems; /tackle-issues fixes them"`). `/tackle-issues` picks the PR up from there.
+- **Not part of this PR** → `scripts/issue.sh new "<title>" <bug|enhancement> "<body with acceptance criteria, found while reviewing #N>"`, and mention the new issues in the review body.
+- **Nothing found** → `gh pr review N --comment --body "Reviewed in the app: all criteria OK. <steps checked>"` and remove `changes requested` if it is set.
+
+## 5. Finish
+
+1. `scripts/issue.sh release N "reviewed"` (removes `in review`).
+2. All OK and checks green → ask "Merge PR #N?". Yes → `gh pr merge N --squash --delete-branch`. Never merge without that yes.
+3. Stop the dev server (`lsof -ti tcp:<port> | xargs kill`) and `cd ../saftladen && git worktree remove ../saftladen-pr-N`, unless the dev wants to keep testing.
+
+The dev wants to stop early → still post what was found so far (with their OK) and release the PR. Never leave it claimed.

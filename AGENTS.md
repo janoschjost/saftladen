@@ -41,6 +41,10 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
    ```
    Red → read the log (`gh run view --log-failed`), fix in the worktree, push, watch again. Keep the worktree until the checks pass. "no checks reported" right after the push: wait a few seconds and retry. A PR that only changes `*.md` files gets no checks at all (`paths-ignore` in `ci.yml`), so remove its worktree right away.
 
+## Review
+
+Devs review a PR in the running app with `/review-pr N`. It claims the PR (`in review`), so only one dev reviews it at a time. Findings go on the PR as review comments plus the label `changes requested`, which `/tackle-issues` fixes before new issues; findings outside the PR's issue become new issues.
+
 ## Commits
 
 - Commit only when a dev tells you to, never on your own initiative. Working an issue through this workflow (e.g. `/tackle-issues`) counts as that instruction for the issue's branch.
