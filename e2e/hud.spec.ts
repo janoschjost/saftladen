@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openGame, read, until } from './game';
+import { freeStations, openGame, read, until } from './game';
 
 // Few page loads on purpose: CI renders in software and every openGame costs seconds.
 
@@ -121,6 +121,7 @@ test.describe('hud.settings', () => {
 
 test('actions.sheet + actions.search: A toggles the sheet, previews, number keys, search, Esc', async ({ page }) => {
   await openGame(page);
+  await freeStations(page);
   const sheet = page.locator('#action-sheet');
   await page.keyboard.press('a');
   await expect(sheet).toBeVisible();
@@ -178,6 +179,7 @@ test('actions.sheet + actions.search: A toggles the sheet, previews, number keys
 
 test('actions.camera + actions.handback: Drucken flies to Orbit and follows the lead; a wheel hands back, Esc flies to the overview', async ({ page }) => {
   await openGame(page);
+  await freeStations(page);
   await page.keyboard.press('1'); // from Iso
   await page.keyboard.press('a');
   await page.locator('#action-cards .m-card[data-action="printer"]').click();

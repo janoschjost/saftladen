@@ -34,6 +34,20 @@ export async function until<A = undefined>(page: Page, fn: (g: any, arg: A) => u
   await expect.poll(() => read(page, fn, arg), { timeout }).toBeTruthy();
 }
 
+/**
+ * Empties the printer, the coffee machine and the kitchen: at the start somebody may already be on a coffee or print
+ * errand (who depends on the seed's random draws), and an action that needs the station would say "nicht möglich".
+ */
+export async function freeStations(page: Page): Promise<void> {
+  await read(page, (g) => {
+    for (const p of g.people) {
+      p.cancelPrint();
+      p.cancelRun();
+      p.cancelCoffee();
+    }
+  });
+}
+
 declare global {
   interface Window {
     __game?: unknown;
