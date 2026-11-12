@@ -1,74 +1,118 @@
 import { HOME_COUNT } from '../render/homeOffice';
 import { homeRoomOf, reservedRooms } from '../data/homeAssignments';
+import { DOOR_IN } from './Door';
 import type { NavGrid } from './NavGrid';
 import type { Person } from './Person';
 import type { TimeOfDay } from './TimeOfDay';
 import type { Weather } from './Weather';
 
-/** Share of the team that is out of the office at any time (errands + home office). */
+/** Share of the people on duty that is out of the office at any time (errands + home office). */
 const ABSENT_SHARE = 0.36;
 /** Share of the absences that are home office. */
 const HOME_SHARE = 0.45;
-/** Lunch rush: a lot more people are out between these hours. */
-const LUNCH = { from: 11.75, to: 13.25, share: 0.55, homeShare: 0.25, check: [1, 3], errand: [40, 95] };
 /** Rain keeps people in: fewer errands, those who go take longer, more home office. */
 const RAIN = { share: 0.75, homeShare: 0.6, errandStretch: 1.4 };
-/** Closing time: from this hour on the team trickles out for the day (the night shift stays). */
-const CLOSING = 17.25;
-const CLOSING_CHECK = [1.2, 3.2];
 /** At most this many people are in the office by day; the surplus works from home (errand if all home rooms are taken). */
 const MAX_OFFICE = 15;
 const MAX_HOME = HOME_COUNT; // one live feed per home office variant
 const CHECK = [2, 6]; // seconds between departure decisions
-const ERRAND = [25, 70]; // seconds out for a coffee / lunch / parcel
+const ERRAND = [25, 70]; // seconds out for a coffee / parcel
 const HOME = [90, 220]; // seconds of working from home
 /** homebodies (see TeamMember.homebody): picked this much more often, stay this much longer, likely home at start */
 const HOMEBODY = { weight: 6, stay: 2, startHome: 0.75 };
 
-/** The night shift: these two work late in the office (one, both or nobody), Marco sometimes works from home. Everybody else is off. */
-const NIGHT_OFFICE = ['sandro-hagen', 'fabian-bucher'];
-const NIGHT_HOME = 'marco-rieser';
-const NIGHT_ROLL = [45, 130]; // seconds between night-shift reshuffles
-/** Morning arrivals: first one after `first` s, then one every `gap` s (+ random `jitter`). */
-const DAWN = { first: 3, gap: 14, jitter: 10 };
-const OFF = 9999; // "off for the night": stays away until morning
+/** The working day rolls over at this hour: everybody gets a fresh plan. Hours after midnight count on (01:00 = 25). */
+const DAY_START = 4;
+/** Random spread (hours, +/-) around each person's habitual times (TeamMember.schedule), rolled once per day. */
+const JITTER = { arrive: 0.4, leave: 0.55, lunch: 0.4 };
+/**
+ * Lunch: everybody pops out around their own lunch hour for `errand` seconds. Who is not free within `window` hours
+ * skips it, `skip` of the team eats at the desk anyway. From `crowd` people out at once it counts as the lunch break.
+ */
+const LUNCH = { errand: [22, 45], window: 1.25, skip: 0.12, crowd: 4 };
+/** Night shift (see Schedule.nightOwlChance): stays on until some hour in this range (26.5 = 02:30). */
+const NIGHT_END = [21.5, 26.5];
+/** Crunch: on some days a deadline keeps a few more people in for the night. */
+const CRUNCH = { chance: 0.1, people: [2, 4] };
+/** Errands and home office spells only start between these hours and not within `beforeLeave` hours of going home. */
+const ERRANDS = { from: 7.5, to: 18, beforeLeave: 0.75 };
+/** Seconds between two people walking in (so the door does not jam when the clock is moved by hand). */
+const DOOR_GAP = [1.5, 4];
+/**
+ * Going home / to lunch: seconds between two people setting off, and how many may be on their way to the door at once.
+ * Who is still not out after `patience` seconds (held up on the way) no longer counts, so they do not keep the rest in.
+ */
+const EXIT = { gap: [1, 3], max: 3, patience: 25 };
+/** Nobody walks in while somebody on the way out is within `radius` metres of the door (the doorway fits one); after `wait` seconds they come in anyway. */
+const DOOR_CLEAR = { radius: 3.5, wait: 6 };
+const OFF = 9999; // "off duty": stays away until their next working day starts
 
 const between = ([a, b]: number[]) => a + Math.random() * (b - a);
+/** -spread .. +spread, most likely near 0 */
+const jitter = (spread: number) => (Math.random() + Math.random() - 1) * spread;
 
-/** Sends people out of the door (errand or home office) and lets them come back later. */
+/** One person's working day, rolled fresh every morning from their habitual schedule. */
+interface DayPlan {
+  arrive: number;
+  /** leaves the office at this hour (night shift at home: moves to the home office then) */
+  leave: number;
+  /** done for the day at this hour (= `leave` unless they work at night) */
+  end: number;
+  lunch: number;
+  lunched: boolean;
+  night: boolean;
+}
+
+type Duty = 'duty' | 'home' | 'off';
+
+/** Everybody keeps their own office hours; in between people pop out of the door (errand, lunch or home office) and come back later. */
 export class Presence {
   private timer = 4;
-  private wasNight = false;
-  private nightTimer = 0;
-  private nightCheck = 0;
-  private wantOffice = new Set<string>();
-  private wantHome = false;
-  /** people the player moved by hand during the night: the night shift leaves them alone */
+  private plans = new Map<Person, DayPlan>();
+  private lastHour = 0;
+  private clock = 0;
+  private doorSlot = 0;
+  private exitSlot = 0;
+  /** when the people on their way out set off (`clock`) */
+  private exits = new Map<Person, number>();
+  /** since when (`clock`) somebody waits outside for the doorway to clear */
+  private waiting = new Map<Person, number>();
+  private checkTimer = 0;
+  private onDuty = 0;
+  /** people who are out for lunch right now */
+  private lunchers = new Set<Person>();
+  /** people doing their night shift from the home office */
+  private nightHomers = new Set<Person>();
+  /** people the player moved by hand outside their hours: the schedule leaves them alone for the rest of the day */
   private overridden = new Set<Person>();
-  private closingTimer = 0;
-  private recallTimer = 0;
 
   constructor(
     private people: readonly Person[],
     private tod: TimeOfDay,
     private weather: Weather,
   ) {
-    this.wasNight = tod.night;
+    this.rollDay();
+    this.lastHour = this.workHour;
   }
 
-  /** People who are out on an errand or in the home office (not those who simply went home for the night). */
+  /** Clock hour of the running working day: 04:00 .. 28:00 (hours after midnight count on). */
+  private get workHour(): number {
+    const h = this.tod.hour % 24;
+    return h < DAY_START ? h + 24 : h;
+  }
+
+  /** People who are out on an errand or in the home office (not those who are off duty). */
   get away(): Person[] {
     return this.people.filter((p) => p.presence !== 'in' && p.awayKind !== 'off');
   }
 
-  /** true during the lunch rush */
+  /** true while a good part of the team is out for lunch */
   get lunch(): boolean {
-    return !this.tod.night && this.tod.hour >= LUNCH.from && this.tod.hour < LUNCH.to;
+    return this.lunchers.size >= LUNCH.crowd;
   }
 
   get target(): number {
-    const share = this.lunch ? LUNCH.share : ABSENT_SHARE;
-    return Math.round(this.people.length * share * (this.weather.raining ? RAIN.share : 1));
+    return Math.round(this.onDuty * ABSENT_SHARE * (this.weather.raining ? RAIN.share : 1));
   }
 
   get absent(): Person[] {
@@ -77,6 +121,53 @@ export class Presence {
 
   get homeCount(): number {
     return this.people.filter((p) => p.awayKind === 'home').length;
+  }
+
+  /** Today's hours of one person: their habitual times plus some jitter, now and then a night shift. */
+  private roll(p: Person): DayPlan {
+    const s = p.member.schedule;
+    const arrive = s.arrive + jitter(JITTER.arrive);
+    const leave = Math.max(arrive + 2, s.leave + jitter(JITTER.leave));
+    const lunch = p.member.homebody || Math.random() < LUNCH.skip ? Infinity : s.lunch + jitter(JITTER.lunch);
+    const night = Math.random() < s.nightOwlChance;
+    return { arrive, leave, end: night ? Math.max(leave + 1, between(NIGHT_END)) : leave, lunch, lunched: false, night };
+  }
+
+  /** A new working day: fresh plans for everybody, on some days a crunch keeps a few more people in for the night. */
+  private rollDay(): void {
+    this.overridden.clear();
+    this.lunchers.clear();
+    this.plans.clear();
+    for (const p of this.people) this.plans.set(p, this.roll(p));
+    if (Math.random() >= CRUNCH.chance) return;
+    const pool = this.people.filter((p) => !p.member.homebody && !this.plans.get(p)!.night).sort(() => Math.random() - 0.5);
+    for (const p of pool.slice(0, Math.round(between(CRUNCH.people)))) {
+      const plan = this.plans.get(p)!;
+      plan.night = true;
+      plan.end = Math.max(plan.leave + 1, between(NIGHT_END));
+    }
+  }
+
+  private planOf(p: Person): DayPlan {
+    let plan = this.plans.get(p);
+    if (!plan) this.plans.set(p, (plan = this.roll(p)));
+    return plan;
+  }
+
+  /** Where this person should be at `hour`: in the office (errands and home office spells included), on a night shift at home, or off. */
+  private duty(p: Person, hour: number): Duty {
+    const plan = this.planOf(p);
+    if (hour < plan.arrive || hour >= plan.end) return 'off';
+    if (plan.night && p.member.schedule.nightHome && hour >= plan.leave) return 'home';
+    return 'duty';
+  }
+
+  /** Today's hours of everybody (for a look in the console: `__game.presence.schedule`). */
+  get schedule(): Array<{ id: string; arrive: number; leave: number; end: number; lunch: number; night: boolean }> {
+    return this.people.map((p) => {
+      const { arrive, leave, end, lunch, night } = this.planOf(p);
+      return { id: p.id, arrive, leave, end, lunch, night };
+    });
   }
 
   /** The person's own room (special or assigned), else a free one that nobody else has reserved, else any free one. */
@@ -94,23 +185,9 @@ export class Presence {
     return p.preferredHome;
   }
 
-  /** Who works tonight: one or both of the office people (or nobody), Marco from home about half the time. */
-  private rollNight(): void {
-    this.nightTimer = between(NIGHT_ROLL);
-    const r = Math.random();
-    this.wantOffice = new Set(r < 0.35 ? [NIGHT_OFFICE[0]] : r < 0.7 ? [NIGHT_OFFICE[1]] : r < 0.88 ? NIGHT_OFFICE : []);
-    this.wantHome = Math.random() < 0.5;
-  }
-
-  /** What this person should be doing at night: at their desk (`in`), at home working, or off. */
-  private nightRole(p: Person): 'in' | 'home' | 'off' {
-    if (this.wantOffice.has(p.id)) return 'in';
-    if (p.id === NIGHT_HOME && this.wantHome) return 'home';
-    return 'off';
-  }
-
   /** Some people are already gone when the game starts (#homes: all eight home offices occupied, for a look at the rooms). */
   seed(): void {
+    const hour = (this.lastHour = this.workHour);
     if (location.hash.includes('homes')) {
       const fixed = this.people.filter((p) => homeRoomOf(p.id) !== null);
       const taken = new Set(fixed.map((p) => homeRoomOf(p.id)));
@@ -124,24 +201,30 @@ export class Presence {
         p.homeVariant = free[i];
         p.startAway('home', 9999);
       });
+      for (const p of [...fixed, ...auto]) this.overridden.add(p);
       return;
     }
-    if (this.tod.night) {
-      this.rollNight();
-      for (const p of this.people) {
-        const role = this.nightRole(p);
-        if (role === 'in') continue;
-        if (role === 'home') p.homeVariant = this.freeVariant(p);
-        p.startAway(role, OFF);
+    // who is not at work at this hour starts outside
+    for (const p of this.people) {
+      const plan = this.planOf(p);
+      plan.lunched = hour >= plan.lunch + 0.5;
+      const duty = this.duty(p, hour);
+      if (duty === 'duty') continue;
+      if (duty === 'home') {
+        p.homeVariant = this.freeVariant(p);
+        this.nightHomers.add(p);
       }
-      return;
+      p.startAway(duty, OFF);
     }
-    const homebodies = this.people.filter((p) => p.member.homebody && Math.random() < HOMEBODY.startHome);
+    const onDuty = this.people.filter((p) => p.presence === 'in');
+    this.onDuty = onDuty.length;
+    if (hour < ERRANDS.from || hour >= ERRANDS.to) return; // early birds and the night shift sit at their desks
+    const homebodies = onDuty.filter((p) => p.member.homebody && Math.random() < HOMEBODY.startHome);
     for (const p of homebodies) {
       p.homeVariant = this.freeVariant(p);
       p.startAway('home', Math.random() * HOME[1] * HOMEBODY.stay + 6);
     }
-    const pool = this.people.filter((p) => !p.member.homebody).sort(() => Math.random() - 0.5);
+    const pool = onDuty.filter((p) => !p.member.homebody).sort(() => Math.random() - 0.5);
     const n = Math.round(this.target * 0.8) - homebodies.length;
     let home = 0;
     for (const p of pool.slice(0, Math.max(0, n))) {
@@ -166,15 +249,20 @@ export class Presence {
     return this.people.filter((p) => p.presence === 'in' || p.presence === 'returning').length;
   }
 
-  /** Office over capacity: sends one person to the home office, holds back those about to return from there. Returns true if somebody left. */
+  /** Somebody who is not tied up right now (talk, meeting, printer, ...) and so free to walk out. */
+  private free(p: Person): boolean {
+    return p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob;
+  }
+
+  /** Office over capacity: sends one person to the home office, holds back those about to return. Returns true if somebody left. */
   private capOffice(nav: NavGrid): boolean {
     const present = this.present;
     if (present < MAX_OFFICE) return false;
-    // nobody walks back in while the office is full
-    for (const p of this.people) if (p.presence === 'out' && p.awayKind === 'home' && p.awayLeft < 5 && present >= MAX_OFFICE) p.awayLeft = 5 + Math.random() * 15;
+    // nobody walks back in while the office is full (0 = called back by the player: they do)
+    for (const p of this.people) if (p.presence === 'out' && p.awayKind !== 'off' && p.awayLeft > 0 && p.awayLeft < 5) p.awayLeft = 5 + Math.random() * 15;
     if (present === MAX_OFFICE) return false;
     if (this.people.some((p) => p.presence === 'leaving')) return false;
-    const candidates = this.people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.task && !p.printJob && !p.foosJob && !p.vapeJob);
+    const candidates = this.people.filter((p) => this.free(p) && !p.task);
     if (!candidates.length) return false;
     const p = candidates[Math.floor(Math.random() * candidates.length)];
     const home = this.homeCount < MAX_HOME || p.member.homebody;
@@ -195,13 +283,13 @@ export class Presence {
       if (this.homeFull) return;
       p.homeVariant = this.freeVariant(p);
     }
-    if (this.tod.night || this.tod.hour >= CLOSING) this.overridden.add(p);
+    if (this.duty(p, this.workHour) !== 'duty') this.overridden.add(p);
     p.leaveOffice(nav, kind, 600);
   }
 
   /** Bring somebody back to the office. */
   callBack(p: Person): void {
-    if (this.tod.night || this.tod.hour >= CLOSING) this.overridden.add(p);
+    if (this.duty(p, this.workHour) !== 'duty') this.overridden.add(p);
     if (p.presence === 'out') p.awayLeft = 0;
     else p.cancelLeave();
   }
@@ -216,81 +304,141 @@ export class Presence {
     else this.callBack(p);
   }
 
-  /** Dawn: everybody who went home for the night trickles back, one after the other over a few minutes (no rush at the door). */
-  private dawn(): void {
-    this.overridden.clear();
-    const back = this.people.filter((p) => p.presence === 'out' && (p.awayKind === 'off' || (p.awayKind === 'home' && p.awayLeft > 600)));
-    back.sort(() => Math.random() - 0.5);
-    back.forEach((p, i) => {
-      p.awayLeft = DAWN.first + i * DAWN.gap + Math.random() * DAWN.jitter;
-    });
+  /** May one more person set off for the door right now? */
+  private get exitFree(): boolean {
+    if (this.clock < this.exitSlot) return false;
+    let busy = 0;
+    for (const [p, since] of this.exits) {
+      if (p.presence !== 'leaving') this.exits.delete(p);
+      else if (this.clock - since < EXIT.patience) busy++;
+    }
+    return busy < EXIT.max;
   }
 
-  /** Night: send everybody except tonight's shift home, keep the shift at their desks. */
-  private updateNight(dt: number, nav: NavGrid): void {
-    this.nightTimer -= dt;
-    if (this.nightTimer <= 0) this.rollNight();
-    this.nightCheck -= dt;
-    if (this.nightCheck > 0) return;
-    this.nightCheck = 0.6;
-    let leaving = this.people.filter((p) => p.presence === 'leaving').length;
+  private exit(p: Person): void {
+    this.exitSlot = this.clock + between(EXIT.gap);
+    this.exits.set(p, this.clock);
+  }
+
+  /** Keeps people from walking in against somebody who is about to walk out. */
+  private clearDoor(): void {
+    const busy = this.people.some((p) => p.presence === 'leaving' && Math.hypot(p.pos.x - DOOR_IN.x, p.pos.z - DOOR_IN.z) < DOOR_CLEAR.radius);
     for (const p of this.people) {
-      if (this.overridden.has(p)) continue;
-      const role = this.nightRole(p);
-      switch (p.presence) {
-        case 'in': {
-          if (role === 'in' || leaving >= 6) break;
-          if (p.held || p.controlled || p.talk || p.meetJob || p.printJob || p.foosJob || p.vapeJob) break;
-          if (role === 'home') p.homeVariant = this.freeVariant(p);
-          p.leaveOffice(nav, role, OFF);
-          leaving++;
-          break;
-        }
-        case 'leaving':
-          if (role === 'in') p.cancelLeave();
-          else {
-            p.awayKind = role;
-            p.awayLeft = OFF;
-          }
-          break;
-        case 'out':
-          if (role === 'in') {
-            if (p.awayLeft > 12) p.awayLeft = between([3, 12]); // back to the desk soon
-          } else if (p.awayKind !== role || p.awayLeft < OFF - 1) {
-            if (role === 'home' && p.awayKind !== 'home') p.homeVariant = this.freeVariant(p);
-            p.awayKind = role;
-            p.awayLeft = OFF;
-          }
-          break;
+      if (!busy || p.presence !== 'out') this.waiting.delete(p);
+      else if (p.awayLeft < 0.5) {
+        const since = this.waiting.get(p) ?? this.clock;
+        this.waiting.set(p, since);
+        if (this.clock - since < DOOR_CLEAR.wait) p.awayLeft = 0.5;
       }
     }
   }
 
+  /** Off duty (or night shift at home): out of the door and away until the plan says otherwise. */
+  private sendOff(p: Person, kind: 'off' | 'home', nav: NavGrid): void {
+    switch (p.presence) {
+      case 'in':
+        if (!this.free(p) || !this.exitFree) return;
+        this.exit(p);
+        if (kind === 'home') p.homeVariant = this.freeVariant(p);
+        p.leaveOffice(nav, kind, OFF);
+        break;
+      case 'leaving':
+      case 'out':
+        if (p.awayKind === kind && p.awayLeft >= OFF - 1) return;
+        if (kind === 'home' && p.awayKind !== 'home') p.homeVariant = this.freeVariant(p);
+        p.awayKind = kind;
+        p.awayLeft = OFF;
+        break;
+      default:
+        return; // just walking in: turns around once inside
+    }
+    if (kind === 'home') this.nightHomers.add(p);
+    else this.nightHomers.delete(p);
+    this.lunchers.delete(p);
+  }
+
+  /** Their day starts: in through the door, one after the other. With a full office (and for homebodies) the day starts away. */
+  private arrive(p: Person): void {
+    const coming = this.people.filter((o) => o.presence === 'out' && o.awayKind === 'off' && o.awayLeft < 600).length;
+    const full = this.present + coming >= MAX_OFFICE;
+    if (p.member.homebody ? Math.random() < HOMEBODY.startHome : full) {
+      // no room: the day starts in the home office, or out and about when all home rooms are taken
+      const home = p.member.homebody || this.homeCount < MAX_HOME;
+      if (home) p.homeVariant = this.freeVariant(p);
+      p.awayKind = home ? 'home' : 'errand';
+      p.awayLeft = home ? between(HOME) * (p.member.homebody ? HOMEBODY.stay : 1) : between(ERRAND);
+      return;
+    }
+    this.doorSlot = Math.max(this.doorSlot + between(DOOR_GAP), this.clock + Math.random());
+    p.awayLeft = this.doorSlot - this.clock;
+  }
+
+  /** Lunch at their own hour. */
+  private lunchBreak(p: Person, plan: DayPlan, hour: number, nav: NavGrid): void {
+    if (hour < plan.lunch) plan.lunched = false; // clock moved back
+    if (plan.lunched || hour < plan.lunch) return;
+    if (p.presence !== 'in' || hour > plan.lunch + LUNCH.window || hour > plan.leave - ERRANDS.beforeLeave) {
+      plan.lunched = true; // ate at home / on the way / not at all
+      return;
+    }
+    if (!this.free(p) || !this.exitFree) return;
+    this.exit(p);
+    plan.lunched = true;
+    this.lunchers.add(p);
+    p.leaveOffice(nav, 'errand', between(LUNCH.errand) * (this.weather.raining ? RAIN.errandStretch : 1));
+  }
+
+  /** Holds everybody to today's plan: arrivals, lunch, going home, night shifts. */
+  private followPlans(hour: number, nav: NavGrid): void {
+    let onDuty = 0;
+    for (const p of this.lunchers) if (p.presence === 'in') this.lunchers.delete(p);
+    for (const p of this.people) {
+      const duty = this.duty(p, hour);
+      if (duty !== 'off') onDuty++;
+      if (this.overridden.has(p)) continue;
+      if (duty !== 'duty') {
+        this.sendOff(p, duty, nav);
+        continue;
+      }
+      if (p.presence === 'leaving' && p.awayKind === 'off') {
+        p.cancelLeave(); // clock moved back
+      } else if (p.presence === 'out' && p.awayKind === 'off' && p.awayLeft > 600) {
+        this.arrive(p);
+      } else if (p.presence === 'out' && p.awayKind === 'home' && this.nightHomers.has(p)) {
+        this.nightHomers.delete(p); // clock moved back: an ordinary home office spell again
+        p.awayLeft = between(HOME) * 0.5;
+      } else {
+        this.lunchBreak(p, this.planOf(p), hour, nav);
+      }
+    }
+    this.onDuty = onDuty;
+  }
+
   update(dt: number, nav: NavGrid): void {
-    if (this.tod.night !== this.wasNight) {
-      this.wasNight = this.tod.night;
-      if (this.tod.night) {
-        this.overridden.clear();
-        this.rollNight();
-      } else this.dawn();
+    this.clock += dt;
+    const hour = this.workHour;
+    if (hour < this.lastHour - 20) this.rollDay(); // past 04:00 (a smaller step back is the player moving the clock)
+    this.lastHour = hour;
+    this.checkTimer -= dt;
+    if (this.checkTimer <= 0) {
+      this.checkTimer = 0.5;
+      this.followPlans(hour, nav);
     }
-    if (this.tod.night) {
-      this.updateNight(dt, nav);
-      return;
-    }
-    if (this.tod.hour >= CLOSING) {
-      this.closing(dt, nav);
-      return;
-    }
-    this.recall(dt);
+    this.clearDoor();
+    if (hour < ERRANDS.from || hour >= ERRANDS.to) return;
     this.capOffice(nav);
     this.timer -= dt;
     if (this.timer > 0) return;
-    const lunch = this.lunch;
-    this.timer = between(lunch ? LUNCH.check : CHECK);
+    this.timer = between(CHECK);
     const leaving = this.people.filter((p) => p.presence === 'leaving').length;
-    if (this.absent.length >= this.target || leaving >= (lunch ? 3 : 2)) return;
-    const candidates = this.people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.task && !p.printJob && !p.foosJob && !p.vapeJob);
+    // enough people out already; a full office still lets somebody go, so that those waiting outside get their turn
+    if ((this.away.length >= this.target && this.present < MAX_OFFICE) || leaving >= 2) return;
+    const candidates = this.people.filter((p) => {
+      if (!this.free(p) || p.task || this.overridden.has(p)) return false;
+      const plan = this.planOf(p);
+      // not right before lunch or going home
+      return this.duty(p, hour) === 'duty' && hour < plan.leave - ERRANDS.beforeLeave && (plan.lunched || hour < plan.lunch - 0.5);
+    });
     if (!candidates.length) return;
     // homebodies get several tickets in the draw
     const draw = candidates.flatMap((c) => Array<Person>(c.member.homebody ? HOMEBODY.weight : 1).fill(c));
@@ -302,37 +450,9 @@ export class Presence {
       p.leaveOffice(nav, 'home', between(HOME) * HOMEBODY.stay);
       return;
     }
-    const homeShare = this.weather.raining ? RAIN.homeShare : lunch ? LUNCH.homeShare : HOME_SHARE;
+    const homeShare = this.weather.raining ? RAIN.homeShare : HOME_SHARE;
     const home = Math.random() < homeShare && this.homeCount < MAX_HOME;
     if (home) p.homeVariant = this.freeVariant(p);
-    p.leaveOffice(nav, home ? 'home' : 'errand', home ? between(HOME) : between(lunch ? LUNCH.errand : ERRAND) * stretch);
-  }
-
-  /** Time was moved back before closing: whoever went home for the day returns. */
-  private recall(dt: number): void {
-    this.recallTimer -= dt;
-    if (this.recallTimer > 0) return;
-    this.recallTimer = 1;
-    for (const p of this.people) {
-      if (p.awayKind !== 'off' || this.overridden.has(p)) continue;
-      if (p.presence === 'out' && p.awayLeft > 600) p.awayLeft = between([3, 40]);
-      else if (p.presence === 'leaving') p.cancelLeave();
-    }
-  }
-
-  /** Closing time: one person after the other heads home for the day. */
-  private closing(dt: number, nav: NavGrid): void {
-    this.closingTimer -= dt;
-    if (this.closingTimer > 0) return;
-    this.closingTimer = between(CLOSING_CHECK);
-    const leaving = this.people.filter((p) => p.presence === 'leaving').length;
-    if (leaving >= 3) return;
-    const stays = new Set([...NIGHT_OFFICE, NIGHT_HOME]);
-    const candidates = this.people.filter(
-      (p) => p.inOffice && !stays.has(p.id) && !this.overridden.has(p) && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob,
-    );
-    if (!candidates.length) return;
-    const p = candidates[Math.floor(Math.random() * candidates.length)];
-    p.leaveOffice(nav, 'off', OFF);
+    p.leaveOffice(nav, home ? 'home' : 'errand', home ? between(HOME) : between(ERRAND) * stretch);
   }
 }
