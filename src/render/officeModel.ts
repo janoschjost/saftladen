@@ -43,12 +43,9 @@ export const CORRIDOR_POINT: Vec2 = { x: ax(12), z: az(1.1) };
 const DEBUG_ROW_LABELS = true;
 let rowCount = 0;
 
+import { BAND, CZ, H_CORE, H_LOW, ROOF_HI, ROOF_LO, TEETH, roofHeightAt } from './roofHeight';
+
 const CORR = 2.2; // z where the hallway ends (desk zone starts)
-const CZ = -1.0; // z of the core's south wall (rooms z B.z0..CZ), hallway CZ..CORR
-const H_LOW = 2.8; // flat ceiling along window walls
-const H_CORE = 3.3; // top of core box / text wall
-const BAND = 6.7; // z where the high folded roof ends and the low window band begins
-const TEETH = [-5, 1.3, 7.9, 14.5, 21.1, 27.7]; // sawtooth roof fold lines (x)
 const CUT = 1.2; // interior walls are solid up to here, see-through above
 const DOOR_MAX = 1.3; // openings up to this width are doors and keep their size when the plan is scaled
 const FRAME_LAP = 0.006; // door frame overlaps the glass around it by this much (m), so no faces are coplanar
@@ -70,6 +67,8 @@ export interface OfficeModel {
   desks: DeskPlacement[];
   /** every piece of furniture the room editor can move (desks included) */
   items: RoomItem[];
+  /** top of every pendant cord (plan coordinates, height in m), to check the cords end under the roof */
+  pendantCords: Array<{ x: number; z: number; top: number }>;
   /** coat stands with their hooks */
   coatRacks: CoatRackRig[];
   /** footprints (game space) that block walking, for the nav grid: architecture + the items where they stand right now */
@@ -758,10 +757,12 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       world.add(s);
     }
   }
+  const pendantCords = new Map<string, { x: number; z: number; top: number }>();
   function pendant(x: number, z: number, type: 'steel' | 'black' | 'cage' = 'steel', bottom = 2.0, ceil = 3.6): void {
     item('pendant', at('pendant', x, z), 'Hängelampe', () => pendantParts(x, z, type, bottom, ceil));
   }
   function pendantParts(x: number, z: number, type: 'steel' | 'black' | 'cage' = 'steel', bottom = 2.0, ceil = 3.6): void {
+    pendantCords.set(`${x},${z}`, { x, z, top: ceil });
     cyl(0.008, 0.008, EXACT ? ceil - bottom - 0.3 : Math.min(ceil - bottom - 0.3, 0.8), x, bottom + 0.3, z, mat.black, world, 4);
     if (type === 'steel') cyl(0.06, 0.2, 0.3, x, bottom, z, mat.steel);
     if (type === 'black') cyl(0.05, 0.28, 0.3, x, bottom, z, mat.black);
@@ -2031,21 +2032,21 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   within(7.1, 6.1, () => {
     deskRowZ(2.72, ROW3, 1, ROW3_OPT); // flipped, back against the reception counter (face x=2.3)
     box(0.84, 1.3, 6.45, 5.486, 0, 6.125, mat.white); // white divider units, double depth, desk-side face unchanged (x 5.906)
-    for (const z of [4.5, 7.2]) pendant(3.0, z, 'steel', 2.1, 4.2);
+    for (const z of [4.5, 7.2]) pendant(3.0, z, 'steel', 2.1, roofHeightAt(3.0, z));
   }, 'Trennmöbel Himbeeren');
   // Kreative Kiwis (x 9.7..12.483)
   within(9.08, 5.9, () => {
     deskRowZ(8.672, ROW3, -1, ROW3_OPT);
     deskRowZ(9.492, ROW3, 1, ROW3_OPT);
     shelf(9.08, 2.65, 2.0, 1.3, 0.4);
-    for (const z of [4.6, 7.0]) pendant(9.08, z, 'steel', 2.1, 4.2);
+    for (const z of [4.6, 7.0]) pendant(9.08, z, 'steel', 2.1, roofHeightAt(9.08, z));
   });
   // Digitale Birnen (x 14.7..19.5)
   within(15.884, 6.1, () => {
     deskRowZ(15.474, ROW3, -1, ROW3_OPT);
     deskRowZ(16.294, ROW3, 1, ROW3_OPT);
     shelf(15.884, 2.65, 2.4, 1.3, 0.4);
-    for (const z of [4.8, 7.2]) pendant(15.884, z, 'steel', 2.1, 4.2);
+    for (const z of [4.8, 7.2]) pendant(15.884, z, 'steel', 2.1, roofHeightAt(15.884, z));
     plant(18.6, 8.9, 1.0, 0.85);
   });
   // planter / divider wall between Kreative Kiwis (graphic) and Digitale Birnen (digital): an item of its own, built in
@@ -2291,8 +2292,8 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     flat(-5, BAND, B.x1, B.z1, H_LOW); // low band along long window wall
     flat(27.7, B.z0, B.x1, BAND, H_LOW); // low band along east end
     flat(-5, B.z0, 26, CZ, H_CORE); // lid of core box
-    const lo = 3.8;
-    const hi = 5.5;
+    const lo = ROOF_LO;
+    const hi = ROOF_HI;
     for (let i = 0; i < TEETH.length - 1; i++) {
       const a = TEETH[i];
       const b = TEETH[i + 1];
@@ -2534,7 +2535,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     roomLabels.add(sp);
   });
 
-  return { desks, items, coatRacks, blockers: allBlockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter, machine: kitchenMachine, stands: kitchenStands, table: tableSeats }, phoneBooth: { seat: boothSeat, doorPos: { x: ax(23.75), z: az(CZ) } }, toilets: { cabins: toiletCabins, wait: [{ x: ax(3.35), z: az(-3.3) }, { x: ax(0.7), z: az(-3.2) }] } };
+  return { desks, items, pendantCords: [...pendantCords.values()], coatRacks, blockers: allBlockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter, machine: kitchenMachine, stands: kitchenStands, table: tableSeats }, phoneBooth: { seat: boothSeat, doorPos: { x: ax(23.75), z: az(CZ) } }, toilets: { cabins: toiletCabins, wait: [{ x: ax(3.35), z: az(-3.3) }, { x: ax(0.7), z: az(-3.2) }] } };
 }
 
 /**
