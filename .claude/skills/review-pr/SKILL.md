@@ -36,9 +36,9 @@ Build the steps from the issue's acceptance criteria, the PR's `## Try it` links
 - what to do: keys, clicks, how long to wait, where to look
 - what to look for: the expected result, taken from the criterion, plus what would count as broken
 
-Then ask with `AskUserQuestion`: `OK`, `Problem` (the dev describes it under "Other" or in the follow-up) or `Skip`. On a problem, ask enough to make it actionable (what was seen, expected, how to reproduce), and note whether it is part of this issue (→ PR) or something else (→ new issue). One step per question so the dev can test in between.
+Ask each step with `AskUserQuestion`, and put the whole step into the `question` text itself: the full link, what to do and what to look for, one per line. The open dialog covers the chat, so text written before it is not visible while the dev tests; don't rely on it. Options: `OK`, `Problem` (the dev describes it under "Other" or in the follow-up) or `Skip`. On a problem, ask enough to make it actionable (what was seen, expected, how to reproduce), and note whether it is part of this issue (→ PR) or something else (→ new issue). One step per question so the dev can test in between.
 
-Then one **regression** step: the existing `FEATURES.md` lines whose files the PR touches, each with its link, checked together.
+Then one **regression** step: the existing `FEATURES.md` lines whose files the PR touches, each with its link, checked together, again with every link and what to look for in the question text.
 
 ## 4. Feedback
 
