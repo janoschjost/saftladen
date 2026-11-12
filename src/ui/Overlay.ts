@@ -4,7 +4,6 @@ export class Overlay {
   private tipName = document.getElementById('tooltip-name') as HTMLElement;
   private tipRole = document.getElementById('tooltip-role') as HTMLElement;
   private labels = document.getElementById('labels') as HTMLElement;
-  private toggle = document.getElementById('toggle-names') as HTMLButtonElement;
   private meta = document.getElementById('hud-meta') as HTMLElement;
   private metaKey = '';
   private labelEls = new Map<string, HTMLElement>();
@@ -12,10 +11,8 @@ export class Overlay {
   private reticlePrompt = document.getElementById('reticle-prompt') as HTMLElement;
   private labelClip = '';
   namesVisible = false;
-
-  constructor() {
-    this.toggle.addEventListener('click', () => this.toggleNames());
-  }
+  /** called whenever the name labels are switched on or off (the settings switch mirrors it) */
+  onNames: ((on: boolean) => void) | null = null;
 
   /** Walk-mode crosshair: `null` hides it, '' shows the dot only, text adds the interaction hint below it. */
   setReticle(prompt: string | null): void {
@@ -65,9 +62,13 @@ export class Overlay {
   }
 
   toggleNames(): void {
-    this.namesVisible = !this.namesVisible;
-    this.toggle.setAttribute('aria-pressed', String(this.namesVisible));
-    for (const el of this.labelEls.values()) el.hidden = !this.namesVisible;
+    this.setNames(!this.namesVisible);
+  }
+
+  setNames(on: boolean): void {
+    this.namesVisible = on;
+    for (const el of this.labelEls.values()) el.hidden = !on;
+    this.onNames?.(on);
   }
 
   placeLabels(items: Array<{ id: string; x: number; y: number; hidden?: boolean }>): void {

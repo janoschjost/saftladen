@@ -49,15 +49,16 @@ export class Easter {
     return this.discoT > 0;
   }
 
-  key(e: KeyboardEvent): void {
+  /** Feeds the Konami sequence; true when this key completed it (the key then does nothing else). */
+  key(e: KeyboardEvent): boolean {
     // held keys repeat and modifiers are not part of the code: neither may break the sequence
-    if (e.repeat || /^(Shift|Control|Alt|Meta|CapsLock)/.test(e.code)) return;
+    if (e.repeat || /^(Shift|Control|Alt|Meta|CapsLock)/.test(e.code)) return false;
     const code = e.code;
     this.seq = code === KONAMI[this.seq] ? this.seq + 1 : code === KONAMI[0] ? 1 : 0;
-    if (this.seq === KONAMI.length) {
-      this.seq = 0;
-      this.discoT = DISCO_SECONDS;
-    }
+    if (this.seq !== KONAMI.length) return false;
+    this.seq = 0;
+    this.discoT = DISCO_SECONDS;
+    return true;
   }
 
   /** A click on a walker. Returns nothing; the effects show up in `angry`, `flipAngle` and the pose code. */

@@ -292,7 +292,7 @@ export class CharacterPicker {
   close(): void {
     this.root.hidden = true;
     cancelAnimationFrame(this.raf);
-    this.openBtn.focus();
+    document.getElementById('open-settings')?.focus(); // the picker was opened from the settings popover
   }
 
   private resize(): void {

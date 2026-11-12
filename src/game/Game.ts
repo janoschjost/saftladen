@@ -15,6 +15,11 @@ import { formatTime, type DayCtx, type DayTask } from './Day';
 import { buildOffice, CORRIDOR_POINT, type OfficeModel } from '../render/officeModel';
 import { buildWorld, NAV_CELL, WORLD } from '../render/World';
 import { Actions } from '../ui/Actions';
+import { ActionSheet, PREVIEW, type SheetPick } from '../ui/ActionSheet';
+import { NowChip } from '../ui/NowChip';
+import { People } from '../ui/People';
+import { OFFICE_ACTIONS, type OfficeAction } from '../data/actions';
+import { ACTION_POLAR, ARRIVE_RADIUS, FOLLOW_ZOOM, shotPosition, type Shot } from '../render/cameraFly';
 import { Feeds } from '../ui/Feeds';
 import { Overlay } from '../ui/Overlay';
 import { Roster } from '../ui/Roster';
@@ -64,6 +69,11 @@ const STEER_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'Arr
 const OVERCAST = new THREE.Color('#8c95a3'); // sky colour in the rain
 const MAX_FRAME = 0.25; // avoid spiral of death after tab switches
 const HIP_HEIGHT = 0.8; // hip pivots of the character rig: the upper body bends here
+const ACTION_MAX = 240; // seconds: an action's chip and camera give up after this long at the latest
+const ACTION_NO_LEAD = 6; // seconds the chip stays for an action that moves nobody (e.g. rain)
+
+/** What an action may change on a person; the first person whose values change is the one the camera follows. */
+const leadState = (p: Person): unknown[] => [p.printJob, p.foosJob, p.meetPhase, p.coffeeJob, p.vapeJob, p.phoneJob, p.talk, p.presence === 'in' ? null : p.presence];
 
 export class Game {
   private renderer: THREE.WebGLRenderer;
@@ -89,6 +99,20 @@ export class Game {
   private spawnFx!: SpawnFx;
   private xmas!: Christmas;
   private settings!: Settings;
+  private sheet!: ActionSheet;
+  private now!: NowChip;
+  private peoplePanel!: People;
+  /**
+   * The action started from the Aktionen sheet: `lead` is the person it moved first (`keys`: which of their
+   * `leadState` values it set), `owned` while the camera is the action's (the player has not grabbed it),
+   * `settled` once the camera rests on the place.
+   */
+  private action: { def: OfficeAction | null; caption: string; lead: Person | null; keys: number[]; owned: boolean; settled: boolean; age: number; azimuth: number } | null = null;
+  /** previews the sheet asked for; drawn in the next frame, right before the main render */
+  private previews: Array<{ action: OfficeAction; canvas: HTMLCanvasElement }> = [];
+  private previewCam = new THREE.PerspectiveCamera(60, PREVIEW.width / PREVIEW.height, 0.1, 400);
+  private picker = document.getElementById('picker') as HTMLElement;
+  private dayMenu = document.getElementById('day-menu') as HTMLElement;
   /** pets (dogs and cats), cached */
   private pets: Dog[] = [];
   private lastPresence = new Map<Person, Person['presence']>();
@@ -203,10 +227,18 @@ export class Game {
     this.views = new Views(stage, this.renderer.domElement, this.nav, (mode) => {
       this.roof.visible = mode === 'walk' ? true : mode === 'plan' || mode === 'third' ? false : this.roofWanted;
       if (mode !== 'third' && this.day && this.day.state !== 'waiting') this.endDay(false); // the player switched the camera away
+      if (mode !== 'orbit') this.handBack(); // the camera is the player's again
+      this.settings?.setView(mode);
+      if (mode === 'walk' || mode === 'third') {
+        this.settings?.setOpen(false);
+        this.sheet?.close();
+      }
     });
+    this.views.onUserCamera = () => this.handBack();
     this.dayHud = new DayHud(() => this.endDay());
     this.views.setDoorways(model.doors.map((d) => ({ x: d.center.x, z: d.center.z, r: d.width / 2 })));
     this.overlay = new Overlay();
+    this.overlay.onNames = (on) => this.settings?.setNames(on);
     this.roster = new Roster(
       (id) => this.feeds.focus(id),
       (id) => {
@@ -236,13 +268,19 @@ export class Game {
       (id, number) => this.assignSeat(id, number),
     );
 
-    this.settings = new Settings((state) => {
+    this.settings = new Settings({
+      onChange: (state) => {
         model.rowLabels.visible = state.tables;
         model.roomLabels.visible = state.rooms;
         this.seats.setLabelsVisible(state.seats);
-      this.weather.mode = state.xmas ? 'sun' : state.weather; // it snows instead of raining
-      this.xmas.set(state.xmas);
+        this.weather.mode = state.xmas ? 'sun' : state.weather; // it snows instead of raining
+        this.xmas.set(state.xmas);
+      },
+      onView: (mode) => this.views.setMode(mode),
+      onNames: (on) => this.overlay.setNames(on),
     });
+    this.settings.setView(this.views.mode);
+    this.peoplePanel = new People();
 
     this.ring = new THREE.Mesh(
       new THREE.RingGeometry(0.5, 0.65, 32).rotateX(-Math.PI / 2),
@@ -256,6 +294,15 @@ export class Game {
     this.spawn();
     new DevPanel();
     this.registerDevEvents();
+    this.now = new NowChip(
+      () => this.toggleActionFollow(),
+      () => this.endAction(true),
+    );
+    this.sheet = new ActionSheet({
+      onPick: (pick) => this.runAction(pick),
+      onPreviews: (items) => (this.previews = items),
+      onToggle: (open) => open && this.settings.setOpen(false),
+    });
     this.pets = this.walkers.filter((w): w is Dog => w instanceof Dog);
     this.presence = new Presence(this.people, this.tod, this.weather);
     this.presence.seed();
@@ -525,14 +572,35 @@ export class Game {
       if (this.views.mode === 'walk') return this.interact();
       if (this.views.mode === 'third') return;
       const hit = this.pick(this.toNdc(e));
-      if (hit) this.easter.click(hit);
+      if (hit) {
+        this.easter.click(hit);
+        this.handBack(); // selecting by hand: the selection's follow takes over
+      }
       this.selected = hit && hit !== this.selected ? hit : null;
       this.followed = this.selected && !this.selected.away ? this.selected : null; // selecting starts follow mode right away
     });
     window.addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLElement && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
-      this.easter.key(e);
+      const konami = this.easter.key(e);
       if (this.day && e.code === 'Space') e.preventDefault(); // held to play in the day tasks, must not scroll or press a button
+      if (e.key === 'Escape' && this.action) {
+        // Esc ends the action first: follow off, camera back to the overview (the next Esc deselects as before)
+        this.endAction(true);
+        return;
+      }
+      if (this.hudKeys && !e.repeat && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        if (e.key === ',') {
+          this.sheet.close();
+          this.settings.setOpen(!this.settings.isOpen);
+          return;
+        }
+        // A steers left while a person is steered, and ends the Konami code
+        if (e.key.toLowerCase() === 'a' && !this.steered && !konami && !this.editor.active) {
+          this.sheet.toggle();
+          return;
+        }
+      }
+      if (this.action?.owned && !this.steered && STEER_KEYS.includes(e.code)) this.handBack(); // WASD: the player takes the camera
       if (this.views.mode !== 'walk' && this.views.mode !== 'third' && this.editor.key(e)) {
         if (this.editor.active) this.selected = null;
         return;
@@ -581,6 +649,7 @@ export class Game {
     this.updateDay(dt);
     this.updateSteer(dt);
     this.updateFollow(dt);
+    this.updateAction(dt);
     while (this.acc >= STEP) {
       this.simulate(STEP);
       this.acc -= STEP;
@@ -1058,6 +1127,10 @@ export class Game {
     if (!person) return;
     this.endDay();
     this.editor.setActive(false);
+    this.sheet.close();
+    this.settings.setOpen(false);
+    this.endAction(false);
+    document.body.classList.add('is-day'); // gear and Aktionen make way for the day HUD
     this.selected = this.followed = null;
     const tasks = (DAY_STORIES[id] ?? []).map((make) => make());
     const needs = [...new Set(tasks.flatMap((t) => t.needs ?? []))].flatMap((nid) => this.people.find((p) => p.id === nid) ?? []);
@@ -1079,6 +1152,7 @@ export class Game {
     const d = this.day;
     if (!d) return;
     this.day = null;
+    document.body.classList.remove('is-day');
     d.tasks.forEach((t) => t.dispose());
     this.release(d.person);
     this.dayHud.hide();
@@ -1226,6 +1300,157 @@ export class Game {
     );
   }
 
+  /** Gear, Aktionen and their keys only exist outside the walk view, the day and the full-screen menus. */
+  private get hudKeys(): boolean {
+    return !this.day && this.views.mode !== 'walk' && this.views.mode !== 'third' && this.picker.hasAttribute('hidden') && this.dayMenu.hasAttribute('hidden');
+  }
+
+  /**
+   * Starts an action by card id (`src/data/actions.ts`) or by dev event id (`?action=<id>`, tests). `quiet`: no
+   * "nicht möglich" chip when it cannot run (the URL param retries).
+   */
+  startAction(id: string, quiet = false): 'started' | 'failed' | 'unknown' {
+    const def = OFFICE_ACTIONS.find((a) => a.id === id) ?? null;
+    const ev = devEvents.list().find((e) => e.id === (def?.eventId ?? id));
+    if (!ev) return 'unknown';
+    return this.runAction({ eventId: ev.id, label: def?.label ?? ev.label, action: def }, quiet);
+  }
+
+  /** Runs the event; when it ran, the camera flies in Orbit to the first person it moved (or to the place). */
+  private runAction(pick: SheetPick, quiet = false): 'started' | 'failed' | 'unknown' {
+    const ev = devEvents.list().find((e) => e.id === pick.eventId);
+    if (!ev) return 'unknown';
+    const before = new Map(this.people.map((p) => [p, leadState(p)]));
+    const result = this.day ? null : ev.run();
+    if (result === null) {
+      // the camera stays where it is; a running action gets its chip back afterwards
+      if (!quiet) this.now.fail(pick.label, () => this.action && this.now.show(this.action.caption, this.action.owned));
+      return 'failed';
+    }
+    let lead: Person | null = null;
+    let keys: number[] = [];
+    for (const p of this.people) {
+      const was = before.get(p)!;
+      const changed = leadState(p).flatMap((v, i) => (v !== was[i] && v !== null ? [i] : []));
+      if (!changed.length) continue;
+      lead = p;
+      keys = changed;
+      break;
+    }
+    this.endAction(false);
+    if (this.views.mode !== 'orbit') this.views.setMode('orbit', true);
+    this.followed = null; // the action directs the camera now
+    const name = lead ? lead.member.name.split(' ')[0] : '';
+    const text = pick.action?.caption ?? (typeof result === 'string' && result ? result : pick.label);
+    const caption = name && !text.includes(name) ? `${text} · ${name}` : text;
+    this.action = { def: pick.action, caption, lead, keys, owned: true, settled: false, age: 0, azimuth: this.views.orbitShot.azimuth };
+    this.now.show(caption, true);
+    this.aimCamera();
+    return 'started';
+  }
+
+  /** The camera shot of an action's place: its angle and zoom. */
+  private placeShot(def: OfficeAction): Shot {
+    return { x: def.place.x, y: 0.6, z: def.place.z, azimuth: THREE.MathUtils.degToRad(def.angle), polar: ACTION_POLAR, dist: this.views.overviewShot().dist / def.zoom };
+  }
+
+  /** Close behind the lead person, from the side the camera looked from when the action started. */
+  private leadShot(a: NonNullable<Game['action']>): Shot {
+    const p = a.lead!.root.position;
+    return { x: p.x, y: 0.8, z: p.z, azimuth: a.azimuth, polar: ACTION_POLAR, dist: this.views.overviewShot().dist / FOLLOW_ZOOM };
+  }
+
+  private arrived(a: NonNullable<Game['action']>): boolean {
+    return !!a.def && !!a.lead && Math.hypot(a.lead.pos.x - a.def.place.x, a.lead.pos.z - a.def.place.z) < ARRIVE_RADIUS;
+  }
+
+  /** Points the camera for the running action: trail the walking lead (if "Kamera folgt bei Aktionen"), else the place. */
+  private aimCamera(): void {
+    const a = this.action;
+    if (!a?.owned || this.views.mode !== 'orbit') return;
+    if (a.lead && this.settings.followActions && !this.arrived(a)) {
+      a.settled = false;
+      this.views.flyTo(() => this.leadShot(a));
+    } else if (a.def) {
+      a.settled = true;
+      this.views.flyTo(this.placeShot(a.def));
+    } else if (a.lead) {
+      this.views.flyTo(this.leadShot(a));
+    }
+  }
+
+  /** Arrival on the place settles the camera; the end of the event (or the lead leaving) flies back to the overview. */
+  private updateAction(dt: number): void {
+    const a = this.action;
+    if (!a) return;
+    a.age += dt;
+    const lead = a.lead;
+    const busy = !!lead && !lead.away && leadState(lead).some((v, i) => a.keys.includes(i) && v !== null);
+    if ((lead ? !busy : a.age > ACTION_NO_LEAD) || a.age > ACTION_MAX) return this.endAction(a.owned);
+    if (a.owned && !a.settled && a.def && this.settings.followActions && this.arrived(a)) {
+      a.settled = true;
+      this.views.flyTo(this.placeShot(a.def));
+    }
+  }
+
+  /** The player grabbed the camera (drag, wheel, WASD, a view change, a hand-picked person): the action lets go. */
+  private handBack(): void {
+    const a = this.action;
+    if (!a?.owned) return;
+    a.owned = false;
+    this.views.stopFly();
+    this.now.setFollow(false);
+  }
+
+  /** The chip's Folgen button. */
+  private toggleActionFollow(): void {
+    const a = this.action;
+    if (!a) return;
+    if (a.owned) return this.handBack();
+    a.owned = true;
+    this.followed = null;
+    if (this.views.mode !== 'orbit') this.views.setMode('orbit', true);
+    this.now.setFollow(true);
+    this.aimCamera();
+  }
+
+  /** Ends the action's chip; `flyBack`: the camera returns to the overview. */
+  private endAction(flyBack: boolean): void {
+    const a = this.action;
+    if (!a) return;
+    this.action = null;
+    this.now.hide();
+    if (flyBack && this.views.mode === 'orbit') this.views.flyTo(this.views.overviewShot());
+    else if (a.owned) this.views.stopFly();
+  }
+
+  /** One small offscreen picture per action card: drawn into the corner of the canvas, copied out, then painted over. */
+  private renderPreviews(): void {
+    const r = this.renderer;
+    const pr = r.getPixelRatio();
+    const src = r.domElement;
+    const w = Math.min(PREVIEW.width, src.width);
+    const h = Math.min(PREVIEW.height, src.height);
+    const roof = this.roof.visible;
+    this.roof.visible = false;
+    r.setScissorTest(true);
+    r.setViewport(0, 0, w / pr, h / pr);
+    r.setScissor(0, 0, w / pr, h / pr);
+    const cam = this.previewCam;
+    for (const { action, canvas } of this.previews) {
+      const s = this.placeShot(action);
+      const p = shotPosition(s);
+      cam.position.set(p.x, p.y, p.z);
+      cam.lookAt(s.x, s.y, s.z);
+      r.render(this.scene, cam);
+      canvas.getContext('2d')?.drawImage(src, 0, src.height - h, w, h, 0, 0, canvas.width, canvas.height);
+    }
+    this.previews = [];
+    r.setScissorTest(false);
+    r.setViewport(0, 0, window.innerWidth, window.innerHeight);
+    this.roof.visible = roof;
+  }
+
   private toggleFollow(): void {
     if (this.followed) this.followed = null;
     else if (this.selected && !this.selected.away) this.followed = this.selected;
@@ -1360,6 +1585,7 @@ export class Game {
     for (const w of this.walkers) if (!w.away || w.fx > 0) this.pose(w, alpha);
     this.updateHover();
     this.updateOverlay();
+    if (this.previews.length) this.renderPreviews();
     this.renderer.render(this.scene, this.views.camera);
   }
 
@@ -1960,6 +2186,7 @@ export class Game {
     this.rosterTimer -= 1 / 60;
     if (this.rosterTimer <= 0) {
       this.rosterTimer = 0.25;
+      this.peoplePanel.sync();
       this.roster.update(
         this.presence.away
           .map((p) => ({

@@ -1,8 +1,8 @@
 const groups = new Map<string, Array<(collapsed: boolean, animate?: boolean) => void>>();
 
 /** Adds a chevron button to a panel title that folds the panel's content away. The state is remembered. */
-/** Panels sharing a `group` behave like an accordion: only one is open at a time. */
-export function makeCollapsible(root: HTMLElement, title: HTMLElement, key: string, group?: string): void {
+/** Panels sharing a `group` behave like an accordion: only one is open at a time. `folded`: the state before anything is remembered. */
+export function makeCollapsible(root: HTMLElement, title: HTMLElement, key: string, group?: string, folded = false): void {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'm-collapse';
@@ -37,9 +37,10 @@ export function makeCollapsible(root: HTMLElement, title: HTMLElement, key: stri
       /* storage may be unavailable */
     }
   };
-  let start = false;
+  let start = folded;
   try {
-    start = localStorage.getItem(key) === '1';
+    const stored = localStorage.getItem(key);
+    if (stored !== null) start = stored === '1';
   } catch {
     /* ignore */
   }

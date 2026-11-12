@@ -34,7 +34,7 @@ test.describe('keys', () => {
     await expect(label).toBeHidden();
     await page.keyboard.press('n');
     expect(await read(page, (g) => g.overlay.namesVisible)).toBe(true);
-    await expect(page.locator('#toggle-names')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#setting-names')).toBeChecked(); // the settings switch mirrors the key
     await page.keyboard.press('n');
     expect(await read(page, (g) => g.overlay.namesVisible)).toBe(false);
   });

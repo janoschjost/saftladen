@@ -14,6 +14,7 @@ test('egg.konami', async ({ page }) => {
 
 test('day.menu + day.flow: play a day as Jan', async ({ page }) => {
   await openGame(page);
+  await page.locator('#open-settings').click();
   await page.locator('#open-day').click();
   await expect(page.locator('#day-menu')).toBeVisible();
   await expect(page.locator('#day-menu-name')).toHaveText('Jan Hasler');
@@ -37,7 +38,7 @@ test('day.menu + day.flow: play a day as Jan', async ({ page }) => {
 test('xmas.mode', async ({ page }) => {
   await openGame(page);
   const start = await read(page, (g) => g.xmas.on);
-  await page.locator('#toggle-settings').click();
+  await page.locator('#open-env').click();
   const toggle = page.locator('#setting-xmas');
   await expect(toggle).toBeVisible();
 

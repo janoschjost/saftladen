@@ -34,6 +34,19 @@ export function hourOf(cycle: number): number {
   return 24;
 }
 
+/** Clock hour -> cycle position (the inverse of `hourOf`): where an hour sits on the time slider. */
+export function cycleOf(hour: number): number {
+  const h = Math.min(24, Math.max(0, hour));
+  for (let i = 1; i < ANCHORS.length; i++) {
+    const [c1, h1] = ANCHORS[i];
+    if (h <= h1) {
+      const [c0, h0] = ANCHORS[i - 1];
+      return c0 + ((h - h0) / (h1 - h0)) * (c1 - c0);
+    }
+  }
+  return 1;
+}
+
 /** Day / night clock: drives the light, who is in the office and how tired everybody looks. */
 export class TimeOfDay {
   /** 0..1 position in the cycle (0 = midnight); the slider moves this */

@@ -11,6 +11,8 @@ import { getSeed, setSeed } from './rng';
  *   ?seed=<n>         seeds the random numbers (see rng.ts): same seed, same start. The console logs every page's seed.
  *   ?event=<id>       runs a dev-panel event right at start (`dev.list()` shows the ids), e.g. ?event=meeting-room;
  *                     repeat it for several (?event=rain&event=coffee). FEATURES.md links each feature to such a URL.
+ *   ?action=<id>      starts an Aktionen card (`src/data/actions.ts`, e.g. ?action=printer) or any dev event like the
+ *                     sheet does: the camera flies in Orbit to the person it moves; retried until it can run
  *   ?test             only exposes `window.__game` (read-only test hook for the Playwright tests in e2e/)
  * Example: http://localhost:5173/?snack&time=14&follow
  */
@@ -25,7 +27,7 @@ export function applySeedParam(): void {
 
 export function applyDebugParams(game: Game): void {
   const q = new URLSearchParams(location.search);
-  if (!['snack', 'time', 'day', 'seed', 'test', 'event'].some((k) => q.has(k))) return;
+  if (!['snack', 'time', 'day', 'seed', 'test', 'event', 'action'].some((k) => q.has(k))) return;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const g = game as any;
   (window as unknown as { __game: Game }).__game = game;
@@ -45,6 +47,7 @@ export function applyDebugParams(game: Game): void {
   }
   if (q.has('day')) game.startDay(q.get('day') || 'jan-hasler');
   for (const id of q.getAll('event')) runEvent(id);
+  for (const id of q.getAll('action')) runAction(game, id);
   if (!q.has('snack')) return;
 
   const id = q.get('snack') || 'jan-hasler';
@@ -88,6 +91,19 @@ function runEvent(id: string): void {
     const r = ev.run();
     if (r !== null) console.info(`[debug] event ${id}: ${r || ev.label}`);
     else if (performance.now() - t0 > 60_000) console.warn(`[debug] event ${id}: not possible`);
+    else return;
+    window.clearInterval(timer);
+  }, 500);
+}
+
+/** Like `runEvent`, but through the Aktionen sheet's path: chip, Orbit, camera follows. */
+function runAction(game: Game, id: string): void {
+  const t0 = performance.now();
+  const timer = window.setInterval(() => {
+    const r = game.startAction(id, true);
+    if (r === 'unknown') console.warn(`[debug] no action "${id}"`);
+    else if (r === 'started') console.info(`[debug] action ${id} started`);
+    else if (performance.now() - t0 > 60_000) console.warn(`[debug] action ${id}: not possible`);
     else return;
     window.clearInterval(timer);
   }, 500);

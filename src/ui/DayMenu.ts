@@ -211,7 +211,6 @@ export class DayMenu {
   open(): void {
     if (this.isOpen || !this.slots.length) return;
     this.root.hidden = false;
-    this.openBtn.setAttribute('aria-pressed', 'true');
     if (!this.renderer) {
       this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -235,7 +234,6 @@ export class DayMenu {
 
   close(): void {
     this.root.hidden = true;
-    this.openBtn.setAttribute('aria-pressed', 'false');
     cancelAnimationFrame(this.raf);
   }
 
