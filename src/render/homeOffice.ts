@@ -6,6 +6,7 @@ import { buildDog, type DogRig } from './dogBuilder';
 import { ball, box, cyl, merge, propMaterial } from './geo';
 import { SIT_DROP } from './officeBuilder';
 import { fxRandom, seeded } from '../game/rng';
+import { LAUNDRY, LAUNDRY_PICKS, RACK_SLOTS, laundryHung, laundryTime, laundryTrip } from './laundry';
 
 /**
  * Home offices: eight small rooms seen through the webcam of the person working there.
@@ -244,6 +245,8 @@ export interface HomeStyle {
   drink?: 'coffee' | 'cocktail';
   /** there is sea to swim in (signature move 'swim') */
   sea?: boolean;
+  /** has room for a drying rack beside the chair (laundry round) */
+  rack?: boolean;
   build(s: Room): void;
 }
 
@@ -251,6 +254,7 @@ const STYLES: HomeStyle[] = [
   {
     // 0 ---------------------------------------------------------------- bedroom
     label: 'Schlafzimmer',
+    rack: true,
     bg: '#c9d8e8',
     hemi: ['#ffffff', '#d8c8b0', 1.15],
     key: ['#fff1dc', 1.5, [-3, 5, 3]],
@@ -290,6 +294,7 @@ const STYLES: HomeStyle[] = [
   {
     // 1 ---------------------------------------------------------------- kitchen
     label: 'Küchentisch',
+    rack: true,
     bg: '#f1e8d6',
     hemi: ['#ffffff', '#e8dcc4', 1.2],
     key: ['#fff6e6', 1.7, [3, 5, 3]],
@@ -378,6 +383,7 @@ const STYLES: HomeStyle[] = [
   {
     // 3 ---------------------------------------------------------------- balcony
     label: 'Balkon',
+    rack: true,
     bg: '#a8d8f5',
     hemi: ['#d8efff', '#c9b79a', 1.5],
     key: ['#fff4d6', 2.4, [-4, 6, 3]],
@@ -468,6 +474,7 @@ const STYLES: HomeStyle[] = [
   {
     // 5 ---------------------------------------------------------------- attic
     label: 'Dachstock',
+    rack: true,
     bg: '#c9a574',
     hemi: ['#fff1d8', '#a88a5e', 1.15],
     key: ['#ffe6c0', 1.5, [-3, 5, 3]],
@@ -521,6 +528,7 @@ const STYLES: HomeStyle[] = [
   {
     // 6 ---------------------------------------------------------------- scandinavian studio
     label: 'Skandi-Studio',
+    rack: true,
     bg: '#f7f6f2',
     hemi: ['#ffffff', '#e8e2d4', 1.5],
     key: ['#ffffff', 1.6, [-4, 5, 3]],
@@ -741,7 +749,7 @@ const STYLES: HomeStyle[] = [
 export const HOME_LABELS = STYLES.map((s) => s.label);
 
 const ACTIVITIES = ['type', 'type', 'type', 'sip', 'sip', 'stretch', 'think', 'call', 'wave', 'away', 'yawn', 'game'] as const satisfies readonly ('type' | HomeBreak)[];
-type Activity = (typeof ACTIVITIES)[number] | 'vape' | 'spit' | SignatureMove | AdhdExtra;
+type Activity = (typeof ACTIVITIES)[number] | 'vape' | 'spit' | 'laundry' | SignatureMove | AdhdExtra;
 /**
  * Extra breaks for restless people (TeamMember.adhd), one ticket each in the draw: a fidget spinner, a spin on the
  * office chair, a snack run out of the picture, pacing behind the desk.
@@ -788,6 +796,7 @@ const ACTIVITY_LABEL: Record<Activity, string> = {
   pace: 'Läuft herum',
   curl: 'Trainiert',
   catwalk: 'Katze im Bild',
+  laundry: 'Hängt Wäsche auf',
 };
 const ACTIVITY_TIME: Record<Activity, [number, number]> = {
   type: [4, 10],
@@ -808,7 +817,60 @@ const ACTIVITY_TIME: Record<Activity, [number, number]> = {
   pace: [7, 9],
   curl: [8, 12],
   catwalk: [6.5, 7.5],
+  laundry: [laundryTime(2), laundryTime(3)], // the real length is set per round (see setActivity)
 };
+
+/** Where the drying rack stands (world, like the rest of the room) and where its pieces hang: two rows of four. */
+const RACK = {
+  x: 0.95,
+  z: -0.8,
+  /** the person stands here, facing the wall, a step in front of the rack */
+  stand: new THREE.Vector3(0.95, 0, -0.32),
+  slots: [
+    ...[-0.27, -0.09, 0.09, 0.27].map((x) => ({ x, y: 1.2, z: -0.12 })),
+    ...[-0.27, -0.09, 0.09, 0.27].map((x) => ({ x, y: 0.84, z: 0.12 })),
+  ],
+};
+const LAUNDRY_COLORS = ['#e8e2d4', '#6e8fbf', '#d96f7d', '#f2c46d', '#5a7a52', '#c9675a', '#2f3e5a', '#8a5a8c'];
+
+/** The folding rack itself (the frame is part of the room, the pieces come and go: see laundryPieces). */
+function dryingRack(s: Room): void {
+  const metal = '#c9ccd0';
+  for (const x of [-0.4, 0.4]) {
+    s.bx(0.05, 0.05, 0.5, RACK.x + x, 0, RACK.z, metal); // foot
+    for (const z of [-0.12, 0.12]) s.bx(0.03, 1.24, 0.03, RACK.x + x, 0, RACK.z + z, metal);
+  }
+  for (const [y, z] of [[1.2, -0.12], [1.2, 0.12], [0.84, -0.12], [0.84, 0.12]]) s.bx(0.84, 0.025, 0.025, RACK.x, y, RACK.z + z, metal);
+}
+
+/** The eight pieces of laundry hanging over the rack rails (hidden until hung up): shirts, towels, trousers. */
+function laundryPieces(): THREE.Mesh[] {
+  return RACK.slots.map((slot, i) => {
+    const c = LAUNDRY_COLORS[i % LAUNDRY_COLORS.length];
+    const c2 = LAUNDRY_COLORS[(i + 3) % LAUNDRY_COLORS.length];
+    const kind = i % 3;
+    const parts =
+      kind === 0
+        ? [box(0.15, 0.26, 0.03, 0, -0.14, 0, c), box(0.07, 0.05, 0.03, -0.1, -0.06, 0, c), box(0.07, 0.05, 0.03, 0.1, -0.06, 0, c)] // shirt
+        : kind === 1
+          ? [box(0.2, 0.3, 0.03, 0, -0.16, 0, c), box(0.2, 0.04, 0.034, 0, -0.28, 0, c2)] // towel
+          : [box(0.17, 0.06, 0.03, 0, -0.04, 0, c), box(0.075, 0.3, 0.03, -0.045, -0.2, 0, c), box(0.075, 0.3, 0.03, 0.045, -0.2, 0, c)]; // trousers
+    const m = propMesh(parts);
+    m.position.set(RACK.x + slot.x, slot.y + 0.02, RACK.z + slot.z);
+    m.visible = false;
+    return m;
+  });
+}
+
+/** The bundle of washing carried to the rack, held at the chest like a controller. */
+function laundryBundle(): THREE.Object3D {
+  const g = new THREE.Group();
+  g.add(propMesh([box(0.3, 0.12, 0.22, 0, 0, 0, '#e8e2d4'), box(0.2, 0.05, 0.16, -0.02, 0.08, 0, '#6e8fbf'), box(0.14, 0.05, 0.12, 0.05, 0.12, 0, '#d96f7d')]));
+  g.position.copy(PAD.at);
+  g.rotation.x = -0.3;
+  g.visible = false;
+  return g;
+}
 
 interface Occupant {
   rig: CharacterRig;
@@ -819,6 +881,8 @@ interface Occupant {
   gamepad: THREE.Object3D;
   yawn: THREE.Object3D;
   dumbbell: THREE.Object3D;
+  /** washing carried to the drying rack */
+  bundle: THREE.Object3D;
   /** fidget spinner in the right fist (kept flat and spun every frame) */
   spinner: THREE.Object3D;
   /** coffee haters: the spat-out coffee droplets (in the body group) */
@@ -944,7 +1008,7 @@ function occupantOf(member: TeamMember, fresh = false): Occupant {
   const pets: Occupant['pets'] = [];
   if (member.dog) pets.push({ rig: buildDog(member.dog), spot: new THREE.Vector3(-1.15, 0, 0.35), yaw: 0.5, onDesk: false });
   for (const [i, c] of (member.cats ?? []).entries()) pets.push({ rig: buildCat(c.kind), spot: new THREE.Vector3(i % 2 ? -0.6 : 0.55, 0.74, 0.45), yaw: i % 2 ? 0.5 : -0.4, onDesk: true }); // either side of the laptop
-  o = { rig, pets, mug: handMug(), gamepad: gamepad(), yawn: yawnMouth(), dumbbell: dumbbell(), spinner: fidgetSpinner(), held: heldPoses(rig) };
+  o = { rig, pets, mug: handMug(), gamepad: gamepad(), yawn: yawnMouth(), dumbbell: dumbbell(), bundle: laundryBundle(), spinner: fidgetSpinner(), held: heldPoses(rig) };
   rig.elbowR.add(o.dumbbell, o.spinner);
   if (member.hatesCoffee) {
     o.spray = new THREE.Group();
@@ -954,7 +1018,7 @@ function occupantOf(member: TeamMember, fresh = false): Occupant {
   }
   if (member.swimLook) o.swimRig = buildCharacter({ ...member.look, ...member.homeLook, ...member.swimLook });
   rig.elbowL.add(o.mug);
-  rig.body.add(o.gamepad, o.yawn);
+  rig.body.add(o.gamepad, o.yawn, o.bundle);
   occupants.set(member.id, o);
   return o;
 }
@@ -1149,6 +1213,12 @@ export class HomeOffice {
   private lapPos = new THREE.Vector3();
   private lapLook = new THREE.Vector3();
   private haze = HAZE.base;
+  /** drying rack pieces (rooms with a rack) and how many hang there; they stay for the occupant's whole stay */
+  private pieces: THREE.Mesh[] = [];
+  private hung = 0;
+  /** this round of laundry: pieces on the rack when it began, and how many it hangs */
+  private roundBase = 0;
+  private roundSize = 0;
 
   constructor(readonly variant: number) {
     this.style = STYLES[variant];
@@ -1156,6 +1226,7 @@ export class HomeOffice {
     rnd = seeded(7 + variant * 31);
     const set = new Room();
     this.style.build(set);
+    if (this.style.rack) dryingRack(set);
     set.finish();
     this.desk = set.desk;
     this.chair = set.chair;
@@ -1164,6 +1235,10 @@ export class HomeOffice {
     this.camera.position.set(...set.webcam.pos);
     this.camera.lookAt(...set.webcam.look);
     this.scene.add(set.group);
+    if (this.style.rack) {
+      this.pieces = laundryPieces();
+      this.scene.add(...this.pieces);
+    }
 
     const [sky, ground, hi] = this.style.hemi;
     this.scene.add(new THREE.HemisphereLight(sky, ground, hi));
@@ -1188,6 +1263,11 @@ export class HomeOffice {
     return ACTIVITY_LABEL[this.activity];
   }
 
+  /** pieces of laundry on the rack right now */
+  get laundryHung(): number {
+    return this.hung;
+  }
+
   get occupied(): boolean {
     return !!this.member;
   }
@@ -1203,8 +1283,11 @@ export class HomeOffice {
       if (this.occupant.swimRig) this.scene.remove(this.occupant.swimRig.root);
       for (const p of this.occupant.pets) this.scene.remove(p.rig.root);
       if (this.occupant.headset) this.occupant.rig.body.remove(this.occupant.headset);
+      this.occupant.bundle.visible = false;
     }
     this.member = member;
+    this.hung = 0; // a new stay, a fresh rack
+    this.pieces.forEach((m) => (m.visible = false));
     this.occupant = member ? occupantOf(member, fresh) : null;
     if (!this.occupant) return;
     const { rig, pets } = this.occupant;
@@ -1241,11 +1324,13 @@ export class HomeOffice {
   }
 
   /** Whether this room and occupant have what a signature move or extra break needs. */
-  private canDo(move: SignatureMove | AdhdExtra): boolean {
+  private canDo(move: SignatureMove | AdhdExtra | 'laundry'): boolean {
     const canStand = this.desk !== undefined && !this.style.recline; // a desk to work at, not lying in a deck chair
     switch (move) {
       case 'swim':
         return !!this.style.sea;
+      case 'laundry':
+        return canStand && !!this.style.rack && this.hung < RACK_SLOTS;
       case 'catwalk':
         return this.desk !== undefined && !!this.occupant?.pets.some((p) => p.onDesk);
       case 'spin':
@@ -1263,6 +1348,18 @@ export class HomeOffice {
     this.activity = a;
     this.actT = 0;
     this.actLeft = rand(a === 'type' && this.occupant?.rig.vape ? VAPE_PAUSE : ACTIVITY_TIME[a]);
+    if (a === 'laundry') {
+      this.roundBase = this.hung;
+      this.roundSize = laundryTrip(this.hung, fxRandom());
+      this.actLeft = laundryTime(this.roundSize);
+    }
+  }
+
+  /** Dev: sends the occupant on a laundry round right now. False when this room or person cannot (no rack, rack full). */
+  startLaundry(): boolean {
+    if (!this.occupant || !this.canDo('laundry')) return false;
+    this.setActivity('laundry');
+    return true;
   }
 
   update(dt: number): void {
@@ -1277,6 +1374,7 @@ export class HomeOffice {
       const sig = this.member?.signature;
       if (sig && this.canDo(sig)) pool.push(...Array<Activity>(SIGNATURE_PICKS).fill(sig));
       if (this.member?.adhd) pool.push(...ADHD_EXTRAS.filter((x) => this.canDo(x)));
+      if (this.canDo('laundry')) pool.push(...Array<Activity>(LAUNDRY_PICKS).fill('laundry'));
       this.setActivity(this.activity === 'type' ? pool[Math.floor(fxRandom() * pool.length)] : 'type');
     }
     const t = this.clock;
@@ -1448,6 +1546,46 @@ export class HomeOffice {
         }
         break;
       }
+      case 'laundry': {
+        // up, carry the bundle to the rack (back to the camera), hang a piece at a time, walk back empty-handed, sit
+        const at = this.actT;
+        const n = this.roundSize;
+        const seat = this.seat.clone();
+        const side = new THREE.Vector3(0.55, this.seat.y, this.seat.z - 0.12);
+        const rack = RACK.stand.clone().setY(this.seat.y);
+        const hangEnd = LAUNDRY.arrive + n * LAUNDRY.hang;
+        const backEnd = hangEnd + LAUNDRY.back;
+        stand = Math.min(1, at / LAUNDRY.up) * Math.min(1, Math.max(0, this.actLeft / LAUNDRY.sit));
+        if (at < LAUNDRY.up) walkPath([seat, seat], 0);
+        else if (at < LAUNDRY.arrive) walkPath([seat, side, rack], (at - LAUNDRY.up) / (LAUNDRY.arrive - LAUNDRY.up));
+        else if (at < hangEnd) walkPath([rack, rack], 0);
+        else if (at < backEnd) walkPath([rack, side, seat], (at - hangEnd) / LAUNDRY.back);
+        else walkPath([seat, seat], 0);
+        const walking = (at > LAUNDRY.up && at < LAUNDRY.arrive) || (at >= hangEnd && at < backEnd);
+        const carrying = at > LAUNDRY.up * 0.5 && at < hangEnd;
+        if (walking) gait = 9;
+        if (at >= LAUNDRY.arrive && at < hangEnd) standYaw = Math.PI; // facing the rack
+        else if (at >= backEnd) standYaw = 0; // turn back to the desk to sit down
+        if (walking && at >= hangEnd) walkArms();
+        if (carrying) {
+          Object.assign(L, mixPose(L, held.gameL, 1));
+          Object.assign(R, mixPose(R, held.gameR, 1));
+        }
+        if (at >= LAUNDRY.arrive && at < hangEnd) {
+          // each piece: arms up to the rail, let go (it lands in the middle of the hang), arms back down to the bundle
+          const u = ((at - LAUNDRY.arrive) % LAUNDRY.hang) / LAUNDRY.hang;
+          const reach = Math.sin(Math.min(1, u) * Math.PI);
+          const up = { x: -2.0, z: 0.12, e: -0.2, ez: 0 };
+          Object.assign(L, mixPose(L, up, reach));
+          Object.assign(R, mixPose(R, up, reach));
+          lean += 0.05 * reach;
+        }
+        const done = laundryHung(at, n);
+        this.hung = this.roundBase + done;
+        o0.bundle.visible = carrying;
+        o0.bundle.scale.setScalar(n ? 1 - 0.75 * (done / n) : 1);
+        break;
+      }
       case 'yawn': {
         const open = Math.sin(Math.min(1, this.actT / (this.actT + this.actLeft)) * Math.PI);
         mouth = open;
@@ -1498,6 +1636,8 @@ export class HomeOffice {
       default:
         break;
     }
+    if (a !== 'laundry') o0.bundle.visible = false;
+    for (const [i, m] of this.pieces.entries()) m.visible = i < this.hung;
     const tilt = recl;
     ease(this.poseL, L, k);
     ease(this.poseR, R, k);
