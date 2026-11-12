@@ -2268,6 +2268,32 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   };
   const door = { left: wing(1), right: wing(-1) };
 
+  // logo above the entrance door, on the outer face of the front wall
+  {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="194" height="51" viewBox="0 0 194 51"><g fill="#000"><path d="M0 22.8779H5.58577L13.0206 43.4878L20.6869 22.8779H25.9261L14.9084 50.1525H10.7092L0 22.8779Z"/><path d="M29.5078 22.8779H34.3618V50.1525H29.5078V22.8779Z"/><path d="M45.7921 27.2693H38.0312V22.8779H58.4066V27.2693H50.646V50.1525H45.7921V27.2693Z"/><path d="M67.455 22.8779H71.6542L83.4037 50.1525H77.8563L75.3138 43.9114H63.4873L61.0218 50.1525H55.5898L67.455 22.8779ZM73.6188 39.7514L69.4196 28.6567L65.1437 39.7514H73.6188Z"/><path d="M85.8125 22.8779H93.209L100.493 41.9855L107.851 22.8779H115.17V50.1525H110.548V27.5007H110.47L102.188 50.1525H98.7978L90.5124 27.5007H90.4353V50.1525H85.8125V22.8779Z"/><path d="M121.535 22.8779H126.389V50.1525H121.535V22.8779Z"/><path d="M133.105 22.8779H139.539L152.753 43.1415L152.829 43.2183H152.753L152.829 43.1415V22.8779H157.684V50.1525H151.52L138.036 29.2344H137.96V50.1525H133.105V22.8779Z"/></g><path d="M190.3 0H170C169 0 168 0.4 167.3 1.1C166.6 1.7 166.2 2.7 166.2 3.6V17.1L163 25L171.1 21.8H190.3C191.3 21.8 192.2 21.4 192.9 20.7C193.6 20 194 19.1 194 18.1V3.6C194 3.1 193.9 2.7 193.7 2.2C193.5 1.8 193.2 1.4 192.9 1C192.6 0.7 192.1 0.4 191.7 0.2C191.3 0.1 190.8 0 190.3 0Z" fill="#000"/><path d="M179.981 13.9L182.511 11.79C183.011 11.39 183.461 10.87 183.831 10.26C184.141 9.74005 184.301 9.08005 184.301 8.30005C184.301 5.87005 182.611 4.30005 180.001 4.30005C177.271 4.30005 175.501 5.87005 175.501 8.30005V8.76005L179.001 9.04005V8.50005C179.001 8.37005 179.031 8.24005 179.091 8.01005C179.111 7.94005 179.171 7.83005 179.251 7.75005C179.301 7.70005 179.501 7.60005 179.621 7.54005C179.711 7.50005 179.821 7.49005 180.021 7.49005C180.111 7.49005 180.161 7.49005 180.291 7.55005C180.571 7.67005 180.641 7.75005 180.641 7.75005C180.721 7.84005 180.781 7.89005 180.821 7.97005C180.861 8.09005 180.891 8.21005 180.891 8.30005C180.891 8.74005 180.461 9.12005 179.981 9.51005L175.191 13.78V17.1H184.491V13.9H179.981Z" fill="#fff"/></svg>`;
+    const cv = document.createElement('canvas');
+    cv.width = 776; // 4 px per svg unit
+    cv.height = 204;
+    const logoTex = new THREE.CanvasTexture(cv);
+    logoTex.colorSpace = THREE.SRGBColorSpace;
+    logoTex.anisotropy = 8;
+    const img = new Image();
+    img.onload = () => {
+      cv.getContext('2d')!.drawImage(img, 0, 0, cv.width, cv.height);
+      logoTex.needsUpdate = true;
+    };
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    const logoW = 1.5;
+    const logoH = (logoW * 51) / 194;
+    const logo = new THREE.Mesh(
+      new THREE.PlaneGeometry(logoW, logoH),
+      new THREE.MeshBasicMaterial({ map: logoTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }),
+    );
+    // centred above the door, between its head (2.1 m) and the wall top
+    logo.position.set(ax(-3.3), (2.1 + H_LOW) / 2 + 0.02, az(B.z1) + 0.15 + 0.005);
+    scene.add(logo);
+  }
+
   // printer paper (not merged, shown while somebody prints)
   const paper = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.012, 0.22), L(0xffffff));
   paper.position.set(ax(PR.x - 0.52), 0.85, az(PR.z));
