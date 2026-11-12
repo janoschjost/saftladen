@@ -92,7 +92,8 @@ export class Dog extends Walker {
   }
 
   override get fixed(): boolean {
-    return this.away || !!this.script;
+    // waiting on the porch is off the nav grid: pinned there, or the wall push snaps it back inside (#72)
+    return this.away || !!this.script || (this.onPorch && this.owner.presence !== 'in');
   }
 
   /** On the porch in front of the door (arrived there, waiting for the owner to vanish with them). */

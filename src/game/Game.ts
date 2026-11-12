@@ -887,6 +887,23 @@ export class Game {
     devEvents.register({ id: 'errand', group: strings.presence.event.group, label: strings.presence.event.someoneLeaves.errand, run: away('errand') });
     devEvents.register({ id: 'home', group: strings.presence.event.group, label: strings.presence.event.someoneLeaves.home, run: away('home') });
     devEvents.register({
+      id: 'pet-errand',
+      group: strings.presence.event.group,
+      label: 'Jemand mit Haustier geht raus',
+      run: () => {
+        const p = free().find((o) => o.pets.length);
+        if (!p) {
+          // nobody with a pet in: call one back, the event is retried until they are here
+          const out = this.people.find((o) => o.pets.length && o.presence === 'out');
+          if (out) this.presence.callBack(out);
+          return null;
+        }
+        this.release(p);
+        this.presence.send(p, 'errand', this.nav);
+        return strings.presence.event.leaves.errand(p.member.name.split(' ')[0]);
+      },
+    });
+    devEvents.register({
       id: 'home-laundry',
       group: strings.presence.event.group,
       label: 'Jemand im Homeoffice hängt Wäsche auf',
