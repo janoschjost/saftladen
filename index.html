@@ -289,6 +289,7 @@
           <button class="m-settings__link" id="open-picker" type="button">Figuren</button>
           <button class="m-settings__link" id="open-day" type="button">Ein Tag im Leben</button>
           <button class="m-settings__link" id="open-dev" type="button" aria-pressed="false">Dev-Events <kbd class="m-settings__key">`</kbd></button>
+          <button class="m-settings__link" id="open-welcome" type="button">Hilfe</button>
         </div>
       </section>
     </aside>
@@ -428,6 +429,17 @@
         <p class="m-tooltip__role" id="tooltip-role"></p>
       </div>
     </aside>
+    <section class="m-welcome" id="welcome" role="dialog" aria-modal="true" aria-labelledby="welcome-title" hidden>
+      <div class="m-welcome__card">
+        <h2 class="m-welcome__title" id="welcome-title"></h2>
+        <div class="m-welcome__greet">
+          <img class="m-welcome__portrait" id="welcome-portrait" width="96" height="96" alt="" />
+          <p class="m-welcome__bubble" id="welcome-bubble"></p>
+        </div>
+        <ul class="m-welcome__bullets" id="welcome-bullets"></ul>
+        <button class="m-button m-welcome__start" id="welcome-start" type="button"></button>
+      </div>
+    </section>
     <section class="m-picker" id="picker" aria-label="Figur wählen" hidden>
       <aside class="m-picker__sidebar">
         <h2 class="m-picker__title">Figur wählen</h2>
