@@ -17,13 +17,16 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
    `npm run dev` in a worktree picks the next free port from 5174 (the main checkout keeps 5173).
 4. **Implement.** Read the issue and all of its comments. Follow `README.md` and the existing code. Keep the change scoped to the issue.
 5. **Done means:**
-   - `npm run build` passes. CI (`.github/workflows/ci.yml`) runs build and tests on every PR; a red check is not done.
-   - `npm test` passes, and new or changed behavior has a test (Vitest, `*.test.ts` next to the code, named after the `FEATURES.md` id). Logic a test needs is pulled apart from rendering; randomness comes from `src/game/rng.ts` (`setSeed` in tests), never `Math.random()`.
+   - `npm run build` passes. CI (`.github/workflows/ci.yml`) runs build and Vitest on every PR; a red check is not done. The e2e tests run on CI only with the `e2e` label (~5 Actions minutes per run), so run them locally and note the result in the PR body. Add the label (`gh pr edit --add-label e2e`) only when the PR changes the e2e setup itself: `e2e/`, `playwright.config.ts`, the `?test` hook or the CI workflow. Otherwise leave it to the reviewer.
+   - `npm test` and `npm run test:e2e` pass, and new or changed behavior has a test named after the `FEATURES.md` id:
+     - logic → Vitest, `*.test.ts` next to the code. Logic a test needs is pulled apart from rendering; randomness comes from `src/game/rng.ts` (`setSeed` in tests), never `Math.random()`.
+     - interactions and UI (keys, hashes, panels, parts working together) → Playwright, `e2e/*.spec.ts`, reading the game through the `?test` hook (see README).
+     - purely visual changes → checked in the browser.
    - Every criterion has been checked in the running app.
    - `FEATURES.md` is updated: add or change the lines for this issue, ending with `(#N)`. Every line you touched still works.
 6. **PR.** Rebase first. On conflicts keep both sides' behavior, never just yours, then re-check the affected `FEATURES.md` lines.
    ```sh
-   git fetch origin && git rebase origin/main && npm run build && npm test
+   git fetch origin && git rebase origin/main && npm run build && npm test && npm run test:e2e
    git push -u origin HEAD
    gh pr create --base main --assignee @me --title "<imperative summary>" --body "<see below>"
    cd <repo root> && git worktree remove .worktrees/issue-N

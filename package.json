@@ -8,12 +8,14 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "fetch-team": "node scripts/fetch-team.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "three": "^0.187.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.0",
     "@types/three": "^0.187.0",
     "sass": "^1.108.2",
     "sharp": "^0.35.5",

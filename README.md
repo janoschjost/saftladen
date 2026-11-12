@@ -11,8 +11,17 @@ npm install
 npm run dev            # http://localhost:5173
 npm run build
 npm test               # vitest: simulation tests (src/**/*.test.ts), deterministic via a fixed seed
+npm run test:e2e       # playwright: browser smoke tests (e2e/), headless Chromium against its own dev server on :5199
 npm run fetch-team     # re-scrape https://vitamin2.ch/agentur (names, roles, portraits -> public/team, src/data/team.raw.json)
 ```
+
+## Tests
+
+- Logic → Vitest (`src/**/*.test.ts`, Node, no browser).
+- Interactions and UI (keys, URL hashes, panels, how the parts work together) → Playwright (`e2e/*.spec.ts`). First time: `npx playwright install chromium`. Each test opens `/?test&seed=1&time=11`: `?test` exposes the game as `window.__game` (dev server only, not in the production bundle), the seed and the frozen clock make the start the same every run. Tests read the game state through that hook (`read()` / `until()` in `e2e/game.ts`) and wait for states, never for fixed times. `npx playwright test --ui` to debug, traces of failures land in `test-results/`.
+- Purely visual changes → check them in the browser (no screenshot tests yet).
+
+CI runs build and Vitest on every push. The Playwright job costs about 5 Actions minutes, so it only runs on pull requests labeled `e2e` (again on each push while the label is on) or when started by hand (Actions → CI → Run workflow). That is why `npm run test:e2e` must pass locally before every PR.
 
 ## Structure
 
