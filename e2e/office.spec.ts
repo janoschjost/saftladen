@@ -52,8 +52,13 @@ test('select.actions + keys.home: select, send home, call back', async ({ page }
   let picked: string | null = null;
   for (const t of target) {
     await page.mouse.click(t.x, t.y);
-    picked = await read(page, (g) => g.selected?.id ?? null);
-    if (picked) break;
+    // the click may hit somebody else (a pet lying next to its owner, a passer-by): only the aimed-at person counts
+    const hit = await read(page, (g, id) => g.selected?.id === id && g.selected.presence === 'in', t.id);
+    if (hit) {
+      picked = t.id;
+      break;
+    }
+    await page.keyboard.press('Escape');
   }
   expect(picked).not.toBeNull();
   await expect(page.locator('#actions')).toBeVisible();

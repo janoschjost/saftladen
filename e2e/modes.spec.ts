@@ -47,6 +47,6 @@ test('xmas.mode', async ({ page }) => {
   // snow fades in, decorations show
   await until(page, (g) => g.xmas.on && g.xmas.amount > 0.5 && g.xmas.decor.group.visible);
   await toggle.setChecked(false);
-  // snow fades out, then the decorations go
-  await until(page, (g) => !g.xmas.on && g.xmas.amount === 0 && !g.xmas.decor.group.visible);
+  // snow fades out (about 8 s of game time, longer on a slow CI frame rate), then the decorations go
+  await until(page, (g) => !g.xmas.on && g.xmas.amount === 0 && !g.xmas.decor.group.visible, undefined, 60_000);
 });

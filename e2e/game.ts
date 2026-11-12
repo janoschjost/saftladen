@@ -13,8 +13,9 @@ export async function openGame(page: Page, hash = '', hour = HOUR): Promise<stri
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(`/?test&seed=${SEED}&time=${hour}${hash ? `#${hash}` : ''}`);
-  await page.waitForFunction(() => !!window.__game);
-  await expect(page.locator('#loader')).toHaveCount(0);
+  // generous: CI renders WebGL in software, the first frames there take seconds
+  await page.waitForFunction(() => !!window.__game, undefined, { timeout: 30_000 });
+  await expect(page.locator('#loader')).toHaveCount(0, { timeout: 30_000 });
   return errors;
 }
 
