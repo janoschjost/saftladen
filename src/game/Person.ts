@@ -560,7 +560,10 @@ export class Person extends Walker {
         this.presence = 'in';
         this.awayKind = null;
         this.state = 'idle';
-        this.timer = 0.4 + random();
+        // just in: walk on to a desk right away instead of standing about in the entrance (later arrivals need the room)
+        this.timer = 0.1 + random() * 0.3;
+        this.displaced = true;
+        this.socialCooldown = Math.max(this.socialCooldown, 10);
         return true;
       default:
         return false;
@@ -1105,8 +1108,8 @@ export class Person extends Walker {
         return;
       }
     }
-    // sometimes just look around instead of walking
-    if (random() < (this.adhd ? 0.5 : 0.25)) {
+    // sometimes just look around instead of walking (not when they should move on: no free desk, so off somewhere else)
+    if (!seek && random() < (this.adhd ? 0.5 : 0.25)) {
       this.yaw += (random() - 0.5) * (this.adhd ? 4 : 2.4);
       this.timer = this.idleTime();
       return;

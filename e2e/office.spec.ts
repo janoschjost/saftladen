@@ -72,3 +72,42 @@ test('select.actions + keys.home: select, send home, call back', async ({ page }
   await page.keyboard.press('h');
   await until(page, (g, id) => g.people.find((o: any) => o.id === id).presence === 'in', picked);
 });
+
+test('presence.door-flow: after "all back" people walk in one by one and move on from the entrance', async ({ page }) => {
+  test.setTimeout(240_000);
+  await openGame(page);
+  expect(await read(page, (g) => g.presence.away.length)).toBeGreaterThanOrEqual(3);
+  // the roster shares the dock with other panels and may start collapsed
+  const roster = page.locator('#away');
+  await expect(roster).toBeVisible();
+  if (await roster.evaluate((el) => el.classList.contains('is-collapsed'))) await roster.locator('.m-away__title').click();
+  await page.locator('#away-all').click();
+  // watch the arrivals every frame (game time): how many come through the door at once, and where each one is 4 s after stepping in.
+  // By day the office is full (presence.caps), so only a few get in: enough to see that they don't stay in the entrance.
+  await read(page, (g) => {
+    const w = window as unknown as { allBack: { maxIn: number; dists: number[] } };
+    const r = (w.allBack = { maxIn: 0, dists: [] as number[] });
+    const inAt = new Map<unknown, number>();
+    const last = new Map<unknown, string>();
+    const tick = () => {
+      const now = g.presence.clock;
+      r.maxIn = Math.max(r.maxIn, g.people.filter((p: { presence: string }) => p.presence === 'returning').length);
+      for (const p of g.people) {
+        if (last.get(p) === 'returning' && p.presence === 'in') inAt.set(p, now);
+        last.set(p, p.presence);
+        const t = inAt.get(p);
+        if (t !== undefined && now - t >= 4) {
+          inAt.delete(p);
+          r.dists.push(Math.hypot(p.pos.x - p.lane.in.x, p.pos.z - p.lane.in.z));
+        }
+      }
+      requestAnimationFrame(tick);
+    };
+    tick();
+  });
+  const result = () => read(page, () => (window as unknown as { allBack: { maxIn: number; dists: number[] } }).allBack);
+  await expect.poll(async () => (await result()).dists.length, { timeout: 120_000 }).toBeGreaterThanOrEqual(1);
+  const r = await result();
+  expect(r.maxIn).toBeLessThanOrEqual(2);
+  for (const d of r.dists) expect(d).toBeGreaterThan(2);
+});
