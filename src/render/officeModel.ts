@@ -1065,12 +1065,22 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       }
     }
   }, 'Esstisch');
-  within(7.6, 0, () => {
-    for (const x of [7.2, 8.0]) {
-      cyl(0.17, 0.17, 0.05, x, 0.7, -1.55, mat.white);
-      cyl(0.025, 0.025, 0.7, x, 0, -1.55, mat.steel, world, 8);
+  within(8.3, 0, () => {
+    // bar runs from the west edge of the glass panel (x 6.2) to the east wall (inner face ~10.45)
+    box(4.25, 0.05, 0.35, 8.325, 1.0, -1.25, mat.white);
+    // bar stools: round base, post, footrest ring, padded round seat
+    for (let i = 0; i < 5; i++) {
+      const x = 6.7 + i * 0.7;
+      const z = -1.65;
+      cyl(0.18, 0.2, 0.025, x, 0, z, mat.steel);
+      cyl(0.025, 0.025, 0.68, x, 0.02, z, mat.steel, world, 8);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.012, 6, 20), mat.steel);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.set(gx(x), 0.26, gz(z));
+      world.add(ring);
+      cyl(0.19, 0.19, 0.06, x, 0.7, z, mat.black);
+      cyl(0.16, 0.16, 0.02, x, 0.68, z, mat.steel);
     }
-    box(2.6, 0.05, 0.35, 7.8, 1.0, -1.25, mat.white);
   }, 'Stehbar');
   // washroom (x 0..4, left of the kitchen): purple walls, black floor, trough sink with mirror on the south wall next to the door, shower + 3 colored WC cabins on the north wall
   {
@@ -1296,7 +1306,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     box(0.8, 0.04, 0.8, RX, 1.96, RZ, mat.lightgrey);
     box(0.72, 1.9, 0.72, RX, 0.04, RZ, mat.dark); // dark interior
     box(0.3, 0.9, 0.12, RX - 0.12, 0.9, RZ + 0.05, aMat.orange); // bundle of orange cables
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 5; i++) {
       const y = 1.2 + i * 0.12;
       box(0.62, 0.07, 0.4, RX, y, RZ - 0.1, i % 2 ? mat.lightgrey : mat.steel); // patch panels / switches
       box(0.02, 0.02, 0.02, RX + 0.25, y + 0.02, RZ + 0.1, i % 3 === 2 ? ledA : ledG);

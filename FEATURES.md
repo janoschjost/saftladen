@@ -127,6 +127,7 @@ Rules:
 ## Office model
 - `office.scale` Real office 41×15 m; `EXACT` switches exact vs scaled plan — `src/render/officeModel.ts`
 - `office.rooms` Rooms: GL Sizi annex, storage/craft room, kitchen, washroom, archive/printer room, photo studio/dark room, phone booth "PSST!", glass meeting room, lounge with pod + foosball + reception, east room — `src/render/officeModel.ts`
+- `office.kitchen-bar` Kitchen bar counter runs from the west edge of the glass panel to the east wall, with five bar stools (round base, post, footrest ring, padded seat) — `src/render/officeModel.ts`, url: `/?seed=1&time=11#orbit` (#86)
 - `office.photo-studio` Photo studio (east end, behind the hallway): no wall on the east side, a black curtain closes it instead; the curtain hangs in folds — `src/render/officeModel.ts`, url: `/?seed=1&time=11#iso` (#42)
 - `office.teams` Team desk areas: Wassermelonen, Hashtag-Himbeeren, Kreative Kiwis, Digitale Birnen — `src/render/officeModel.ts`
 - `office.lettering` Wall lettering "FRISCHE IDEEN, DIE WIRKEN" (also on door leaves) — `src/render/officeModel.ts`
