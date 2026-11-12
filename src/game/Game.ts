@@ -783,7 +783,12 @@ export class Game {
       run: () => {
         if (this.phoneBooth.current) return null;
         const p = pickFree(1).find((o) => o.member.look.phone) ?? this.people.find((o) => o.member.look.phone && o.inOffice && !o.held && !o.talk && !o.meetJob);
-        if (!p) return null;
+        if (!p) {
+          // only phone people use the booth: call one back, the next try (e.g. `?event=phone-booth` retries) sends them in
+          const away = this.people.find((o) => o.member.look.phone && o.presence === 'out');
+          if (away) this.presence.callBack(away);
+          return null;
+        }
         drop(p);
         return this.phoneBooth.start(p, this.nav) ? `${p.member.name.split(' ')[0]} geht telefonieren in die Kabine` : null;
       },

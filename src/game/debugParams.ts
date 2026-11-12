@@ -1,3 +1,4 @@
+import { devEvents } from './DevEvents';
 import type { Game } from './Game';
 import { getSeed, setSeed } from './rng';
 
@@ -8,6 +9,8 @@ import { getSeed, setSeed } from './rng';
  *   &follow           camera follows the person (orbit view)
  *   ?day              starts "Ein Tag im Leben" as Jan Hasler; ?day=<person-id> for somebody else
  *   ?seed=<n>         seeds the random numbers (see rng.ts): same seed, same start. The console logs every page's seed.
+ *   ?event=<id>       runs a dev-panel event right at start (`dev.list()` shows the ids), e.g. ?event=meeting-room;
+ *                     repeat it for several (?event=rain&event=coffee). FEATURES.md links each feature to such a URL.
  *   ?test             only exposes `window.__game` (read-only test hook for the Playwright tests in e2e/)
  * Example: http://localhost:5173/?snack&time=14&follow
  */
@@ -22,7 +25,7 @@ export function applySeedParam(): void {
 
 export function applyDebugParams(game: Game): void {
   const q = new URLSearchParams(location.search);
-  if (!['snack', 'time', 'day', 'seed', 'test'].some((k) => q.has(k))) return;
+  if (!['snack', 'time', 'day', 'seed', 'test', 'event'].some((k) => q.has(k))) return;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const g = game as any;
   (window as unknown as { __game: Game }).__game = game;
@@ -41,6 +44,7 @@ export function applyDebugParams(game: Game): void {
     }
   }
   if (q.has('day')) game.startDay(q.get('day') || 'jan-hasler');
+  for (const id of q.getAll('event')) runEvent(id);
   if (!q.has('snack')) return;
 
   const id = q.get('snack') || 'jan-hasler';
@@ -70,4 +74,21 @@ export function applyDebugParams(game: Game): void {
       g.views.orbit.update?.();
     }
   }, 100);
+}
+
+/**
+ * Dev events are registered by id; an unknown id only warns, the game starts normally. An event that can't run yet
+ * (nobody free, table busy, the person still on the way in) is retried for up to a minute.
+ */
+function runEvent(id: string): void {
+  const ev = devEvents.list().find((e) => e.id === id);
+  if (!ev) return console.warn(`[debug] no event "${id}", see dev.list()`);
+  const t0 = performance.now();
+  const timer = window.setInterval(() => {
+    const r = ev.run();
+    if (r !== null) console.info(`[debug] event ${id}: ${r || ev.label}`);
+    else if (performance.now() - t0 > 60_000) console.warn(`[debug] event ${id}: not possible`);
+    else return;
+    window.clearInterval(timer);
+  }, 500);
 }
