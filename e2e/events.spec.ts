@@ -10,7 +10,7 @@ const cases: [string, string, (g: any) => unknown][] = [
   ['place.coffee-break', 'coffee', (g) => g.kitchen.current],
   ['place.booth', 'phone-booth', (g) => g.phoneBooth.current],
   ['place.pod', 'pod', (g) => g.pod.current],
-  ['pet.crouch', 'pet-dog', (g) => g.people.some((p: { petAmt: number; rig: { legL: { rotation: { x: number } } } }) => p.petAmt > 0.9 && p.rig.legL.rotation.x < -0.4)],
+  ['pet.crouch', 'pet-dog', (g) => g.people.some((p: { petAmt: number; rig: { legL: { rotation: { x: number } }; kneeR: { rotation: { x: number } } } }) => p.petAmt > 0.9 && p.rig.legL.rotation.x < -0.4 && p.rig.kneeR.rotation.x > 1.2)],
   ['presence.remote-visit', 'remote-visit', (g) => g.people.some((p: { id: string; presence: string }) => p.id === 'zlatko-pesic' && p.presence !== 'out')],
   ['home.son', 'remote-son', (g) => g.homes.some((h: { sonHere?: boolean } | null) => h?.sonHere)],
   ['place.printer', 'printer', (g) => g.people.some((p: { printJob?: unknown }) => p.printJob)],
@@ -63,7 +63,7 @@ test('dev.params: ?test fast-forwards in game time and does not draw the office'
 // The cats' owner is out at 11:00 with seeds 1 and 2 (the event needs her in the office), so the cat case uses seed 3
 test('pet.crouch-cat (?event=pet-cat)', async ({ page }) => {
   const errors = await openGame(page, '', undefined, 'event=pet-cat', 3);
-  await until(page, (g) => g.people.some((p: { petAmt: number; rig: { legL: { rotation: { x: number } } } }) => p.petAmt > 0.9 && p.rig.legL.rotation.x < -0.4), undefined, 40_000);
+  await until(page, (g) => g.people.some((p: { petAmt: number; rig: { legL: { rotation: { x: number } }; kneeR: { rotation: { x: number } } } }) => p.petAmt > 0.9 && p.rig.legL.rotation.x < -0.4 && p.rig.kneeR.rotation.x > 1.2), undefined, 40_000);
   expect(errors).toEqual([]);
 });
 
