@@ -72,7 +72,7 @@ export class Game {
   readonly sim!: Sim;
   private views!: Views;
   private roof!: THREE.Object3D;
-  private setRoof!: (visible: boolean) => void;
+  private roofCords!: (visible: boolean) => void;
   private roofWanted = false;
   private editor!: RoomEditor;
   private overlay: Overlay;
@@ -213,8 +213,8 @@ export class Game {
     applySky(this.sim.tod, this.sky);
     this.deskLights = new DeskLights(this.scene, this.sim.office, this.sim.tod);
     this.easter = new Easter(this.scene);
-    this.roof = model.roof; // renderPreviews hides it for a moment; the cords stay as they are
-    this.setRoof = model.setRoofVisible;
+    this.roof = model.roof;
+    this.roofCords = model.setRoofVisible;
     this.entrance = model.entrance;
     this.meetingLight = new RoomLight(this.scene, model.meeting.lamp, this.sim.tod, () => this.sim.meetingRoom.occupants(this.sim.people));
     this.views = new Views(stage, this.drawer.renderer.domElement, this.sim.walkColliders, (mode) => {
@@ -326,6 +326,12 @@ export class Game {
     this.seats.setOwners(this.seatOwners());
 
     this.drawer.renderer.setAnimationLoop((t) => this.frame(t));
+  }
+
+  /** roof on/off, with the pendant cords that go with it */
+  private setRoof(visible: boolean): void {
+    this.roof.visible = visible;
+    this.roofCords(visible);
   }
 
   private restoreSeats(): void {
