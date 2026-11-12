@@ -1,5 +1,5 @@
 import type { TeamMember } from '../data/types';
-import { random, type Rng } from './rng';
+import { stream, type Rng } from './rng';
 
 /**
  * Kompensiertier "Kurt", Marco's alter ego (#32). Marco turns into Kurt when he goes home (end of day, leaving for the
@@ -22,8 +22,11 @@ export function transformsOnLeave(member: Pick<TeamMember, 'alterEgo'>, reason: 
   return !!member.alterEgo && (reason === 'end' || reason === 'home');
 }
 
-/** Rolled once per home office spell: does the feed show the alter ego? Draws no number for people without one. */
-export function rollHomeAlter(member: Pick<TeamMember, 'alterEgo'>, rnd: Rng = random): boolean {
+/** Kurt's own dice: same seed, same Kurt spells, without shifting the simulation's numbers. */
+const dice = stream(0x4b757274);
+
+/** Rolled once per home office spell: does the feed show the alter ego? */
+export function rollHomeAlter(member: Pick<TeamMember, 'alterEgo'>, rnd: Rng = dice): boolean {
   return !!member.alterEgo && rnd() < KURT.homeChance;
 }
 

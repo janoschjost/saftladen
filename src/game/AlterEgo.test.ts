@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { team } from '../data/team';
 import { KURT, kurtOnScreen, rollHomeAlter, transformsOnLeave } from './AlterEgo';
-import { seeded, setSeed, random } from './rng';
+import { random, seeded, setSeed } from './rng';
 
 const marco = team.find((m) => m.id === 'marco-rieser')!;
 const other = team.find((m) => !m.alterEgo)!;
@@ -21,12 +21,15 @@ describe('kurt', () => {
     for (let i = 0; i < 5000; i++) if (rollHomeAlter(marco, rnd)) n++;
     expect(n / 5000).toBeGreaterThan(KURT.homeChance - 0.03);
     expect(n / 5000).toBeLessThan(KURT.homeChance + 0.03);
-    // people without an alter ego draw no number (the simulation's dice stay as they were)
+    // the roll never draws from the simulation's stream (a seeded day plays out as without Kurt), and repeats per seed
     setSeed(3);
     const first = random();
     setSeed(3);
-    expect(rollHomeAlter(other)).toBe(false);
+    const a = Array.from({ length: 20 }, () => rollHomeAlter(marco));
     expect(random()).toBe(first);
+    setSeed(3);
+    expect(Array.from({ length: 20 }, () => rollHomeAlter(marco))).toEqual(a);
+    expect(rollHomeAlter(other)).toBe(false);
   });
 
   it('kurt.screen: his empty desk shows Kurt while he is out (not home office) between 08:30 and 17:00', () => {
