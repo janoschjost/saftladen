@@ -89,6 +89,7 @@ interface Sample {
   home: number;
   homeRooms: number[];
   lunch: boolean;
+  returning: number;
   states: string;
 }
 
@@ -118,6 +119,7 @@ function runDay(seed: number, from = 5, to = 23, raining = false) {
         home: home.length,
         homeRooms: home.map((p) => p.homeVariant),
         lunch: presence.lunch,
+        returning: people.filter((p) => p.presence === 'returning').length,
         states: people.map((p) => `${p.presence[0]}${p.awayKind?.[0] ?? '-'}`).join(''),
       });
     }
@@ -194,5 +196,13 @@ describe('presence', () => {
     const avgIn = core.reduce((n, s) => n + s.inOffice, 0) / core.length;
     expect(avgIn).toBeLessThan(team.length * 0.85);
     expect(avgIn).toBeGreaterThan(team.length * 0.3);
+  });
+
+  it('presence.door-flow: arrivals come in one after another, at most 2 on their way in at once', () => {
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const { samples } = runDay(seed);
+      expect(samples.some((s) => s.returning > 0)).toBe(true);
+      for (const s of samples) expect(s.returning).toBeLessThanOrEqual(2);
+    }
   });
 });
