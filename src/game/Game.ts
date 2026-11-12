@@ -159,10 +159,14 @@ export class Game {
   private acc = 0;
   private last = performance.now();
 
-  constructor(private stage: HTMLElement) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = true;
+  /** `cheap`: no antialiasing, no shadows, pixel ratio 1. For the e2e tests, which render WebGL in software. */
+  constructor(
+    private stage: HTMLElement,
+    { cheap = false } = {},
+  ) {
+    this.renderer = new THREE.WebGLRenderer({ antialias: !cheap });
+    this.renderer.setPixelRatio(cheap ? 1 : Math.min(window.devicePixelRatio, 2));
+    this.renderer.shadowMap.enabled = !cheap;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     stage.appendChild(this.renderer.domElement);
 

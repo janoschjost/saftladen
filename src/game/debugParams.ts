@@ -11,7 +11,8 @@ import { getSeed, setSeed } from './rng';
  *   ?seed=<n>         seeds the random numbers (see rng.ts): same seed, same start. The console logs every page's seed.
  *   ?event=<id>       runs a dev-panel event right at start (`dev.list()` shows the ids), e.g. ?event=meeting-room;
  *                     repeat it for several (?event=rain&event=coffee). FEATURES.md links each feature to such a URL.
- *   ?test             only exposes `window.__game` (read-only test hook for the Playwright tests in e2e/)
+ *   ?test             exposes `window.__game` (read-only test hook for the Playwright tests in e2e/) and renders cheap:
+ *                     no shadows, no antialiasing (the tests render WebGL in software, ~100x faster this way)
  * Example: http://localhost:5173/?snack&time=14&follow
  */
 
