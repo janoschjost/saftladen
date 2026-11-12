@@ -105,7 +105,7 @@ Rules:
 
 ## Pets
 - `pet.roster` Dogs Tala (Ramon), Ellie (Janosch), Harry (Nina), Mira (terrier, Fabian); cats Angus and Binx (Donata) — `src/data/team.ts`
-- `pet.owner` Pets stay beside their owner, lie down when the owner sits, sleep after 12 s, sometimes switch sides; leave and return with the owner: they arrive and vanish together with the owner (materialise effect), not walking ahead — `src/game/Dog.ts`, `src/game/Presence.ts`, url: `/?seed=1&time=11&event=errand` (#41)
+- `pet.owner` Pets stay beside their owner, lie down when the owner sits, sleep after 12 s, sometimes switch sides; leave and return with the owner: they arrive and vanish together with the owner (materialise effect), not walking ahead; a pet that reaches the door first waits on the porch until the owner is out — `src/game/Dog.ts`, `src/game/Presence.ts`, test: `src/game/Dog.test.ts`, url: `/?seed=1&time=11&event=pet-errand` (#41, #72)
 - `pet.petting` Passers-by within 1.5 m may stop and pet a pet (trots over, wags, happy hops); cooldowns per pet and per person — `src/game/PetCare.ts`
 - `pet.announce` Awake pets bark/meow when someone comes in the front door — `src/game/PetCare.ts`
 - `pet.player` The player's person can pet a pet — `src/game/Person.ts`
