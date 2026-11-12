@@ -260,6 +260,7 @@ export class Game {
     this.nav.clear();
     for (const b of this.model.blockers()) this.nav.blockWorld(b.min.x, b.min.z, b.max.x, b.max.z);
     this.nav.sealUnreachable(CORRIDOR_POINT);
+    this.traffic.rebuild();
   }
 
   /** The room editor moved furniture: new nav grid, then desks, seats and standing spots follow. */
@@ -1165,11 +1166,17 @@ export class Game {
         const a = ws[i];
         const b = ws[j];
         if (a.away || b.away || a.ignores(b) || a.fixed || b.fixed) continue;
-        const dx = b.pos.x - a.pos.x;
-        const dz = b.pos.z - a.pos.z;
+        let dx = b.pos.x - a.pos.x;
+        let dz = b.pos.z - a.pos.z;
         const min = (a.radius + b.radius) * 1.1;
-        const d2 = dx * dx + dz * dz;
-        if (d2 >= min * min || d2 === 0) continue;
+        let d2 = dx * dx + dz * dz;
+        if (d2 >= min * min) continue;
+        if (d2 < 1e-8) {
+          // exactly on top of each other (same destination spot): part them in a fixed direction per pair
+          dx = Math.cos(i * 2.4 + j) * 1e-3;
+          dz = Math.sin(i * 2.4 + j) * 1e-3;
+          d2 = dx * dx + dz * dz;
+        }
         const d = Math.sqrt(d2);
         const push = ((min - d) / d) * 0.5;
         const wa = a.held ? 0 : b.held ? 2 : 1;

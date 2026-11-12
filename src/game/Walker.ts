@@ -1,9 +1,17 @@
 import * as THREE from 'three';
 import type { NavGrid, Vec2 } from './NavGrid';
+import type { Gate } from './Passages';
 import type { Talk } from './Social';
 import type { Traffic } from './Traffic';
 
 export type WalkerState = 'idle' | 'walk';
+
+const GATE_DETOUR = 3; // seconds of waiting at a passage before another route is tried
+const GATE_PATIENCE = 6; // seconds of waiting (plus up to 3 more, per walker) before the walker gives way and does something else
+const MOUTH_SIDE = 0.9; // metres a waiting walker keeps to the side of a passage's lane
+const MOUTH_DEPTH = 2; // ... within this distance in front of its entrance
+const LOITER = 1; // seconds somebody may stand idle inside a passage before moving on
+const GATE_PUSH = 4; // seconds a walker that gave way in vain ignores reservations and goes through anyway
 
 /**
  * Base for everything that wanders the floor. Holds sim state only;
@@ -32,6 +40,17 @@ export abstract class Walker {
   private stuckFrom: Vec2 = { x: 0, z: 0 };
   private stuckCount = 0;
   private replanned = false;
+  /** seconds spent waiting in front of a narrow passage that carries oncoming traffic */
+  private gateWait = 0;
+  private gateDetoured = false;
+  /** seconds this walker has been standing around inside a passage */
+  private loiter = 0;
+  /** how long this walker waits before it gives way (differs per walker, so two that block each other do not both leave) */
+  private gatePatience = GATE_PATIENCE + Math.random() * 3;
+  /** gave way at a passage and has not got through one since */
+  private gateGaveWay = false;
+  /** seconds this walker still pushes through passages regardless of reservations (deadlock fallback) */
+  private gateForce = 0;
   /** the traffic director (routes and destinations); set by the game */
   traffic: Traffic | null = null;
   /** which way this walker prefers to pass head-on (stable, so nobody dithers) */
@@ -111,6 +130,11 @@ export abstract class Walker {
     return true;
   }
 
+  /** Standing in front of a narrow passage until the oncoming traffic is through. */
+  get yielding(): boolean {
+    return this.state === 'walk' && this.gateWait > 0.1;
+  }
+
   ignores(o: Walker): boolean {
     return this.companion === o || o.companion === this;
   }
@@ -141,6 +165,13 @@ export abstract class Walker {
         this.wanderTo(nav);
         if (this.path.length) return;
       }
+      // nobody loiters in a doorway or corridor: everybody else would have to wait for it
+      this.loiter = !this.talk && !this.fixed && !this.companion && this.traffic && this.traffic.passages.at(this.pos) >= 0 ? this.loiter + dt : 0;
+      if (this.loiter > LOITER) {
+        this.loiter = 0;
+        this.wanderTo(nav);
+        if (this.path.length) return;
+      }
       this.moving += (0 - this.moving) * Math.min(1, dt * 8);
       if (this.talk) {
         // standing in a conversation: face the others
@@ -167,6 +198,8 @@ export abstract class Walker {
     dx /= dist;
     dz /= dist;
 
+    if (this.waitAtPassage(dt, nav, others, dx, dz)) return;
+
     // steering: sidestep walkers ahead (right-hand rule so head-on pairs pass each other), slow down if close
     let sx = 0;
     let sz = 0;
@@ -185,14 +218,17 @@ export abstract class Walker {
       const k = 1 - d / reach;
       // lateral offset of the other relative to our heading: side > 0 means it is on our right
       const side = ox * dz - oz * dx;
+      // somebody waiting beside our lane for us to come through is no obstacle
+      const yielding = o.yielding;
+      if (yielding && Math.abs(side) > this.radius + o.radius) continue;
       const dodge = Math.abs(side) < 0.15 ? this.dodgePref : side > 0 ? 1 : -1; // go to the opposite side of it (head-on: our usual side)
       // perpendicular to heading (left = (-dz, dx)); dodge > 0 means other is on right, so go left
       sx += (-dz * dodge - ox / d * 0.3) * k * 3.2;
       sz += (dx * dodge - oz / d * 0.3) * k * 3.2;
       if (ahead > 0.4 && d < this.radius + o.radius + 0.9) {
-        speedFactor = Math.min(speedFactor, Math.max(0.25, (d - this.radius - o.radius) / 0.9));
-        // nose to nose: back off a little instead of pushing through
-        if (d < this.radius + o.radius + 0.4) {
+        speedFactor = Math.min(speedFactor, Math.max(yielding ? 0.6 : 0.25, (d - this.radius - o.radius) / 0.9));
+        // nose to nose: back off a little instead of pushing through (only from somebody walking, and not if they wait for us: walk around those)
+        if (!yielding && o.state === 'walk' && d < this.radius + o.radius + 0.4) {
           back = Math.max(back, 1 - (d - this.radius - o.radius) / 0.4);
           backSide = side > 0 ? -1 : 1;
         }
@@ -271,9 +307,93 @@ export abstract class Walker {
   }
 
   /**
-   * Idle walker makes room: when someone walks towards us (or stands on us) shuffle sideways, out of their path.
-   * Returns true while stepping (replaces the idle animation for this step).
+   * Doorways, corridors and gaps between desks take one direction at a time: with oncoming traffic in the passage ahead,
+   * stop in front of it (the one already inside goes first) and keep out of the way of whoever comes out.
+   * Deadlock fallback: after GATE_DETOUR seconds take another route if there is one; when patience runs out give way
+   * (drop the route and clear off, like any stuck walker), and after giving way in vain go through regardless.
+   * Returns true while waiting (replaces the walk for this step).
    */
+  private waitAtPassage(dt: number, nav: NavGrid, others: readonly Walker[], dx: number, dz: number): boolean {
+    const passages = this.traffic?.passages;
+    if (!passages) return false;
+    this.gateForce = Math.max(0, this.gateForce - dt);
+    const gate = passages.gate(this, this.path, this.gateWait, this.gateForce > 0);
+    // face to face with somebody inside a passage: the one who has to give way backs out to open floor
+    const out = passages.headOn(this);
+    if (out) {
+      const back = nav.findPath(this.pos, out);
+      if (back.length) {
+        this.follow(nav, back);
+        return true;
+      }
+    }
+    if (!gate) {
+      // drains instead of dropping to zero, so a way that keeps opening and closing still runs out of patience
+      this.gateWait = Math.max(0, this.gateWait - dt * 2);
+      if (this.gateWait === 0) this.gateDetoured = false;
+      if (passages.at(this.pos) >= 0) this.gateGaveWay = false;
+      return false;
+    }
+    this.gateWait += dt;
+    if (this.gateWait > this.gatePatience) {
+      this.gateWait = 0;
+      this.gateDetoured = false;
+      if (this.gateGaveWay) {
+        this.gateGaveWay = false;
+        this.gateForce = GATE_PUSH;
+        passages.gate(this, this.path, 0, true);
+        return false;
+      }
+      this.gateGaveWay = true;
+      this.path = [];
+      this.state = 'idle';
+      this.timer = 0.2 + Math.random() * 0.5;
+      return true;
+    }
+    if (this.gateWait > GATE_DETOUR && !this.gateDetoured) {
+      this.gateDetoured = true;
+      const detour = this.traffic!.detour(this, this.path[this.path.length - 1], gate.passage);
+      if (detour) {
+        this.follow(nav, detour);
+        return true;
+      }
+    }
+    // waiting is not being stuck
+    this.blockedTime = 0;
+    this.stuckClock = 0;
+    this.stuckFrom = { ...this.pos };
+    if (this.clearMouth(dt, nav, gate) || this.stepAside(dt, nav, others)) return true;
+    this.turnTo(Math.atan2(dx, dz), dt);
+    this.moving += (0 - this.moving) * Math.min(1, dt * 8);
+    return true;
+  }
+
+  /**
+   * Waiting right in front of a passage would block whoever comes out of it: shuffle sideways out of its lane
+   * (or backwards if there is no room beside it). Returns true while moving.
+   */
+  private clearMouth(dt: number, nav: NavGrid, gate: Gate): boolean {
+    const rx = this.pos.x - gate.mouth.x;
+    const rz = this.pos.z - gate.mouth.z;
+    const along = rx * gate.dx + rz * gate.dz; // negative: still in front of the entrance
+    const side = rx * gate.dz - rz * gate.dx;
+    if (Math.abs(side) >= MOUTH_SIDE || along < -MOUTH_DEPTH) return false;
+    const sgn = Math.abs(side) < 0.1 ? this.dodgePref : side > 0 ? 1 : -1;
+    let mx = gate.dz * sgn;
+    let mz = -gate.dx * sgn;
+    if (!this.clear(nav, mx, mz)) {
+      if (Math.abs(side) < 0.3 && this.clear(nav, -mx, -mz)) [mx, mz] = [-mx, -mz];
+      else if (this.clear(nav, -gate.dx, -gate.dz)) [mx, mz] = [-gate.dx, -gate.dz];
+      else return false;
+    }
+    const step = this.speed * 0.8 * dt;
+    this.pos.x += mx * step;
+    this.pos.z += mz * step;
+    this.moving += (0.5 - this.moving) * Math.min(1, dt * 8);
+    this.phase += dt * this.speed * 2.5;
+    return true;
+  }
+
   /** true when 4+ other bodies stand within ~1.8 and this walker is not part of a talk: time to move on */
   private crowded(others: readonly Walker[]): boolean {
     let n = 0;
@@ -328,7 +448,7 @@ export abstract class Walker {
         const k = stuck ? 1 : 1 - d / near;
         ax += hz * sgn * k * 2 + (d > 1e-4 ? (ox / d) * 0.3 : 0);
         az += -hx * sgn * k * 2 + (d > 1e-4 ? (oz / d) * 0.3 : 0);
-        if (stuck) this.timer = Math.max(this.timer, 1.5); // stay out of the way a moment after they pass
+        if (stuck && this.state === 'idle') this.timer = Math.max(this.timer, 1.5); // stay out of the way a moment after they pass
       } else if (d < this.radius + o.radius && d > 1e-4 && !o.fixed) {
         // two standing bodies overlap: drift apart
         ax += ox / d;
@@ -337,6 +457,7 @@ export abstract class Walker {
     }
     const l = Math.hypot(ax, az);
     if (l < 0.05) return false;
+    const idle = this.state === 'idle';
     ax /= l;
     az /= l;
     // never shuffle into walls, shelves or door frames: try the mirrored side, else stay put
@@ -350,7 +471,7 @@ export abstract class Walker {
     this.pos.z += az * step;
     this.moving += (0.5 - this.moving) * Math.min(1, dt * 8);
     this.phase += dt * this.speed * 2.5;
-    this.timer = Math.max(this.timer, 0.4); // don't wander off while shuffling
+    if (idle) this.timer = Math.max(this.timer, 0.4); // don't wander off while shuffling
     return true;
   }
 
@@ -383,6 +504,10 @@ export abstract class Walker {
       this.timer = 0.5;
       return;
     }
+    this.follow(nav, path);
+  }
+
+  private follow(nav: NavGrid, path: Vec2[]): void {
     const j = nav.cell * 0.3;
     this.path = path.map((p, i) => (i === path.length - 1 ? p : { x: p.x + (Math.random() - 0.5) * j, z: p.z + (Math.random() - 0.5) * j }));
     this.state = 'walk';
