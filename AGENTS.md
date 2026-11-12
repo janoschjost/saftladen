@@ -11,9 +11,10 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
 3. **Worktree.** Never work in the main checkout. Other sessions and the dev's own dev server use it.
    ```sh
    git fetch origin
-   git worktree add .worktrees/issue-N -b fix/issue-N-<slug> origin/main   # feat/ for enhancements
-   cd .worktrees/issue-N && npm ci
+   git worktree add ../saftladen-issue-N -b fix/issue-N-<slug> origin/main   # feat/ for enhancements
+   cd ../saftladen-issue-N && npm ci
    ```
+   Worktrees live next to the repo (`../saftladen-<name>`), the same place PhpStorm's "New Worktree…" puts them.
    `npm run dev` in a worktree picks the next free port from 5174 (the main checkout keeps 5173).
 4. **Implement.** Read the issue and all of its comments. Follow `README.md` and the existing code. Keep the change scoped to the issue.
 5. **Done means:**
@@ -29,7 +30,7 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
    git fetch origin && git rebase origin/main && npm run build && npm test && npm run test:e2e
    git push -u origin HEAD
    gh pr create --base main --assignee @me --title "<imperative summary>" --body "<see below>"
-   cd <repo root> && git worktree remove .worktrees/issue-N
+   cd ../saftladen && git worktree remove ../saftladen-issue-N
    ```
    `--assignee @me` assigns the PR to the dev whose `gh` login runs the session.
    The PR body starts with `Closes #N` on its own line, so merging closes the issue. Then come `## What changed`, `## Acceptance criteria` (checked, with how each was verified) and optionally `## Notes`. See `gh pr view 23`.
