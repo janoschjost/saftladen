@@ -63,7 +63,7 @@ Rules:
 - `desk.gestures` Idle gestures every 12–38 s: yawn, stretch, head scratch, look around — `src/game/Game.ts`
 - `desk.screens` Monitors show role-based content (code, design, data, sheet, docs, media), stable per person — `src/render/screens.ts`, `src/data/screens.ts`
 - `desk.screens-live` Working monitors are alive: code and text scroll, design shows a drifting selection, sheets move the cell cursor, charts get a sweeping marker, video a running playhead; content runs faster while the sitter works; shown pictures redraw at 10 fps on shared textures, hidden ones not — `src/render/screens.ts`, `src/game/Office.ts`, e2e: `e2e/screens.spec.ts`, url: `/?seed=1&time=11` (#15)
-- `place.meeting-tv` The meeting-room TV is black without a meeting; in a meeting it shows slides (60%) or stays off; on some lunch breaks (30%, 11:45–13:30) 2–4 people gather for a round of kart racing (bending road, item boxes, coins, rival, lap/position/item HUD); the players turn to the TV instead of each other — `src/render/screens.ts`, `src/game/Meeting.ts`, `src/render/officeModel.ts`, e2e: `e2e/screens.spec.ts`, url: `/?seed=1&time=11&event=meeting-kart` (#15)
+- `place.meeting-tv` The meeting-room TV is black without a meeting; in a meeting it shows slides (60%) or stays off; on some lunch breaks (30%, 11:45–13:30) 2–4 people gather for a round of kart racing (bending road, item boxes, coins, rival, lap/position/item HUD); the players turn to the TV instead of each other — `src/render/screens.ts`, `src/game/Meeting.ts`, `src/render/officeModel.ts`, test: `src/game/Meeting.test.ts`, e2e: `e2e/screens.spec.ts`, url: `/?seed=1&time=11&event=meeting-kart` (#15)
 - `desk.lights` At night a warm lamp fades in over each occupied desk — `src/game/DeskLights.ts`, url: `/?seed=1&time=21` (#38)
 - `desk.seats` Fixed seat per person; seats panel with numbered labels and a per-person select; saved to localStorage, or to `src/data/seats.json` on the dev server — `src/ui/Seats.ts`, `src/game/Game.ts`
 
@@ -80,6 +80,8 @@ Rules:
 - `place.pod` Wooden pod: two people now and then sit on the benches together — `src/game/Pod.ts`, e2e: `e2e/events.spec.ts`, url: `/?seed=1&time=11&event=pod` (#38)
 - `place.booth` Phone booth: one person on the stool, door shut during the call — `src/game/PhoneBooth.ts`, e2e: `e2e/events.spec.ts`, url: `/?seed=1&time=11&event=phone-booth` (#38)
 - `place.meeting` Meetings in the glass room (2/4/6, TV shows slides or stays off): seats side chairs first, door shut and doorway blocked, stragglers give up, leave together; speaker gestures, listeners nod — `src/game/Meeting.ts`, `src/game/Game.ts`, e2e: `e2e/events.spec.ts`, url: `/?seed=1&time=11&event=meeting-room` (#38)
+- `place.toilet` WC cabins in the washroom (orange, yellow): now and then somebody goes, sits on the toilet and plays the Game Boy (same handheld pose as the day task), the odd ♪ / ! bubble; random stay 20–50 s; door locked and the light above it red while occupied, green when free — `src/game/Toilets.ts`, `src/render/officeModel.ts`, test: `src/game/Toilets.test.ts`, e2e: `e2e/events.spec.ts`, url: `/?seed=1&time=11&event=toilet` (#17)
+- `place.toilet-queue` An occupied cabin is never entered by a second person: they take the other cabin, else wait in front of the cabins (at most 2) and go in when one frees, or give up after 25–45 s — `src/game/Toilets.ts`, test: `src/game/Toilets.test.ts`, e2e: `e2e/events.spec.ts`, url: `/?seed=1&time=11&event=toilet&event=toilet&event=toilet` (#17)
 
 ## Social
 - `social.start` Groups may start talking: pairs rarely, bigger groups almost always; friends more readily; at a quiet spot, not in a crowd — `src/game/Social.ts`
@@ -101,7 +103,7 @@ Rules:
 - `door.auto` Interior doors swing open within 1.25 m and stay open 0.9 s after — `src/game/Doors.ts`
 - `door.rest` At rest closed / ajar / propped, rerolled every 30–120 s — `src/game/Doors.ts`
 - `door.player` Walk-mode player can toggle the door they face; the choice holds a while — `src/game/Doors.ts`
-- `door.lock` Doors locked during a meeting or booth call — `src/game/Doors.ts`, url: `/?seed=1&time=11&event=meeting-room` (#38)
+- `door.lock` Doors locked during a meeting, booth call or while somebody sits on the toilet — `src/game/Doors.ts`, url: `/?seed=1&time=11&event=meeting-room` (#38, #17)
 
 ## Pets
 - `pet.roster` Dogs Tala (Ramon), Ellie (Janosch), Harry (Nina), Mira (terrier, Fabian); cats Angus and Binx (Donata) — `src/data/team.ts`

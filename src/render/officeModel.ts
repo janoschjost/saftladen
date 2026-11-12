@@ -95,6 +95,8 @@ export interface OfficeModel {
   kitchen: { center: Vec2; machine: Vec2; stands: Vec2[]; table: Array<{ x: number; z: number; yaw: number }> };
   /** the stool in the phone box (game coordinates, yaw = facing the door) */
   phoneBooth: { seat: { x: number; z: number; yaw: number }; doorPos: Vec2 };
+  /** the two WC cabins in the washroom (seat on the bowl facing the door, doorway centre, the occupied light above the door) and where people queue when both are taken */
+  toilets: { cabins: Array<{ seat: { x: number; z: number; yaw: number }; doorPos: Vec2; sign: THREE.MeshBasicMaterial }>; wait: Vec2[] };
 }
 
 type Mat = THREE.Material;
@@ -172,6 +174,9 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   const boothSeat = { x: 0, z: 0, yaw: -Math.PI / 2 }; // faces west (the table on the west wall)
   const meetCenter: Vec2 = { x: 0, z: 0 };
   const meetTv: Vec2 = { x: 0, z: 0 };
+  const toiletCabins: OfficeModel['toilets']['cabins'] = [];
+  /** WC cabin interiors (game coordinates): nobody walks in there, the toilet goer is scripted in through the door */
+  const toiletInside: THREE.Box3[] = [];
   const kitchenCenter: Vec2 = { x: 0, z: 0 };
   const kitchenMachine: Vec2 = { x: 0, z: 0 };
   const tableSeats: Array<{ x: number; z: number; yaw: number }> = [];
@@ -1220,8 +1225,27 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       box(0.05, 2.05, 0.12, xm - 0.4, 0, ZF, frame);
       box(0.05, 2.05, 0.12, xm + 0.4, 0, ZF, frame);
       box(0.85, 0.05, 0.12, xm, 2.05, ZF, frame);
-      // door leaf: closed on 1 + 3, ajar on 2 + 4
-      if (i % 2 === 0) box(0.78, 2.0, 0.04, xm, 0, ZF + 0.03, frame);
+      // door leaf: the two WCs (2 + 3) swing (outwards, locked while occupied, light above the door); shower closed, pissoir ajar
+      const wc = i === 1 || i === 2;
+      if (wc) {
+        const pivot = new THREE.Group();
+        const leaf = new THREE.Mesh(new THREE.BoxGeometry(0.78, 2.0, 0.04), frame);
+        leaf.position.set(0.39, 1.0, 0);
+        leaf.castShadow = true;
+        pivot.add(leaf);
+        for (const side of [-1, 1]) {
+          const knob = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.025, 0.04), mat.steel);
+          knob.position.set(0.68, 1.0, side * 0.04);
+          pivot.add(knob);
+        }
+        pivot.position.set(ax(xm - 0.39), 0, az(ZF + 0.03));
+        scene.add(pivot);
+        doors.push({ pivot, base: 0, swing: -1, center: { x: ax(xm), z: az(ZF) }, width: 0.78, height: 2.0 });
+        const sign = new THREE.MeshBasicMaterial({ color: 0x3fbf5a });
+        rbox(0.2, 0.08, 0.02, ax(xm), 2.17, az(ZF + 0.06), sign, 0, scene);
+        toiletCabins.push({ seat: { x: ax(xm), z: az(Z_N + 0.52), yaw: 0 }, doorPos: { x: ax(xm), z: az(ZF) }, sign });
+        toiletInside.push(new THREE.Box3(new THREE.Vector3(ax(x0), 0, az(Z_N)), new THREE.Vector3(ax(x1), 1.2, az(ZF + 0.06))));
+      } else if (i % 2 === 0) box(0.78, 2.0, 0.04, xm, 0, ZF + 0.03, frame);
       else {
         const th = (75 * Math.PI) / 180;
         box(0.78, 2.0, 0.04, xm - 0.4 + Math.cos(th) * 0.39, 0, ZF + 0.03 + Math.sin(th) * 0.39, frame, -th);
@@ -1256,9 +1280,9 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       } else {
         box(0.22, 0.14, 0.02, xm, 0.75, Z_N + 0.24, mat.white); // flush plate
         for (const dx of [-0.05, 0.05]) box(0.07, 0.04, 0.005, xm + dx, 0.8, Z_N + 0.255, mat.lightgrey);
-        box(0.34, 0.3, 0.45, xm, 0.38, Z_N + 0.46, mat.white); // wall-hung bowl
-        box(0.2, 0.01, 0.28, xm, 0.685, Z_N + 0.47, mat.grey); // opening
-        box(0.32, 0.4, 0.03, xm, 0.68, Z_N + 0.28, mat.white); // lid, up
+        box(0.34, 0.3, 0.45, xm, 0.12, Z_N + 0.46, mat.white); // wall-hung bowl, seat at sitting height
+        box(0.2, 0.01, 0.28, xm, 0.425, Z_N + 0.47, mat.grey); // opening
+        box(0.32, 0.4, 0.03, xm, 0.42, Z_N + 0.28, mat.white); // lid, up
         for (const dx of [-0.22, -0.14]) cyl(0.05, 0.05, 0.1, xm + dx, 1.05, Z_N + 0.12, mat.white); // paper rolls
         cyl(0.03, 0.03, 0.2, xm + 0.15, 1.05, Z_N + 0.1, spray);
         cyl(0.1, 0.09, 0.3, xL + 0.12, 0, Z_N + 0.7, mat.steel); // pedal bin
@@ -2474,6 +2498,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   const meeting = { doorPos: { x: ax(20.65), z: az(CORR) }, center: meetCenter, tv: meetTv, seats: meetSeats };
   // the strip south of the wall, east of the annex, is outside: block it so nobody walks out through the entrance doorway into thin air
   blockers.push(new THREE.Box3(new THREE.Vector3(ax(ANNEX.x1), 0, OFFICE_D), new THREE.Vector3(OFFICE_W, 1.2, OFFICE_D + ANNEX_D)));
+  blockers.push(...toiletInside);
   const allBlockers = () => [...blockers, ...items.flatMap((it) => it.blockers())];
   // numbered room labels (blue, model coordinates of the room centres)
   const roomLabels = new THREE.Group();
@@ -2504,7 +2529,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     roomLabels.add(sp);
   });
 
-  return { desks, items, coatRacks, blockers: allBlockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter, machine: kitchenMachine, stands: kitchenStands, table: tableSeats }, phoneBooth: { seat: boothSeat, doorPos: { x: ax(23.75), z: az(CZ) } } };
+  return { desks, items, coatRacks, blockers: allBlockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter, machine: kitchenMachine, stands: kitchenStands, table: tableSeats }, phoneBooth: { seat: boothSeat, doorPos: { x: ax(23.75), z: az(CZ) } }, toilets: { cabins: toiletCabins, wait: [{ x: ax(3.35), z: az(-3.3) }, { x: ax(0.7), z: az(-3.2) }] } };
 }
 
 /**

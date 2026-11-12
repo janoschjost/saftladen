@@ -40,6 +40,7 @@ import { MeetingRoom } from './Meeting';
 import { setTvMode } from '../render/screens';
 import { Pod } from './Pod';
 import { PhoneBooth } from './PhoneBooth';
+import { Toilets } from './Toilets';
 import { NavGrid } from './NavGrid';
 import { Office } from './Office';
 import { Person } from './Person';
@@ -109,6 +110,7 @@ export class Game {
   private pod!: Pod;
   private kitchen!: Kitchen;
   private phoneBooth!: PhoneBooth;
+  private toilets!: Toilets;
   private metaTimer = 0;
   private rosterTimer = 0;
   private raycaster = new THREE.Raycaster();
@@ -195,6 +197,9 @@ export class Game {
     this.phoneBooth = new PhoneBooth(model.phoneBooth, this.nav);
     this.phoneBooth.onClosed = (closed) => this.doors.setLocked(this.phoneBooth.doorPos, closed);
     this.meetingRoom.onClosed = (closed) => this.doors.setLocked(this.meetingRoom.doorPos, closed);
+    this.toilets = new Toilets(model.toilets, this.nav);
+    this.toilets.onLocked = (cabin, locked) => this.doors.setLocked(cabin.doorPos, locked);
+    this.toilets.onOccupied = (cabin, occupied) => model.toilets.cabins[this.toilets.cabins.indexOf(cabin)]?.sign.color.setHex(occupied ? 0xe0342c : 0x3fbf5a);
     this.views = new Views(stage, this.renderer.domElement, this.nav, (mode) => {
       this.roof.visible = mode === 'walk' ? true : mode === 'plan' || mode === 'third' ? false : this.roofWanted;
       if (mode !== 'third' && this.day && this.day.state !== 'waiting') this.endDay(false); // the player switched the camera away
@@ -289,6 +294,7 @@ export class Game {
     this.pod.relayout(this.nav);
     this.kitchen.relayout(this.nav);
     this.phoneBooth.relayout(this.nav);
+    this.toilets.relayout(this.nav);
   }
 
   private restoreSeats(): void {
@@ -856,6 +862,29 @@ export class Game {
       },
     });
     devEvents.register({
+      id: 'toilet',
+      group: 'Aktionen',
+      label: 'Jemand geht aufs WC (Gameboy)',
+      run: () => {
+        const p = pickFree(1).find((o) => !o.talk && !o.inMeeting);
+        if (!p) return null;
+        drop(p);
+        const first = p.member.name.split(' ')[0];
+        const r = this.toilets.go(p, this.nav);
+        return r === 'cabin' ? `${first} geht aufs WC` : r === 'queue' ? `${first} wartet vor dem WC` : null;
+      },
+    });
+    devEvents.register({
+      id: 'toilet-end',
+      group: 'Aktionen',
+      label: 'WCs leeren',
+      run: () => {
+        if (!this.toilets.cabins.some((c) => c.session) && !this.toilets.queue.length) return null;
+        this.toilets.abort();
+        return 'WCs werden verlassen';
+      },
+    });
+    devEvents.register({
       id: 'printer',
       group: 'Aktionen',
       label: 'Jemand druckt',
@@ -1253,6 +1282,7 @@ export class Game {
     this.pod.update(dt, this.people, this.nav);
     this.kitchen.update(dt, this.people, this.nav);
     this.phoneBooth.update(dt, this.people, this.nav);
+    this.toilets.update(dt, this.people, this.nav);
     this.separate();
     this.separate();
     this.separate();
@@ -1867,6 +1897,7 @@ export class Game {
           .filter((d) => !d.away && (d.barkT > 0 || (d.petted && d.happy > 0.5)))
           .map((d) => say(`pet-${d.id}`, d.barkT > 0 ? (d.isCat ? 'Miau!' : 'Wuff!') : '♥', d)),
         ...(meet?.phase === 'session' ? [say(meet.speaker.id, meet.text, meet.speaker)] : []),
+        ...this.toilets.cabins.flatMap((c) => (c.session?.text && !c.session.person.away ? [say(`wc-${c.session.person.id}`, c.session.text, c.session.person)] : [])),
       ],
       this.views.camera,
       window.innerWidth,
