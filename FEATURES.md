@@ -3,7 +3,7 @@
 This is the list of what must still be in the game. Each line is one behavior a player can see or trigger, with the file that owns it.
 
 Rules:
-- Every PR that adds or changes a feature updates this file in the same PR.
+- Every PR that adds or changes a feature updates this file in the same PR, ending the line with its issue `(#N)`.
 - Never delete a line unless an issue asks for that feature to go. In that case move it to **Removed on purpose** and name the issue.
 - The `id` in front of each line is stable. Tests reference it (e.g. `it('presence.lunch-rush', …)`). Once a test guards a line, add the test file after the path.
 
@@ -40,16 +40,16 @@ Rules:
 ## Presence
 - `presence.share` About 36% of the team is out at any time, 45% of those in home office — `src/game/Presence.ts`
 - `presence.errand` Errands (25–70 s) and home office (90–220 s) go through the front door and porch; away people are hidden and not clickable — `src/game/Presence.ts`, `src/game/Door.ts`
-- `presence.hours` Office hours per person: habitual arrive / leave / lunch hour (`schedule` in team data, fallback core hours 08:00–17:30); every day at 04:00 each person gets a fresh plan with jitter, so arrivals and departures are staggered — `src/game/Presence.ts`, `src/data/team.ts`
-- `presence.lunch` Lunch at each person's own hour (short errand); some skip it or eat at the desk; 4+ out at once counts as the lunch break — `src/game/Presence.ts`
-- `presence.errand-window` Errands and home office spells only between 07:30 and 18:00, not shortly before going home — `src/game/Presence.ts`
-- `presence.night-shift` Night owls: per-person chance to stay on into the night (desk lamp on; `nightHome` people from the home office, e.g. marco-rieser); some days a crunch keeps 2–4 more in — `src/game/Presence.ts`, `src/data/team.ts`
-- `presence.door-flow` Arrivals and departures don't jam the front door: people walk in one after another, at most 3 on the way out at once, nobody enters while someone is leaving through it — `src/game/Presence.ts`
+- `presence.hours` Office hours per person: habitual arrive / leave / lunch hour (`schedule` in team data, fallback core hours 08:00–17:30); every day at 04:00 each person gets a fresh plan with jitter, so arrivals and departures are staggered — `src/game/Presence.ts`, `src/data/team.ts` (#5)
+- `presence.lunch` Lunch at each person's own hour (short errand); some skip it or eat at the desk; 4+ out at once counts as the lunch break — `src/game/Presence.ts` (#5)
+- `presence.errand-window` Errands and home office spells only between 07:30 and 18:00, not shortly before going home — `src/game/Presence.ts` (#5)
+- `presence.night-shift` Night owls: per-person chance to stay on into the night (desk lamp on; `nightHome` people from the home office, e.g. marco-rieser); some days a crunch keeps 2–4 more in — `src/game/Presence.ts`, `src/data/team.ts` (#5)
+- `presence.door-flow` Arrivals and departures don't jam the front door: people walk in one after another, at most 3 on the way out at once, nobody enters while someone is leaving through it — `src/game/Presence.ts` (#5)
 - `presence.rain` Rain keeps people in: fewer leave, longer errands, more home office — `src/game/Presence.ts`
 - `presence.caps` Max 15 in the office, max 8 in home office (one per room); nobody returns while the office is full — `src/game/Presence.ts`
 - `presence.homebodies` Homebodies are picked 6× more often, stay 2× longer, likely home at start — `src/game/Presence.ts`
-- `presence.schedule-debug` Today's plans in the console: `__game.presence.schedule` (with `?time=…`) — `src/game/Presence.ts`
-- `presence.strings` All presence wording (leave vs return labels, roster status, action buttons) comes from one table; going out and coming back have separate labels — `src/i18n/strings.ts`
+- `presence.schedule-debug` Today's plans in the console: `__game.presence.schedule` (with `?time=…`) — `src/game/Presence.ts` (#5)
+- `presence.strings` All presence wording (leave vs return labels, roster status, action buttons) comes from one table; going out and coming back have separate labels — `src/i18n/strings.ts` (#8)
 - `presence.manual` Sending someone out/home by hand keeps them away until called back (max 10 min); hand-moved people are left alone by the night shift — `src/game/Presence.ts`
 - `presence.homes-hash` `#homes` fills all 8 home offices at start — `src/game/Presence.ts`
 - `presence.roster` Away roster: out / on the way / "zurück in …" countdown / Homeoffice; clicking a home-office person opens their feed — `src/ui/Roster.ts`
@@ -90,7 +90,7 @@ Rules:
 ## Movement
 - `move.astar` A* on an 8-way grid, no corner cutting, no spawns in sealed pockets — `src/game/NavGrid.ts`
 - `move.traffic` Routes bend around crowds; wander spots go to quiet places — `src/game/Traffic.ts`
-- `move.passages` Narrow passages (doorways, corridors, gaps between desks, found from the nav grid) carry one direction at a time: oncoming walkers wait beside the entrance, sides take turns, head-on inside → one backs out; deadlock fallback detour → give way → push through; nobody loiters inside — `src/game/Passages.ts`
+- `move.passages` Narrow passages (doorways, corridors, gaps between desks, found from the nav grid) carry one direction at a time: oncoming walkers wait beside the entrance, sides take turns, head-on inside → one backs out; deadlock fallback detour → give way → push through; nobody loiters inside — `src/game/Passages.ts` (#3)
 - `move.passing` Keep right head-on, slow when close, back off nose to nose, re-plan or give up when stuck; idle people shuffle aside — `src/game/Walker.ts`
 - `move.collision` Overlapping walkers are pushed apart; walls and furniture are solid — `src/game/Game.ts`, `src/game/NavGrid.ts`
 
@@ -106,7 +106,7 @@ Rules:
 - `pet.petting` Passers-by within 1.5 m may stop and pet a pet (trots over, wags, happy hops); cooldowns per pet and per person — `src/game/PetCare.ts`
 - `pet.announce` Awake pets bark/meow when someone comes in the front door — `src/game/PetCare.ts`
 - `pet.player` The player's person can pet a pet — `src/game/Person.ts`
-- `pet.pose-reset` Petting leaves no distortion: rig resets to neutral each frame, bends at the hips, pose ends when picked up or pulled into a chat — `src/game/Person.ts`, `src/game/Game.ts`
+- `pet.pose-reset` Petting leaves no distortion: rig resets to neutral each frame, bends at the hips, pose ends when picked up or pulled into a chat — `src/game/Person.ts`, `src/game/Game.ts` (#1)
 - `pet.portrait` Pets get rendered low-poly head portraits — `src/render/petPortrait.ts`
 
 ## Time, weather, lights
@@ -124,9 +124,9 @@ Rules:
 - `office.rooms` Rooms: GL Sizi annex, storage/craft room, kitchen, washroom, archive/printer room, photo studio/dark room, phone booth "PSST!", glass meeting room, lounge with pod + foosball + reception, east room — `src/render/officeModel.ts`
 - `office.teams` Team desk areas: Wassermelonen, Hashtag-Himbeeren, Kreative Kiwis, Digitale Birnen — `src/render/officeModel.ts`
 - `office.lettering` Wall lettering "FRISCHE IDEEN, DIE WIRKEN" (also on door leaves) — `src/render/officeModel.ts`
-- `office.glass-door` Glass wall and glass door across the hallway; frames and panes don't flicker (no coplanar faces) — `src/render/officeModel.ts`
-- `office.kiwi-birnen-wall` Divider wall between Kreative Kiwis and Digitale Birnen: corridor line to window wall in both plan scales, stops at the window pane, no overlap with the column — `src/render/officeModel.ts`
-- `office.coat-stands` Freestanding coat stands (round base, pole, hook arms; room-editor item `coat-rack`); no stand in the entrance. A person's long draped coat hangs on a hook exactly while they are in, on the stand nearest their desk, same hook again when free — `src/render/officeModel.ts`, `src/game/CoatRacks.ts`, `src/render/jacketBuilder.ts`
+- `office.glass-door` Glass wall and glass door across the hallway; frames and panes don't flicker (no coplanar faces) — `src/render/officeModel.ts` (#7)
+- `office.kiwi-birnen-wall` Divider wall between Kreative Kiwis and Digitale Birnen: corridor line to window wall in both plan scales, stops at the window pane, no overlap with the column — `src/render/officeModel.ts` (#6)
+- `office.coat-stands` Freestanding coat stands (round base, pole, hook arms; room-editor item `coat-rack`); no stand in the entrance. A person's long draped coat hangs on a hook exactly while they are in, on the stand nearest their desk, same hook again when free — `src/render/officeModel.ts`, `src/game/CoatRacks.ts`, `src/render/jacketBuilder.ts` (#4)
 - `office.deco` Bunting and string lights under the sawtooth roof — `src/render/officeModel.ts`
 - `office.mosquito` Easter egg: framed dead mosquito next to the meeting-room screen — `src/render/officeModel.ts`
 - `office.desk-props` Per desk: Apple keyboard/mouse, mesh chair, seeded plant — `src/render/officeModel.ts`
