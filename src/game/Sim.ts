@@ -28,6 +28,7 @@ import { TimeOfDay } from './TimeOfDay';
 import { Toilets } from './Toilets';
 import { Traffic } from './Traffic';
 import { Walker } from './Walker';
+import type { WalkColliders } from './walkCollision';
 import { Weather } from './Weather';
 import { Welcome } from './Welcome';
 import { random } from './rng';
@@ -63,6 +64,8 @@ export interface SimOptions {
 export class Sim {
   readonly scene: THREE.Scene;
   readonly nav = new NavGrid(Math.ceil(WORLD.width / NAV_CELL), Math.ceil(WORLD.depth / NAV_CELL), NAV_CELL);
+  /** what the walk-mode player collides with; blockNav keeps the boxes in step with the furniture */
+  readonly walkColliders: WalkColliders = { nav: this.nav, boxes: [], doorways: [] };
   readonly model: OfficeModel;
   readonly office: Office;
   readonly doors: Doors;
@@ -107,6 +110,7 @@ export class Sim {
     const model = (this.model = buildOffice(scene));
     prepare?.(model);
     this.blockNav();
+    this.walkColliders.doorways = model.doors.map((d) => ({ x: d.center.x, z: d.center.z, r: d.width / 2 }));
     this.office = new Office(model, this.nav);
     this.doors = new Doors(model.doors);
     this.meetingRoom = new MeetingRoom(model.meeting, this.nav);
@@ -131,7 +135,9 @@ export class Sim {
   /** Walls and furniture as they stand now become what nobody can walk through. */
   blockNav(): void {
     this.nav.clear();
-    for (const b of this.model.blockers()) this.nav.blockWorld(b.min.x, b.min.z, b.max.x, b.max.z);
+    const blockers = this.model.blockers();
+    for (const b of blockers) this.nav.blockWorld(b.min.x, b.min.z, b.max.x, b.max.z);
+    this.walkColliders.boxes = blockers;
     this.nav.sealUnreachable(CORRIDOR_POINT);
     this.traffic.rebuild();
   }
