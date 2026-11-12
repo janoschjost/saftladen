@@ -183,7 +183,7 @@ Rules:
 - `home.adhd` ADHD extras (Delya, Sandro): fidget spinner, chair spin, snack run, pacing — `src/render/homeOffice.ts`
 - `home.coffee-hater` Coffee haters spit the coffee out and drink a can — `src/render/homeOffice.ts`
 - `home.vape` Vapers: glowing tip, puffs, room hazes over — `src/render/homeOffice.ts`
-- `home.feeds` Feed tiles (in the Leute dock): count, activity caption, click to enlarge (FLIP); office labels kept off the feeds; collapsible (`saftladen.feeds.collapsed`) — `src/ui/Feeds.ts`, `src/game/Game.ts`, url: `/#homes` (#38, #98)
+- `home.feeds` Feed tiles (in the Leute dock): count, activity caption, click to enlarge (FLIP); office labels kept off the feeds; collapsible (`saftladen.feeds.collapsed`); no overscroll bounce, so overlays stay on their videos — `src/ui/Feeds.ts`, `src/game/Game.ts`, url: `/#homes` (#38, #98, #58)
 - `home.assign` Room assignment per person in the character view (`saftladen.homes`), one owner per regular room, own rooms fixed — `src/data/homeAssignments.ts`, `src/ui/CharacterPicker.ts`
 
 ## Characters
