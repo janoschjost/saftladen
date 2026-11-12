@@ -1,3 +1,4 @@
+import { statSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
@@ -29,9 +30,13 @@ const saveJson = (name: string, route: string, file: string): Plugin => ({
   },
 });
 
+/** In a git worktree `.git` is a file, in the main checkout a directory. */
+const inWorktree = statSync(fileURLToPath(new URL('.git', import.meta.url)), { throwIfNoEntry: false })?.isFile() ?? false;
+
 export default defineConfig({
   base: './',
   plugins: [saveJson('save-layout', '/__save-layout', './src/data/layout.json'), saveJson('save-seats', '/__save-seats', './src/data/seats.json')],
-  // served at https://saftladen.test through a Herd proxy (herd proxy saftladen http://127.0.0.1:5173 --secure)
-  server: { port: 5173, strictPort: true, host: true, allowedHosts: ['saftladen.test'] },
+  // Main checkout: served at https://saftladen.test through a Herd proxy (herd proxy saftladen http://127.0.0.1:5173 --secure),
+  // so it must get exactly 5173. Worktrees (parallel agent sessions) start at 5174 and take the next free port.
+  server: { port: inWorktree ? 5174 : 5173, strictPort: !inWorktree, host: true, allowedHosts: ['saftladen.test'] },
 });
