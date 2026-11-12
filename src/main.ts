@@ -17,6 +17,7 @@ try {
   if (import.meta.env.DEV) applySeedParam();
   const game = new Game(document.getElementById('stage') as HTMLElement);
   if (import.meta.env.DEV) void import('./game/debugParams').then((m) => m.applyDebugParams(game));
+  if (import.meta.env.DEV) void import('./game/DevForce').then((m) => m.installForceState(game));
   new CharacterPicker();
   new DayMenu((id) => game.startDay(id));
 } finally {
