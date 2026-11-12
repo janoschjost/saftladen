@@ -8,6 +8,7 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
    - Ask from a dev without an issue → search the open issues first (`gh issue list --search "<words>"`). If none fits, open one with `scripts/issue.sh new "<title>" <bug|enhancement> "<body with acceptance criteria>"`.
    - Docs, tooling and typo fixes may skip the issue and go straight to a PR.
 2. **Claim.** `scripts/issue.sh claim N`. Exit code 2 means another session owns the issue: don't touch it. Never take over an issue that is labeled `in progress`, assigned, or has an open PR. Giving up → `scripts/issue.sh release N "<reason>"`.
+   - Open questions or a product decision needed → `scripts/issue.sh ask N "<questions>"` (label `question`). Waiting on another PR or issue → `scripts/issue.sh block N "<reason>"` (label `blocked`). Agents don't work `question` issues; a dev answers in a comment and removes the label. `gh issue list --label question` is the devs' inbox.
 3. **Worktree.** Never work in the main checkout. Other sessions and the dev's own dev server use it.
    ```sh
    git fetch origin
