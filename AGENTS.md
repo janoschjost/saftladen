@@ -33,7 +33,12 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
 
 ## Commits
 
-Small and logical. Short imperative subject in the style of `git log`. Commit, push and open PRs only on a branch, never on `main`. Merge only when a dev explicitly tells you to, for that PR: checks green (or deliberately skipped), then `gh pr merge N --squash --delete-branch`. Never merge on your own initiative.
+- Commit only when a dev tells you to, never on your own initiative. Working an issue through this workflow (e.g. `/tackle-issues`) counts as that instruction for the issue's branch.
+- Split the work into meaningful, logical commits.
+- Short, precise imperative subject in the style of `git log`. Add a body only when the subject alone isn't enough.
+- No `Co-Authored-By` line and no other attribution line in commit messages.
+- Commit, push and open PRs only on a branch, never on `main`.
+- Merge only when a dev explicitly tells you to, for that PR: checks green (or deliberately skipped), then `gh pr merge N --squash --delete-branch`. Never merge on your own initiative.
 
 ## FEATURES.md
 
