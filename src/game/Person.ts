@@ -5,7 +5,7 @@ import type { TeamMember } from '../data/types';
 import type { CharacterRig } from '../render/characterBuilder';
 import { SIT_DROP } from '../render/officeBuilder';
 import { screenVariants, type ScreenKind } from '../render/screens';
-import { DOOR_IN, DOOR_OUT } from './Door';
+import { DOOR_LANES, pickDoorLane, type DoorLane } from './Door';
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { MeetSeat } from './Meeting';
 import type { CoffeeSpot, Kitchen, MachineSpot } from './Coffee';
@@ -359,15 +359,19 @@ export class Person extends Walker {
     return this.presence === 'in';
   }
 
+  /** the wing of the entrance door this person uses on the current trip */
+  lane: DoorLane = DOOR_LANES[0];
+
   /** Walk to the door and leave; comes back after `seconds`. */
   leaveOffice(nav: NavGrid, kind: AwayKind, seconds: number): void {
     this.cancelTask();
+    this.lane = pickDoorLane();
     this.presence = 'leaving';
     this.awayKind = kind;
     this.awayLeft = seconds;
     this.presenceRetries = 0;
     this.presenceRetry = 0;
-    this.goTo(nav, DOOR_IN);
+    this.goTo(nav, this.lane.in);
   }
 
   /** Start the game already outside. */
@@ -383,10 +387,11 @@ export class Person extends Walker {
   private comeBack(): void {
     this.presence = 'returning';
     this.setAway(false);
-    this.pos = { ...DOOR_OUT };
-    this.prev = { ...DOOR_OUT };
+    this.lane = pickDoorLane();
+    this.pos = { ...this.lane.out };
+    this.prev = { ...this.lane.out };
     this.yaw = this.prevYaw = Math.PI;
-    this.startScript(DOOR_IN, this.speed * 0.9);
+    this.startScript(this.lane.in, this.speed * 0.9);
   }
 
   /** Called back before they got out of the door. */
@@ -423,14 +428,14 @@ export class Person extends Walker {
         }
         if (this.isWalking()) return false; // normal walking to the door
         this.moving += (0 - this.moving) * Math.min(1, dt * 8);
-        if (Math.hypot(DOOR_IN.x - this.pos.x, DOOR_IN.z - this.pos.z) < 0.7) {
-          this.startScript(DOOR_OUT);
+        if (Math.hypot(this.lane.in.x - this.pos.x, this.lane.in.z - this.pos.z) < 0.7) {
+          this.startScript(this.lane.out);
           return true;
         }
         this.presenceRetry -= dt;
         if (this.presenceRetry <= 0) {
           this.presenceRetry = 0.5;
-          this.goTo(nav, DOOR_IN);
+          this.goTo(nav, this.lane.in);
           if (!this.isWalking() && ++this.presenceRetries > 8) this.abortLeaving();
         }
         return true;

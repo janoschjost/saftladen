@@ -1,6 +1,6 @@
 import type * as THREE from 'three';
 import type { DogRig } from '../render/dogBuilder';
-import { DOOR, DOOR_IN, DOOR_OUT } from './Door';
+import { DOOR } from './Door';
 import type { NavGrid } from './NavGrid';
 import type { Person } from './Person';
 import { Walker } from './Walker';
@@ -118,10 +118,10 @@ export class Dog extends Walker {
       this.doorWait -= dt;
       if (this.doorWait > 0) return true;
       this.setAway(false);
-      this.pos = { ...DOOR_OUT, x: DOOR_OUT.x + 0.3 };
+      this.pos = { ...this.owner.lane.out, x: this.owner.lane.out.x + 0.2 };
       this.prev = { ...this.pos };
       this.yaw = this.prevYaw = Math.PI;
-      this.startScript(DOOR_IN, this.speed * 0.9);
+      this.startScript(this.owner.lane.in, this.speed * 0.9);
       return true;
     }
     if (this.script) {
@@ -147,24 +147,24 @@ export class Dog extends Walker {
       if (!this.headingOut) {
         // drop whatever we were doing and run for the door
         this.headingOut = true;
-        this.goTo(nav, DOOR_IN);
+        this.goTo(nav, this.owner.lane.in);
         return false;
       }
       if (this.state === 'walk') return false;
-      if (Math.hypot(DOOR_IN.x - this.pos.x, DOOR_IN.z - this.pos.z) < 0.9) {
-        this.startScript(DOOR_OUT, this.speed);
+      if (Math.hypot(this.owner.lane.in.x - this.pos.x, this.owner.lane.in.z - this.pos.z) < 0.9) {
+        this.startScript(this.owner.lane.out, this.speed);
         return true;
       }
       this.retry -= dt;
       if (this.retry <= 0) {
         this.retry = 0.4;
-        this.goTo(nav, DOOR_IN);
+        this.goTo(nav, this.owner.lane.in);
       }
       return this.state === 'idle';
     }
     // owner changed their mind while we were already on the porch
     if (this.pos.z > DOOR.z) {
-      this.startScript(DOOR_IN, this.speed);
+      this.startScript(this.owner.lane.in, this.speed);
       return true;
     }
     return false;

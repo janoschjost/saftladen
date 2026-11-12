@@ -72,8 +72,8 @@ export interface OfficeModel {
   blockers(): THREE.Box3[];
   /** ceiling, beams, clerestory, bunting, string lights (hidden by default) */
   roof: THREE.Group;
-  /** front door leaf, hinged at its pivot; rotation.y = 0 is closed, negative swings it outwards */
-  entrance: THREE.Group;
+  /** the two wings of the front door, each hinged at its outer jamb and swinging on its own: rotation.y = 0 is closed, negative (left) / positive (right) swings it outwards */
+  entrance: { left: THREE.Group; right: THREE.Group };
   /** swinging interior doors */
   doors: DoorRig[];
   /** the two spots where people stand to play foosball (game coordinates, yaw = facing the table) */
@@ -766,7 +766,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   windowWall(B.x0, B.z0, B.x0, B.z1); // west end: Wassermelonen windows
   if (EXACT) {
     windowWall(B.x1, B.z0, B.x1, B.z1); // east end windows
-    wall(B.x0, B.z1, 7.5, B.z1, H_LOW, [{ a: -6.7, b: -5.6, door: -1 }, { a: -4.4, b: -3.4 }], { t: 0.3, outer: true }); // solid part, open doorway (the leaf is dynamic, see `entrance`)
+    wall(B.x0, B.z1, 7.5, B.z1, H_LOW, [{ a: -6.7, b: -5.6, door: -1 }, { a: -4.9, b: -2.9 }], { t: 0.3, outer: true }); // solid part, 2 m double doorway (the two wings are dynamic, see `entrance`)
     windowWall(7.5, B.z1, B.x1, B.z1); // long window wall
   }
   for (const [a, b] of [
@@ -2242,21 +2242,26 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   staticRoof.visible = false;
   scene.add(staticRoof);
 
-  // entrance door leaf (not merged, so it can swing open when somebody walks through)
-  const door = new THREE.Group();
-  const doorW = 1.0; // fills the doorway (model x -4.4 .. -3.4) exactly
-  const doorH = 2.1;
-  const leaf = new THREE.Mesh(new THREE.BoxGeometry(doorW, doorH, 0.05), mat.lightgrey);
-  leaf.position.set(doorW / 2, doorH / 2, 0);
-  leaf.castShadow = true;
-  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.03, 0.09), mat.steel);
-  handle.position.set(doorW - 0.1, 1.0, 0);
-  // glass pane set into the upper part of the leaf (slightly proud of both faces)
-  const pane = new THREE.Mesh(new THREE.BoxGeometry(doorW - 0.3, 1.1, 0.06), mat.glass);
-  pane.position.set(doorW / 2, 1.3, 0);
-  door.add(leaf, pane, handle);
-  door.position.set(ax(-3.9) - 0.5, 0, az(B.z1) - 0.15 + 0.025); // flush with the inner face of the 0.3 m wall
-  scene.add(door);
+  // entrance double door: two wings (not merged, so each swings open on its own when somebody walks through)
+  const wingW = 1.0; // two wings fill the doorway (model x -4.9 .. -2.9) exactly
+  const wingH = 2.1;
+  const wing = (side: 1 | -1): THREE.Group => {
+    // side 1 = left wing (hinged at the west jamb, leaf extends east), -1 = right wing (mirrored)
+    const g = new THREE.Group();
+    const leaf = new THREE.Mesh(new THREE.BoxGeometry(wingW, wingH, 0.05), mat.lightgrey);
+    leaf.position.set((side * wingW) / 2, wingH / 2, 0);
+    leaf.castShadow = true;
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.03, 0.09), mat.steel);
+    handle.position.set(side * (wingW - 0.1), 1.0, 0);
+    // glass pane set into the upper part of the leaf (slightly proud of both faces)
+    const pane = new THREE.Mesh(new THREE.BoxGeometry(wingW - 0.3, 1.1, 0.06), mat.glass);
+    pane.position.set((side * wingW) / 2, 1.3, 0);
+    g.add(leaf, pane, handle);
+    g.position.set(ax(-3.9) - side * wingW, 0, az(B.z1) - 0.15 + 0.025); // flush with the inner face of the 0.3 m wall
+    scene.add(g);
+    return g;
+  };
+  const door = { left: wing(1), right: wing(-1) };
 
   // printer paper (not merged, shown while somebody prints)
   const paper = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.012, 0.22), L(0xffffff));

@@ -31,7 +31,7 @@ import { Weather } from './Weather';
 import { Christmas } from './Christmas';
 import { RainFx } from '../render/rainFx';
 import { loadState, saveState } from '../ui/persist';
-import { DOOR } from './Door';
+import { DOOR_LANES } from './Door';
 import { Doors } from './Doors';
 import { Kitchen } from './Coffee';
 import { MeetingRoom } from './Meeting';
@@ -97,8 +97,8 @@ export class Game {
   private actions: Actions;
   private seats: Seats;
   private homes: Array<HomeOffice | null> = Array.from({ length: ROOM_COUNT }, () => null);
-  private entrance!: THREE.Object3D;
-  private doorOpen = 0;
+  private entrance!: { left: THREE.Object3D; right: THREE.Object3D };
+  private doorOpen = { left: 0, right: 0 };
   private doors!: Doors;
   private meetingRoom!: MeetingRoom;
   private pod!: Pod;
@@ -1811,11 +1811,14 @@ export class Game {
     this.feeds.sync(entries);
   }
 
-  /** The front door swings open while somebody is on the way through it. */
+  /** Each wing of the front door swings open on its own while somebody is on the way through its lane. */
   private updateDoor(dt: number): void {
-    const near = this.walkers.some((w) => !w.away && Math.hypot(w.pos.x - DOOR.x, w.pos.z - DOOR.z) < 1.4);
-    this.doorOpen += ((near ? 1 : 0) - this.doorOpen) * Math.min(1, dt * 6);
-    this.entrance.rotation.y = -this.doorOpen * 1.7;
+    for (const lane of DOOR_LANES) {
+      const near = this.walkers.some((w) => !w.away && Math.abs(w.pos.x - lane.gate.x) < 0.6 && Math.abs(w.pos.z - lane.gate.z) < 1.4);
+      const k = lane.wing;
+      this.doorOpen[k] += ((near ? 1 : 0) - this.doorOpen[k]) * Math.min(1, dt * 6);
+      this.entrance[k].rotation.y = (k === 'left' ? -1 : 1) * this.doorOpen[k] * 1.7;
+    }
     this.doors.update(
       dt,
       [...this.walkers.filter((w) => !w.away).map((w) => w.pos), ...(this.views.mode === 'walk' ? [this.views.eye] : [])],
