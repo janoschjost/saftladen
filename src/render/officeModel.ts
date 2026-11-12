@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Vec2 } from '../game/NavGrid';
 import { screenOffMaterial, type DeskRig } from './officeBuilder';
+import { tvMaterial } from './screens';
 import { RoomItem, type ItemAnchor } from './roomItem';
 
 /**
@@ -85,7 +86,7 @@ export interface OfficeModel {
   /** numbered sprites above every room (blue), toggled in the settings */
   roomLabels: THREE.Group;
   /** glass meeting room: doorway centre, table centre and the 8 chairs (game coordinates, yaw = facing the table) */
-  meeting: { doorPos: Vec2; center: Vec2; seats: Array<{ x: number; z: number; yaw: number }> };
+  meeting: { doorPos: Vec2; center: Vec2; tv: Vec2; seats: Array<{ x: number; z: number; yaw: number }> };
   /** the two bench seats in the wooden pod (game coordinates, yaw = facing out of the pod) */
   pod: { center: Vec2; seats: Array<{ x: number; z: number; yaw: number }> };
   /** kitchen: where the coffee group gathers (game coordinates, in front of the espresso machine), the machine itself and the two spots to stand at it */
@@ -158,6 +159,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   const podCenter: Vec2 = { x: 0, z: 0 };
   const boothSeat = { x: 0, z: 0, yaw: -Math.PI / 2 }; // faces west (the table on the west wall)
   const meetCenter: Vec2 = { x: 0, z: 0 };
+  const meetTv: Vec2 = { x: 0, z: 0 };
   const kitchenCenter: Vec2 = { x: 0, z: 0 };
   const kitchenMachine: Vec2 = { x: 0, z: 0 };
   const tableSeats: Array<{ x: number; z: number; yaw: number }> = [];
@@ -1995,10 +1997,13 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     meetCenter.x = gx(23);
     meetCenter.z = gz(6.0);
     track(meetCenter);
+    meetTv.x = gx(23);
+    meetTv.z = gz(2.3);
+    track(meetTv);
     // wall-mounted display on the door wall: white frame, black screen, white header box above, facing into the room
     item('tv', 'meeting-tv', 'Fernseher', () => {
       box(2.2, 1.25, 0.06, 23, 0.9, 2.3, mat.white);
-      box(2.08, 1.13, 0.01, 23, 0.96, 2.335, L(0x15191c));
+      box(2.08, 1.13, 0.01, 23, 0.96, 2.335, tvMaterial()); // starts black; Game.updateTv sets what it shows (slides / kart race), Office.updateScreens animates it
       box(2.3, 0.16, 0.14, 23, 2.15, 2.28, mat.white);
     });
     // easter egg: framed dead bug on the wall left of the screen
@@ -2335,7 +2340,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   } else scene.add(paper);
   const printer = { stand: printerStand, paper };
 
-  const meeting = { doorPos: { x: ax(20.65), z: az(CORR) }, center: meetCenter, seats: meetSeats };
+  const meeting = { doorPos: { x: ax(20.65), z: az(CORR) }, center: meetCenter, tv: meetTv, seats: meetSeats };
   // the strip south of the wall, east of the annex, is outside: block it so nobody walks out through the entrance doorway into thin air
   blockers.push(new THREE.Box3(new THREE.Vector3(ax(ANNEX.x1), 0, OFFICE_D), new THREE.Vector3(OFFICE_W, 1.2, OFFICE_D + ANNEX_D)));
   const allBlockers = () => [...blockers, ...items.flatMap((it) => it.blockers())];

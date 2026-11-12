@@ -4,6 +4,7 @@ import type { Person } from './Person';
 import { Chat } from './Chatter';
 import { nextSpeaker, type ConversationKind, type Talk } from './Social';
 import { random } from './rng';
+import type { TvMode } from '../render/screens';
 
 /** A chair at the meeting table. */
 export interface MeetSeat {
@@ -23,6 +24,13 @@ const SESSION = { min: 45, max: 90 }; // seconds the door stays shut
 const FIRST_MEETING = { min: 25, max: 50 }; // seconds after game start
 const PAUSE = { min: 70, max: 140 }; // seconds between two meetings
 const GROUP = { min: 3, max: 6 };
+const KART_SESSION = { min: 60, max: 110 }; // a round of kart racing
+const KART_GROUP = { min: 2, max: 4 };
+const LUNCH = { from: 11.75, to: 13.5 }; // hours: kart rounds only happen around lunch
+const KART_DAY = 0.3; // chance that a lunch break has a round at all
+
+/** What the TV shows during an ordinary meeting: usually slides, sometimes nobody switched it on. */
+const meetingScreen = (): TvMode => (random() < 0.6 ? 'slides' : 'off');
 
 const between = ({ min, max }: { min: number; max: number }) => min + random() * (max - min);
 
@@ -36,7 +44,7 @@ export class Meeting implements Talk {
   private chat: Chat | null = null;
   private speakerTimer = 0;
   private previous: Person | null = null;
-  private duration = between(SESSION);
+  private duration: number;
   /** the door is shut and the doorway blocked: nobody else wanders in */
   closed = false;
 
@@ -44,8 +52,11 @@ export class Meeting implements Talk {
     public members: Person[],
     readonly center: Vec2,
     private room: MeetingRoom,
+    /** what the TV shows once everybody sits */
+    readonly screen: TvMode = meetingScreen(),
   ) {
     this.speaker = members[0];
+    this.duration = between(screen === 'kart' ? KART_SESSION : SESSION);
   }
 
   /** false once everybody has left */
@@ -69,6 +80,8 @@ export class Meeting implements Talk {
     }
 
     if (this.phase === 'session') {
+      // a kart round: everybody turns to the TV, not to each other
+      if (this.screen === 'kart') for (const m of this.members) m.meetFocus = this.room.tvPos;
       this.speakerTimer -= dt;
       if (this.speakerTimer <= 0) {
         const next = nextSpeaker(this.members, this.speaker, this.previous);
@@ -85,6 +98,7 @@ export class Meeting implements Talk {
         this.room.setClosed(false, nav);
         for (const m of this.members) {
           m.speaking = false;
+          m.meetFocus = null;
           m.dismissMeeting();
         }
       }
@@ -104,6 +118,7 @@ export class Meeting implements Talk {
     this.closed = false;
     for (const m of this.members) {
       m.speaking = false;
+      m.meetFocus = null;
       m.dismissMeeting();
     }
     return false;
@@ -145,6 +160,9 @@ export class MeetingRoom {
   /** the chat between people the player seated here (null while fewer than two sit) */
   casual: CasualChat | null = null;
   private timer = between(FIRST_MEETING);
+  /** this lunch break has a kart round coming (rolled once per lunch break) */
+  private kartPending = false;
+  private lunchRolled = false;
   private doorCell: { cx: number; cz: number };
   private sources = new Map<MeetSeat, ModelSeat>();
   /** called when the door should be locked shut (true) or released (false) */
@@ -200,6 +218,11 @@ export class MeetingRoom {
     return p.x >= Math.min(...xs) - m && p.x <= Math.max(...xs) + m && p.z >= Math.min(...zs) - m && p.z <= Math.max(...zs) + m;
   }
 
+  /** where the TV hangs */
+  get tvPos(): Vec2 {
+    return this.model.tv;
+  }
+
   get doorPos(): Vec2 {
     return this.model.doorPos;
   }
@@ -216,14 +239,14 @@ export class MeetingRoom {
   }
 
   /** Calls `people` to the room (first free seats, north to south). Returns the meeting, or null if there is no room for a meeting. */
-  start(people: Person[], nav: NavGrid): Meeting | null {
+  start(people: Person[], nav: NavGrid, screen?: TvMode): Meeting | null {
     if (this.current) return null;
     // side chairs first (north to south), the two head chairs only when the group is big
     const isHead = (s: MeetSeat) => Math.abs(Math.cos(s.yaw)) > 0.5; // heads face north / south
     const seats = this.seats.filter((s) => !s.occupant).sort((a, b) => Number(isHead(a)) - Number(isHead(b)) || a.seat.z - b.seat.z || a.seat.x - b.seat.x);
     const group = people.slice(0, seats.length);
     if (group.length < 2) return null;
-    const m = new Meeting(group, this.model.center, this);
+    const m = new Meeting(group, this.model.center, this, screen);
     // nearest person takes the seat nearest to the door side first
     group.forEach((p, i) => p.callToMeeting(nav, seats[i], m));
     this.current = m;
@@ -254,8 +277,26 @@ export class MeetingRoom {
     chat.update(dt);
   }
 
-  update(dt: number, people: readonly Person[], nav: NavGrid): void {
+  /** What the TV in the room shows: slides or a kart race while a meeting sits, otherwise nothing. */
+  get tv(): TvMode {
+    return this.current?.phase === 'session' ? this.current.screen : 'off';
+  }
+
+  /** Some lunch breaks a few people gather here for a round of kart racing. */
+  private rollKart(hour: number): void {
+    const lunch = hour >= LUNCH.from && hour < LUNCH.to;
+    if (lunch && !this.lunchRolled) {
+      this.lunchRolled = true;
+      this.kartPending = random() < KART_DAY;
+    } else if (!lunch) {
+      this.lunchRolled = false;
+      this.kartPending = false;
+    }
+  }
+
+  update(dt: number, people: readonly Person[], nav: NavGrid, hour = 0): void {
     this.updateCasual(dt, people);
+    this.rollKart(hour);
     if (this.current) {
       if (!this.current.update(dt, nav)) {
         this.current = null;
@@ -266,10 +307,15 @@ export class MeetingRoom {
     this.timer -= dt;
     if (this.timer > 0) return;
     this.timer = 10;
+    const kart = this.kartPending;
     const free = people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob);
-    const n = Math.min(free.length, Math.round(GROUP.min + random() * (GROUP.max - GROUP.min)));
-    if (n < GROUP.min) return;
+    const size = kart ? KART_GROUP : GROUP;
+    const n = Math.min(free.length, Math.round(size.min + random() * (size.max - size.min)));
+    if (n < size.min) return;
     const group = free.sort(() => random() - 0.5).slice(0, n);
-    if (this.start(group, nav)) this.timer = 0;
+    if (this.start(group, nav, kart ? 'kart' : undefined)) {
+      this.timer = 0;
+      this.kartPending = false;
+    }
   }
 }

@@ -267,6 +267,8 @@ export class Person extends Walker {
   private emoteIn = EMOTE_GAP.min + random() * (EMOTE_GAP.max - EMOTE_GAP.min);
   /** walking to / sitting in the meeting room */
   meetJob: MeetJob | null = null;
+  /** while sitting in a meeting: look at this point (the TV) instead of across the table */
+  meetFocus: Vec2 | null = null;
   /** called to a meeting while still at a desk: goes once they have stood up */
   private pendingMeet: { seat: MeetSeat; talk: Talk; nav: NavGrid } | null = null;
   private presenceRetry = 0;
@@ -356,6 +358,7 @@ export class Person extends Walker {
     if (seat?.occupant === this) seat.occupant = null;
     if (this.talk === (j?.talk ?? pending?.talk)) this.talk = null;
     this.meetJob = null;
+    this.meetFocus = null;
     this.pendingMeet = null;
     this.path = [];
     this.state = 'idle';
@@ -1355,7 +1358,7 @@ export class Person extends Walker {
         this.pos.x = s.seat.x;
         this.pos.z = s.seat.z;
         this.sit = 1;
-        this.turnTo(s.yaw, dt);
+        this.turnTo(this.meetFocus ? Math.atan2(this.meetFocus.x - s.seat.x, this.meetFocus.z - s.seat.z) : s.yaw, dt);
         this.moving += (0 - this.moving) * ease;
         if (j.solo !== undefined && (j.solo -= dt) <= 0) j.dismissed = true;
         if (j.dismissed) {
