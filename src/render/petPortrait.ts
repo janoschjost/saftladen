@@ -1,12 +1,17 @@
 import * as THREE from 'three';
-import type { DogRig } from './dogBuilder';
 
 const SIZE = 192;
 const cache = new Map<string, string>();
 let renderer: THREE.WebGLRenderer | null = null;
 
-/** Profile picture of a pet: its low-poly head, rendered once from a fresh rig and cached as a data URL. */
-export function petPortrait(key: string, build: () => DogRig): string | null {
+/** Something with a head to frame: `face` is the head centre (y, z) and radius in rig units (before the root scale). */
+export interface PortraitRig {
+  root: THREE.Object3D;
+  face: { r: number; y: number; z: number };
+}
+
+/** Profile picture of a pet (or Kurt): its low-poly head, rendered once from a fresh rig and cached as a data URL. */
+export function petPortrait(key: string, build: () => PortraitRig): string | null {
   const hit = cache.get(key);
   if (hit) return hit;
   try {
