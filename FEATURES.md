@@ -67,7 +67,7 @@ Rules:
 
 ## Errands and places in the office
 - `place.printer` Printer in the archive: one person at a time, paper shows while printing — `src/game/Person.ts`, `src/render/officeModel.ts`, e2e: `e2e/events.spec.ts`, url: `/?seed=1&time=11&event=printer` (#38)
-- `place.foosball` Foosball: challenge a free opponent, animated rods — `src/game/Person.ts`, `src/game/Game.ts`
+- `place.foosball` Foosball: challenge a free opponent, animated rods — `src/game/Person.ts`, `src/game/Game.ts`, e2e: `e2e/events.spec.ts`, url: `/?seed=1&time=11&event=foosball` (#39)
 - `place.phone-walk` Phone calls while walking: pacing a path or wandering — `src/game/Person.ts`, url: `/?seed=1&time=11&event=phone-jan-hasler` (#38)
 - `place.vape` Vape drags: raise, inhale, hold, exhale with puffs — `src/game/Person.ts`, url: `/?seed=1&time=11&event=vape-fabian-bucher` (#38)
 - `place.coffee-run` Coffee run: brew at the espresso machine, carry the cup back; desk stays reserved — `src/game/Person.ts`, `src/game/Coffee.ts`
@@ -92,7 +92,7 @@ Rules:
 - `move.astar` A* on an 8-way grid, no corner cutting, no spawns in sealed pockets — `src/game/NavGrid.ts`, test: `src/game/NavGrid.test.ts`
 - `move.traffic` Routes bend around crowds; wander spots go to quiet places — `src/game/Traffic.ts`
 - `move.passages` Narrow passages (doorways, corridors, gaps between desks, found from the nav grid) carry one direction at a time: oncoming walkers wait beside the entrance, sides take turns, head-on inside → one backs out; deadlock fallback detour → give way → push through; nobody loiters inside — `src/game/Passages.ts` (#3)
-- `move.passing` Keep right head-on, slow when close, back off nose to nose, re-plan or give up when stuck; idle people shuffle aside — `src/game/Walker.ts`
+- `move.passing` Keep right head-on, slow when close, back off nose to nose (only one of two walkers coming at each other backs off, the other edges past), re-plan or give up when stuck; idle people shuffle aside — `src/game/Walker.ts`, test: `src/game/Walker.test.ts`, url: `/?seed=1&time=11&event=foosball` (#39)
 - `move.collision` Overlapping walkers are pushed apart; walls and furniture are solid — `src/game/Game.ts`, `src/game/NavGrid.ts`
 
 ## Doors

@@ -13,6 +13,7 @@ const cases: [string, string, (g: any) => unknown][] = [
   ['place.booth', 'phone-booth', (g) => g.phoneBooth.current],
   ['place.pod', 'pod', (g) => g.pod.current],
   ['place.printer', 'printer', (g) => g.people.some((p: { printJob?: unknown }) => p.printJob)],
+  ['place.foosball', 'foosball', (g) => g.people.filter((p: { foosJob?: unknown }) => p.foosJob).length === 2],
 ];
 
 for (const [id, event, reached] of cases) {
