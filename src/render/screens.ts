@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { seeded, type Rng } from '../game/rng';
+import { fxRandom, seeded, type Rng } from '../game/rng';
 
 /** What a monitor shows, by kind of work. */
 export type ScreenKind = 'code' | 'design' | 'data' | 'sheet' | 'docs' | 'media';
@@ -448,72 +448,260 @@ function paint(c: Ctx, e: Entry): void {
   }
 }
 
-/** The meeting-room TV: a Mario-Kart-like race, always running. Own texture, redrawn at the same low rate. */
-export function raceMaterial(): THREE.MeshBasicMaterial {
-  if (race) return race.mat;
+/** What the meeting-room TV shows: nothing, a slide deck (a meeting is running) or a round of kart racing (lunch break). */
+export type TvMode = 'off' | 'slides' | 'kart';
+
+interface Tv {
+  mat: THREE.MeshBasicMaterial;
+  tex: THREE.CanvasTexture;
+  live: HTMLCanvasElement;
+  mode: TvMode;
+  t: number;
+  acc: number;
+}
+let tv: Tv | null = null;
+/** deck colours of the current meeting (effects RNG: slides never change a seeded run) */
+let deck = 0;
+
+/** The meeting-room TV: own texture, black until a mode is set, redrawn at the same low rate while it shows something. */
+export function tvMaterial(): THREE.MeshBasicMaterial {
+  if (tv) return tv.mat;
   const live = mk();
   const tex = new THREE.CanvasTexture(live);
   tex.colorSpace = THREE.SRGBColorSpace;
   const mat = new THREE.MeshBasicMaterial({ map: tex });
-  race = { mat, tex, live, t: 0, acc: 0 };
-  drawRace(live.getContext('2d')!, 0);
-  tex.needsUpdate = true;
+  tv = { mat, tex, live, mode: 'off', t: 0, acc: 0 };
+  drawTv(tv);
   return mat;
 }
 
-let race: { mat: THREE.MeshBasicMaterial; tex: THREE.CanvasTexture; live: HTMLCanvasElement; t: number; acc: number } | null = null;
+export const tvMode = (): TvMode => tv?.mode ?? 'off';
 
-/** Advances the race; called once per frame, redraws at 10 fps. */
-export function tickRace(dt: number): void {
-  if (!race) return;
-  race.t += dt;
-  race.acc += dt;
-  if (race.acc < TICK) return;
-  race.acc = 0;
-  drawRace(race.live.getContext('2d')!, race.t);
-  race.tex.needsUpdate = true;
+/** Switches the picture; a new mode starts from its beginning. */
+export function setTvMode(mode: TvMode): void {
+  if (!tv || tv.mode === mode) return;
+  tv.mode = mode;
+  tv.t = 0;
+  deck = Math.floor(fxRandom() * DECKS.length);
+  drawTv(tv);
 }
 
+/** Advances the picture; called once per frame, redraws at 10 fps (and not at all while the TV is off). */
+export function tickTv(dt: number): void {
+  if (!tv || tv.mode === 'off') return;
+  tv.t += dt;
+  tv.acc += dt;
+  if (tv.acc < TICK) return;
+  tv.acc = 0;
+  drawTv(tv);
+}
+
+function drawTv(s: Tv): void {
+  const c = s.live.getContext('2d')!;
+  if (s.mode === 'kart') drawRace(c, s.t);
+  else if (s.mode === 'slides') drawSlide(c, s.t);
+  else {
+    rect(c, '#07080a', 0, 0, W, H);
+    rect(c, '#101216', 0, 0, W, 2); // faint glass edge
+  }
+  s.tex.needsUpdate = true;
+}
+
+const SLIDE_SECONDS = 9;
+const DECKS: readonly { bg: string; ink: string; accent: string; soft: string }[] = [
+  { bg: '#ffffff', ink: '#1c2430', accent: '#2f6fed', soft: '#e6edfb' },
+  { bg: '#16213a', ink: '#f2f5fb', accent: '#f2a93b', soft: '#25345a' },
+  { bg: '#fdf6ec', ink: '#3a2c20', accent: '#d9534f', soft: '#f3e2c9' },
+];
+
+/** A slide deck: one slide every few seconds, five layouts, the colours stay per deck (a new deck per meeting). */
+function drawSlide(c: Ctx, t: number): void {
+  const n = Math.floor(t / SLIDE_SECONDS);
+  const k = DECKS[deck];
+  const local = t - n * SLIDE_SECONDS;
+  const layout = n % 5;
+  rect(c, k.bg, 0, 0, W, H);
+  rect(c, k.accent, 0, 0, W, 3);
+  if (layout === 0) {
+    // title slide
+    rect(c, k.ink, 18, 40, 120, 9);
+    rect(c, k.ink, 18, 54, 84, 9);
+    rect(c, k.accent, 18, 72, 36, 3);
+    rect(c, k.soft, 18, 82, 70, 4);
+    rect(c, k.soft, 150, 20, 28, 28);
+    rect(c, k.accent, 158, 28, 12, 12);
+  } else if (layout === 1) {
+    // bullets appear one after the other
+    rect(c, k.ink, 14, 12, 90, 7);
+    const shown = Math.min(5, 1 + Math.floor(local / 1.6));
+    for (let i = 0; i < shown; i++) {
+      const y = 34 + i * 15;
+      rect(c, k.accent, 16, y, 4, 4);
+      rect(c, i % 2 ? k.soft : k.ink, 26, y, 50 + ((i * 37) % 80), 4);
+      rect(c, k.soft, 26, y + 6, 30 + ((i * 53) % 60), 3);
+    }
+  } else if (layout === 2) {
+    // bar chart grows
+    rect(c, k.ink, 14, 12, 70, 7);
+    const grow = Math.min(1, local / 3);
+    for (let i = 0; i < 6; i++) {
+      const h = (14 + ((i * 29) % 52)) * grow;
+      rect(c, i === 4 ? k.accent : k.soft, 24 + i * 24, 108 - h, 16, h);
+    }
+    rect(c, k.ink, 18, 108, W - 36, 1);
+  } else if (layout === 3) {
+    // picture left, text right
+    rect(c, k.soft, 12, 18, 84, 84);
+    rect(c, k.accent, 24, 60, 30, 42);
+    rect(c, k.ink, 60, 44, 24, 58);
+    rect(c, k.ink, 106, 22, 70, 7);
+    rect(c, k.ink, 106, 36, 56, 4);
+    rect(c, k.soft, 106, 46, 66, 4);
+    rect(c, k.soft, 106, 56, 60, 4);
+    rect(c, k.soft, 106, 66, 44, 4);
+  } else {
+    // one big number
+    rect(c, k.accent, 20, 30, 26, 44);
+    rect(c, k.accent, 54, 30, 26, 44);
+    rect(c, k.ink, 92, 62, 8, 12);
+    rect(c, k.soft, 20, 86, 120, 5);
+    rect(c, k.soft, 20, 96, 90, 5);
+  }
+  // footer: slide dots
+  for (let i = 0; i < 5; i++) rect(c, i === layout ? k.accent : k.soft, 14 + i * 7, 112, 4, 3);
+  // laser pointer dot wandering over the slide
+  if (layout !== 0) rect(c, '#e5342c', 40 + (Math.sin(t * 0.8) * 0.5 + 0.5) * 120, 40 + (Math.cos(t * 0.6) * 0.5 + 0.5) * 50, 3, 3);
+}
+
+
+const LANES = 0.62;
+
+/** Kart racing, seen from behind the driver: bending road, item boxes, coins, a rival, the HUD of the genre. */
 function drawRace(c: Ctx, t: number): void {
-  const horizon = 44;
+  const horizon = 46;
   const sky = c.createLinearGradient(0, 0, 0, horizon);
-  sky.addColorStop(0, '#5fb8ff');
-  sky.addColorStop(1, '#bfe6ff');
+  sky.addColorStop(0, '#3f9cf5');
+  sky.addColorStop(1, '#bfe9ff');
   c.fillStyle = sky;
   c.fillRect(0, 0, W, horizon);
-  rect(c, '#4b9a52', 0, 30, 60, 14); // hills
-  rect(c, '#3f8747', 110, 34, 82, 10);
+  // clouds drift, mountains and a castle stay on the horizon
+  for (let i = 0; i < 3; i++) {
+    const x = ((i * 70 + t * 3) % (W + 40)) - 20;
+    rect(c, '#ffffff', x, 8 + i * 6, 22, 5);
+    rect(c, '#ffffff', x + 5, 5 + i * 6, 12, 4);
+  }
+  const mountains = [[10, 26, 22], [40, 18, 30], [86, 24, 24], [130, 14, 34], [166, 24, 22]];
+  for (const [x, h, w] of mountains) {
+    for (let r = 0; r < h; r++) {
+      const half = (w * (r + 1)) / h / 2;
+      rect(c, r < 5 ? '#f4f8ff' : '#5f8fd0', x + w / 2 - half, horizon - h + r, half * 2, 1);
+    }
+  }
+  rect(c, '#e8d8b8', 150, horizon - 14, 14, 14);
+  rect(c, '#d9534f', 148, horizon - 20, 18, 6);
+  rect(c, '#4b9a52', 0, horizon - 5, W, 5); // tree line
   const bend = Math.sin(t * 0.5) * 50; // the road swings left and right
+  const cxAt = (d: number) => W / 2 + bend * (1 - d) * (1 - d);
+  const halfAt = (d: number) => 12 + d * 78;
+  const lap = 20; // seconds per lap
   for (let y = horizon; y < H; y++) {
     const d = (y - horizon) / (H - horizon); // 0 far .. 1 near
     const z = 1 / (d + 0.04);
-    const stripe = Math.floor(z * 0.9 - t * 9) % 2 === 0;
-    const cx = W / 2 + bend * (1 - d) * (1 - d);
-    const half = 12 + d * 78;
+    const phase = z * 0.9 + t * 9; // grows with time: the road rushes towards us
+    const stripe = Math.floor(phase) % 2 === 0;
+    const cx = cxAt(d);
+    const half = halfAt(d);
     rect(c, stripe ? '#58b04e' : '#4da245', 0, y, W, 1);
-    rect(c, stripe ? '#e5546c' : '#ffffff', cx - half - 5 * d - 2, y, half * 2 + 10 * d + 4, 1); // kerbs
+    rect(c, stripe ? '#e5342c' : '#ffffff', cx - half - 5 * d - 2, y, half * 2 + 10 * d + 4, 1); // kerbs
     rect(c, stripe ? '#6e7480' : '#656b77', cx - half, y, half * 2, 1);
-    if (Math.floor(z * 0.45 - t * 4.5) % 2 === 0) rect(c, '#f2f2f2', cx - 1 - d * 2, y, 2 + d * 4, 1); // centre line
+    if (Math.floor(z * 0.45 + t * 4.5) % 2 === 0) rect(c, '#f2f2f2', cx - 1 - d * 2, y, 2 + d * 4, 1); // centre line
+    // start / finish line once a lap
+    const lz = ((t % lap) / lap) * 30;
+    if (Math.abs(z - (30 - lz)) < 0.55) {
+      for (let i = 0; i < 10; i++) rect(c, (i + Math.floor(y / 2)) % 2 ? '#ffffff' : '#111111', cx - half + (i * half * 2) / 10, y, (half * 2) / 10 + 1, 1);
+    }
   }
-  // the kart: wobbles, red cap, tyres
-  const kx = W / 2 + Math.sin(t * 1.3) * 22 - Math.cos(t * 0.5) * 8;
-  const ky = 92 + Math.sin(t * 9) * 1;
-  rect(c, '#222', kx - 14, ky + 12, 8, 6);
-  rect(c, '#222', kx + 6, ky + 12, 8, 6);
-  rect(c, '#e5342c', kx - 11, ky + 2, 22, 12);
-  rect(c, '#ffd23a', kx - 11, ky + 8, 22, 2);
-  rect(c, '#f2c9a0', kx - 4, ky - 5, 8, 7);
-  rect(c, '#e5342c', kx - 5, ky - 9, 10, 4);
-  // a rival kart further up
-  const rx = W / 2 + Math.sin(t * 0.8 + 2) * 16 + Math.sin(t * 0.5) * 6;
-  rect(c, '#3b82f6', rx - 5, 62, 10, 6);
-  rect(c, '#222', rx - 6, 66, 3, 3);
-  rect(c, '#222', rx + 3, 66, 3, 3);
-  // hud: lap + position
-  rect(c, 'rgba(0,0,0,0.45)', 4, 4, 34, 10);
-  rect(c, '#ffd23a', 7, 7, 8 + (Math.floor(t / 14) % 3) * 6, 4);
-  rect(c, 'rgba(0,0,0,0.45)', W - 26, 4, 22, 14);
-  rect(c, '#ffffff', W - 22, 8, 3, 6);
-  rect(c, '#ffffff', W - 14, 8, 6, 2);
-  rect(c, '#ffffff', W - 14, 12, 6, 2);
+  // things on the road, far to near: item boxes, coins, bananas
+  const things: { d: number; lane: number; kind: number; i: number }[] = [];
+  for (let i = 0; i < 9; i++) {
+    const zo = 26 - ((t * 10 + i * 5.3) % 25);
+    const d = 1 / zo - 0.04;
+    if (d <= 0.02 || d > 0.95) continue;
+    const lane = ((i * 0.73) % 1.6) - 0.8;
+    things.push({ d, lane: lane * LANES / 0.8, kind: i % 3, i });
+  }
+  things.sort((a, b) => a.d - b.d);
+  for (const th of things) {
+    const x = cxAt(th.d) + th.lane * halfAt(th.d);
+    const y = horizon + th.d * (H - horizon);
+    const s = 2 + th.d * 11;
+    if (th.kind === 0) {
+      // item box: cycling rainbow with a question mark
+      const hue = (t * 240 + th.i * 50) % 360;
+      rect(c, `hsl(${hue} 90% 55%)`, x - s / 2, y - s, s, s);
+      rect(c, '#ffffff', x - s / 2, y - s, s, Math.max(1, s * 0.12));
+      if (s > 6) rect(c, '#ffffff', x - 1, y - s * 0.7, Math.max(1, s * 0.2), s * 0.4);
+    } else if (th.kind === 1) {
+      // coin
+      const w = Math.max(1, s * (0.4 + 0.6 * Math.abs(Math.cos(t * 6 + th.i))));
+      rect(c, '#ffd23a', x - w / 2, y - s, w, s);
+      rect(c, '#c98f0a', x - w / 2, y - s, w, 1);
+    } else {
+      // banana peel
+      rect(c, '#ffe14a', x - s / 2, y - s * 0.6, s, s * 0.6);
+      rect(c, '#9a7b1a', x - s / 2, y - s * 0.6, s * 0.25, s * 0.25);
+    }
+  }
+  // rival (green cap) a bit ahead
+  const rd = 0.3 + Math.sin(t * 0.4) * 0.04;
+  const rx = cxAt(rd) + Math.sin(t * 0.8 + 2) * halfAt(rd) * 0.5;
+  const ry = horizon + rd * (H - horizon);
+  kart(c, rx, ry, 0.55, '#27a844', '#1b7a31', t + 1);
+  // our kart: wobbles through the bends
+  const kx = W / 2 + Math.sin(t * 1.3) * 18 - Math.cos(t * 0.5) * 9;
+  const ky = 98 + Math.sin(t * 9) * 1;
+  kart(c, kx, ky, 1, '#e5342c', '#a81f19', t);
+  // HUD: lap, position, item roulette, coins
+  rect(c, 'rgba(0,0,0,0.5)', 4, 4, 44, 12);
+  hudText(c, `LAP ${Math.floor(t / lap) % 3 + 1}/3`, 8, 13, 8, '#ffffff');
+  const first = Math.sin(t * 0.25) > -0.3;
+  hudText(c, first ? '1st' : '2nd', W - 38, 20, 16, first ? '#ffd23a' : '#e8edf5');
+  rect(c, 'rgba(255,255,255,0.75)', 4, 20, 20, 20);
+  rect(c, 'rgba(0,0,0,0.35)', 6, 22, 16, 16);
+  const item = Math.floor(t * 2) % 3;
+  rect(c, ['#e5342c', '#27a844', '#ffe14a'][item], 9, 25, 10, 10);
+  rect(c, '#ffffff', 9, 25, 10, 2);
+  rect(c, '#ffd23a', W - 44, 104, 7, 7);
+  hudText(c, `x${String(3 + (Math.floor(t * 1.2) % 8)).padStart(2, '0')}`, W - 34, 112, 8, '#ffffff');
+}
+
+/** A kart from behind: tyres, body, exhaust flame, driver with a cap. `s` scales it down for far karts. */
+function kart(c: Ctx, x: number, y: number, s: number, body: string, dark: string, t: number): void {
+  const r = (col: string, dx: number, dy: number, w: number, h: number) => rect(c, col, x + dx * s, y + dy * s, w * s, h * s);
+  r('rgba(0,0,0,0.3)', -17, 14, 34, 4); // shadow
+  r('#1a1a1a', -18, 6, 9, 11); // rear tyres
+  r('#1a1a1a', 9, 6, 9, 11);
+  r('#555b66', -16, 8, 5, 2);
+  r('#555b66', 11, 8, 5, 2);
+  r(dark, -12, 4, 24, 12); // body
+  r(body, -12, 2, 24, 9);
+  r('#ffd23a', -12, 9, 24, 2);
+  r('#2a2f3a', -5, 12, 4, 3); // exhaust
+  r('#2a2f3a', 1, 12, 4, 3);
+  if (Math.floor(t * 20) % 2 === 0) r('#ffb02e', -4, 15, 2, 2);
+  r('#2f56c2', -6, -3, 12, 7); // overalls / shoulders
+  r('#f2c9a0', -4, -9, 8, 6); // head
+  r(body, -5, -13, 10, 5); // cap
+  r(body, -6, -9, 12, 2);
+  r('#ffffff', -2, -12, 4, 3);
+}
+
+function hudText(c: Ctx, text: string, x: number, y: number, size: number, col: string): void {
+  c.font = `italic 800 ${size}px "Arial Black", Arial, sans-serif`;
+  c.lineWidth = Math.max(2, size / 4);
+  c.strokeStyle = '#1a1a1a';
+  c.lineJoin = 'round';
+  c.strokeText(text, x, y);
+  c.fillStyle = col;
+  c.fillText(text, x, y);
 }

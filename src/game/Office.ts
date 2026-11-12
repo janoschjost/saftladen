@@ -1,6 +1,6 @@
 import type * as THREE from 'three';
 import { screenOffMaterial, type DeskRig } from '../render/officeBuilder';
-import { screenMaterial, tickScreens, tickRace, useScreen, type ScreenKind } from '../render/screens';
+import { screenMaterial, tickScreens, tickTv, useScreen, type ScreenKind } from '../render/screens';
 import type { DeskPlacement, OfficeModel } from '../render/officeModel';
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { Person } from './Person';
@@ -132,12 +132,12 @@ export class Office {
     }
   }
 
-  /** Moves the pictures on the monitors (and the TV race); content runs faster while its sitter works. */
+  /** Moves the pictures on the monitors (and the meeting-room TV); content runs faster while its sitter works. */
   updateScreens(dt: number): void {
     const typing = new Set<THREE.Material>();
     for (const d of this.desks) if (d.occupant?.working) typing.add(d.screenMaterial);
     tickScreens(dt, typing);
-    tickRace(dt);
+    tickTv(dt);
   }
 
   /** First free cell behind the chair. */

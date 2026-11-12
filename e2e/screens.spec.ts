@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { openGame, read, until } from './game';
 
-test('desk.screens-live: a working monitor shows moving content, the meeting TV runs a race', async ({ page }) => {
+test('desk.screens-live: a working monitor shows moving content', async ({ page }) => {
   const errors = await openGame(page);
   await until(page, (g) => g.office.desks.some((d: any) => d.occupant?.working));
   const shot = () =>
@@ -14,5 +14,18 @@ test('desk.screens-live: a working monitor shows moving content, the meeting TV 
     });
   const a = await shot();
   await expect.poll(shot, { timeout: 10_000 }).not.toBe(a);
+  expect(errors).toEqual([]);
+});
+
+test('place.meeting-tv: black without a meeting, slides in a meeting', async ({ page }) => {
+  const errors = await openGame(page, '', undefined, 'event=meeting-room');
+  expect(await read(page, (g) => g.meetingRoom.tv)).toBe('off');
+  await until(page, (g) => g.meetingRoom.tv === 'slides', undefined, 90_000);
+  expect(errors).toEqual([]);
+});
+
+test('place.meeting-tv: a lunch round plays kart racing', async ({ page }) => {
+  const errors = await openGame(page, '', undefined, 'event=meeting-kart');
+  await until(page, (g) => g.meetingRoom.tv === 'kart', undefined, 90_000);
   expect(errors).toEqual([]);
 });

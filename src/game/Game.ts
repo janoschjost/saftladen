@@ -36,6 +36,7 @@ import { DOOR_LANES } from './Door';
 import { Doors } from './Doors';
 import { Kitchen } from './Coffee';
 import { MeetingRoom } from './Meeting';
+import { setTvMode } from '../render/screens';
 import { Pod } from './Pod';
 import { PhoneBooth } from './PhoneBooth';
 import { NavGrid } from './NavGrid';
@@ -670,8 +671,21 @@ export class Game {
         const group = pickFree(5);
         if (group.length < 2) return null;
         group.forEach(drop);
-        const m = this.meetingRoom.start(group, this.nav);
+        const m = this.meetingRoom.start(group, this.nav, 'slides');
         return m ? `Besprechung mit ${group.length}: ${group.map((p) => p.member.name.split(' ')[0]).join(', ')}` : null;
+      },
+    });
+    devEvents.register({
+      id: 'meeting-kart',
+      group: 'Meetings',
+      label: 'Mittags-Mariokart (3)',
+      run: () => {
+        if (this.meetingRoom.current) return null;
+        const group = pickFree(3);
+        if (group.length < 2) return null;
+        group.forEach(drop);
+        const m = this.meetingRoom.start(group, this.nav, 'kart');
+        return m ? `Kart-Runde mit ${group.length}: ${group.map((p) => p.member.name.split(' ')[0]).join(', ')}` : null;
       },
     });
     devEvents.register({
@@ -1179,7 +1193,8 @@ export class Game {
     }
     this.social.update(dt, this.people, this.nav, this.traffic);
     this.petCare.update(dt, this.people, this.pets, this.nav);
-    this.meetingRoom.update(dt, this.people, this.nav);
+    this.meetingRoom.update(dt, this.people, this.nav, this.tod.hour);
+    setTvMode(this.meetingRoom.tv);
     this.pod.update(dt, this.people, this.nav);
     this.kitchen.update(dt, this.people, this.nav);
     this.phoneBooth.update(dt, this.people, this.nav);
