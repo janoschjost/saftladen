@@ -46,8 +46,11 @@ const DOOR_GAP = [1.5, 4];
 const EXIT = { gap: [1, 3], max: 3, patience: 25 };
 /** Nobody walks in while somebody on the way out is within `radius` metres of the door (the doorway fits one); after `wait` seconds they come in anyway. */
 const DOOR_CLEAR = { radius: 3.5, wait: 6 };
-/** Arrivals (morning, errand / home office / lunch returns): at most `max` on their way in at once, `gap` seconds apart. */
-const ENTRY = { max: 2, gap: [1.5, 3.5] };
+/**
+ * Arrivals (morning, errand / home office / lunch returns): at most `max` on their way in at once, `gap` seconds apart.
+ * From `crowd` people queueing outside (e.g. everybody called back at once) they come in `crowdGap` seconds apart, so the entrance stays clear.
+ */
+const ENTRY = { max: 2, gap: [1.5, 3.5], crowd: 3, crowdGap: [3, 5] };
 const OFF = 9999; // "off duty": stays away until their next working day starts
 
 const between = ([a, b]: number[]) => a + random() * (b - a);
@@ -527,16 +530,20 @@ export class Presence {
 
   /**
    * Keeps people from walking in against somebody who is about to walk out, and lets them in one after the other:
-   * at most `ENTRY.max` on their way in at once, `ENTRY.gap` seconds apart (errand / home office / lunch returns pile up otherwise).
+   * at most `ENTRY.max` on their way in at once, `ENTRY.gap` seconds apart (errand / home office / lunch returns pile up otherwise),
+   * further apart while a crowd queues outside (mass return).
    */
   private clearDoor(): void {
     const busy = this.people.some((p) => p.presence === 'leaving' && DOOR_LANES.some((l) => Math.hypot(p.pos.x - l.in.x, p.pos.z - l.in.z) < DOOR_CLEAR.radius));
     let entering = 0;
+    let queue = 0;
     for (const p of this.people) {
       if (p.presence === 'returning') entering++;
       else if (this.admitted.has(p) && p.presence === 'out') entering++;
       else this.admitted.delete(p);
+      if (p.presence === 'out' && p.awayLeft <= 0.5 && !this.admitted.has(p)) queue++;
     }
+    const gap = queue >= ENTRY.crowd ? ENTRY.crowdGap : ENTRY.gap;
     for (const p of this.people) {
       if (p.presence !== 'out') {
         this.waiting.delete(p);
@@ -559,7 +566,7 @@ export class Presence {
       }
       this.waiting.delete(p);
       this.admitted.add(p);
-      this.entrySlot = this.clock + between(ENTRY.gap);
+      this.entrySlot = this.clock + between(gap);
       entering++;
     }
   }
