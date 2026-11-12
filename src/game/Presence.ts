@@ -1,6 +1,6 @@
 import { HOME_COUNT } from '../render/homeOffice';
 import { homeRoomOf, reservedRooms } from '../data/homeAssignments';
-import { DOOR_IN } from './Door';
+import { DOOR_LANES } from './Door';
 import type { NavGrid } from './NavGrid';
 import type { Person } from './Person';
 import type { TimeOfDay } from './TimeOfDay';
@@ -46,6 +46,8 @@ const DOOR_GAP = [1.5, 4];
 const EXIT = { gap: [1, 3], max: 3, patience: 25 };
 /** Nobody walks in while somebody on the way out is within `radius` metres of the door (the doorway fits one); after `wait` seconds they come in anyway. */
 const DOOR_CLEAR = { radius: 3.5, wait: 6 };
+/** Arrivals (morning, errand / home office / lunch returns): at most `max` on their way in at once, `gap` seconds apart. */
+const ENTRY = { max: 2, gap: [1.5, 3.5] };
 const OFF = 9999; // "off duty": stays away until their next working day starts
 
 const between = ([a, b]: number[]) => a + random() * (b - a);
@@ -74,6 +76,9 @@ export class Presence {
   private clock = 0;
   private doorSlot = 0;
   private exitSlot = 0;
+  private entrySlot = 0;
+  /** people cleared to walk in (their `awayLeft` may run out now) */
+  private admitted = new Set<Person>();
   /** when the people on their way out set off (`clock`) */
   private exits = new Map<Person, number>();
   /** since when (`clock`) somebody waits outside for the doorway to clear */
@@ -321,16 +326,40 @@ export class Presence {
     this.exits.set(p, this.clock);
   }
 
-  /** Keeps people from walking in against somebody who is about to walk out. */
+  /**
+   * Keeps people from walking in against somebody who is about to walk out, and lets them in one after the other:
+   * at most `ENTRY.max` on their way in at once, `ENTRY.gap` seconds apart (errand / home office / lunch returns pile up otherwise).
+   */
   private clearDoor(): void {
-    const busy = this.people.some((p) => p.presence === 'leaving' && Math.hypot(p.pos.x - DOOR_IN.x, p.pos.z - DOOR_IN.z) < DOOR_CLEAR.radius);
+    const busy = this.people.some((p) => p.presence === 'leaving' && DOOR_LANES.some((l) => Math.hypot(p.pos.x - l.in.x, p.pos.z - l.in.z) < DOOR_CLEAR.radius));
+    let entering = 0;
     for (const p of this.people) {
-      if (!busy || p.presence !== 'out') this.waiting.delete(p);
-      else if (p.awayLeft < 0.5) {
+      if (p.presence === 'returning') entering++;
+      else if (this.admitted.has(p) && p.presence === 'out') entering++;
+      else this.admitted.delete(p);
+    }
+    for (const p of this.people) {
+      if (p.presence !== 'out') {
+        this.waiting.delete(p);
+        continue;
+      }
+      if (p.awayLeft >= 0.5 || this.admitted.has(p)) continue;
+      if (busy) {
         const since = this.waiting.get(p) ?? this.clock;
         this.waiting.set(p, since);
-        if (this.clock - since < DOOR_CLEAR.wait) p.awayLeft = 0.5;
+        if (this.clock - since < DOOR_CLEAR.wait) {
+          p.awayLeft = 0.5;
+          continue;
+        }
       }
+      if (entering >= ENTRY.max || this.clock < this.entrySlot) {
+        p.awayLeft = 0.5; // queue outside until the lounge has room
+        continue;
+      }
+      this.waiting.delete(p);
+      this.admitted.add(p);
+      this.entrySlot = this.clock + between(ENTRY.gap);
+      entering++;
     }
   }
 

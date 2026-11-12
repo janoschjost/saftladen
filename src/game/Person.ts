@@ -11,6 +11,7 @@ import type { MeetSeat } from './Meeting';
 import type { CoffeeSpot, Kitchen, MachineSpot } from './Coffee';
 import type { Desk, FoosSpot, Office } from './Office';
 import type { Talk } from './Social';
+import type { Dog } from './Dog';
 import { Walker } from './Walker';
 import { random } from './rng';
 
@@ -209,6 +210,8 @@ export class Person extends Walker {
   awayKind: AwayKind | null = null;
   /** seconds until this person comes back (counts down while `out`) */
   awayLeft = 0;
+  /** pets that come and go with this person (registered by `Dog`) */
+  pets: Dog[] = [];
   /** which of the home office variants this person works from */
   homeVariant = 0;
   /** the home office this person likes best (used when it is free) */
@@ -392,6 +395,7 @@ export class Person extends Walker {
     this.prev = { ...this.lane.out };
     this.yaw = this.prevYaw = Math.PI;
     this.startScript(this.lane.in, this.speed * 0.9);
+    for (const d of this.pets) d.arriveWith(this);
   }
 
   /** Called back before they got out of the door. */
@@ -424,6 +428,7 @@ export class Person extends Walker {
           if (this.runScript(dt)) return true;
           this.presence = 'out';
           this.setAway(true);
+          for (const d of this.pets) d.sendAway(); // pets vanish with the owner, wherever they are
           return true;
         }
         if (this.isWalking()) return false; // normal walking to the door
@@ -442,7 +447,11 @@ export class Person extends Walker {
       }
       case 'out':
         this.awayLeft -= dt;
-        if (this.awayLeft <= 0) this.comeBack();
+        // pets still around (not yet despawned) hold up the arrival: both appear together
+        if (this.awayLeft <= 0) {
+          if (this.pets.some((d) => !d.away)) this.awayLeft = 0.3;
+          else this.comeBack();
+        }
         return true;
       case 'returning':
         if (this.held) {

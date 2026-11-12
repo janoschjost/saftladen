@@ -1244,8 +1244,8 @@ export class Game {
 
     const ph = THREE.MathUtils.lerp(w.prevPhase, w.phase, alpha);
     const dangle = Math.sin(performance.now() / 110) * 0.35 * (w.lift / 0.45);
-    const swing = Math.sin(ph) * 0.7 * w.moving + dangle;
-    const bob = Math.abs(Math.cos(ph)) * 0.05 * w.moving;
+    const swing = Math.sin(ph) * 0.42 * w.moving + dangle;
+    const bob = 0; // hip height now follows the planted foot (see the leg block below)
     const breathe = Math.sin(performance.now() / 600 + w.phase) * 0.008 * (1 - w.moving);
 
     if (w instanceof Person) {
@@ -1259,12 +1259,25 @@ export class Game {
       // standing: walk cycle (knees bend while a leg swings forward); sitting: thighs flat, shins down
       r.legL.rotation.x = swing * (1 - sit) - 1.5 * sit;
       r.legR.rotation.x = -swing * (1 - sit) - 1.5 * sit;
-      r.kneeL.rotation.x = Math.max(0, -swing) * 0.8 * (1 - sit) + 1.5 * sit;
-      r.kneeR.rotation.x = Math.max(0, swing) * 0.8 * (1 - sit) + 1.5 * sit;
-      r.legL.position.y = r.legR.position.y = 0.8 - SIT_DROP * sit;
+      // knee bends while the leg swings forward through the middle of the step (foot lifts off), not at the extremes
+      const cph = Math.cos(ph);
+      const kneeSwing = 1.1 * w.moving;
+      r.kneeL.rotation.x = Math.max(0, -cph) * kneeSwing * (1 - sit) + 0.06 * w.moving * (1 - sit) + 1.5 * sit;
+      r.kneeR.rotation.x = Math.max(0, cph) * kneeSwing * (1 - sit) + 0.06 * w.moving * (1 - sit) + 1.5 * sit;
+      // pelvis rides on the planted foot: lowest when the legs are spread, highest when they pass, so the feet touch the ground
+      let hip = 0.8;
+      if (sit < 0.01 && w.lift < 0.02 && w.moving > 0.01) {
+        const depth = (a: number, k: number) => 0.4 * Math.cos(a) + 0.4 * Math.cos(a + k);
+        // only part of the full drop: the legs are not perfectly stiff, and a full drop looks bouncy
+        hip = 0.8 + (Math.max(depth(r.legL.rotation.x, r.kneeL.rotation.x), depth(r.legR.rotation.x, r.kneeR.rotation.x)) - 0.8) * 0.5;
+      }
+      r.legL.position.y = r.legR.position.y = hip * (1 - sit) + (0.8 - SIT_DROP) * sit;
       r.armL.rotation.x = -swing * 0.8 * (1 - sit);
       r.armR.rotation.x = swing * 0.8 * (1 - sit);
-      r.body.position.y = (bob + breathe) * (1 - sit) - SIT_DROP * sit;
+      r.body.position.y = (hip - 0.8 + bob + breathe) * (1 - sit) - SIT_DROP * sit;
+      // gentle weight shift onto the planted leg
+      r.body.rotation.z = Math.cos(ph) * 0.035 * w.moving * (1 - sit);
+      r.body.position.x = Math.sin(ph) * 0.02 * w.moving * (1 - sit);
       if (w.working) {
         // typing: hands on the keyboard, small quick jitters, now and then a glance at the screen
         const t = performance.now() / 1000 + w.phase;
@@ -1288,6 +1301,11 @@ export class Game {
       }
       r.elbowL.rotation.set(0, 0, 0);
       r.elbowR.rotation.set(0, 0, 0);
+      if (!w.working && sit < 0.01) {
+        // relaxed walking arms: elbows bend more as the hand swings forward
+        r.elbowL.rotation.x = Math.min(0, r.armL.rotation.x) * 0.6 - 0.12 * w.moving;
+        r.elbowR.rotation.x = Math.min(0, r.armR.rotation.x) * 0.6 - 0.12 * w.moving;
+      }
       this.poseTired(w, r);
       if (r.vape) this.poseVape(w, r.vape, ph);
       if (r.phone) this.posePhone(w, r.phone);
