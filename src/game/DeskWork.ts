@@ -127,20 +127,20 @@ export class DeskWork {
     const ta = this.typeAmt;
     const ma = this.mouseAmt;
     // alternating hands: each hand strokes in its own rhythm, gated by the burst
-    const strokeL = Math.max(0, Math.sin(t * this.fl)) * Math.max(0, Math.sin(t * 2.3 + 1)) * 0.11 + Math.sin(t * 5.3) * 0.03;
-    const strokeR = Math.max(0, Math.sin(t * this.fr + 2)) * Math.max(0, Math.sin(t * 2.9)) * 0.11 + Math.sin(t * 4.1) * 0.03;
+    const strokeL = Math.max(0, Math.sin(t * this.fl)) * Math.max(0, Math.sin(t * 2.3 + 1)) * 0.34 + Math.sin(t * 5.3) * 0.08;
+    const strokeR = Math.max(0, Math.sin(t * this.fr + 2)) * Math.max(0, Math.sin(t * 2.9)) * 0.34 + Math.sin(t * 4.1) * 0.08;
     const lean = act === 'lean' ? 1 : 0;
     const read = act === 'read' ? 1 : 0;
 
     const wander = Math.sin(t * 0.9) * 0.6 + Math.sin(t * 1.7 + 1) * 0.4;
-    const scroll = this.scrollT > 0 ? Math.sin(t * 22) * 0.025 : 0;
+    const scroll = this.scrollT > 0 ? Math.sin(t * 22) * 0.07 : 0;
     const tgt: DeskPose = {
       // hands rise a little off the keys while leaning, rest on them when reading
       armL: -1.2 + strokeL * ta + 0.05 * Math.sin(t * 0.8) * (1 - ta) + lean * 0.6 + read * 0.05 - ma * 0.03,
-      armR: -1.2 + strokeR * ta + 0.05 * Math.sin(t * 0.7) * read + lean * 0.6 + ma * (0.04 + wander * 0.07 - this.click * 0.04) + scroll * ma,
-      armRz: ma * (wander * 0.1 + Math.sin(t * 2.1) * 0.02),
-      elbowL: -0.08 * ta * Math.max(0, Math.sin(t * this.fl)),
-      elbowR: -0.08 * ta * Math.max(0, Math.sin(t * this.fr + 2)) - ma * (0.04 + this.click * 0.08),
+      armR: -1.2 + strokeR * ta + 0.05 * Math.sin(t * 0.7) * read + lean * 0.6 + ma * (0.08 + wander * 0.22 - this.click * 0.14) + scroll * ma,
+      armRz: ma * (wander * 0.32 + Math.sin(t * 2.1) * 0.05),
+      elbowL: -0.22 * ta * Math.max(0, Math.sin(t * this.fl)),
+      elbowR: -0.22 * ta * Math.max(0, Math.sin(t * this.fr + 2)) - ma * (0.08 + this.click * 0.2),
       lean: -0.13 * lean + 0.05 * read + 0.025 * ta + Math.sin(t * 0.35) * 0.01,
       turn: this.glance * (1 - ta * 0.6),
       bob: Math.sin(t * 1.3) * 0.006 + (lean ? -0.01 : 0),
