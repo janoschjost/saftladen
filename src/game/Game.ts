@@ -2142,7 +2142,7 @@ export class Game {
       const home = absent.filter((p) => p.awayKind === 'home').length;
       const inside = this.people.filter((p) => p.presence === 'in').length;
       const pets = this.walkers.filter((w) => w instanceof Dog && !w.away).length;
-      const meta = [this.tod.clock, strings.presence.count.inOffice(inside)];
+      const meta = [strings.presence.count.inOffice(inside)];
       if (this.weather.rain > 0.3) meta.push('Regen');
       if (this.presence.lunch) meta.push('Mittagspause');
       if (absent.length) {

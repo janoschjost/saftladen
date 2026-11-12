@@ -29,9 +29,9 @@ export class Overlay {
     if (key === this.metaKey) return;
     this.metaKey = key;
     this.meta.replaceChildren(
-      ...list.map((text, i) => {
+      ...list.map((text) => {
         const li = document.createElement('li');
-        li.className = i === 0 ? 'm-hud-title__chip m-hud-title__chip--clock' : 'm-hud-title__chip';
+        li.className = 'm-hud-title__chip';
         li.textContent = text;
         return li;
       }),
