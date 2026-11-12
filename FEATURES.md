@@ -5,23 +5,23 @@ This is the list of what must still be in the game. Each line is one behavior a 
 Rules:
 - Every PR that adds or changes a feature updates this file in the same PR, ending the line with its issue `(#N)`.
 - Never delete a line unless an issue asks for that feature to go. In that case move it to **Removed on purpose** and name the issue.
-- The `id` in front of each line is stable. Tests reference it (e.g. `it('presence.lunch-rush', …)`). Once a test guards a line, add the test file after the path.
+- The `id` in front of each line is stable. Tests reference it (e.g. `it('presence.lunch-rush', …)`). Once a test guards a line, add the test file after the path (`test:` for Vitest, `e2e:` for Playwright).
 
 ## Views and camera
-- `view.orbit` Orbit view (default, `2`): drag rotates, right-drag pans, wheel zooms — `src/render/Views.ts`
-- `view.iso` Iso view (`1`): orthographic, drag pans, eased wheel zoom, drag people to move them, follows a steered person — `src/render/IsoCamera.ts`
-- `view.plan` Plan view (`3`): top-down, pan/zoom, touch pan/pinch — `src/render/Views.ts`
-- `view.walk` Walk view (`4`): first person, WASD/arrows, Shift runs (FOV widens), head bob, nav-grid collision, click captures the mouse, `Esc` back to orbit — `src/render/Views.ts`
+- `view.orbit` Orbit view (default, `2`): drag rotates, right-drag pans, wheel zooms — `src/render/Views.ts`, e2e: `e2e/smoke.spec.ts` (#34)
+- `view.iso` Iso view (`1`): orthographic, drag pans, eased wheel zoom, drag people to move them, follows a steered person — `src/render/IsoCamera.ts`, e2e: `e2e/smoke.spec.ts` (#34)
+- `view.plan` Plan view (`3`): top-down, pan/zoom, touch pan/pinch — `src/render/Views.ts`, e2e: `e2e/smoke.spec.ts` (#34)
+- `view.walk` Walk view (`4`): first person, WASD/arrows, Shift runs (FOV widens), head bob, nav-grid collision, click captures the mouse, `Esc` back to orbit — `src/render/Views.ts`, e2e: `e2e/smoke.spec.ts` (#34)
 - `view.walk-reticle` Walk mode crosshair with prompt; `E` or click opens/closes doors and talks to people — `src/ui/Overlay.ts`, `src/game/Game.ts`
 - `view.third` Over-the-shoulder camera for day mode: mouse turns, wheel zooms 2.2–9 m, no view-bar button — `src/render/Views.ts`
-- `view.deeplinks` Hash deep links `#iso` `#orbit` `#plan` `#walk` `#walk@x,z,yaw`; the hash wins over the saved view — `src/render/Views.ts`
+- `view.deeplinks` Hash deep links `#iso` `#orbit` `#plan` `#walk` `#walk@x,z,yaw`; the hash wins over the saved view — `src/render/Views.ts`, e2e: `e2e/smoke.spec.ts` (#34)
 - `view.persist` Camera of all views, view mode, time and selection are restored next visit (`saftladen.state`) — `src/ui/persist.ts`
 - `view.help` Collapsible controls panel, hints grouped per mode with mouse icons and keycaps — `src/render/Views.ts`
 
 ## Keys (outside day mode)
-- `keys.names` `N` toggles name labels — `src/game/Game.ts`
-- `keys.roof` `R` toggles the sawtooth roof (iso/orbit only) — `src/game/Game.ts`
-- `keys.home` `H` sends the selected person to home office / back — `src/game/Game.ts`, `src/game/Presence.ts`
+- `keys.names` `N` toggles name labels — `src/game/Game.ts`, e2e: `e2e/smoke.spec.ts` (#34)
+- `keys.roof` `R` toggles the sawtooth roof (iso/orbit only) — `src/game/Game.ts`, e2e: `e2e/smoke.spec.ts` (#34)
+- `keys.home` `H` sends the selected person to home office / back — `src/game/Game.ts`, `src/game/Presence.ts`, e2e: `e2e/office.spec.ts` (#34)
 - `keys.follow` `F` toggles camera follow of the selected walker — `src/game/Game.ts`
 - `keys.steer` `C` steers the selected person (WASD/arrows relative to camera, Shift runs 5.4 vs 2.2 m/s); one person at a time, only if in the office — `src/game/Game.ts`
 - `keys.escape` `Esc` ends the day and clears selection, follow and steering — `src/game/Game.ts`
@@ -31,7 +31,7 @@ Rules:
 ## Selection and dragging
 - `select.click` Clicking a person or pet selects and follows it; clicking again deselects; a drag isn't a click — `src/game/Game.ts`
 - `select.tooltip` Hover/click tooltip with name, role, portrait — `src/ui/Overlay.ts`
-- `select.actions` Action card: follow, steer, send home (disabled with "Alle Homeoffices sind besetzt"), send out — `src/ui/Actions.ts`
+- `select.actions` Action card: follow, steer, send home (disabled with "Alle Homeoffices sind besetzt"), send out — `src/ui/Actions.ts`, e2e: `e2e/office.spec.ts` (#34)
 - `drag.person` People can be dragged; dropping inside a wall/desk moves them to the nearest free floor — `src/game/Game.ts`
 - `drag.chair` Dragging near a free chair snaps them on; they stay seated when dropped — `src/game/Game.ts`
 - `drag.meeting-chat` Dropping someone in the meeting room next to a person, or 2+ people on meeting chairs, starts a chat — `src/game/Meeting.ts`
@@ -51,7 +51,7 @@ Rules:
 - `presence.schedule-debug` Today's plans in the console: `__game.presence.schedule` (with `?time=…`) — `src/game/Presence.ts` (#5)
 - `presence.strings` All presence wording (leave vs return labels, roster status, action buttons) comes from one table; going out and coming back have separate labels — `src/i18n/strings.ts` (#8)
 - `presence.manual` Sending someone out/home by hand keeps them away until called back (max 10 min); hand-moved people are left alone by the night shift — `src/game/Presence.ts`
-- `presence.homes-hash` `#homes` fills all 8 home offices at start — `src/game/Presence.ts`
+- `presence.homes-hash` `#homes` fills all 8 home offices at start — `src/game/Presence.ts`, e2e: `e2e/office.spec.ts` (#34)
 - `presence.roster` Away roster: out / on the way / "zurück in …" countdown / Homeoffice; clicking a home-office person opens their feed — `src/ui/Roster.ts`
 
 ## Desks and work
@@ -114,7 +114,7 @@ Rules:
 - `time.light` Sun moves 06–20, warm when low, moonlight at night, sky fades dark — `src/game/TimeOfDay.ts`
 - `time.tired` Tiredness rises toward night — `src/game/TimeOfDay.ts`
 - `weather.auto` Auto weather: dry spells and showers, rain fades in/out; settings force Auto/Sonne/Regen — `src/game/Weather.ts`, `src/ui/Settings.ts`
-- `xmas.mode` Christmas mode: settings switch (`saftladen.settings.xmas`, default on in December); snowfall fading in/out, colder sky — `src/game/Christmas.ts`, `src/render/snowFx.ts`, `src/ui/Settings.ts`
+- `xmas.mode` Christmas mode: settings switch (`saftladen.settings.xmas`, default on in December); snowfall fading in/out, colder sky — `src/game/Christmas.ts`, `src/render/snowFx.ts`, `src/ui/Settings.ts`, e2e: `e2e/modes.spec.ts` (#34)
 - `xmas.decor` Christmas trees with presents, blinking light strands along the walls, wreaths — `src/render/xmasDecor.ts`
 - `xmas.wear` Santa hats (variety by look) and scarves on everyone, tiny hats on pets — `src/render/xmasWear.ts`
 - `weather.fx` Rain streaks ending at roof height, dimmer at night; greyer light and overcast sky — `src/render/rainFx.ts`, `src/game/Game.ts`
@@ -126,7 +126,7 @@ Rules:
 - `office.lettering` Wall lettering "FRISCHE IDEEN, DIE WIRKEN" (also on door leaves) — `src/render/officeModel.ts`
 - `office.glass-door` Glass wall and glass door across the hallway; frames and panes don't flicker (no coplanar faces) — `src/render/officeModel.ts` (#7)
 - `office.kiwi-birnen-wall` Divider wall between Kreative Kiwis and Digitale Birnen: corridor line to window wall in both plan scales, stops at the window pane, no overlap with the column — `src/render/officeModel.ts` (#6)
-- `office.coat-stands` Freestanding coat stands (round base, pole, hook arms; room-editor item `coat-rack`); no stand in the entrance. A person's long draped coat hangs on a hook exactly while they are in, on the stand nearest their desk, same hook again when free — `src/render/officeModel.ts`, `src/game/CoatRacks.ts`, `src/render/jacketBuilder.ts` (#4)
+- `office.coat-stands` Freestanding coat stands (round base, pole, hook arms; room-editor item `coat-rack`); no stand in the entrance. A person's long draped coat hangs on a hook exactly while they are in, on the stand nearest their desk, same hook again when free — `src/render/officeModel.ts`, `src/game/CoatRacks.ts`, `src/render/jacketBuilder.ts`, e2e: `e2e/office.spec.ts` (#4, #34)
 - `office.deco` Bunting and string lights under the sawtooth roof — `src/render/officeModel.ts`
 - `office.mosquito` Easter egg: framed dead mosquito next to the meeting-room screen — `src/render/officeModel.ts`
 - `office.desk-props` Per desk: Apple keyboard/mouse, mesh chair, seeded plant — `src/render/officeModel.ts`
@@ -158,9 +158,9 @@ Rules:
 - `char.picker` Character picker: list, turntable (drag, wheel zoom, auto-spin), counter, owner's pets, live home-office preview; keys `Esc` `↑↓` `←→` `Space` — `src/ui/CharacterPicker.ts`
 
 ## Day mode ("Ein Tag im Leben")
-- `day.menu` Menu: playable people on pedestals, chosen steps forward, figures look at the cursor, idle gestures, name tags, pets; keys `Esc`, `←→`/`A D`, `Enter`/`Space` — `src/ui/DayMenu.ts`
+- `day.menu` Menu: playable people on pedestals, chosen steps forward, figures look at the cursor, idle gestures, name tags, pets; keys `Esc`, `←→`/`A D`, `Enter`/`Space` — `src/ui/DayMenu.ts`, e2e: `e2e/modes.spec.ts` (#34)
 - `day.characters` Playable: Jan Hasler (SnackHunt → PhoneRush), Jeerapat Wang (HideGameboy), Sandro Hagen (no story yet) — `src/data/dayCharacters.ts`, `src/data/dayStories.ts`
-- `day.flow` Start brings the person in if away, third-person camera; leaving restores the previous view; desk tasks clear the person's own desk — `src/game/Game.ts`
+- `day.flow` Start brings the person in if away, third-person camera; leaving restores the previous view; desk tasks clear the person's own desk — `src/game/Game.ts`, e2e: `e2e/modes.spec.ts` (#34)
 - `day.hud` HUD: name, status, stopwatch (waits during task setup), task list, target marker / edge arrow with metres, meter with traffic-light mood, exit — `src/ui/DayHud.ts`, `src/game/Day.ts`
 - `day.result` Result card with splits, total, best time (localStorage), new record; fail card with reason and retry; scene freezes on fail — `src/ui/DayHud.ts`, `src/game/Game.ts`
 - `day.snack-hunt` "Snacks besorgen": 8 spinning chip bags under green beams, grab within 0.7 m, eat + quip — `src/game/tasks/SnackHunt.ts`
@@ -170,13 +170,13 @@ Rules:
 - `day.space` `Space` doesn't scroll the page during a day — `src/game/Game.ts`
 
 ## Easter eggs
-- `egg.konami` Konami code: 14 s office disco, dancing at 124 BPM, colour lights, dimmed daylight — `src/game/Easter.ts`
+- `egg.konami` Konami code: 14 s office disco, dancing at 124 BPM, colour lights, dimmed daylight — `src/game/Easter.ts`, e2e: `e2e/modes.spec.ts` (#34)
 - `egg.angry` Clicking a person 7× quickly: angry bubble, then they storm out — `src/game/Easter.ts`
 - `egg.backflip` Clicking a pet 5×: bark and backflip — `src/game/Easter.ts`
 
 ## Dev tools
 - `dev.events` Dev events registry + panel (meetings 2/4/6, errand, home office, vape, printer, rain …) with status / "nicht möglich"; console `dev.list()`, `dev.trigger(id)` — `src/game/DevEvents.ts`, `src/ui/DevPanel.ts`
-- `dev.params` Dev-only query params: `?day[=id]`, `?snack[=id]`, `&time=14`, `&follow`, `?seed=<n>`; any of them exposes `window.__game` — `src/game/debugParams.ts`
+- `dev.params` Dev-only query params: `?day[=id]`, `?snack[=id]`, `&time=14`, `&follow`, `?seed=<n>`, `?test`; any of them exposes `window.__game` (the read-only hook of the Playwright tests; not in the production bundle) — `src/game/debugParams.ts`, e2e: `e2e/game.ts` (#34)
 - `dev.seed` One seedable random source for the simulation: same `?seed` → same start (plans, speeds, who is out); the console logs each page's seed. Per-frame visuals use their own stream — `src/game/rng.ts`, test: `src/game/rng.test.ts`, `src/game/Presence.test.ts` (#29)
 - `ui.panels` Side panels (settings, seats, dev, editor) close each other; dock panels (feeds, roster) behave as an accordion, honour reduced motion — `src/ui/exclusive.ts`, `src/ui/collapsible.ts`
 

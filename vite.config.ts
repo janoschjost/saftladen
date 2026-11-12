@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { statSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -38,5 +39,7 @@ export default defineConfig({
   plugins: [saveJson('save-layout', '/__save-layout', './src/data/layout.json'), saveJson('save-seats', '/__save-seats', './src/data/seats.json')],
   // Main checkout: served at https://saftladen.test through a Herd proxy (herd proxy saftladen http://127.0.0.1:5173 --secure),
   // so it must get exactly 5173. Worktrees (parallel agent sessions) start at 5174 and take the next free port.
+  // unit tests only; the browser tests in e2e/ run with Playwright (npm run test:e2e)
+  test: { include: ['src/**/*.test.ts'] },
   server: { port: inWorktree ? 5174 : 5173, strictPort: !inWorktree, host: true, allowedHosts: ['saftladen.test'] },
 });
