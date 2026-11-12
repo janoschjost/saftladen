@@ -3,7 +3,7 @@ import { NAV_CELL } from '../render/World';
 import type { Vec2 } from './NavGrid';
 
 /** Model x of the entrance doorway centre (see officeModel.ts). */
-const ENTRANCE_X = ax(-3.9);
+const ENTRANCE_X = ax(-3.3);
 
 const snap = (x: number): number => (Math.floor(x / NAV_CELL) + 0.5) * NAV_CELL;
 

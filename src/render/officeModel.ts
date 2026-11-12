@@ -766,7 +766,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   windowWall(B.x0, B.z0, B.x0, B.z1); // west end: Wassermelonen windows
   if (EXACT) {
     windowWall(B.x1, B.z0, B.x1, B.z1); // east end windows
-    wall(B.x0, B.z1, 7.5, B.z1, H_LOW, [{ a: -6.7, b: -5.6, door: -1 }, { a: -4.9, b: -2.9 }], { t: 0.3, outer: true }); // solid part, 2 m double doorway (the two wings are dynamic, see `entrance`)
+    wall(B.x0, B.z1, 7.5, B.z1, H_LOW, [{ a: -6.7, b: -5.6, door: -1 }, { a: -4.3, b: -2.3 }], { t: 0.3, outer: true }); // solid part, 2 m double doorway (the two wings are dynamic, see `entrance`)
     windowWall(7.5, B.z1, B.x1, B.z1); // long window wall
   }
   for (const [a, b] of [
@@ -2242,8 +2242,11 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   staticRoof.visible = false;
   scene.add(staticRoof);
 
+  // porch platform in front of the entrance, so people stepping out / arriving do not stand in thin air
+  slab(-4.75, -1.85, B.z1 + 0.15, B.z1 + 2.5, -0.15, 0.02, L(0x8f8f94));
+
   // entrance double door: two wings (not merged, so each swings open on its own when somebody walks through)
-  const wingW = 1.0; // two wings fill the doorway (model x -4.9 .. -2.9) exactly
+  const wingW = 1.0; // two wings fill the doorway (model x -4.3 .. -2.3) exactly
   const wingH = 2.1;
   const wing = (side: 1 | -1): THREE.Group => {
     // side 1 = left wing (hinged at the west jamb, leaf extends east), -1 = right wing (mirrored)
@@ -2257,7 +2260,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     const pane = new THREE.Mesh(new THREE.BoxGeometry(wingW - 0.3, 1.1, 0.06), mat.glass);
     pane.position.set((side * wingW) / 2, 1.3, 0);
     g.add(leaf, pane, handle);
-    g.position.set(ax(-3.9) - side * wingW, 0, az(B.z1) - 0.15 + 0.025); // flush with the inner face of the 0.3 m wall
+    g.position.set(ax(-3.3) - side * wingW, 0, az(B.z1) - 0.15 + 0.025); // flush with the inner face of the 0.3 m wall
     scene.add(g);
     return g;
   };
