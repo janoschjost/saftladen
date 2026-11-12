@@ -13,6 +13,7 @@ import type { CoffeeSpot, Kitchen, MachineSpot } from './Coffee';
 import type { Desk, FoosSpot, Office } from './Office';
 import type { Talk } from './Social';
 import type { Dog } from './Dog';
+import { DeskWork, type DeskActivity } from './DeskWork';
 import { Walker } from './Walker';
 import { KURT, rollHomeAlter, transformsOnLeave } from './AlterEgo';
 import { random } from './rng';
@@ -310,6 +311,7 @@ export class Person extends Walker {
     this.baseHead = rig.headHeight;
     this.scale = rig.root.scale.y;
     this.id = member.id;
+    this.deskWork = new DeskWork(member.role, !!member.adhd);
     if (member.speed) this.speed = member.speed;
     this.root.userData.walker = this;
   }
@@ -601,6 +603,13 @@ export class Person extends Walker {
     return j && j.t >= VAPE_HOLD ? j.t - VAPE_HOLD : -1;
   }
 
+  /** Typing / mouse / reading / leaning back while at the desk; the pose the renderer reads. */
+  readonly deskWork: DeskWork;
+  /** What this person does at the desk right now, null when not working. */
+  get deskActivity(): DeskActivity | null {
+    return this.working ? this.deskWork.activity : null;
+  }
+
   /** True while sitting at a desk and working. */
   get working(): boolean {
     return this.task?.phase === 'work';
@@ -713,6 +722,8 @@ export class Person extends Walker {
     if (rc && ((rc.t += dt) >= rc.dur || (!rc.free && (!this.talk || this.moving > 0.3)))) this.reaction = null;
     super.update(dt, nav, others);
     this.clock += dt;
+    if (this.working) this.deskWork.update(dt);
+    else this.deskWork.reset();
     if (this.rig.setMood && (this.moodTimer -= dt) <= 0) {
       this.moodTimer = 4 + random() * 10;
       this.happy = !this.happy;
