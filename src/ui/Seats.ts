@@ -9,7 +9,7 @@ export interface SeatPerson {
 export class Seats {
   private root = document.getElementById('seats') as HTMLElement;
   private list = document.getElementById('seats-list') as HTMLElement;
-  private toggle = document.getElementById('toggle-seats') as HTMLButtonElement;
+  private toggle = document.getElementById('open-seats') as HTMLButtonElement;
   private labels = document.getElementById('labels') as HTMLElement;
   private labelEls: HTMLElement[] = [];
   private selects = new Map<string, HTMLSelectElement>();

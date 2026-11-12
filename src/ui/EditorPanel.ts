@@ -23,7 +23,7 @@ const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as
 /** Room editor panel: data of the selected item, its actions, and the layout as JSON (export / import / reset). */
 export class EditorPanel {
   private root = el('editor');
-  private toggle = el<HTMLButtonElement>('toggle-editor');
+  private toggle = el<HTMLButtonElement>('open-editor');
   private selection = el('editor-selection');
   private empty = el('editor-empty');
   private name = el('editor-name');

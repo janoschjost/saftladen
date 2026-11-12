@@ -1,12 +1,12 @@
 import { devEvents } from '../game/DevEvents';
 import { exclusivePanel } from './exclusive';
 
-/** Dev panel: one button per registered dev event, grouped. Toggle with the "Dev" button or the ` key. */
+/** Dev panel: one button per registered dev event, grouped. Opened from the settings popover ("Dev-Events") or with the ` key. */
 export class DevPanel {
   private root = document.getElementById('dev') as HTMLElement;
   private body = document.getElementById('dev-body') as HTMLElement;
   private status = document.getElementById('dev-status') as HTMLElement;
-  private toggle = document.getElementById('toggle-dev') as HTMLButtonElement;
+  private toggle = document.getElementById('open-dev') as HTMLButtonElement;
 
   private closeOthers = exclusivePanel('dev', () => this.setOpen(false));
 

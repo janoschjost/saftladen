@@ -2,11 +2,12 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { NavGrid } from '../game/NavGrid';
 import { makeCollapsible } from '../ui/collapsible';
+import { blendShot, easeInOut, FLY_TIME, shotFrom, shotPosition, TRAIL, type Shot } from './cameraFly';
 import { IsoCamera } from './IsoCamera';
 import { ax, az } from './officeModel';
 import { WORLD } from './World';
 
-/** `third` is the behind-the-shoulder camera of the day-in-the-life mode; it has no button in the view bar. */
+/** `third` is the behind-the-shoulder camera of the day-in-the-life mode; it has no segment in the settings popover. */
 export type ViewMode = 'iso' | 'orbit' | 'plan' | 'walk' | 'third';
 
 /** Everything needed to put the camera back where it was (saved between visits). */
@@ -18,7 +19,7 @@ export interface ViewSnapshot {
   walk: { x: number; z: number; yaw: number; pitch: number };
 }
 
-/** Mouse gestures in the controls panel (24px line icons, drawn with currentColor). */
+/** Mouse gestures in the controls list (24px line icons, drawn with currentColor). */
 const ICONS = {
   drag: '<path d="M12 3v18M3 12h18"/><path d="m9 6 3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/>',
   rotate: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v4h-4"/>',
@@ -29,9 +30,9 @@ const ICONS = {
   look: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
 } as const;
 
-/** One line of the controls panel: a mouse gesture (icon, action, how to do it) or keyboard keys and the action. */
+/** One line of the controls list: a mouse gesture (icon, action, how to do it) or keyboard keys and the action. */
 type Hint = { icon: keyof typeof ICONS; text: string; how: string } | { keys: string[]; text: string };
-/** The panel lists its lines in small titled groups. */
+/** The list shows its lines in small titled groups. */
 type HintGroup = { title: string; items: Hint[] };
 
 /** two keys per line (forward/back, left/right) keeps the key column narrow; walk mode also takes the arrow keys */
@@ -53,7 +54,7 @@ const HINTS: Record<ViewMode, HintGroup[]> = {
         { icon: 'person', text: 'Umsetzen', how: 'Person ziehen' },
       ],
     },
-    { title: 'Ansicht', items: [{ keys: ['N'], text: 'Namen' }, { keys: ['R'], text: 'Dach' }, { keys: ['H'], text: 'Homeoffice' }] },
+    { title: 'Ansicht', items: [{ keys: ['1–4'], text: 'Ansicht' }, { keys: ['N'], text: 'Namen' }, { keys: ['R'], text: 'Dach' }, { keys: ['H'], text: 'Homeoffice' }] },
     PERSON,
   ],
   orbit: [
@@ -66,7 +67,7 @@ const HINTS: Record<ViewMode, HintGroup[]> = {
         { icon: 'click', text: 'Auswählen', how: 'Person anklicken' },
       ],
     },
-    { title: 'Ansicht', items: [{ keys: ['N'], text: 'Namen' }, { keys: ['R'], text: 'Dach' }] },
+    { title: 'Ansicht', items: [{ keys: ['1–4'], text: 'Ansicht' }, { keys: ['N'], text: 'Namen' }, { keys: ['R'], text: 'Dach' }] },
     PERSON,
   ],
   plan: [
@@ -77,7 +78,7 @@ const HINTS: Record<ViewMode, HintGroup[]> = {
         { icon: 'wheel', text: 'Zoomen', how: 'Scrollen' },
       ],
     },
-    { title: 'Ansicht', items: [{ keys: ['N'], text: 'Namen' }] },
+    { title: 'Ansicht', items: [{ keys: ['1–4'], text: 'Ansicht' }, { keys: ['N'], text: 'Namen' }] },
     PERSON,
   ],
   walk: [
@@ -172,8 +173,11 @@ export class Views {
   private sprint = 0;
   private sprintGoal = 0;
   private moved = 0;
-  private buttons: HTMLButtonElement[];
   private hint: HTMLElement | null;
+  /** Orbit camera flight (Aktionen): from a shot to a fixed shot, or to a moving one it keeps trailing after arrival */
+  private fly: { from: Shot; to: Shot | (() => Shot); t: number; dur: number } | null = null;
+  /** the player grabbed the Orbit camera (drag, wheel, touch): a running flight stops first */
+  onUserCamera: (() => void) | null = null;
 
   constructor(
     private stage: HTMLElement,
@@ -190,6 +194,10 @@ export class Views {
     this.orbit.minDistance = 3;
     this.orbit.maxDistance = 150;
     this.orbit.enableDamping = true;
+    this.orbit.addEventListener('start', () => {
+      this.fly = null;
+      this.onUserCamera?.();
+    });
     this.resetOrbit();
 
     // plan: orthographic, looking down with -z up the screen (core rooms on top, like the floor plan)
@@ -204,11 +212,11 @@ export class Views {
     this.planCtl.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
     this.planCtl.update();
 
-    this.buttons = [...document.querySelectorAll<HTMLButtonElement>('[data-view]')];
     this.hint = document.getElementById('hint');
     const help = document.getElementById('help');
-    if (help) makeCollapsible(help, help.querySelector('.m-help__title') as HTMLElement, 'saftladen.help.collapsed');
-    this.buttons.forEach((b) => b.addEventListener('click', () => this.setMode(b.dataset.view as ViewMode)));
+    // one line of key hints; a click unfolds the full controls list of the current view
+    if (help) makeCollapsible(help, help.querySelector('.m-help__title') as HTMLElement, 'saftladen.hints.collapsed', undefined, true);
+    document.getElementById('walk-exit')?.addEventListener('click', () => this.setMode(DEFAULT_MODE));
     this.bind();
     // deep link: #orbit | #plan | #walk | #walk@x,z,yaw (game metres, radians)
     const [h, at] = location.hash.slice(1).split('@');
@@ -289,11 +297,12 @@ export class Views {
       this.fov = this.persp.fov = FOV_THIRD;
       this.persp.updateProjectionMatrix();
     }
+    if (mode !== 'orbit') this.fly = null;
     if (mode === 'orbit' && !keepCamera) this.resetOrbit();
     if (mode === 'walk') this.applyWalk();
-    this.buttons.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === mode)));
     this.hint?.replaceChildren(...HINTS[mode].map(hintGroup));
     this.stage.dataset.view = mode;
+    document.body.dataset.view = mode; // the HUD hides gear and Aktionen in walk and day mode
     this.onChange(mode);
     this.resize(window.innerWidth, window.innerHeight);
   }
@@ -312,7 +321,10 @@ export class Views {
 
   update(dt: number): void {
     if (this.mode === 'iso') this.iso.update(dt);
-    else if (this.mode === 'orbit') this.orbit.update();
+    else if (this.mode === 'orbit') {
+      if (this.fly) this.updateFly(dt);
+      this.orbit.update();
+    }
     else if (this.mode === 'plan') this.planCtl.update();
     else if (this.mode === 'third') this.third(dt);
     else this.walk(dt);
@@ -376,10 +388,58 @@ export class Views {
   }
 
   private resetOrbit(): void {
-    const k = WORLD.width / 41;
-    this.persp.position.set(this.center.x - 4 * k, 22 * k, this.center.z + 22 * k);
-    this.orbit.target.copy(this.center);
+    this.applyShot(this.overviewShot());
     this.orbit.update();
+  }
+
+  /** The default Orbit shot: the whole office from the front, slightly from the left. */
+  overviewShot(): Shot {
+    const k = WORLD.width / 41;
+    return shotFrom({ x: this.center.x - 4 * k, y: 22 * k, z: this.center.z + 22 * k }, this.center);
+  }
+
+  /** Where the Orbit camera looks from right now. */
+  get orbitShot(): Shot {
+    return shotFrom(this.persp.position, this.orbit.target);
+  }
+
+  get flying(): boolean {
+    return !!this.fly;
+  }
+
+  /**
+   * Flies the Orbit camera to a shot in `duration` seconds (eased, the azimuth the short way round). A function goal
+   * is a moving shot (a walking person): it is read every frame and trailed after arrival until `stopFly`.
+   * Only in Orbit; with reduced motion the camera cuts instead.
+   */
+  flyTo(goal: Shot | (() => Shot), duration = FLY_TIME): void {
+    if (this.mode !== 'orbit') return;
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this.fly = { from: this.orbitShot, to: goal, t: 0, dur: still ? 0 : duration };
+  }
+
+  stopFly(): void {
+    this.fly = null;
+  }
+
+  private updateFly(dt: number): void {
+    const f = this.fly!;
+    const goal = typeof f.to === 'function' ? f.to() : f.to;
+    if (f.t < 1) {
+      f.t = f.dur > 0 ? Math.min(1, f.t + dt / f.dur) : 1;
+      this.applyShot(blendShot(f.from, goal, easeInOut(f.t)));
+    } else if (typeof f.to === 'function') {
+      this.applyShot(blendShot(this.orbitShot, goal, 1 - Math.exp(-TRAIL * dt)));
+    } else {
+      this.applyShot(goal);
+      this.fly = null;
+    }
+  }
+
+  private applyShot(s: Shot): void {
+    const p = shotPosition(s);
+    this.persp.position.set(p.x, p.y, p.z);
+    this.orbit.target.set(s.x, s.y, s.z);
   }
 
   private applyWalk(): void {

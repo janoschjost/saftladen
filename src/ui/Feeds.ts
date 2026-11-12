@@ -121,7 +121,7 @@ export class Feeds {
 
   /** Screen rectangles of the visible tiles, to draw the scenes into. */
   tiles(): Array<FeedTile & { id: string }> {
-    if (this.root.hidden) return [];
+    if (this.root.hidden || this.root.parentElement?.closest('[hidden]')) return []; // the "Leute" dock is closed
     const out: Array<FeedTile & { id: string }> = [];
     const box = this.root.getBoundingClientRect();
     for (const [id, t] of this.tilesEls) {
