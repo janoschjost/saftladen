@@ -1,5 +1,5 @@
 import type { RoomItem } from '../render/roomItem';
-import { exclusivePanel } from './exclusive';
+import { sidePanel } from './SidePanel';
 
 export interface EditorPanelActions {
   toggle(): void;
@@ -20,10 +20,8 @@ export interface EditorPanelActions {
 
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
-/** Room editor panel: data of the selected item, its actions, and the layout as JSON (export / import / reset). */
+/** Editor tab of the side panel (and the tool column in the plan view): data of the selected item, its actions, and the layout as JSON (export / import / reset). */
 export class EditorPanel {
-  private root = el('editor');
-  private toggle = el<HTMLButtonElement>('toggle-editor');
   private selection = el('editor-selection');
   private empty = el('editor-empty');
   private name = el('editor-name');
@@ -40,16 +38,27 @@ export class EditorPanel {
   private json = el<HTMLTextAreaElement>('editor-json');
   private statusEl = el('editor-status');
   private removedKey = '';
-  private closeOthers = exclusivePanel('editor', () => {
-    if (!this.root.hidden) this.actions.toggle();
-  });
+  private toolSelect = el<HTMLButtonElement>('tool-select');
+  private toolRotate = el<HTMLButtonElement>('tool-rotate');
+  private toolRemove = el<HTMLButtonElement>('tool-remove');
+  private toolSnap = el<HTMLButtonElement>('tool-snap');
+  private snap = el<HTMLInputElement>('editor-snap');
 
   constructor(private actions: EditorPanelActions) {
-    this.toggle.addEventListener('click', () => actions.toggle());
+    this.toolSelect.addEventListener('click', () => actions.toggle());
+    this.toolRotate.addEventListener('click', () => actions.rotate());
+    this.toolRemove.addEventListener('click', () => actions.remove());
+    this.toolSnap.addEventListener('click', () => {
+      this.snap.checked = !this.snap.checked;
+      this.snap.dispatchEvent(new Event('change'));
+    });
     el('editor-rotate').addEventListener('click', () => actions.rotate());
     el('editor-reset-item').addEventListener('click', () => actions.resetItem());
     this.removeButton.addEventListener('click', () => actions.remove());
-    el<HTMLInputElement>('editor-snap').addEventListener('change', (e) => actions.setSnap((e.target as HTMLInputElement).checked));
+    this.snap.addEventListener('change', () => {
+      actions.setSnap(this.snap.checked);
+      this.toolSnap.setAttribute('aria-pressed', String(this.snap.checked));
+    });
     for (const input of [this.x, this.z]) {
       input.addEventListener('change', () => {
         const x = Number(this.x.value);
@@ -80,9 +89,10 @@ export class EditorPanel {
   }
 
   setOpen(open: boolean): void {
-    this.root.hidden = !open;
-    this.toggle.setAttribute('aria-pressed', String(open));
-    if (open) this.closeOthers();
+    this.toolSelect.setAttribute('aria-pressed', String(open));
+    const side = sidePanel();
+    if (open) side.show('editor');
+    else if (side.tab === 'editor') side.close();
     document.body.classList.toggle('is-editing-room', open);
   }
 
@@ -104,6 +114,8 @@ export class EditorPanel {
       this.turn.textContent = `${item.rot * 90}°`;
       this.removeButton.disabled = !item.removable;
     }
+    this.toolRotate.disabled = !item;
+    this.toolRemove.disabled = !item || !item.removable;
     this.count.textContent = changed ? `· ${changed} geändert` : '';
     const key = removed.map((it) => it.id).join('|');
     if (key === this.removedKey) return;

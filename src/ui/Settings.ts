@@ -1,5 +1,4 @@
 import type { WeatherMode } from '../game/Weather';
-import { exclusivePanel } from './exclusive';
 
 const KEY = 'saftladen.settings';
 
@@ -13,10 +12,8 @@ export interface SettingsState {
 
 const WEATHER: WeatherMode[] = ['auto', 'sun', 'rain'];
 
-/** Settings panel: label toggles and weather. Remembered in localStorage. */
+/** Umgebung tab (switches for Weihnachten and the labels) plus the weather segments of the timeline. Remembered in localStorage. */
 export class Settings {
-  private root = document.getElementById('settings') as HTMLElement;
-  private toggle = document.getElementById('toggle-settings') as HTMLButtonElement;
   private tables = document.getElementById('setting-tables') as HTMLInputElement;
   private seats = document.getElementById('setting-seats') as HTMLInputElement;
   private rooms = document.getElementById('setting-rooms') as HTMLInputElement;
@@ -35,11 +32,6 @@ export class Settings {
     this.rooms.checked = saved.rooms ?? true;
     this.xmas.checked = saved.xmas ?? new Date().getMonth() === 11; // December: on by default
     this.setWeatherValue(WEATHER.includes(saved.weather as WeatherMode) ? (saved.weather as WeatherMode) : 'auto');
-    const closeOthers = exclusivePanel('settings', () => this.setOpen(false));
-    this.toggle.addEventListener('click', () => {
-      this.setOpen(this.root.hidden === true);
-      if (!this.root.hidden) closeOthers();
-    });
     for (const input of [this.tables, this.seats, this.rooms, this.xmas, ...this.weather]) {
       input.addEventListener('input', () => this.apply());
       input.addEventListener('change', () => this.apply());
@@ -61,9 +53,13 @@ export class Settings {
     return (this.weather.find((i) => i.checked)?.value as WeatherMode) ?? 'auto';
   }
 
-  private setOpen(open: boolean): void {
-    this.root.hidden = !open;
-    this.toggle.setAttribute('aria-pressed', String(open));
+  get xmasOn(): boolean {
+    return this.xmas.checked;
+  }
+
+  setXmas(on: boolean): void {
+    this.xmas.checked = on;
+    this.apply();
   }
 
   private apply(): void {

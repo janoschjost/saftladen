@@ -1,4 +1,4 @@
-import { makeCollapsible } from './collapsible';
+import { sidePanel } from './SidePanel';
 
 export interface FeedEntry {
   id: string;
@@ -10,7 +10,7 @@ export interface FeedEntry {
 export interface FeedTile {
   variant: number;
   rect: DOMRect;
-  /** the part of the tile inside the panel (the panel clips while it opens/closes) */
+  /** the part of the tile inside the scrolling panel */
   clip: DOMRect;
 }
 
@@ -20,14 +20,11 @@ export interface FeedTile {
  */
 export class Feeds {
   private root = document.getElementById('feeds') as HTMLElement;
+  private scroller = document.getElementById('side-scroll') as HTMLElement;
   private grid = document.getElementById('feeds-grid') as HTMLElement;
   private count = document.getElementById('feeds-count') as HTMLElement;
   private anims: Animation[] = [];
   private tilesEls = new Map<string, { el: HTMLElement; variant: number; activity: HTMLElement }>();
-
-  constructor() {
-    makeCollapsible(this.root, this.root.querySelector('.m-feeds__title') as HTMLElement, 'saftladen.feeds.collapsed', 'dock');
-  }
 
   sync(entries: FeedEntry[]): void {
     const ids = new Set(entries.map((e) => e.id));
@@ -50,17 +47,18 @@ export class Feeds {
       this.tilesEls.set(e.id, { el, variant: e.variant, activity: el.querySelector('.m-feed__activity') as HTMLElement });
     }
     this.root.hidden = entries.length === 0;
-    this.count.textContent = String(entries.length);
+    this.count.textContent = entries.length ? `· ${entries.length}` : '';
   }
 
-  /** Enlarge one tile (click again to shrink). The tiles and the panel glide to their new size (FLIP). */
+  /** Enlarge one tile (click again to shrink). The tiles glide to their new size (FLIP). */
   focus(id: string): void {
     const t = this.tilesEls.get(id);
     if (!t) return;
     const large = !t.el.classList.contains('is-large');
-    const animate = !this.root.hidden && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // a feed lives in the Leute tab: show it
+    sidePanel().show('people');
+    const animate = !matchMedia('(prefers-reduced-motion: reduce)').matches && !!t.el.offsetParent;
     // First: where everything is right now (including a running animation)
-    const firstRoot = this.root.getBoundingClientRect();
     const first = new Map<string, DOMRect>();
     if (animate) for (const [k, o] of this.tilesEls) first.set(k, o.el.getBoundingClientRect());
     for (const a of this.anims) a.cancel();
@@ -68,20 +66,11 @@ export class Feeds {
 
     for (const o of this.tilesEls.values()) o.el.classList.remove('is-large');
     t.el.classList.toggle('is-large', large);
-    this.root.hidden = false;
+    if (large) t.el.scrollIntoView({ block: 'nearest' });
     if (!animate) return;
 
-    // the enlarged tile is first in the grid: show the top before measuring the end state
-    if (large) this.root.scrollTop = 0;
-    const lastRoot = this.root.getBoundingClientRect();
     const easing = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
     const duration = 320;
-    this.root.classList.add('is-animating');
-    const rootAnim = this.root.animate(
-      { height: [`${firstRoot.height}px`, `${lastRoot.height}px`] },
-      { duration, easing },
-    );
-    this.anims.push(rootAnim);
     for (const [k, o] of this.tilesEls) {
       const f = first.get(k);
       if (!f) continue;
@@ -105,13 +94,6 @@ export class Feeds {
       a.onfinish = end;
       a.oncancel = end;
     }
-    rootAnim.onfinish = () => {
-      this.anims = [];
-      this.root.classList.remove('is-animating');
-    };
-    rootAnim.oncancel = () => {
-      if (!this.anims.includes(rootAnim)) this.root.classList.remove('is-animating');
-    };
   }
 
   setActivity(id: string, text: string): void {
@@ -121,9 +103,9 @@ export class Feeds {
 
   /** Screen rectangles of the visible tiles, to draw the scenes into. */
   tiles(): Array<FeedTile & { id: string }> {
-    if (this.root.hidden) return [];
+    if (this.root.hidden || !this.root.offsetParent) return [];
     const out: Array<FeedTile & { id: string }> = [];
-    const box = this.root.getBoundingClientRect();
+    const box = this.scroller.getBoundingClientRect();
     for (const [id, t] of this.tilesEls) {
       const rect = t.el.getBoundingClientRect();
       if (rect.width < 4 || rect.height < 4) continue;

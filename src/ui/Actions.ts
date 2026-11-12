@@ -1,16 +1,33 @@
 import { strings } from '../i18n/strings';
 
 const t = strings.presence.command;
+const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
-/** Small card for the selected person: send them to the home office or out of the door. */
+export interface ActionsInfo {
+  name: string;
+  role: string;
+  portrait: string | null;
+  status: string;
+  /** a person (all four buttons) or a pet (follow only) */
+  person: boolean;
+  homeFull: boolean;
+  steering: boolean;
+  following: boolean;
+}
+
+/** Card of the selected person in the Leute tab: who they are and the buttons follow, steer, send home, send out. */
 export class Actions {
-  private root = document.getElementById('actions') as HTMLElement;
-  private name = document.getElementById('actions-name') as HTMLElement;
-  private home = document.getElementById('actions-home') as HTMLButtonElement;
-  private out = document.getElementById('actions-out') as HTMLButtonElement;
-
-  private follow = document.getElementById('actions-follow') as HTMLButtonElement;
-  private steer = document.getElementById('actions-steer') as HTMLButtonElement;
+  private root = $('actions');
+  private hint = $('people-hint');
+  private name = $('actions-name');
+  private role = $('actions-role');
+  private status = $('actions-status');
+  private portrait = $<HTMLImageElement>('actions-portrait');
+  private home = $<HTMLButtonElement>('actions-home');
+  private out = $<HTMLButtonElement>('actions-out');
+  private follow = $<HTMLButtonElement>('actions-follow');
+  private steer = $<HTMLButtonElement>('actions-steer');
+  private portraitKey = '';
 
   constructor(onHome: () => void, onOut: () => void, onSteer: () => void, onFollow: () => void) {
     this.follow.addEventListener('click', onFollow);
@@ -21,16 +38,27 @@ export class Actions {
     this.out.addEventListener('click', onOut);
   }
 
-  /** `name` null hides the card. */
-  show(name: string | null, homeFull: boolean, steering = false, following = false): void {
-    this.root.hidden = !name;
-    if (!name) return;
-    if (this.name.textContent !== name) this.name.textContent = name;
-    this.follow.setAttribute('aria-pressed', String(following));
-    this.follow.textContent = following ? 'Folgen beenden (F)' : 'Folgen (F)';
-    this.steer.setAttribute('aria-pressed', String(steering));
-    this.steer.textContent = steering ? 'Steuern beenden' : 'Steuern (WASD)';
-    this.home.disabled = homeFull;
-    this.home.title = homeFull ? t.homeFull : '';
+  /** `null` hides the card (the tab shows its hint instead). */
+  show(info: ActionsInfo | null): void {
+    this.root.hidden = !info;
+    this.hint.hidden = !!info;
+    if (!info) return;
+    this.set(this.name, info.name);
+    this.set(this.role, info.role);
+    this.set(this.status, info.status);
+    this.portrait.hidden = !info.portrait;
+    if (info.portrait && info.portrait !== this.portraitKey) {
+      this.portraitKey = info.portrait;
+      this.portrait.src = info.portrait.startsWith('data:') ? info.portrait : import.meta.env.BASE_URL + info.portrait;
+    }
+    this.follow.setAttribute('aria-pressed', String(info.following));
+    this.steer.hidden = this.home.hidden = this.out.hidden = !info.person;
+    this.steer.setAttribute('aria-pressed', String(info.steering));
+    this.home.disabled = info.homeFull;
+    this.home.title = info.homeFull ? t.homeFull : '';
+  }
+
+  private set(el: HTMLElement, text: string): void {
+    if (el.textContent !== text) el.textContent = text;
   }
 }

@@ -36,8 +36,8 @@ export const strings = {
     },
     /** buttons on the card of the selected person */
     command: {
-      errand: 'Rausschicken',
-      home: 'Ins Homeoffice',
+      errand: 'Raus',
+      home: 'Nach Hause',
       homeFull: 'Alle Homeoffices sind besetzt',
     },
     /** chips in the title bar */
@@ -55,6 +55,37 @@ export const strings = {
       calledBack: (first: string) => `${first} war nicht im Büro und kommt zurück: nochmal klicken, sobald er da ist`,
       arriving: (firsts: string[]) => `${firsts.join(' und ')} ${firsts.length > 1 ? 'kommen' : 'kommt'} gleich ins Büro …`,
     },
+  },
+  /** the controls: dock, timeline, palette, radial menu, side panel */
+  chrome: {
+    mode: { iso: 'Iso', orbit: 'Orbit', plan: 'Grundriss', walk: 'Rundgang', third: 'Ein Tag im Leben' },
+    tab: { people: 'Leute', seats: 'Plätze', env: 'Umgebung', editor: 'Editor', dev: 'Dev' },
+    palette: {
+      open: 'Befehle',
+      placeholder: 'Befehl, Person oder Ereignis suchen …',
+      empty: 'Nichts gefunden.',
+      pick: 'wählen',
+      run: 'ausführen',
+      close: 'schliessen',
+      group: { view: 'Ansicht', show: 'Anzeigen', panel: 'Panel', events: 'Ereignisse', people: 'Leute' },
+      namesOn: 'Namen anzeigen',
+      namesOff: 'Namen ausblenden',
+      timelineOpen: 'Zeitleiste öffnen',
+      timelineClose: 'Zeitleiste schliessen',
+      xmas: 'Weihnachten',
+      rain: 'Wetter Regen',
+      dry: 'Wetter Trocken',
+      auto: 'Wetter Auto',
+      day: 'Ein Tag im Leben',
+      pickerOpen: 'Figuren ansehen',
+      help: 'Steuerung',
+    },
+    timeline: { label: 'Tageszeit', pause: 'Pause', auto: 'Zeit läuft', weather: 'Wetter', events: { meeting: 'Meeting', lunch: 'Mittag', end: 'Feierabend' } },
+    weather: { auto: 'Auto', sun: 'Trocken', rain: 'Regen' },
+    radial: { info: 'Info', follow: 'Folgen', steer: 'Steuern', home: 'Home', out: 'Raus' },
+    away: (n: number) => `${n} draussen`,
+    people: { inOffice: 'Im Büro', outside: 'Draussen', hint: 'Person anklicken, um sie auszuwählen.', atDesk: 'Am Platz', meeting: 'Meeting', talking: 'Im Gespräch', walking: 'Unterwegs', pet: 'Tier' },
+    walkBack: 'Zurück zur Ansicht',
   },
 } as const;
 

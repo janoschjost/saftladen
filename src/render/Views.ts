@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { NavGrid } from '../game/NavGrid';
-import { makeCollapsible } from '../ui/collapsible';
+import { isTyping } from '../ui/typing';
 import { IsoCamera } from './IsoCamera';
 import { ax, az } from './officeModel';
 import { WORLD } from './World';
@@ -174,6 +174,10 @@ export class Views {
   private moved = 0;
   private buttons: HTMLButtonElement[];
   private hint: HTMLElement | null;
+  /** size of the scene area (the window minus the side panel) */
+  private size = { w: window.innerWidth, h: window.innerHeight };
+  /** the view Rundgang was entered from: Esc goes back there */
+  private beforeWalk: ViewMode = DEFAULT_MODE;
 
   constructor(
     private stage: HTMLElement,
@@ -206,8 +210,6 @@ export class Views {
 
     this.buttons = [...document.querySelectorAll<HTMLButtonElement>('[data-view]')];
     this.hint = document.getElementById('hint');
-    const help = document.getElementById('help');
-    if (help) makeCollapsible(help, help.querySelector('.m-help__title') as HTMLElement, 'saftladen.help.collapsed');
     this.buttons.forEach((b) => b.addEventListener('click', () => this.setMode(b.dataset.view as ViewMode)));
     this.bind();
     // deep link: #orbit | #plan | #walk | #walk@x,z,yaw (game metres, radians)
@@ -275,6 +277,7 @@ export class Views {
 
   /** `keepCamera`: the orbit camera stays where `restore` put it instead of jumping back to the default spot. */
   setMode(mode: ViewMode, keepCamera = false): void {
+    if (mode === 'walk' && this.mode !== 'walk' && this.mode !== 'third') this.beforeWalk = this.mode;
     this.mode = mode;
     this.iso.enabled = mode === 'iso';
     this.orbit.enabled = mode === 'orbit';
@@ -295,10 +298,16 @@ export class Views {
     this.hint?.replaceChildren(...HINTS[mode].map(hintGroup));
     this.stage.dataset.view = mode;
     this.onChange(mode);
-    this.resize(window.innerWidth, window.innerHeight);
+    this.resize(this.size.w, this.size.h);
+  }
+
+  /** Rundgang -> back to the view it was entered from. */
+  leaveWalk(): void {
+    if (this.mode === 'walk') this.setMode(this.beforeWalk);
   }
 
   resize(w: number, h: number): void {
+    this.size = { w, h };
     this.aspect = w / h;
     this.iso.resize(w, h);
     this.persp.aspect = this.aspect;
@@ -455,12 +464,11 @@ export class Views {
 
   private bind(): void {
     window.addEventListener('keydown', (e) => {
-      if (e.target instanceof HTMLElement && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+      if (isTyping(e.target)) return;
       this.keys.add(e.code);
       const modes: ViewMode[] = ['iso', 'orbit', 'plan', 'walk'];
       const i = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(e.code);
       if (i >= 0) this.setMode(modes[i]);
-      if (e.code === 'Escape' && this.mode === 'walk') this.setMode(DEFAULT_MODE);
       if (this.mode === 'walk' && e.code.startsWith('Arrow')) e.preventDefault();
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));

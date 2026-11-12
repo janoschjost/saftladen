@@ -1,33 +1,19 @@
 import { devEvents } from '../game/DevEvents';
-import { exclusivePanel } from './exclusive';
+import { sidePanel } from './SidePanel';
+import { isTyping } from './typing';
 
-/** Dev panel: one button per registered dev event, grouped. Toggle with the "Dev" button or the ` key. */
+/** Dev tab of the side panel: one button per registered dev event, grouped. Toggle with the dock button or the ` key. */
 export class DevPanel {
-  private root = document.getElementById('dev') as HTMLElement;
   private body = document.getElementById('dev-body') as HTMLElement;
   private status = document.getElementById('dev-status') as HTMLElement;
-  private toggle = document.getElementById('toggle-dev') as HTMLButtonElement;
-
-  private closeOthers = exclusivePanel('dev', () => this.setOpen(false));
 
   constructor() {
-    this.toggle.addEventListener('click', () => this.setOpen(!this.isOpen()));
     window.addEventListener('keydown', (e) => {
-      if (e.target instanceof HTMLElement && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
-      if (e.key === '`') this.setOpen(!this.isOpen());
+      if (isTyping(e.target)) return;
+      if (e.key === '`') sidePanel().toggle('dev');
     });
     devEvents.onChange(() => this.render());
     this.render();
-  }
-
-  private isOpen(): boolean {
-    return !this.root.hidden;
-  }
-
-  private setOpen(open: boolean): void {
-    this.root.hidden = !open;
-    this.toggle.setAttribute('aria-pressed', String(open));
-    if (open) this.closeOthers();
   }
 
   private render(): void {

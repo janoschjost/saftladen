@@ -1,20 +1,14 @@
-import { exclusivePanel } from './exclusive';
-
 export interface SeatPerson {
   id: string;
   name: string;
 }
 
-/** Seat assignment: a number label above every desk and a panel where each person gets a seat number (or none = picks any free desk). */
+/** Seat assignment: a number label above every desk and the Plätze tab where each person gets a seat number (or none = picks any free desk). */
 export class Seats {
-  private root = document.getElementById('seats') as HTMLElement;
   private list = document.getElementById('seats-list') as HTMLElement;
-  private toggle = document.getElementById('toggle-seats') as HTMLButtonElement;
   private labels = document.getElementById('labels') as HTMLElement;
   private labelEls: HTMLElement[] = [];
   private selects = new Map<string, HTMLSelectElement>();
-  open = false;
-  private closeOthers = exclusivePanel('seats', () => this.setOpen(false));
 
   constructor(
     private deskCount: number,
@@ -42,14 +36,6 @@ export class Seats {
       this.list.appendChild(li);
       this.selects.set(p.id, select);
     }
-    this.toggle.addEventListener('click', () => this.setOpen(!this.open));
-  }
-
-  private setOpen(open: boolean): void {
-    this.open = open;
-    this.root.hidden = !open;
-    this.toggle.setAttribute('aria-pressed', String(open));
-    if (open) this.closeOthers();
   }
 
   /** seat number -> id of the person it is assigned to */

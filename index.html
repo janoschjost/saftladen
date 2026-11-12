@@ -228,92 +228,125 @@
       <p class="m-loader__name" aria-label="Saftladen"><span class="m-loader__letter" style="--i:0">S</span><span class="m-loader__letter" style="--i:1">a</span><span class="m-loader__letter" style="--i:2">f</span><span class="m-loader__letter" style="--i:3">t</span><span class="m-loader__letter" style="--i:4">l</span><span class="m-loader__letter" style="--i:5">a</span><span class="m-loader__letter" style="--i:6">d</span><span class="m-loader__letter" style="--i:7">e</span><span class="m-loader__letter" style="--i:8">n</span></p>
     </div>
     <div class="l-stage" id="stage"></div>
-    <header class="l-hud">
+    <header class="l-hud" id="hud">
       <div class="m-hud-title">
         <h1 class="m-hud-title__name"><svg class="m-hud-title__mark" viewBox="0 0 31 25" width="31" height="25" fill="none" aria-hidden="true"><path class="m-hud-title__mark-two" d="M16.9799 13.9L19.5099 11.79C20.0099 11.39 20.4599 10.87 20.8299 10.26C21.1399 9.74005 21.2999 9.08005 21.2999 8.30005C21.2999 5.87005 19.6099 4.30005 16.9999 4.30005C14.2699 4.30005 12.4999 5.87005 12.4999 8.30005V8.76005L15.9999 9.04005V8.50005C15.9999 8.37005 16.0299 8.24005 16.0899 8.01005C16.1099 7.94005 16.1699 7.83005 16.2499 7.75005C16.2999 7.70005 16.4999 7.60005 16.6199 7.54005C16.7099 7.50005 16.8199 7.49005 17.0199 7.49005C17.1099 7.49005 17.1599 7.49005 17.2899 7.55005C17.5699 7.67005 17.6399 7.75005 17.6399 7.75005C17.7199 7.84005 17.7799 7.89005 17.8199 7.97005C17.8599 8.09005 17.8899 8.21005 17.8899 8.30005C17.8899 8.74005 17.4599 9.12005 16.9799 9.51005L12.1899 13.78V17.1H21.4899V13.9H16.9799Z"/><path fill="currentColor" d="M27.3 0H7C6 0 5 0.4 4.3 1.1C3.6 1.7 3.2 2.7 3.2 3.6V17.1L0 25L8.1 21.8H27.3C28.3 21.8 29.2 21.4 29.9 20.7C30.6 20 31 19.1 31 18.1V3.6C31 3.1 30.9 2.7 30.7 2.2C30.5 1.8 30.2 1.4 29.9 1C29.6 0.7 29.1 0.4 28.7 0.2C28.3 0.1 27.8 0 27.3 0ZM21.1 16.6H12.7V14L17.3 9.9C17.8 9.5 18.4 9 18.4 8.3C18.4 8.1 18.34 7.91 18.3 7.8C18.2 7.6 18.1 7.5 18 7.4C17.9 7.3 17.7 7.19 17.5 7.1C17.26 6.99 17.1 7 17 7C16.8 7 16.6 7 16.4 7.1C16.2 7.2 16 7.3 15.9 7.4C15.8 7.5 15.65 7.69 15.6 7.9C15.54 8.13 15.5 8.3 15.5 8.5L13 8.3C13 6 14.7 4.8 17 4.8C19.2 4.8 20.8 6 20.8 8.3C20.8 8.9 20.7 9.5 20.4 10C20.1 10.5 19.7 11 19.2 11.4L15.6 14.4H21V16.6H21.1Z"/></svg><span>Saftladen</span></h1>
         <ul class="m-hud-title__meta" id="hud-meta" aria-live="off"></ul>
       </div>
-      <div class="m-toolbar" role="toolbar" aria-label="Werkzeuge">
-        <button class="m-tool" id="open-picker" type="button" aria-label="Figuren" data-tip="Figuren"><svg class="m-tool__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg></button>
-        <button class="m-tool" id="open-day" type="button" aria-label="Ein Tag im Leben" data-tip="Ein Tag im Leben" aria-pressed="false"><svg class="m-tool__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m10 8.5 5 3.5-5 3.5z"/></svg></button>
-        <button class="m-tool" id="toggle-seats" type="button" aria-label="Plätze" data-tip="Plätze" aria-pressed="false"><svg class="m-tool__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 11V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v5"/><path d="M5 11h14v5H5z"/><path d="M7 16v4M17 16v4"/></svg></button>
-        <button class="m-tool" id="toggle-names" type="button" aria-label="Namen" data-tip="Namen" aria-pressed="false"><svg class="m-tool__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1"/></svg></button>
-        <span class="m-toolbar__sep" aria-hidden="true"></span>
-        <button class="m-tool" id="toggle-settings" type="button" aria-label="Einstellungen" data-tip="Einstellungen" aria-pressed="false"><svg class="m-tool__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
-        <span class="m-toolbar__sep" aria-hidden="true"></span>
-        <button class="m-tool" id="toggle-editor" type="button" aria-label="Raum bearbeiten" data-tip="Raum bearbeiten (E)" aria-pressed="false"><svg class="m-tool__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M3 12h18"/><path d="m9 6 3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg></button>
-        <button class="m-tool" id="toggle-dev" type="button" aria-label="Dev-Events" data-tip="Dev-Events" aria-pressed="false"><svg class="m-tool__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 8-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/></svg></button>
+      <div class="m-topbar" id="topbar">
+        <button class="m-away-button" id="away-button" type="button" aria-label="Wer ist draussen" hidden><span class="m-away-button__avatars" id="away-avatars" aria-hidden="true"></span><span id="away-count"></span></button>
+        <button class="m-palette-button" id="open-palette" type="button" aria-haspopup="dialog"><svg class="m-palette-button__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><span>Befehle</span><kbd class="m-keycap" id="palette-keycap">⌘K</kbd></button>
       </div>
+      <button class="m-walk-back" id="walk-back" type="button" hidden><kbd class="m-keycap">Esc</kbd><span>Zurück zur Ansicht</span></button>
     </header>
-    <nav class="m-viewbar" role="group" aria-label="Ansicht">
-      <button class="m-viewbar__item" type="button" data-view="iso" aria-pressed="false"><svg class="m-viewbar__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5v8l-9 5-9-5V8z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg><span class="m-viewbar__label">Iso</span></button>
-      <button class="m-viewbar__item" type="button" data-view="orbit" aria-pressed="true"><svg class="m-viewbar__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M20.5 12c0 2-3.8 3.5-8.5 3.5S3.5 14 3.5 12 7.3 8.5 12 8.5s8.5 1.5 8.5 3.5z"/></svg><span class="m-viewbar__label">Orbit</span></button>
-      <button class="m-viewbar__item" type="button" data-view="plan" aria-pressed="false"><svg class="m-viewbar__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="M4 11h7M15 4v7M11 20v-6M15 15h5"/></svg><span class="m-viewbar__label">Grundriss</span></button>
-      <button class="m-viewbar__item" type="button" data-view="walk" aria-pressed="false"><svg class="m-viewbar__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13" cy="4.5" r="1.8"/><path d="m9 21 2-6 3 2v4M11 15l1-5-3 2-1 3M12 10l3 2 3-1"/></svg><span class="m-viewbar__label">Rundgang</span></button>
+    <p class="m-mode-badge" id="mode-badge" role="status"></p>
+    <aside class="m-plan-tools" id="plan-tools" role="toolbar" aria-label="Editor-Werkzeuge" aria-orientation="vertical" hidden>
+      <button class="m-plan-tools__btn" id="tool-select" type="button" aria-pressed="false"><svg class="m-plan-tools__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 3 13 7-6 2-2 6z"/></svg><span>Wählen</span></button>
+      <button class="m-plan-tools__btn" id="tool-rotate" type="button" disabled><svg class="m-plan-tools__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v4h-4"/></svg><span>Drehen <kbd class="m-keycap">R</kbd></span></button>
+      <button class="m-plan-tools__btn" id="tool-remove" type="button" disabled><svg class="m-plan-tools__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg><span>Entfernen <kbd class="m-keycap">Entf</kbd></span></button>
+      <button class="m-plan-tools__btn" id="tool-snap" type="button" aria-pressed="true"><svg class="m-plan-tools__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v16H4zM4 12h16M12 4v16"/></svg><span>Raster</span></button>
+    </aside>
+    <section class="m-timeline" id="timeline" aria-label="Zeitleiste" hidden>
+      <button class="m-timeline__play" id="timeline-auto" type="button" aria-pressed="true" aria-label="Zeit läuft: pausieren"><svg class="m-timeline__pause" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M7 4h3.5v16H7zM13.5 4H17v16h-3.5z"/></svg><svg class="m-timeline__resume" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="m7 4 13 8-13 8z"/></svg></button>
+      <div class="m-timeline__track" id="timeline-track">
+        <ul class="m-timeline__events" id="timeline-events"></ul>
+        <div class="m-timeline__bar" id="timeline-bar">
+          <div class="m-timeline__handle" id="timeline-handle"><output class="m-timeline__bubble" id="timeline-bubble" for="timeline-range">10:00</output></div>
+          <input class="m-timeline__range" id="timeline-range" type="range" min="0" max="1440" step="1" value="600" aria-label="Tageszeit" />
+        </div>
+        <ol class="m-timeline__ticks" aria-hidden="true"><li>00</li><li>06</li><li>12</li><li>18</li><li>24</li></ol>
+      </div>
+      <div class="m-timeline__weather" role="radiogroup" aria-label="Wetter">
+        <label class="m-segment"><input type="radio" name="setting-weather" value="auto" checked /><span>Auto</span></label>
+        <label class="m-segment"><input type="radio" name="setting-weather" value="sun" /><span>Trocken</span></label>
+        <label class="m-segment"><input type="radio" name="setting-weather" value="rain" /><span>Regen</span></label>
+      </div>
+    </section>
+    <nav class="m-dock" id="dock" role="toolbar" aria-label="Steuerung">
+      <div class="m-dock__group" role="group" aria-label="Ansicht"><button class="m-dock__btn m-dock__btn--view" type="button" data-view="iso" aria-label="Iso" data-tip="Iso (1)" aria-pressed="false"><svg class="m-dock__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5v8l-9 5-9-5V8z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg><span class="m-dock__label">Iso</span></button><button class="m-dock__btn m-dock__btn--view" type="button" data-view="orbit" aria-label="Orbit" data-tip="Orbit (2)" aria-pressed="true"><svg class="m-dock__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M20.5 12c0 2-3.8 3.5-8.5 3.5S3.5 14 3.5 12 7.3 8.5 12 8.5s8.5 1.5 8.5 3.5z"/></svg><span class="m-dock__label">Orbit</span></button><button class="m-dock__btn m-dock__btn--view" type="button" data-view="plan" aria-label="Grundriss" data-tip="Grundriss (3)" aria-pressed="false"><svg class="m-dock__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="M4 11h7M15 4v7M11 20v-6M15 15h5"/></svg><span class="m-dock__label">Grundriss</span></button><button class="m-dock__btn m-dock__btn--view" type="button" data-view="walk" aria-label="Rundgang" data-tip="Rundgang (4)" aria-pressed="false"><svg class="m-dock__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13" cy="4.5" r="1.8"/><path d="m9 21 2-6 3 2v4M11 15l1-5-3 2-1 3M12 10l3 2 3-1"/></svg><span class="m-dock__label">Rundgang</span></button></div>
+      <span class="m-dock__sep" aria-hidden="true"></span>
+      <div class="m-dock__group" role="group" aria-label="Werkzeuge"><button class="m-dock__btn" id="toggle-people" type="button" aria-label="Leute" data-tip="Leute" data-panel="people" aria-pressed="false"><svg class="m-dock__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.8 0 4.5 2.2 4.5 5"/></svg></button><button class="m-dock__btn" id="open-day" type="button" aria-label="Ein Tag im Leben" data-tip="Ein Tag im Leben" aria-pressed="false"><svg class="m-dock__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m10 8.5 5 3.5-5 3.5z"/></svg></button><button class="m-dock__btn" id="toggle-seats" type="button" aria-label="Plätze" data-tip="Plätze" data-panel="seats" aria-pressed="false"><svg class="m-dock__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 11V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v5"/><path d="M5 11h14v5H5z"/><path d="M7 16v4M17 16v4"/></svg></button><button class="m-dock__btn" id="toggle-names" type="button" aria-label="Namen" data-tip="Namen (N)" aria-pressed="false"><svg class="m-dock__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1"/></svg></button></div>
+      <span class="m-dock__sep" aria-hidden="true"></span>
+      <button class="m-dock__clock" id="dock-clock" type="button" aria-label="Zeitleiste" data-tip="Zeitleiste" aria-expanded="false" aria-controls="timeline"><span class="m-dock__sky"><svg class="m-dock__sun" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="m-dock__moon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg></span><span class="m-dock__time" id="dock-time">10:00</span></button>
+      <button class="m-dock__btn m-dock__more" id="dock-more" type="button" aria-label="Weitere Befehle" data-tip="Befehle"><svg class="m-dock__icon" viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
+      <span class="m-dock__sep" aria-hidden="true"></span>
+      <div class="m-dock__group" role="group" aria-label="Power-Tools"><button class="m-dock__btn" id="toggle-editor" type="button" aria-label="Raum bearbeiten" data-tip="Raum bearbeiten (E)" data-panel="editor" aria-pressed="false"><svg class="m-dock__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M3 12h18"/><path d="m9 6 3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg></button><button class="m-dock__btn" id="toggle-dev" type="button" aria-label="Dev-Events" data-tip="Dev-Events (`)" data-panel="dev" aria-pressed="false"><svg class="m-dock__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 8-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/></svg></button></div>
     </nav>
-    <div class="l-dock">
-      <aside class="m-away" id="away" hidden>
-        <h2 class="m-away__title"><span class="m-away__count" id="away-count"></span></h2>
-        <ul class="m-away__list" id="away-list"></ul>
-        <button class="m-button m-away__all" id="away-all" type="button"></button>
-      </aside>
-      <aside class="m-settings" id="settings" aria-label="Einstellungen" hidden>
-        <h2 class="m-flyout__title">Einstellungen</h2>
-        <section class="m-settings__group" aria-labelledby="settings-env">
-          <h3 class="m-settings__heading" id="settings-env">Umgebung</h3>
-          <div class="m-settings__field">
-            <div class="m-settings__field-head">
-              <span>Tageszeit</span>
-              <output class="m-settings__clock" id="time-clock" for="time-slider">10:00</output>
-            </div>
-            <input class="m-settings__slider" type="range" id="time-slider" min="0" max="1000" step="1" value="308" aria-label="Tageszeit" />
-          </div>
-          <label class="m-settings__row"><span>Zeit läuft automatisch</span><input class="m-settings__switch" type="checkbox" id="time-auto" checked /></label>
-          <label class="m-settings__row"><span>Weihnachten <small>Schnee, Deko, Mützen</small></span><input class="m-settings__switch" type="checkbox" id="setting-xmas" /></label>
-          <div class="m-settings__field">
-            <div class="m-settings__field-head"><span id="weather-label">Wetter</span></div>
-            <div class="m-settings__segments" role="radiogroup" aria-labelledby="weather-label">
-              <label class="m-settings__segment"><input type="radio" name="setting-weather" value="auto" checked /><span>Auto</span></label>
-              <label class="m-settings__segment"><input type="radio" name="setting-weather" value="sun" /><span>Trocken</span></label>
-              <label class="m-settings__segment"><input type="radio" name="setting-weather" value="rain" /><span>Regen</span></label>
-            </div>
-          </div>
-        </section>
-        <section class="m-settings__group" aria-labelledby="settings-labels">
-          <h3 class="m-settings__heading" id="settings-labels">Beschriftungen</h3>
-          <label class="m-settings__row"><span>Tische <small>Reihennummern</small></span><input class="m-settings__switch" type="checkbox" id="setting-tables" checked /></label>
-          <label class="m-settings__row"><span>Plätze <small>Platznummern</small></span><input class="m-settings__switch" type="checkbox" id="setting-seats" checked /></label>
-          <label class="m-settings__row"><span>Räume <small>Raumnummern</small></span><input class="m-settings__switch" type="checkbox" id="setting-rooms" checked /></label>
-        </section>
-      </aside>
-      <aside class="m-dev" id="dev" aria-label="Dev-Events" hidden>
-        <h2 class="m-flyout__title">Dev-Events <span class="m-dev__hint">( ` )</span></h2>
-        <div id="dev-body"></div>
-        <p class="m-dev__status" id="dev-status" role="status"></p>
-      </aside>
-      <aside class="m-seats" id="seats" aria-label="Platzzuteilung" hidden>
-        <h2 class="m-flyout__title">Plätze</h2>
-        <p class="m-seats__hint">Zugeteilte Personen sitzen an ihrem Platz. Alle anderen wählen einen freien Platz und weichen, wenn die Besitzerin oder der Besitzer kommt.</p>
-        <ul class="m-seats__list" id="seats-list"></ul>
-      </aside>
-      <aside class="m-feeds" id="feeds" aria-label="Homeoffice-Livebilder" hidden>
-        <h2 class="m-feeds__title"><span class="m-feeds__dot" aria-hidden="true"></span>Homeoffice · live <span class="m-feeds__count" id="feeds-count"></span></h2>
-        <div class="m-feeds__grid" id="feeds-grid"></div>
-      </aside>
-      <div class="m-reticle" id="reticle" hidden>
-        <span class="m-reticle__dot" aria-hidden="true"></span>
-        <p class="m-reticle__prompt" id="reticle-prompt" hidden></p>
-      </div>
-      <div class="m-actions" id="actions" hidden>
-        <p class="m-actions__name" id="actions-name"></p>
-        <button class="m-button" id="actions-follow" type="button" aria-pressed="false">Folgen (F)</button>
-        <button class="m-button" id="actions-steer" type="button" aria-pressed="false">Steuern (WASD)</button>
-        <button class="m-button" id="actions-home" type="button"></button>
-        <button class="m-button" id="actions-out" type="button"></button>
-      </div>
+    <p class="m-hint-line" id="hint-line"></p>
+    <div class="m-walk-keys" id="walk-keys" hidden>
+      <span><kbd class="m-keycap" data-code="KeyW">W</kbd><kbd class="m-keycap" data-code="KeyA">A</kbd><kbd class="m-keycap" data-code="KeyS">S</kbd><kbd class="m-keycap" data-code="KeyD">D</kbd> gehen</span>
+      <span><kbd class="m-keycap" data-code="ShiftLeft ShiftRight">Shift</kbd> rennen</span>
+      <span><kbd class="m-keycap" data-code="KeyE">E</kbd> Tür öffnen / sprechen</span>
     </div>
-    <aside class="m-editor" id="editor" aria-label="Raum bearbeiten" hidden>
-      <h2 class="m-editor__title">Raum bearbeiten <span class="m-editor__key">( E )</span></h2>
+    <div class="m-reticle" id="reticle" hidden>
+      <span class="m-reticle__dot" aria-hidden="true"></span>
+      <p class="m-reticle__prompt" id="reticle-prompt" hidden></p>
+    </div>
+    <div class="m-radial" id="radial" hidden>
+      <span class="m-radial__ring" aria-hidden="true"></span>
+      <button class="m-radial__btn" type="button" data-act="follow" aria-pressed="false"><svg class="m-radial__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg><span class="m-radial__label">Folgen <kbd class="m-keycap">F</kbd></span></button>
+      <button class="m-radial__btn" type="button" data-act="steer" aria-pressed="false"><svg class="m-radial__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/></svg><span class="m-radial__label">Steuern <kbd class="m-keycap">C</kbd></span></button>
+      <button class="m-radial__btn" type="button" data-act="home" aria-pressed="false"><svg class="m-radial__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span class="m-radial__label">Home <kbd class="m-keycap">H</kbd></span></button>
+      <button class="m-radial__btn" type="button" data-act="out" aria-pressed="false"><svg class="m-radial__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10"/></svg><span class="m-radial__label">Raus</span></button>
+      <button class="m-radial__btn" type="button" data-act="info"><svg class="m-radial__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg><span class="m-radial__label">Info</span></button>
+    </div>
+    <aside class="m-side" id="side" aria-label="Panel" hidden>
+      <div class="m-side__bg" id="side-bg"></div>
+      <div class="m-side__tabs" role="tablist" aria-label="Panel">
+        <button class="m-side__tab" id="tab-people" type="button" role="tab" aria-selected="false" aria-controls="panel-people" data-tab="people"><svg class="m-side__tab-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.8 0 4.5 2.2 4.5 5"/></svg><span>Leute</span></button>
+        <button class="m-side__tab" id="tab-seats" type="button" role="tab" aria-selected="false" aria-controls="panel-seats" data-tab="seats"><svg class="m-side__tab-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 11V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v5"/><path d="M5 11h14v5H5z"/><path d="M7 16v4M17 16v4"/></svg><span>Plätze</span></button>
+        <button class="m-side__tab" id="tab-env" type="button" role="tab" aria-selected="false" aria-controls="panel-env" data-tab="env"><svg class="m-side__tab-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><span>Umgebung</span></button>
+        <button class="m-side__tab" id="tab-editor" type="button" role="tab" aria-selected="false" aria-controls="panel-editor" data-tab="editor"><svg class="m-side__tab-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M3 12h18"/><path d="m9 6 3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg><span>Editor</span></button>
+        <button class="m-side__tab" id="tab-dev" type="button" role="tab" aria-selected="false" aria-controls="panel-dev" data-tab="dev"><svg class="m-side__tab-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 8-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/></svg><span>Dev</span></button>
+      </div>
+      <div class="m-side__scroll" id="side-scroll">
+        <section class="m-side__panel" id="panel-people" role="tabpanel" aria-labelledby="tab-people" hidden>
+          <div class="m-person" id="actions" hidden>
+            <div class="m-person__head">
+              <img class="m-person__avatar" id="actions-portrait" alt="" width="56" height="56" hidden />
+              <div class="m-person__who">
+                <p class="m-person__name" id="actions-name"></p>
+                <p class="m-person__role" id="actions-role"></p>
+                <p class="m-person__status" id="actions-status"></p>
+              </div>
+            </div>
+            <div class="m-person__buttons">
+              <button class="m-button" id="actions-follow" type="button" aria-pressed="false">Folgen (F)</button>
+              <button class="m-button" id="actions-steer" type="button" aria-pressed="false">Steuern (C)</button>
+              <button class="m-button" id="actions-home" type="button"></button>
+              <button class="m-button" id="actions-out" type="button"></button>
+            </div>
+          </div>
+          <p class="m-side__hint" id="people-hint">Person anklicken, um sie auszuwählen.</p>
+          <h3 class="m-side__heading">Im Büro · <span id="office-count">0</span></h3>
+          <ul class="m-roster" id="office-list"></ul>
+          <div id="away" hidden>
+            <h3 class="m-side__heading">Draussen · <span id="away-total">0</span></h3>
+            <ul class="m-roster" id="away-list"></ul>
+            <button class="m-button" id="away-all" type="button"></button>
+          </div>
+          <aside class="m-feeds" id="feeds" aria-label="Homeoffice-Livebilder" hidden>
+            <h3 class="m-side__heading"><span class="m-feeds__dot" aria-hidden="true"></span>Homeoffice · live <span id="feeds-count"></span></h3>
+            <div class="m-feeds__grid" id="feeds-grid"></div>
+          </aside>
+          <button class="m-button m-side__picker" id="open-picker" type="button">Figuren ansehen</button>
+        </section>
+        <section class="m-side__panel" id="panel-seats" role="tabpanel" aria-labelledby="tab-seats" hidden>
+          <p class="m-side__hint">Zugeteilte Personen sitzen an ihrem Platz. Alle anderen wählen einen freien Platz und weichen, wenn die Besitzerin oder der Besitzer kommt.</p>
+          <ul class="m-seats__list" id="seats-list"></ul>
+        </section>
+        <section class="m-side__panel" id="panel-env" role="tabpanel" aria-labelledby="tab-env" hidden>
+          <p class="m-side__hint">Tageszeit und Wetter stehen in der Zeitleiste (Uhr unten im Dock).</p>
+          <h3 class="m-side__heading">Umgebung</h3>
+          <label class="m-switch-row"><span>Zeit läuft automatisch</span><input class="m-switch" type="checkbox" id="time-auto" role="switch" checked /></label>
+          <label class="m-switch-row"><span>Weihnachten <small>Schnee, Deko, Mützen</small></span><input class="m-switch" type="checkbox" id="setting-xmas" role="switch" /></label>
+          <h3 class="m-side__heading">Beschriftungen</h3>
+          <label class="m-switch-row"><span>Tische <small>Reihennummern</small></span><input class="m-switch" type="checkbox" id="setting-tables" role="switch" checked /></label>
+          <label class="m-switch-row"><span>Plätze <small>Platznummern</small></span><input class="m-switch" type="checkbox" id="setting-seats" role="switch" checked /></label>
+          <label class="m-switch-row"><span>Räume <small>Raumnummern</small></span><input class="m-switch" type="checkbox" id="setting-rooms" role="switch" checked /></label>
+        </section>
+        <section class="m-side__panel m-editor" id="panel-editor" role="tabpanel" aria-labelledby="tab-editor" hidden>
+<h2 class="m-editor__title">Raum bearbeiten <span class="m-editor__key">( E )</span></h2>
       <p class="m-editor__hint">Objekt anklicken und ziehen · R dreht um 90° · Pfeiltasten schieben fein (Shift = Raster) · Entf entfernt · Esc wählt ab</p>
       <p class="m-editor__empty" id="editor-empty">Kein Objekt gewählt.</p>
       <div class="m-editor__selection" id="editor-selection" hidden>
@@ -353,7 +386,23 @@
       </div>
       <textarea class="m-editor__json" id="editor-json" rows="5" spellcheck="false" aria-label="Layout als JSON" placeholder="Layout-JSON"></textarea>
       <p class="m-editor__status" id="editor-status" role="status"></p>
+        </section>
+        <section class="m-side__panel" id="panel-dev" role="tabpanel" aria-labelledby="tab-dev" hidden>
+          <p class="m-side__hint">Jedes Ereignis steht auch in den Befehlen. <span class="m-dev__hint">Die Taste ` öffnet dieses Panel.</span></p>
+          <div id="dev-body"></div>
+          <p class="m-dev__status" id="dev-status" role="status"></p>
+        </section>
+      </div>
     </aside>
+    <div class="m-palette" id="palette" hidden>
+      <div class="m-palette__dim" id="palette-dim"></div>
+      <div class="m-palette__box" role="dialog" aria-modal="true" aria-label="Befehle">
+        <input class="m-palette__input" id="palette-input" type="text" role="combobox" aria-expanded="true" aria-controls="palette-list" aria-autocomplete="list" autocomplete="off" spellcheck="false" placeholder="Befehl, Person oder Ereignis suchen …" />
+        <ul class="m-palette__list" id="palette-list" role="listbox" aria-label="Ergebnisse"></ul>
+        <p class="m-palette__empty" id="palette-empty" hidden>Nichts gefunden.</p>
+        <footer class="m-palette__foot"><span><kbd class="m-keycap">↑↓</kbd> wählen</span><span><kbd class="m-keycap">↵</kbd> ausführen</span><span><kbd class="m-keycap">Esc</kbd> schliessen</span></footer>
+      </div>
+    </div>
     <div class="l-labels" id="labels" aria-hidden="true"></div>
     <aside class="m-tooltip" id="tooltip" hidden>
       <img class="m-tooltip__image" id="tooltip-image" alt="" width="96" height="96" />
@@ -451,8 +500,8 @@
         <button class="m-button" id="day-result-exit" type="button">Beenden</button>
       </div>
     </section>
-    <aside class="m-help" id="help" aria-label="Steuerung">
-      <h2 class="m-help__title">Steuerung</h2>
+    <aside class="m-help" id="help" aria-label="Steuerung" hidden>
+      <h2 class="m-help__title"><span>Steuerung</span><button class="m-help__close" id="help-close" type="button" aria-label="Schliessen">&times;</button></h2>
       <ul class="m-help__list" id="hint"></ul>
     </aside>
     <script type="module" src="/src/main.ts"></script>

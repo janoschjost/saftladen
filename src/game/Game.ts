@@ -16,11 +16,17 @@ import { buildWorld, NAV_CELL, WORLD } from '../render/World';
 import { Actions } from '../ui/Actions';
 import { Feeds } from '../ui/Feeds';
 import { Overlay } from '../ui/Overlay';
-import { Roster } from '../ui/Roster';
+import { Roster, type OfficeEntry } from '../ui/Roster';
 import { Seats } from '../ui/Seats';
 import { DevPanel } from '../ui/DevPanel';
 import { Settings } from '../ui/Settings';
-import { TimeControl } from '../ui/TimeControl';
+import { Timeline } from '../ui/Timeline';
+import { Palette, type PaletteEntry } from '../ui/Palette';
+import { Radial, type RadialAct } from '../ui/Radial';
+import { sidePanel, type SidePanel } from '../ui/SidePanel';
+import { Chrome } from '../ui/Chrome';
+import { isTyping } from '../ui/typing';
+import { chromeVisibility, type PanelTab } from '../ui/chromeRules';
 import { devEvents } from './DevEvents';
 import { DeskLights } from './DeskLights';
 import { CoatRacks } from './CoatRacks';
@@ -43,7 +49,7 @@ import { NavGrid } from './NavGrid';
 import { Office } from './Office';
 import { Person } from './Person';
 import { Presence } from './Presence';
-import { strings } from '../i18n/strings';
+import { awayStatus, strings } from '../i18n/strings';
 import { RoomEditor } from './RoomEditor';
 import { CROUCH_SECONDS, PET_HEIGHT, petPose, smooth } from './petPose';
 import { Social } from './Social';
@@ -95,7 +101,16 @@ export class Game {
   private deskLights!: DeskLights;
   private coatRacks!: CoatRacks;
   private easter!: Easter;
-  private timeControl!: TimeControl;
+  private timeline!: Timeline;
+  private side!: SidePanel;
+  private palette!: Palette;
+  private radial!: Radial;
+  private chrome!: Chrome;
+  /** size of the scene area: the window minus the side panel */
+  private viewW = window.innerWidth;
+  private viewH = window.innerHeight;
+  /** flat dots for the people in the plan view */
+  private dots = new Map<Walker, THREE.Mesh>();
   private feeds = new Feeds();
   private roster: Roster;
   private actions: Actions;
@@ -148,7 +163,7 @@ export class Game {
   private dragMoved = false;
   private fwd = new THREE.Vector3();
   private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-  private ring: THREE.Mesh;
+  private ring: THREE.Group;
   private savedSeats: Record<string, number> = {};
   private acc = 0;
   private last = performance.now();
@@ -158,7 +173,10 @@ export class Game {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
-    stage.appendChild(this.renderer.domElement);
+    // the canvas fills the window (the home office feeds shine through the side panel); the stage is the scene area above it
+    this.renderer.domElement.classList.add('l-canvas');
+    stage.before(this.renderer.domElement);
+    this.side = sidePanel();
 
     const stageColor = getComputedStyle(document.documentElement).getPropertyValue('--color-scene').trim();
     this.scene.background = new THREE.Color(stageColor);
@@ -170,7 +188,7 @@ export class Game {
       this.tod.setCycle(saved.cycle);
       this.tod.night = this.tod.day < 0.45;
     }
-    this.timeControl = new TimeControl(this.tod);
+    this.timeline = new Timeline(this.tod);
     applySky(this.tod, this.sky);
     this.rainFx = new RainFx(this.scene);
     this.spawnFx = new SpawnFx(this.scene);
@@ -191,7 +209,9 @@ export class Game {
     this.phoneBooth = new PhoneBooth(model.phoneBooth, this.nav);
     this.phoneBooth.onClosed = (closed) => this.doors.setLocked(this.phoneBooth.doorPos, closed);
     this.meetingRoom.onClosed = (closed) => this.doors.setLocked(this.meetingRoom.doorPos, closed);
-    this.views = new Views(stage, this.renderer.domElement, this.nav, (mode) => {
+    this.views = new Views(stage, stage, this.nav, (mode) => {
+      this.chrome?.setMode(mode);
+      if (!chromeVisibility(mode).radial) this.radial?.update(null); // gone at once, not on the next frame
       this.roof.visible = mode === 'walk' ? true : mode === 'plan' || mode === 'third' ? false : this.roofWanted;
       if (mode !== 'third' && this.day && this.day.state !== 'waiting') this.endDay(false); // the player switched the camera away
     });
@@ -205,21 +225,19 @@ export class Game {
         if (p) this.presence.callBack(p);
       },
       () => this.presence.callAllBack(),
-    );
-    this.actions = new Actions(
-      () => {
-        if (!(this.selected instanceof Person)) return;
-        this.release(this.selected);
-        this.presence.send(this.selected, 'home', this.nav);
+      (id) => {
+        const p = this.people.find((o) => o.id === id);
+        if (p) this.selectWalker(p);
       },
-      () => {
-        if (!(this.selected instanceof Person)) return;
-        this.release(this.selected);
-        this.presence.send(this.selected, 'errand', this.nav);
-      },
-      () => this.selected instanceof Person && this.toggleSteer(this.selected),
-      () => this.toggleFollow(),
     );
+    const act = {
+      home: () => this.sendSelected('home'),
+      out: () => this.sendSelected('errand'),
+      steer: () => this.selected instanceof Person && this.toggleSteer(this.selected),
+      follow: () => this.toggleFollow(),
+    };
+    this.actions = new Actions(act.home, act.out, act.steer, act.follow);
+    this.radial = new Radial({ ...act, info: () => this.side.show('people') } satisfies Record<RadialAct, () => void>);
 
     this.seats = new Seats(
       this.office.desks.length,
@@ -235,10 +253,14 @@ export class Game {
       this.xmas.set(state.xmas);
     });
 
-    this.ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.5, 0.65, 32).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: getComputedStyle(document.documentElement).getPropertyValue('--color-ink').trim() }),
-    );
+    // dashed ring on the floor under the selected person
+    const ringMaterial = new THREE.MeshBasicMaterial({ color: getComputedStyle(document.documentElement).getPropertyValue('--color-ink').trim() });
+    this.ring = new THREE.Group();
+    const DASHES = 14;
+    for (let i = 0; i < DASHES; i++) {
+      const arc = new THREE.RingGeometry(0.52, 0.62, 6, 1, (i / DASHES) * Math.PI * 2, (Math.PI * 2) / DASHES / 1.7).rotateX(-Math.PI / 2);
+      this.ring.add(new THREE.Mesh(arc, ringMaterial));
+    }
     this.ring.position.y = 0.02;
     this.ring.visible = false;
     this.scene.add(this.ring);
@@ -246,6 +268,11 @@ export class Game {
     this.restoreSeats();
     this.spawn();
     new DevPanel();
+    this.palette = new Palette(() => this.paletteEntries());
+    this.chrome = new Chrome(this.side, this.timeline, this.palette, () => this.views.leaveWalk());
+    this.chrome.setMode(this.views.mode);
+    this.side.onChange((tab) => this.onPanel(tab));
+    this.side.onLayout(() => this.resize());
     this.registerDevEvents();
     this.pets = this.walkers.filter((w): w is Dog => w instanceof Dog);
     this.presence = new Presence(this.people, this.tod, this.weather);
@@ -520,28 +547,27 @@ export class Game {
       this.followed = this.selected && !this.selected.away ? this.selected : null; // selecting starts follow mode right away
     });
     window.addEventListener('keydown', (e) => {
-      if (e.target instanceof HTMLElement && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+      if (isTyping(e.target)) return;
       this.easter.key(e);
       if (this.day && e.code === 'Space') e.preventDefault(); // held to play in the day tasks, must not scroll or press a button
+      if (e.code === 'Escape') return this.escape();
       if (this.views.mode !== 'walk' && this.views.mode !== 'third' && this.editor.key(e)) {
-        if (this.editor.active) this.selected = null;
+        if (this.editor.active) {
+          this.selected = null;
+          this.editorNeedsPlan();
+        }
         return;
       }
       this.keys.add(e.code);
       this.shift = e.shiftKey;
       if (this.steered && STEER_KEYS.includes(e.code)) e.preventDefault();
-      if (e.key.toLowerCase() === 'c' && this.selected instanceof Person) this.toggleSteer(this.selected);
-      if (e.key.toLowerCase() === 'e' && this.views.mode === 'walk') this.interact();
-      if (e.key.toLowerCase() === 'f') this.toggleFollow();
-      if (e.key.toLowerCase() === 'n') this.overlay.toggleNames();
-      if (e.key.toLowerCase() === 'r' && (this.views.mode === 'iso' || this.views.mode === 'orbit')) this.roof.visible = this.roofWanted = !this.roofWanted;
-      if (e.key.toLowerCase() === 'h' && this.selected instanceof Person) this.presence.toggleHome(this.selected, this.nav);
-      if (e.key === 'Escape') {
-        if (this.day) this.endDay();
-        this.selected = null;
-        this.followed = null;
-        this.release(this.steered);
-      }
+      const letter = e.metaKey || e.ctrlKey ? '' : e.key.toLowerCase();
+      if (letter === 'c' && this.selected instanceof Person) this.toggleSteer(this.selected);
+      if (letter === 'e' && this.views.mode === 'walk') this.interact();
+      if (letter === 'f') this.toggleFollow();
+      if (letter === 'n' && chromeVisibility(this.chrome.effectiveMode).dock) this.overlay.toggleNames();
+      if (letter === 'r' && (this.views.mode === 'iso' || this.views.mode === 'orbit')) this.roof.visible = this.roofWanted = !this.roofWanted;
+      if (letter === 'h' && this.selected instanceof Person) this.presence.toggleHome(this.selected, this.nav);
     });
     window.addEventListener('keyup', (e) => {
       this.keys.delete(e.code);
@@ -557,11 +583,142 @@ export class Game {
     }
   }
 
+  private dotMaterials: { plain: THREE.MeshBasicMaterial; picked: THREE.MeshBasicMaterial } | null = null;
+
+  /** Plan view draws every person as a dot (the selected one in mint). */
+  private dotsUpdate(): void {
+    const on = this.views.mode === 'plan';
+    if (!on && !this.dots.size) return;
+    if (!this.dotMaterials) {
+      const css = getComputedStyle(document.documentElement);
+      const mat = (variable: string) => new THREE.MeshBasicMaterial({ color: css.getPropertyValue(variable).trim(), depthTest: false });
+      this.dotMaterials = { plain: mat('--color-ink'), picked: mat('--color-accent') };
+    }
+    const geometry = (this.dotGeometry ??= new THREE.CircleGeometry(0.4, 20).rotateX(-Math.PI / 2));
+    for (const p of this.people) {
+      let dot = this.dots.get(p);
+      if (!dot) {
+        if (!on) continue;
+        dot = new THREE.Mesh(geometry, this.dotMaterials.plain);
+        dot.renderOrder = 900;
+        this.scene.add(dot);
+        this.dots.set(p, dot);
+      }
+      dot.visible = on && !p.away;
+      if (!dot.visible) continue;
+      dot.position.set(p.root.position.x, 2.7, p.root.position.z);
+      const mat = p === this.selected ? this.dotMaterials.picked : this.dotMaterials.plain;
+      if (dot.material !== mat) dot.material = mat;
+    }
+  }
+  private dotGeometry: THREE.CircleGeometry | null = null;
+
+  /** Esc closes one layer: palette, selection, timeline, side panel, then Rundgang / the day (see `escLayer`). */
+  private escape(): void {
+    const selection = !!(this.selected || this.followed || this.steered);
+    const layer = this.chrome.escLayer(selection);
+    if (layer === 'palette' || layer === 'timeline') return this.chrome.closeLayer(layer);
+    if (layer === 'selection') {
+      this.selected = this.followed = null;
+      return this.release(this.steered);
+    }
+    // the editor drops its selected item before the panel closes
+    if (this.editor.active && this.editor.hasSelection && this.views.mode !== 'walk' && this.views.mode !== 'third') return this.editor.deselect();
+    if (layer === 'panel') return this.chrome.closeLayer(layer);
+    if (layer !== 'mode') return;
+    if (this.day) {
+      this.endDay();
+      this.selected = this.followed = null;
+      this.release(this.steered);
+    } else this.views.leaveWalk();
+  }
+
+  /** The editor is open: its tool is the plan view. */
+  private editorNeedsPlan(): void {
+    const mode = this.views.mode;
+    if (this.editor.active && mode !== 'plan' && mode !== 'walk' && mode !== 'third') this.views.setMode('plan');
+  }
+
+  /** The side panel switched tabs: the Editor tab and the room editor go together. */
+  private onPanel(tab: PanelTab | null): void {
+    if (tab === 'editor') {
+      if (!this.editor.active && this.views.mode !== 'walk' && this.views.mode !== 'third') this.editor.setActive(true);
+      this.editorNeedsPlan();
+    } else if (this.editor.active) this.editor.setActive(false);
+  }
+
+  /** Selects somebody (and follows them), as a click on them does. */
+  private selectWalker(w: Walker): void {
+    if (w.away) return;
+    this.editor.setActive(false);
+    this.selected = this.followed = w;
+    if (w instanceof Person) this.easter.click(w);
+  }
+
+  /** Home / Raus on the selected person. */
+  private sendSelected(kind: 'home' | 'errand'): void {
+    const p = this.selected;
+    if (!(p instanceof Person)) return;
+    this.release(p);
+    if (p.presence === 'leaving') this.presence.callBack(p);
+    else this.presence.send(p, kind, this.nav);
+  }
+
+  /** What a person is doing, in words and as a dot colour for the roster. */
+  private officeEntry(p: Person): OfficeEntry {
+    const c = strings.chrome.people;
+    const kind = p.inMeeting ? 'meeting' : p.coffeeJob ? 'coffee' : p.talk ? 'talk' : p.working ? 'desk' : 'walk';
+    const status = { meeting: c.meeting, coffee: 'Kaffee', talk: c.talking, desk: c.atDesk, walk: c.walking }[kind];
+    return { id: p.id, name: p.member.name, portrait: p.member.portrait, kind, status };
+  }
+
+  /** Everything the command palette can run. Built when it opens, so the people carry their current status. */
+  private paletteEntries(): PaletteEntry[] {
+    const p = strings.chrome.palette;
+    const g = p.group;
+    const modes: Array<[ViewMode, string, string]> = [['iso', 'Iso', '1'], ['orbit', 'Orbit', '2'], ['plan', 'Grundriss', '3'], ['walk', 'Rundgang', '4']];
+    const click = (id: string) => () => document.getElementById(id)?.click();
+    const entries: PaletteEntry[] = [
+      ...modes.map(([mode, label, key]) => ({ id: `view-${mode}`, group: g.view, label, key, run: () => this.views.setMode(mode) })),
+      { id: 'day', group: g.view, label: p.day, run: click('open-day') },
+      { id: 'names', group: g.show, label: this.overlay.namesVisible ? p.namesOff : p.namesOn, key: 'N', run: () => this.overlay.toggleNames() },
+      { id: 'timeline', group: g.show, label: this.timeline.wantsOpen ? p.timelineClose : p.timelineOpen, run: () => this.timeline.setOpen(!this.timeline.wantsOpen) },
+      { id: 'xmas', group: g.show, label: p.xmas, detail: this.settings.xmasOn ? 'an' : 'aus', run: () => this.settings.setXmas(!this.settings.xmasOn) },
+      { id: 'weather-rain', group: g.show, label: p.rain, run: () => this.settings.setWeather('rain') },
+      { id: 'weather-sun', group: g.show, label: p.dry, run: () => this.settings.setWeather('sun') },
+      { id: 'weather-auto', group: g.show, label: p.auto, run: () => this.settings.setWeather('auto') },
+      { id: 'panel-people', group: g.panel, label: strings.chrome.tab.people, run: () => this.side.show('people') },
+      { id: 'panel-seats', group: g.panel, label: strings.chrome.tab.seats, run: () => this.side.show('seats') },
+      { id: 'panel-env', group: g.panel, label: 'Umgebung', run: () => this.side.show('env') },
+      { id: 'panel-editor', group: g.panel, label: 'Raum bearbeiten', key: 'E', run: () => this.side.show('editor') },
+      { id: 'panel-dev', group: g.panel, label: 'Dev-Events', key: '`', run: () => this.side.show('dev') },
+      { id: 'picker', group: g.panel, label: p.pickerOpen, run: click('open-picker') },
+      { id: 'help', group: g.panel, label: p.help, run: () => this.chrome.setHelp(true) },
+      ...devEvents.list().map((ev) => ({ id: `event-${ev.id}`, group: g.events, label: ev.label, detail: ev.group, run: () => void devEvents.trigger(ev.id) })),
+      ...this.people.map((person) => ({
+        id: `person-${person.id}`,
+        group: g.people,
+        label: person.member.name,
+        detail: person.away ? awayStatus(person.awayKind === 'home' ? 'home' : 'errand', person.presence === 'leaving' ? 'leave' : person.presence === 'returning' ? 'return' : 'out', person.awayLeft) : this.officeEntry(person).status,
+        run: () => (person.away ? this.side.show('people') : this.selectWalker(person)),
+      })),
+    ];
+    return entries;
+  }
+
+  /** The canvas fills the window; the camera only sees the scene area (the window minus the side panel). */
   private resize(): void {
     const w = window.innerWidth;
     const h = window.innerHeight;
+    const inset = this.side.inset();
+    this.viewW = Math.max(1, w - inset.right);
+    this.viewH = Math.max(1, h - inset.bottom);
+    // too narrow for the hint line beside the dock: it moves up under the title
+    document.body.classList.toggle('is-scene-tight', this.viewW < 1340);
+    this.stage.style.width = `${this.viewW}px`;
+    this.stage.style.height = `${this.viewH}px`;
     this.renderer.setSize(w, h);
-    this.views.resize(w, h);
+    this.views.resize(this.viewW, this.viewH);
   }
 
   private frame(now: number): void {
@@ -588,7 +745,7 @@ export class Game {
     this.deskLights.update(dt);
     this.coatRacks.update();
     this.office.updateScreens(dt);
-    this.timeControl.sync();
+    this.timeline.sync();
     this.views.update(dt);
     this.updateHomes(dt);
     this.updateDoor(dt);
@@ -974,6 +1131,7 @@ export class Game {
     this.selected = this.followed = null;
     const tasks = (DAY_STORIES[id] ?? []).map((make) => make());
     const needs = [...new Set(tasks.flatMap((t) => t.needs ?? []))].flatMap((nid) => this.people.find((p) => p.id === nid) ?? []);
+    this.chrome.setDay(true);
     this.day = { person, state: 'waiting', needs, walking: true, time: 0, prevMode: this.views.mode === 'third' ? 'orbit' : this.views.mode, tasks, current: 0, splits: [] };
     (document.activeElement as HTMLElement | null)?.blur?.(); // space must not press a button
     this.dayHud.show(person.member.name);
@@ -992,6 +1150,7 @@ export class Game {
     const d = this.day;
     if (!d) return;
     this.day = null;
+    this.chrome.setDay(false);
     d.tasks.forEach((t) => t.dispose());
     this.release(d.person);
     this.dayHud.hide();
@@ -1004,6 +1163,8 @@ export class Game {
     if (!d) return;
     const p = d.person;
     if (d.state === 'waiting') {
+      // somebody who set off for lunch or an errand in the meantime is called back too
+      for (const q of [p, ...d.needs]) if (q.presence === 'leaving' || q.presence === 'out') this.presence.callBack(q);
       if (!p.inOffice || p.held || d.needs.some((q) => !q.inOffice || q.held)) return;
       if (!this.beginTask(d)) return;
       d.state = 'playing';
@@ -1110,11 +1271,11 @@ export class Game {
     if (!best) return this.dayHud.setPointer(null);
     const v = new THREE.Vector3(best.x, 0.8, best.z).project(this.views.camera);
     const behind = v.z > 1;
-    let x = (v.x * 0.5 + 0.5) * window.innerWidth;
-    let y = (-v.y * 0.5 + 0.5) * window.innerHeight;
+    let x = (v.x * 0.5 + 0.5) * this.viewW;
+    let y = (-v.y * 0.5 + 0.5) * this.viewH;
     if (behind) {
-      x = window.innerWidth - x;
-      y = window.innerHeight - y;
+      x = this.viewW - x;
+      y = this.viewH - y;
     }
     this.dayHud.setPointer({ x, y }, Math.round(bestD));
   }
@@ -1272,7 +1433,15 @@ export class Game {
     for (const w of this.walkers) if (!w.away || w.fx > 0) this.pose(w, alpha);
     this.updateHover();
     this.updateOverlay();
-    this.renderer.render(this.scene, this.views.camera);
+    const r = this.renderer;
+    const H = window.innerHeight;
+    // the camera draws into the scene area only; the rest of the canvas belongs to the feeds behind the side panel
+    r.setViewport(0, H - this.viewH, this.viewW, this.viewH);
+    r.setScissor(0, H - this.viewH, this.viewW, this.viewH);
+    r.setScissorTest(true);
+    r.render(this.scene, this.views.camera);
+    r.setScissorTest(false);
+    r.setViewport(0, 0, window.innerWidth, H);
   }
 
   /** Interpolated transform + procedural walk cycle. */
@@ -1757,7 +1926,7 @@ export class Game {
   }
 
   private toNdc(e: PointerEvent, out = new THREE.Vector2()): THREE.Vector2 {
-    return out.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+    return out.set((e.clientX / this.viewW) * 2 - 1, -(e.clientY / this.viewH) * 2 + 1);
   }
 
   /** Point on the floor plane (y = 0) under the pointer. */
@@ -1775,7 +1944,7 @@ export class Game {
   private projectPoint(x: number, y: number, z: number): { x: number; y: number } {
     const v = new THREE.Vector3(x, y, z).project(this.views.camera);
     if (v.z > 1 || v.z < -1) return { x: -9999, y: -9999 };
-    return { x: (v.x * 0.5 + 0.5) * window.innerWidth, y: (-v.y * 0.5 + 0.5) * window.innerHeight };
+    return { x: (v.x * 0.5 + 0.5) * this.viewW, y: (-v.y * 0.5 + 0.5) * this.viewH };
   }
 
   private seatOwners(): Map<number, string> {
@@ -1785,7 +1954,7 @@ export class Game {
   private project(w: Walker, extra = 0.25): { x: number; y: number } {
     const v = new THREE.Vector3(w.root.position.x, w.headHeight + extra, w.root.position.z).project(this.views.camera);
     if (v.z > 1 || v.z < -1) return { x: -9999, y: -9999 }; // behind the camera
-    return { x: (v.x * 0.5 + 0.5) * window.innerWidth, y: (-v.y * 0.5 + 0.5) * window.innerHeight };
+    return { x: (v.x * 0.5 + 0.5) * this.viewW, y: (-v.y * 0.5 + 0.5) * this.viewH };
   }
 
   private updateOverlay(): void {
@@ -1798,12 +1967,30 @@ export class Game {
       this.ring.visible = false;
     }
     if (this.selected?.away) this.selected = null;
-    this.actions.show(
-      this.selected instanceof Person && this.selected.inOffice ? this.selected.member.name : null,
-      this.presence.homeFull,
-      !!this.selected && this.selected === this.steered,
-      !!this.selected && this.selected === this.followed,
-    );
+    const sel = this.selected;
+    // no free home office: Home is disabled, unless the person is already on the way and Home takes them back
+    const homeFull = this.presence.homeFull && !(this.selected instanceof Person && this.selected.presence === 'leaving');
+    const steering = !!sel && sel === this.steered;
+    const following = !!sel && sel === this.followed;
+    this.chrome.setSelection(!!sel);
+    this.roster.setSelected(sel instanceof Person ? sel.id : null);
+    // somebody on the way to the door is still selectable: Home / Raus are pressed and take it back
+    const here = sel instanceof Person && (sel.inOffice || sel.presence === 'leaving');
+    if (sel instanceof Person && here) {
+      this.actions.show({ name: sel.member.name, role: sel.member.role, portrait: sel.member.portrait, status: this.officeEntry(sel).status, person: true, homeFull, steering, following });
+    } else if (sel instanceof Dog) {
+      this.actions.show({ name: sel.name, role: sel.label, portrait: sel.portrait, status: strings.chrome.people.pet, person: false, homeFull, steering: false, following });
+    } else this.actions.show(null);
+    // the radial menu hangs on the selected person and follows them; not in walk or day mode
+    if (sel && chromeVisibility(this.chrome.effectiveMode).radial && (!(sel instanceof Person) || here)) {
+      const away = sel instanceof Person ? sel.awayKind : null;
+      const leaving = sel instanceof Person && sel.presence === 'leaving';
+      this.radial.update(
+        { person: sel instanceof Person, follow: following, steer: steering, home: leaving && away === 'home', out: leaving && away === 'errand', homeFull, homeTitle: strings.presence.command.homeFull },
+        ...(Object.values(this.project(sel, sel instanceof Person ? -0.6 : -0.12)) as [number, number]),
+      );
+    } else this.radial.update(null);
+    this.dotsUpdate();
     if (active instanceof Person) {
       this.overlay.showTooltip(active.member.name, active.member.role, active.member.portrait, this.project(active));
     } else if (active instanceof Dog) {
@@ -1851,7 +2038,8 @@ export class Game {
     this.rosterTimer -= 1 / 60;
     if (this.rosterTimer <= 0) {
       this.rosterTimer = 0.25;
-      this.roster.update(
+      this.roster.updateOffice(this.people.filter((p) => p.inOffice && !p.away).map((p) => this.officeEntry(p)));
+      this.roster.updateAway(
         this.presence.away
           .map((p) => ({
             id: p.id,
@@ -1909,6 +2097,7 @@ export class Game {
   private renderFeeds(): void {
     const tiles = this.feeds.tiles();
     this.overlay.maskOut(tiles.map((t) => t.clip));
+    this.side.maskOut(tiles.map((t) => t.clip));
     if (!tiles.length) return;
     const r = this.renderer;
     const h = window.innerHeight;
