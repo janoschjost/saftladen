@@ -2108,35 +2108,6 @@
         will-change: transform;
     }
 
-    .m-bubble {
-        position: absolute;
-        left: 0;
-        top: 0;
-        min-width: 1.75rem;
-        padding: 0.125rem 0.5rem;
-        border-radius: 1rem;
-        background: white;
-        color: var(--color-ink);
-        font-weight: 700;
-        text-align: center;
-        will-change: transform;
-
-        &[hidden] {
-            display: none;
-        }
-
-        &::after {
-            content: '';
-            position: absolute;
-            left: 50%;
-            bottom: -0.3125rem;
-            margin-left: -0.3125rem;
-            border: 0.3125rem solid transparent;
-            border-bottom: 0;
-            border-top-color: white;
-        }
-    }
-
     .m-tooltip {
         position: fixed;
         left: 0;

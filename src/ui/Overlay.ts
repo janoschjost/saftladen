@@ -8,7 +8,6 @@ export class Overlay {
   private meta = document.getElementById('hud-meta') as HTMLElement;
   private metaKey = '';
   private labelEls = new Map<string, HTMLElement>();
-  private bubbleEls = new Map<string, HTMLElement>();
   private reticle = document.getElementById('reticle') as HTMLElement;
   private reticlePrompt = document.getElementById('reticle-prompt') as HTMLElement;
   private labelClip = '';
@@ -53,35 +52,9 @@ export class Overlay {
     }
   }
 
-  /** Speech bubbles above the people who are currently speaking. */
-  setBubbles(items: Array<{ id: string; text: string; x: number; y: number }>): void {
-    const active = new Set<string>();
-    for (const it of items) {
-      active.add(it.id);
-      let el = this.bubbleEls.get(it.id);
-      if (!el) {
-        el = document.createElement('span');
-        el.className = 'm-bubble';
-        this.labels.appendChild(el);
-        this.bubbleEls.set(it.id, el);
-      }
-      const fresh = el.hidden || el.textContent !== it.text;
-      if (el.textContent !== it.text) el.textContent = it.text;
-      el.hidden = false;
-      if (fresh) {
-        // pop in again for every new line
-        el.classList.remove('is-pop');
-        void el.offsetWidth;
-        el.classList.add('is-pop');
-      }
-      el.style.transform = `translate(${Math.round(it.x - el.offsetWidth / 2)}px, ${Math.round(it.y - el.offsetHeight - 6)}px)`;
-    }
-    for (const [id, el] of this.bubbleEls) if (!active.has(id)) el.hidden = true;
-  }
-
   /**
    * Cuts holes into the label layer where the live feeds are: their tiles are see-through (the scenes are drawn
-   * into the canvas behind), so names and bubbles of the office would otherwise show on top of the video.
+   * into the canvas behind), so the name labels of the office would otherwise show on top of the video.
    */
   maskOut(rects: DOMRect[]): void {
     const holes = rects.map((r) => `M${Math.round(r.left)} ${Math.round(r.top)}h${Math.round(r.width)}v${Math.round(r.height)}h${-Math.round(r.width)}Z`).join('');
