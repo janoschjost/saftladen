@@ -1,6 +1,9 @@
 import { awayStatus, strings, type AwayPhase } from '../i18n/strings';
 import { makeCollapsible } from './collapsible';
 
+/** On a phone the dock starts folded (an open feed grid would cover the office); a remembered state wins. */
+const PHONE_FOLDED = matchMedia('(max-width: 840px)').matches;
+
 export interface AwayEntry {
   id: string;
   name: string;
@@ -32,7 +35,7 @@ export class Roster {
     title.prepend(`${t.panel.title} `);
     all.textContent = t.panel.callAllBack;
     all.addEventListener('click', onAll);
-    makeCollapsible(this.root, title, 'saftladen.away.collapsed', 'dock');
+    makeCollapsible(this.root, title, 'saftladen.away.collapsed', 'dock', PHONE_FOLDED);
   }
 
   update(entries: AwayEntry[]): void {

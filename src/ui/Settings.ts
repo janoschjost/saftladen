@@ -1,5 +1,6 @@
 import type { WeatherMode } from '../game/Weather';
 import type { ViewMode } from '../render/Views';
+import { Popover } from './Popover';
 import { parseSettings, serializeSettings, SETTINGS_KEY, type SettingsState } from './settingsState';
 
 export type { SettingsState } from './settingsState';
@@ -14,13 +15,15 @@ export interface SettingsHooks {
 }
 
 /**
- * The gear button (top right, key `,`) and its popover: view, names, camera follow, weather, time, Christmas, labels
- * and the links to the other panels. Esc, a click outside or the close button closes it. Values are remembered in
- * localStorage (`saftladen.settings`); under 840 px the popover is a bottom sheet (CSS).
+ * The gear button (top right, key `,`) with its popover (view, names, camera follow, labels, links to the other
+ * panels) and the sun button next to it with the environment popover (weather, time, Christmas). Esc, a click outside
+ * or the close button closes them; only one is open at a time. Values are remembered in localStorage
+ * (`saftladen.settings`); under 840 px the popovers are bottom sheets (CSS).
  */
 export class Settings {
+  private pop: Popover;
+  private env: Popover;
   private root = document.getElementById('settings') as HTMLElement;
-  private toggle = document.getElementById('open-settings') as HTMLButtonElement;
   private tables = document.getElementById('setting-tables') as HTMLInputElement;
   private seats = document.getElementById('setting-seats') as HTMLInputElement;
   private rooms = document.getElementById('setting-rooms') as HTMLInputElement;
@@ -46,8 +49,15 @@ export class Settings {
     this.follow.checked = this.state.follow;
     this.setWeatherValue(this.state.weather);
 
-    this.toggle.addEventListener('click', () => this.setOpen(!this.isOpen));
-    document.getElementById('settings-close')!.addEventListener('click', () => this.setOpen(false, true));
+    this.pop = new Popover(this.root, document.getElementById('open-settings') as HTMLButtonElement, {
+      close: document.getElementById('settings-close'),
+      key: ',',
+      onOpen: () => this.env.setOpen(false),
+    });
+    this.env = new Popover(document.getElementById('env') as HTMLElement, document.getElementById('open-env') as HTMLButtonElement, {
+      close: document.getElementById('env-close'),
+      onOpen: () => this.pop.setOpen(false),
+    });
     for (const input of [this.tables, this.seats, this.rooms, this.xmas, this.follow, ...this.weather]) {
       input.addEventListener('change', () => this.apply());
     }
@@ -57,33 +67,12 @@ export class Settings {
     this.root.addEventListener('click', (e) => {
       if ((e.target as Element).closest('.m-settings__link')) this.setOpen(false);
     });
-    // a press anywhere outside closes it (the gear button toggles by itself)
-    window.addEventListener(
-      'pointerdown',
-      (e) => {
-        if (!this.isOpen) return;
-        const t = e.target as Node;
-        if (this.root.contains(t) || this.toggle.contains(t)) return;
-        this.setOpen(false);
-      },
-      { capture: true, passive: true },
-    );
-    // capture: Esc (or `,` again) closes the popover first and goes no further (no deselect, no end of the day)
-    window.addEventListener(
-      'keydown',
-      (e) => {
-        if ((e.key !== 'Escape' && e.key !== ',') || !this.isOpen) return;
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        this.setOpen(false, true);
-      },
-      true,
-    );
     this.apply();
   }
 
+  /** The settings popover is open (the environment one has its own button). */
   get isOpen(): boolean {
-    return !this.root.hidden;
+    return this.pop.isOpen;
   }
 
   /** "Kamera folgt bei Aktionen" */
@@ -91,13 +80,10 @@ export class Settings {
     return this.state.follow;
   }
 
-  /** `refocus`: the keyboard focus goes back to the gear (closed with Esc or the close button). */
+  /** Opens the settings popover, or closes both popovers. `refocus`: the focus goes back to the button. */
   setOpen(open: boolean, refocus = false): void {
-    if (open === this.isOpen) return;
-    this.root.hidden = !open;
-    this.toggle.setAttribute('aria-expanded', String(open));
-    if (open) (this.root.querySelector('input:checked, input, button') as HTMLElement | null)?.focus({ preventScroll: true });
-    else if (refocus || this.root.contains(document.activeElement)) this.toggle.focus({ preventScroll: true });
+    this.pop.setOpen(open, refocus);
+    if (!open) this.env.setOpen(false, refocus);
   }
 
   /** Marks the current view (keys 1-4 change it too); the day-mode camera has no segment. */

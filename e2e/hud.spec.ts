@@ -7,17 +7,21 @@ test('hud.minimal + hud.modes: only title, gear, Aktionen and the key line; Rund
   const errors = await openGame(page);
   await expect(page.locator('.m-hud-title')).toBeVisible();
   await expect(page.locator('#help')).toBeVisible();
-  for (const id of ['#open-settings', '#open-actions']) {
+  for (const id of ['#open-env', '#open-settings', '#open-actions']) {
     const box = await page.locator(id).boundingBox();
     expect(box!.height).toBeGreaterThanOrEqual(44);
   }
-  for (const id of ['#settings', '#action-sheet', '#people', '#seats', '#dev', '#editor', '#now', '#walk-exit']) await expect(page.locator(id)).toBeHidden();
+  for (const id of ['#settings', '#env', '#action-sheet', '#seats', '#dev', '#editor', '#now', '#walk-exit']) await expect(page.locator(id)).toBeHidden();
+  // hud.people: the Leute dock is always there, not behind a switch
+  await expect(page.locator('#people')).toBeVisible();
+  await expect(page.locator('#open-people')).toHaveCount(0);
   // the old toolbar and view bar are gone
   await expect(page.locator('.m-toolbar, .m-viewbar, .m-tool, #toggle-settings, #toggle-names')).toHaveCount(0);
 
   // Rundgang: no gear, no Aktionen (A does nothing), a button back
   await page.keyboard.press('4');
   await expect(page.locator('#open-settings')).toBeHidden();
+  await expect(page.locator('#open-env')).toBeHidden();
   await expect(page.locator('#open-actions')).toBeHidden();
   await page.keyboard.press('a');
   await expect(page.locator('#action-sheet')).toBeHidden();
@@ -62,9 +66,38 @@ test.describe('hud.settings', () => {
     await page.keyboard.press('2');
     await gear.click();
     await expect(page.locator('#settings input[value="orbit"]')).toBeChecked();
-    // weather, names, follow; remembered in saftladen.settings
-    await page.locator('#settings label:has(input[value="rain"])').click();
+    // the view segments show their key numbers
+    await expect(page.locator('#settings .m-settings__segment--view .m-settings__key')).toHaveText(['1', '2', '3', '4']);
+
+    // the sun button next to the gear: weather, time of day, Zeit läuft, Weihnachten; one popover at a time
+    const sun = page.locator('#open-env');
+    const env = page.locator('#env');
+    await sun.click();
+    await expect(env).toBeVisible();
+    await expect(pop).toBeHidden();
+    const s = (await sun.boundingBox())!;
+    const e = (await env.boundingBox())!;
+    expect(e.y).toBeGreaterThan(s.y + s.height - 1);
+    await env.locator('label:has(input[value="rain"])').click();
     expect(await read(page, (g) => g.weather.mode)).toBe('rain');
+    const slider = env.locator('#time-slider');
+    await slider.evaluate((el: HTMLInputElement) => {
+      el.value = '500';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(await read(page, (g) => Math.round(g.tod.cycle * 1000))).toBe(500);
+    await expect(env.locator('#time-ticks li')).toHaveText(['0', '6', '12', '18', '24']);
+    await expect(env.locator('#time-clock')).not.toHaveText('11:00');
+    await page.keyboard.press('Escape');
+    await expect(env).toBeHidden();
+    await gear.click();
+    await sun.click();
+    await expect(pop).toBeHidden();
+    await expect(env).toBeVisible();
+    await page.locator('#env-close').click();
+    await expect(env).toBeHidden();
+    await gear.click();
+    // names, follow; remembered in saftladen.settings
     await page.locator('#setting-names').setChecked(true);
     expect(await read(page, (g) => g.overlay.namesVisible)).toBe(true);
     await page.locator('#setting-follow').setChecked(false);
@@ -73,7 +106,6 @@ test.describe('hud.settings', () => {
 
     // the links open the panels that stay, the popover makes room
     for (const [link, panel] of [
-      ['#open-people', '#people'],
       ['#open-seats', '#seats'],
       ['#open-dev', '#dev'],
       ['#open-editor', '#editor'],
@@ -185,6 +217,22 @@ test('actions.camera + actions.handback: Drucken flies to Orbit and follows the 
   await until(page, (g) => !g.views.flying && Math.abs(g.views.orbitShot.dist - g.views.overviewShot().dist) < 0.5, undefined, 60_000);
 });
 
+test('place.meeting: people called out of their chair stand up and walk to the room, nobody glides sitting', async ({ page }) => {
+  test.setTimeout(120_000);
+  await openGame(page);
+  // watch every frame-ish: somebody on the way to the room (approach) must not move with the legs folded
+  await page.evaluate(() => {
+    const w = window as unknown as { __game: any; __gliding: string[] };
+    w.__gliding = [];
+    setInterval(() => {
+      for (const p of w.__game.people) if (p.meetPhase === 'approach' && p.moving > 0.5 && p.sit > 0.3) w.__gliding.push(`${p.id} sit=${p.sit.toFixed(2)}`);
+    }, 50);
+  });
+  await read(page, (g) => g.startAction('meeting'));
+  await until(page, (g) => g.people.filter((p: any) => p.meetPhase === 'sit').length >= 2, undefined, 90_000);
+  expect(await page.evaluate(() => (window as unknown as { __gliding: string[] }).__gliding)).toEqual([]);
+});
+
 test('actions.fail: an action that cannot run says so and leaves the camera alone', async ({ page }) => {
   // the pod is already taken
   await openGame(page, 'iso', undefined, 'event=pod');
@@ -207,10 +255,18 @@ test.describe('actions.touch', () => {
     await page.locator('#open-settings').click();
     const pop = (await page.locator('#settings').boundingBox())!;
     expect([Math.round(pop.y + pop.height), Math.round(pop.width)]).toEqual([844, 390]); // docked to the bottom, full width
-    for (const sel of ['#settings-close', '#settings label:has(input[value="iso"]) span', '#open-people']) {
+    for (const sel of ['#settings-close', '#settings label:has(input[value="iso"]) span', '#open-seats']) {
       expect((await page.locator(sel).boundingBox())!.height).toBeGreaterThanOrEqual(44);
     }
     await page.locator('#settings-close').click();
+    // the environment popover is a bottom sheet too, with a slider big enough for a thumb
+    await page.locator('#open-env').click();
+    const env = (await page.locator('#env').boundingBox())!;
+    expect([Math.round(env.y + env.height), Math.round(env.width)]).toEqual([844, 390]);
+    expect((await page.locator('#time-slider').boundingBox())!.height).toBeGreaterThanOrEqual(32);
+    await page.locator('#env-close').click();
+    // the dock (Leute) starts folded, it would cover the office
+    await expect(page.locator('#feeds')).toHaveClass(/is-collapsed/);
 
     await page.locator('#open-actions').click();
     await expect(page.locator('#action-sheet')).toHaveClass(/is-open/);

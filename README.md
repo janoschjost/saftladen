@@ -43,6 +43,6 @@ CI runs build and Vitest on every push. The Playwright job costs about 5 Actions
 - `src/data/homeAssignments.ts` – who owns which home office room (set per person in the character view, saved in localStorage; Marco has his own special room)
 - `src/render/homeOffice.ts` – 8 home office rooms seen through a webcam; drawn into the main canvas behind the feed tiles (`ui/Feeds.ts`); `ui/Roster.ts` lists who is not in the office
 - `src/ui/Overlay.ts` – tooltip (hover/click) and name labels (N)
-- HUD: title, gear (`src/ui/Settings.ts`, popover with view, weather, time, labels and links to the other panels; `,`), Aktionen (`src/ui/ActionSheet.ts`, `A`; cards from `src/data/actions.ts`, each a dev event plus a camera shot of its place), the "Gerade passiert" chip (`src/ui/NowChip.ts`); camera flights in `src/render/cameraFly.ts`
+- HUD: title, sun and gear (`src/ui/Settings.ts` with `Popover.ts`: the sun popover has weather and the time slider, the gear popover view, labels and links to the other panels; `,`), the always-visible Leute dock (`src/ui/People.ts`), Aktionen (`src/ui/ActionSheet.ts`, `A`; cards from `src/data/actions.ts`, each a dev event plus a camera shot of its place), the "Gerade passiert" chip (`src/ui/NowChip.ts`); camera flights in `src/render/cameraFly.ts`
 
 New team members: run `fetch-team`, then add a look for the new id in `src/data/team.ts`.

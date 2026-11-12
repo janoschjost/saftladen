@@ -1,5 +1,8 @@
 import { makeCollapsible } from './collapsible';
 
+/** On a phone the dock starts folded (an open feed grid would cover the office); a remembered state wins. */
+const PHONE_FOLDED = matchMedia('(max-width: 840px)').matches;
+
 export interface FeedEntry {
   id: string;
   name: string;
@@ -26,7 +29,7 @@ export class Feeds {
   private tilesEls = new Map<string, { el: HTMLElement; variant: number; activity: HTMLElement }>();
 
   constructor() {
-    makeCollapsible(this.root, this.root.querySelector('.m-feeds__title') as HTMLElement, 'saftladen.feeds.collapsed', 'dock');
+    makeCollapsible(this.root, this.root.querySelector('.m-feeds__title') as HTMLElement, 'saftladen.feeds.collapsed', 'dock', PHONE_FOLDED);
   }
 
   sync(entries: FeedEntry[]): void {

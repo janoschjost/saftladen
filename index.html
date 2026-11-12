@@ -233,7 +233,10 @@
         <h1 class="m-hud-title__name"><svg class="m-hud-title__mark" viewBox="0 0 31 25" width="31" height="25" fill="none" aria-hidden="true"><path class="m-hud-title__mark-two" d="M16.9799 13.9L19.5099 11.79C20.0099 11.39 20.4599 10.87 20.8299 10.26C21.1399 9.74005 21.2999 9.08005 21.2999 8.30005C21.2999 5.87005 19.6099 4.30005 16.9999 4.30005C14.2699 4.30005 12.4999 5.87005 12.4999 8.30005V8.76005L15.9999 9.04005V8.50005C15.9999 8.37005 16.0299 8.24005 16.0899 8.01005C16.1099 7.94005 16.1699 7.83005 16.2499 7.75005C16.2999 7.70005 16.4999 7.60005 16.6199 7.54005C16.7099 7.50005 16.8199 7.49005 17.0199 7.49005C17.1099 7.49005 17.1599 7.49005 17.2899 7.55005C17.5699 7.67005 17.6399 7.75005 17.6399 7.75005C17.7199 7.84005 17.7799 7.89005 17.8199 7.97005C17.8599 8.09005 17.8899 8.21005 17.8899 8.30005C17.8899 8.74005 17.4599 9.12005 16.9799 9.51005L12.1899 13.78V17.1H21.4899V13.9H16.9799Z"/><path fill="currentColor" d="M27.3 0H7C6 0 5 0.4 4.3 1.1C3.6 1.7 3.2 2.7 3.2 3.6V17.1L0 25L8.1 21.8H27.3C28.3 21.8 29.2 21.4 29.9 20.7C30.6 20 31 19.1 31 18.1V3.6C31 3.1 30.9 2.7 30.7 2.2C30.5 1.8 30.2 1.4 29.9 1C29.6 0.7 29.1 0.4 28.7 0.2C28.3 0.1 27.8 0 27.3 0ZM21.1 16.6H12.7V14L17.3 9.9C17.8 9.5 18.4 9 18.4 8.3C18.4 8.1 18.34 7.91 18.3 7.8C18.2 7.6 18.1 7.5 18 7.4C17.9 7.3 17.7 7.19 17.5 7.1C17.26 6.99 17.1 7 17 7C16.8 7 16.6 7 16.4 7.1C16.2 7.2 16 7.3 15.9 7.4C15.8 7.5 15.65 7.69 15.6 7.9C15.54 8.13 15.5 8.3 15.5 8.5L13 8.3C13 6 14.7 4.8 17 4.8C19.2 4.8 20.8 6 20.8 8.3C20.8 8.9 20.7 9.5 20.4 10C20.1 10.5 19.7 11 19.2 11.4L15.6 14.4H21V16.6H21.1Z"/></svg><span>Saftladen</span></h1>
         <ul class="m-hud-title__meta" id="hud-meta" aria-live="off"></ul>
       </div>
-      <button class="m-gear" id="open-settings" type="button" aria-label="Einstellungen" aria-expanded="false" aria-controls="settings"><svg class="m-gear__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      <div class="m-hud-tools">
+        <button class="m-gear" id="open-env" type="button" aria-label="Wetter und Tageszeit" aria-expanded="false" aria-controls="env"><svg class="m-gear__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg></button>
+        <button class="m-gear" id="open-settings" type="button" aria-label="Einstellungen" aria-expanded="false" aria-controls="settings"><svg class="m-gear__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      </div>
     </header>
     <aside class="m-settings" id="settings" role="dialog" aria-labelledby="settings-title" hidden>
       <div class="m-settings__head">
@@ -241,35 +244,15 @@
         <button class="m-settings__close" id="settings-close" type="button" aria-label="Einstellungen schliessen"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
       </div>
       <section class="m-settings__group" aria-labelledby="settings-view">
-        <h3 class="m-settings__heading" id="settings-view">Ansicht <span class="m-settings__keys"><kbd class="m-settings__key">1</kbd>–<kbd class="m-settings__key">4</kbd></span></h3>
+        <h3 class="m-settings__heading" id="settings-view">Ansicht</h3>
         <div class="m-settings__segments m-settings__segments--4" role="radiogroup" aria-labelledby="settings-view">
-          <label class="m-settings__segment"><input type="radio" name="setting-view" value="iso" /><span>Iso</span></label>
-          <label class="m-settings__segment"><input type="radio" name="setting-view" value="orbit" checked /><span>Orbit</span></label>
-          <label class="m-settings__segment"><input type="radio" name="setting-view" value="plan" /><span>Grundriss</span></label>
-          <label class="m-settings__segment"><input type="radio" name="setting-view" value="walk" /><span>Rundgang</span></label>
+          <label class="m-settings__segment m-settings__segment--view"><input type="radio" name="setting-view" value="iso" /><span><kbd class="m-settings__key">1</kbd>Iso</span></label>
+          <label class="m-settings__segment m-settings__segment--view"><input type="radio" name="setting-view" value="orbit" checked /><span><kbd class="m-settings__key">2</kbd>Orbit</span></label>
+          <label class="m-settings__segment m-settings__segment--view"><input type="radio" name="setting-view" value="plan" /><span><kbd class="m-settings__key">3</kbd>Grundriss</span></label>
+          <label class="m-settings__segment m-settings__segment--view"><input type="radio" name="setting-view" value="walk" /><span><kbd class="m-settings__key">4</kbd>Rundgang</span></label>
         </div>
         <label class="m-settings__row"><span>Namen <kbd class="m-settings__key">N</kbd></span><input class="m-settings__switch" type="checkbox" role="switch" id="setting-names" /></label>
         <label class="m-settings__row"><span>Kamera folgt bei Aktionen</span><input class="m-settings__switch" type="checkbox" role="switch" id="setting-follow" checked /></label>
-      </section>
-      <section class="m-settings__group" aria-labelledby="settings-env">
-        <h3 class="m-settings__heading" id="settings-env">Umgebung</h3>
-        <div class="m-settings__field">
-          <div class="m-settings__field-head"><span id="weather-label">Wetter</span></div>
-          <div class="m-settings__segments" role="radiogroup" aria-labelledby="weather-label">
-            <label class="m-settings__segment"><input type="radio" name="setting-weather" value="auto" checked /><span>Auto</span></label>
-            <label class="m-settings__segment"><input type="radio" name="setting-weather" value="sun" /><span>Trocken</span></label>
-            <label class="m-settings__segment"><input type="radio" name="setting-weather" value="rain" /><span>Regen</span></label>
-          </div>
-        </div>
-        <div class="m-settings__field">
-          <div class="m-settings__field-head">
-            <span>Tageszeit</span>
-            <output class="m-settings__clock" id="time-clock" for="time-slider">10:00</output>
-          </div>
-          <input class="m-settings__slider" type="range" id="time-slider" min="0" max="1000" step="1" value="308" aria-label="Tageszeit" />
-        </div>
-        <label class="m-settings__row"><span>Zeit läuft</span><input class="m-settings__switch" type="checkbox" role="switch" id="time-auto" checked /></label>
-        <label class="m-settings__row"><span>Weihnachten <small>Schnee, Deko, Mützen</small></span><input class="m-settings__switch" type="checkbox" role="switch" id="setting-xmas" /></label>
       </section>
       <section class="m-settings__group" aria-labelledby="settings-labels">
         <h3 class="m-settings__heading" id="settings-labels">Beschriftungen</h3>
@@ -280,7 +263,6 @@
       <section class="m-settings__group" aria-labelledby="settings-panels">
         <h3 class="m-settings__heading" id="settings-panels">Panels</h3>
         <div class="m-settings__links">
-          <button class="m-settings__link" id="open-people" type="button" aria-pressed="false">Leute</button>
           <button class="m-settings__link" id="open-seats" type="button" aria-pressed="false">Plätze</button>
           <button class="m-settings__link" id="open-editor" type="button" aria-pressed="false">Raum bearbeiten <kbd class="m-settings__key">E</kbd></button>
           <button class="m-settings__link" id="open-picker" type="button">Figuren</button>
@@ -289,7 +271,36 @@
         </div>
       </section>
     </aside>
-    <div class="l-dock" id="people" hidden>
+    <aside class="m-settings m-settings--env" id="env" role="dialog" aria-labelledby="env-title" hidden>
+      <div class="m-settings__head">
+        <h2 class="m-settings__title" id="env-title">Wetter und Tageszeit</h2>
+        <button class="m-settings__close" id="env-close" type="button" aria-label="Wetter und Tageszeit schliessen"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+      <section class="m-settings__group" aria-labelledby="env-title">
+        <div class="m-settings__field">
+          <div class="m-settings__field-head"><span id="weather-label">Wetter</span></div>
+          <div class="m-settings__segments" role="radiogroup" aria-labelledby="weather-label">
+            <label class="m-settings__segment"><input type="radio" name="setting-weather" value="auto" checked /><span>Auto</span></label>
+            <label class="m-settings__segment"><input type="radio" name="setting-weather" value="sun" /><span>Trocken</span></label>
+            <label class="m-settings__segment"><input type="radio" name="setting-weather" value="rain" /><span>Regen</span></label>
+          </div>
+        </div>
+        <div class="m-settings__field m-time" id="time" data-sky="day">
+          <div class="m-settings__field-head">
+            <span class="m-time__label"><svg class="m-time__icon m-time__icon--day" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg><svg class="m-time__icon m-time__icon--night" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>Tageszeit</span>
+            <output class="m-settings__clock m-time__clock" id="time-clock" for="time-slider">10:00</output>
+          </div>
+          <div class="m-time__bar">
+            <div class="m-time__track" aria-hidden="true"></div>
+            <input class="m-time__slider" type="range" id="time-slider" min="0" max="1000" step="1" value="308" aria-label="Tageszeit" />
+          </div>
+          <ol class="m-time__ticks" id="time-ticks" aria-hidden="true"></ol>
+        </div>
+        <label class="m-settings__row"><span>Zeit läuft</span><input class="m-settings__switch" type="checkbox" role="switch" id="time-auto" checked /></label>
+        <label class="m-settings__row"><span>Weihnachten <small>Schnee, Deko, Mützen</small></span><input class="m-settings__switch" type="checkbox" role="switch" id="setting-xmas" /></label>
+      </section>
+    </aside>
+    <div class="l-dock" id="people">
       <aside class="m-away" id="away" hidden>
         <h2 class="m-away__title"><span class="m-away__count" id="away-count"></span></h2>
         <ul class="m-away__list" id="away-list"></ul>
