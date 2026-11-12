@@ -1010,8 +1010,7 @@ export class Person extends Walker {
     if (this.office && !this.snackLeft && (seek || random() < (this.adhd ? WORK_CHANCE * 0.6 : WORK_CHANCE))) {
       const desk = this.office.claim(this);
       if (desk) {
-        this.task = { desk, phase: 'approach', t: 0, from: { ...this.pos }, remaining: (WORK_TIME.min + random() * (WORK_TIME.max - WORK_TIME.min)) * (this.adhd ? 0.3 : 1), retries: 0, retryIn: 0.5 };
-        this.goTo(nav, desk.approach);
+        this.headForDesk(desk, nav);
         return;
       }
     }
@@ -1022,6 +1021,12 @@ export class Person extends Walker {
       return;
     }
     this.wanderTo(nav);
+  }
+
+  /** Walks to a claimed `desk`, sits down and works there. */
+  headForDesk(desk: Desk, nav: NavGrid): void {
+    this.task = { desk, phase: 'approach', t: 0, from: { ...this.pos }, remaining: (WORK_TIME.min + random() * (WORK_TIME.max - WORK_TIME.min)) * (this.adhd ? 0.3 : 1), retries: 0, retryIn: 0.5 };
+    this.goTo(nav, desk.approach);
   }
 
   /** The player talks to this person: they drop their walk and turn around. False when they are too busy to stop (desk, meeting, printer, …). */
