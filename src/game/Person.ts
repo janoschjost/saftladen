@@ -1647,6 +1647,12 @@ export class Person extends Walker {
     this.state = 'idle';
   }
 
+  /** Waits in a queue as part of `talk` (e.g. for the toilet): walks to `spot`, then stands there facing `talk.center` until the talk is taken away. */
+  queueAt(nav: NavGrid, spot: Vec2, talk: Talk): void {
+    this.talk = talk;
+    if (Math.hypot(spot.x - this.pos.x, spot.z - this.pos.z) > 0.4) this.goTo(nav, spot);
+  }
+
   /** Drops whatever they were doing (desk, printer, vape) so a new activity can start. */
   interrupt(): void {
     this.phoneJob = null;
