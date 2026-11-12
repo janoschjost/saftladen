@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { DayCtx, DayMeter, DayTask } from '../Day';
 import type { NavGrid, Vec2 } from '../NavGrid';
 import type { Person } from '../Person';
+import { random } from '../rng';
 
 const BOSS = 'larissa-lanker';
 const KEY = 'Space';
@@ -167,18 +168,18 @@ export class HideGameboy implements DayTask {
         this.phase = 'warn';
         this.timer = WARN.from + (WARN.to - WARN.from) * level;
         boss.faceTo(this.awayYaw + (Math.sin(this.clock * 3) > 0 ? 0.55 : -0.55)); // a half turn of the head and shoulders: the hint
-        if (Math.random() < 0.7) ctx.say(WARN_LINES[Math.floor(Math.random() * WARN_LINES.length)], boss);
+        if (random() < 0.7) ctx.say(WARN_LINES[Math.floor(random() * WARN_LINES.length)], boss);
         this.tone(220, 0.12, 'triangle', 0.08);
         break;
       }
       case 'warn':
         this.phase = 'look';
-        this.timer = LOOK.min + Math.random() * (LOOK.max - LOOK.min);
+        this.timer = LOOK.min + random() * (LOOK.max - LOOK.min);
         boss.faceTo(this.faceYaw);
         break;
       default:
         this.phase = 'away';
-        this.timer = AWAY.max - (AWAY.max - AWAY.min) * level * 0.7 - Math.random() * (AWAY.max - AWAY.min) * 0.5;
+        this.timer = AWAY.max - (AWAY.max - AWAY.min) * level * 0.7 - random() * (AWAY.max - AWAY.min) * 0.5;
         boss.faceTo(this.awayYaw);
     }
   }
@@ -186,7 +187,7 @@ export class HideGameboy implements DayTask {
   private caught(ctx: DayCtx): void {
     this.failed = 'Larissa hat dich beim Gameboy erwischt.';
     this.me!.gameboyOn = true;
-    ctx.say(CAUGHT_LINES[Math.floor(Math.random() * CAUGHT_LINES.length)], this.boss!);
+    ctx.say(CAUGHT_LINES[Math.floor(random() * CAUGHT_LINES.length)], this.boss!);
     for (let i = 0; i < 3; i++) this.tone(260 - i * 55, 0.16, 'sawtooth', 0.1, i * 0.14);
   }
 
@@ -221,7 +222,7 @@ export class HideGameboy implements DayTask {
       }
     }
     scored.sort((a, b) => a.score - b.score);
-    const pick = scored[Math.floor(Math.random() * Math.min(4, scored.length))];
+    const pick = scored[Math.floor(random() * Math.min(4, scored.length))];
     if (pick) return pick.c;
     return nav.nearestWalkable({ x: from.x + Math.sin(yaw) * 4.5, z: from.z + Math.cos(yaw) * 4.5 }, 8) ?? { x: from.x + Math.sin(yaw) * 4.5, z: from.z + Math.cos(yaw) * 4.5 };
   }

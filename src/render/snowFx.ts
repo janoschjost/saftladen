@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { WORLD } from './World';
+import { fxRandom } from '../game/rng';
 
 const FLAKES = 2600;
 const TOP = 14;
@@ -50,14 +51,14 @@ export class SnowFx {
   }
 
   private respawn(i: number, scatter: boolean): void {
-    const x = -MARGIN + Math.random() * (WORLD.width + MARGIN * 2);
-    const z = -MARGIN + Math.random() * (WORLD.depth + MARGIN * 2);
+    const x = -MARGIN + fxRandom() * (WORLD.width + MARGIN * 2);
+    const z = -MARGIN + fxRandom() * (WORLD.depth + MARGIN * 2);
     const inside = x > 0 && x < WORLD.width && z > 0 && z < WORLD.depth;
     this.floor[i] = inside ? ROOF_Y : 0;
-    this.phase[i] = Math.random() * Math.PI * 2;
-    this.speed[i] = 0.6 + Math.random() * 0.8;
+    this.phase[i] = fxRandom() * Math.PI * 2;
+    this.speed[i] = 0.6 + fxRandom() * 0.8;
     this.pos[i * 3] = x;
-    this.pos[i * 3 + 1] = scatter ? this.floor[i] + Math.random() * (TOP - this.floor[i]) : TOP + Math.random() * 2;
+    this.pos[i * 3 + 1] = scatter ? this.floor[i] + fxRandom() * (TOP - this.floor[i]) : TOP + fxRandom() * 2;
     this.pos[i * 3 + 2] = z;
   }
 

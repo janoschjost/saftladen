@@ -1,4 +1,5 @@
 import type { Game } from './Game';
+import { getSeed, setSeed } from './rng';
 
 /**
  * Dev only, URL params for testing:
@@ -6,11 +7,21 @@ import type { Game } from './Game';
  *   &time=14          freezes the clock at 14:00
  *   &follow           camera follows the person (orbit view)
  *   ?day              starts "Ein Tag im Leben" as Jan Hasler; ?day=<person-id> for somebody else
+ *   ?seed=<n>         seeds the random numbers (see rng.ts): same seed, same start. The console logs every page's seed.
  * Example: http://localhost:5173/?snack&time=14&follow
  */
+
+/** Dev only: `?seed=<n>` must be applied before the game is built (its constructor already rolls dice). */
+export function applySeedParam(): void {
+  const raw = new URLSearchParams(location.search).get('seed');
+  const n = Number(raw);
+  if (raw && Number.isFinite(n)) setSeed(n);
+  console.info(`[debug] seed ${getSeed()}, replay with ?seed=${getSeed()}`);
+}
+
 export function applyDebugParams(game: Game): void {
   const q = new URLSearchParams(location.search);
-  if (!q.has('snack') && !q.has('time') && !q.has('day')) return;
+  if (!q.has('snack') && !q.has('time') && !q.has('day') && !q.has('seed')) return;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const g = game as any;
   (window as unknown as { __game: Game }).__game = game;

@@ -5,6 +5,7 @@ import type { TeamMember } from '../data/types';
 import { buildCat } from '../render/catBuilder';
 import { buildCharacter, type CharacterRig } from '../render/characterBuilder';
 import { buildDog } from '../render/dogBuilder';
+import { fxRandom } from '../game/rng';
 
 const SPACING = 2.7; // metres between the pedestals
 const FOV = 30;
@@ -257,7 +258,7 @@ export class DayMenu {
 
   private play(s: Slot, kind: Emote): void {
     s.emote = { kind, t: 0, dur: EMOTES[kind] };
-    this.nextEmote = 3.5 + Math.random() * 3;
+    this.nextEmote = 3.5 + fxRandom() * 3;
   }
 
   /** Gesture on top of the idle pose; arm z is mirrored so the left arm (-x side) swings outwards too. */
@@ -332,7 +333,7 @@ export class DayMenu {
     this.nextEmote -= dt;
     const chosen = this.slots[this.index];
     if (this.nextEmote <= 0 && chosen && !chosen.emote) {
-      this.play(chosen, EMOTE_KINDS[Math.floor(Math.random() * EMOTE_KINDS.length)]);
+      this.play(chosen, EMOTE_KINDS[Math.floor(fxRandom() * EMOTE_KINDS.length)]);
     }
     this.slots.forEach((s, i) => {
       const on = i === this.index;

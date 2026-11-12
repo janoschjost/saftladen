@@ -12,6 +12,7 @@ import type { CoffeeSpot, Kitchen, MachineSpot } from './Coffee';
 import type { Desk, FoosSpot, Office } from './Office';
 import type { Talk } from './Social';
 import { Walker } from './Walker';
+import { random } from './rng';
 
 const WORK_CHANCE = 0.75; // chance per decision to go sit down instead of wandering
 const WORK_TIME = { min: 90, max: 240 }; // seconds a person stays at the desk
@@ -171,7 +172,7 @@ const smooth = (v: number) => {
 };
 
 export class Person extends Walker {
-  speed = 1.0 + Math.random() * 0.5;
+  speed = 1.0 + random() * 0.5;
   radius = 0.4;
   root: THREE.Object3D;
   id: string;
@@ -255,7 +256,7 @@ export class Person extends Walker {
   emoteDir: 1 | -1 = 1;
   /** body language during a talk (laugh, shrug, point, ...); `t` runs from a small negative delay up to `dur` */
   reaction: { kind: Reaction; t: number; dur: number } | null = null;
-  private emoteIn = EMOTE_GAP.min + Math.random() * (EMOTE_GAP.max - EMOTE_GAP.min);
+  private emoteIn = EMOTE_GAP.min + random() * (EMOTE_GAP.max - EMOTE_GAP.min);
   /** walking to / sitting in the meeting room */
   meetJob: MeetJob | null = null;
   /** called to a meeting while still at a desk: goes once they have stood up */
@@ -263,9 +264,9 @@ export class Person extends Walker {
   private presenceRetry = 0;
   private presenceRetries = 0;
   private baseHead: number;
-  private moodTimer = 2 + Math.random() * 6;
+  private moodTimer = 2 + random() * 6;
   private happy = true;
-  private clock = Math.random() * 100;
+  private clock = random() * 100;
   private scale: number;
 
   constructor(
@@ -350,7 +351,7 @@ export class Person extends Walker {
     this.pendingMeet = null;
     this.path = [];
     this.state = 'idle';
-    this.timer = 0.3 + Math.random();
+    this.timer = 0.3 + random();
   }
 
   /** True while in the office and free to do office things (desk, chat). */
@@ -447,7 +448,7 @@ export class Person extends Walker {
         this.presence = 'in';
         this.awayKind = null;
         this.state = 'idle';
-        this.timer = 0.4 + Math.random();
+        this.timer = 0.4 + random();
         return true;
       default:
         return false;
@@ -482,14 +483,14 @@ export class Person extends Walker {
 
   /** Start the game already sitting at a claimed desk. */
   sitAt(desk: Desk): void {
-    this.task = { desk, phase: 'work', t: 0, from: desk.seat, remaining: (40 + Math.random() * 160) * (this.adhd ? 0.3 : 1), retries: 0, retryIn: 0 };
+    this.task = { desk, phase: 'work', t: 0, from: desk.seat, remaining: (40 + random() * 160) * (this.adhd ? 0.3 : 1), retries: 0, retryIn: 0 };
     this.pos.x = this.prev.x = desk.seat.x;
     this.pos.z = this.prev.z = desk.seat.z;
     this.yaw = this.prevYaw = desk.yaw;
     this.sit = 1;
     this.state = 'idle';
     desk.setScreen(true, this.pickScreen());
-    if (Math.random() < 0.35 && !this.member.hatesCoffee) desk.putMug(0.25 + Math.random() * 0.7); // a coffee already waiting on the desk
+    if (random() < 0.35 && !this.member.hatesCoffee) desk.putMug(0.25 + random() * 0.7); // a coffee already waiting on the desk
   }
 
   /** Chair the held person is currently snapped to (set by the game while dragging). */
@@ -519,7 +520,7 @@ export class Person extends Walker {
     this.sit = 0;
     this.pos.x = this.prev.x = desk.approach.x;
     this.pos.z = this.prev.z = desk.approach.z;
-    this.timer = 0.4 + Math.random() * 0.6;
+    this.timer = 0.4 + random() * 0.6;
   }
 
   /** The player put somebody else on this person's meeting chair: they stand up where the chair is open. */
@@ -546,7 +547,7 @@ export class Person extends Walker {
     seat.occupant = this;
     const talk: Talk = session ?? { kind: 'chat', center: { ...seat.seat }, members: [this] };
     if (session) this.talk = session;
-    this.meetJob = { seat, talk, phase: 'sit', t: 0, from: { ...seat.seat }, age: 0, retries: 0, retryIn: 0, dismissed: false, solo: session ? undefined : 20 + Math.random() * 25 };
+    this.meetJob = { seat, talk, phase: 'sit', t: 0, from: { ...seat.seat }, age: 0, retries: 0, retryIn: 0, dismissed: false, solo: session ? undefined : 20 + random() * 25 };
     this.pos.x = this.prev.x = seat.seat.x;
     this.pos.z = this.prev.z = seat.seat.z;
     this.yaw = this.prevYaw = seat.yaw;
@@ -561,7 +562,7 @@ export class Person extends Walker {
     if (!this.canSit(desk)) return false;
     this.cancelTask();
     desk.occupant = this;
-    this.task = { desk, phase: 'work', t: 0, from: { ...desk.seat }, remaining: (WORK_TIME.min + Math.random() * (WORK_TIME.max - WORK_TIME.min)) * (this.adhd ? 0.3 : 1), retries: 0, retryIn: 0 };
+    this.task = { desk, phase: 'work', t: 0, from: { ...desk.seat }, remaining: (WORK_TIME.min + random() * (WORK_TIME.max - WORK_TIME.min)) * (this.adhd ? 0.3 : 1), retries: 0, retryIn: 0 };
     this.pos.x = this.prev.x = desk.seat.x;
     this.pos.z = this.prev.z = desk.seat.z;
     this.yaw = this.prevYaw = desk.yaw;
@@ -588,7 +589,7 @@ export class Person extends Walker {
     super.update(dt, nav, others);
     this.clock += dt;
     if (this.rig.setMood && (this.moodTimer -= dt) <= 0) {
-      this.moodTimer = 4 + Math.random() * 10;
+      this.moodTimer = 4 + random() * 10;
       this.happy = !this.happy;
       this.rig.setMood(this.happy);
     }
@@ -650,14 +651,14 @@ export class Person extends Walker {
       this.emoteP = Math.min(1, e.t / e.dur);
       if (e.t >= e.dur || !this.canEmote()) this.emote = null;
     } else if ((this.emoteIn -= dt) <= 0) {
-      this.emoteIn = (EMOTE_GAP.min + Math.random() * (EMOTE_GAP.max - EMOTE_GAP.min)) * (this.adhd ? 0.6 : 1);
+      this.emoteIn = (EMOTE_GAP.min + random() * (EMOTE_GAP.max - EMOTE_GAP.min)) * (this.adhd ? 0.6 : 1);
       if (this.canEmote()) {
-        let pick = Math.random() * EMOTES.reduce((n, x) => n + x[1], 0);
+        let pick = random() * EMOTES.reduce((n, x) => n + x[1], 0);
         const [kind, , dur] = EMOTES.find((x) => (pick -= x[1]) < 0) ?? EMOTES[0];
         this.emote = { kind, t: 0, dur };
         this.emoteKind = kind;
         this.emoteP = 0;
-        this.emoteDir = Math.random() < 0.5 ? 1 : -1;
+        this.emoteDir = random() < 0.5 ? 1 : -1;
       }
     }
     const k = this.emote ? smooth(Math.min(this.emote.t, this.emote.dur - this.emote.t) / 0.45) : 0;
@@ -686,7 +687,7 @@ export class Person extends Walker {
 
   /** Starts a phone call: walks around with the phone at the ear, either up and down one path or from spot to spot. */
   startPhone(nav: NavGrid): void {
-    const pace = Math.random() < PHONE_PACE_CHANCE;
+    const pace = random() < PHONE_PACE_CHANCE;
     const a = { ...this.pos };
     let b = a;
     if (pace) {
@@ -704,27 +705,27 @@ export class Person extends Walker {
         if (miss === 0) break;
       }
     }
-    this.phoneJob = { remaining: PHONE_TIME.min + Math.random() * (PHONE_TIME.max - PHONE_TIME.min), mode: pace ? 'pace' : 'wander', a, b, toB: true };
+    this.phoneJob = { remaining: PHONE_TIME.min + random() * (PHONE_TIME.max - PHONE_TIME.min), mode: pace ? 'pace' : 'wander', a, b, toB: true };
     this.phoneStep(nav);
   }
 
   /** Takes a call without leaving the chair. */
   private startSeatedPhone(task: DeskTask): void {
-    const time = SEAT_PHONE_TIME.min + Math.random() * (SEAT_PHONE_TIME.max - SEAT_PHONE_TIME.min);
+    const time = SEAT_PHONE_TIME.min + random() * (SEAT_PHONE_TIME.max - SEAT_PHONE_TIME.min);
     this.phoneJob = { remaining: Math.min(time, Math.max(2, task.remaining - 1)), mode: 'sit', a: { ...this.pos }, b: { ...this.pos }, toB: true };
   }
 
   /** Occasionally a phone call or a vape drag while sitting at the desk. */
   private seatedBreaks(dt: number, task: DeskTask, nav: NavGrid): void {
     if (this.held || this.talk || this.phoneJob || this.vapeJob || this.drink || this.cupHeld || task.remaining < 6) return;
-    if (this.member.look.phone && Math.random() < SEAT_PHONE_RATE * dt) this.startSeatedPhone(task);
-    else if (this.member.look.vape && Math.random() < SEAT_VAPE_RATE * dt) this.startVape(Math.random() < 0.35 ? 2 : 1);
+    if (this.member.look.phone && random() < SEAT_PHONE_RATE * dt) this.startSeatedPhone(task);
+    else if (this.member.look.vape && random() < SEAT_VAPE_RATE * dt) this.startVape(random() < 0.35 ? 2 : 1);
     else if (!this.emote) {
       const d = task.desk;
       const coffee = d.mugFill !== null && d.mugFill > 0.06;
-      if (coffee && Math.random() < SEAT_DRINK_RATE * dt) this.drink = { t: 0, held: false, sipped: false, desk: d };
-      else if (this.member.snacker && task.remaining > 18 && !task.errand && Math.random() < SNACK_RATE * dt) this.startRun(task, nav, true);
-      else if (!this.member.hatesCoffee && task.remaining > 18 && !task.errand && Math.random() < RUN_RATE * (coffee ? 0.15 : 1) * dt) this.startRun(task, nav);
+      if (coffee && random() < SEAT_DRINK_RATE * dt) this.drink = { t: 0, held: false, sipped: false, desk: d };
+      else if (this.member.snacker && task.remaining > 18 && !task.errand && random() < SNACK_RATE * dt) this.startRun(task, nav, true);
+      else if (!this.member.hatesCoffee && task.remaining > 18 && !task.errand && random() < RUN_RATE * (coffee ? 0.15 : 1) * dt) this.startRun(task, nav);
     }
   }
 
@@ -820,7 +821,7 @@ export class Person extends Walker {
     this.kitchen?.releaseMachine(this);
     this.run = null;
     if (j.desk) this.office?.release(j.desk, this);
-    this.snackLeft = SNACK_TIME.min + Math.random() * (SNACK_TIME.max - SNACK_TIME.min);
+    this.snackLeft = SNACK_TIME.min + random() * (SNACK_TIME.max - SNACK_TIME.min);
     this.snackClock = BITE_GAP - 0.6; // first chip right away
     this.state = 'idle';
     this.path = [];
@@ -840,7 +841,7 @@ export class Person extends Walker {
     this.timer = 0.2;
     const desk = j.desk ?? this.office?.claim(this) ?? null;
     if (!desk) return;
-    const left = j.desk ? Math.max(j.left, 20) : (WORK_TIME.min + Math.random() * (WORK_TIME.max - WORK_TIME.min)) * (this.adhd ? 0.3 : 1);
+    const left = j.desk ? Math.max(j.left, 20) : (WORK_TIME.min + random() * (WORK_TIME.max - WORK_TIME.min)) * (this.adhd ? 0.3 : 1);
     this.task = { desk, phase: 'approach', t: 0, from: { ...this.pos }, remaining: left, retries: 0, retryIn: 0.5 };
     this.goTo(nav, desk.approach);
   }
@@ -855,7 +856,7 @@ export class Person extends Walker {
     if (j.desk) this.office?.release(j.desk, this);
     this.path = [];
     this.state = 'idle';
-    this.timer = 0.3 + Math.random();
+    this.timer = 0.3 + random();
   }
 
   /** Advances the sip at the desk; arrived with a coffee: sip first, then set it down. */
@@ -929,7 +930,7 @@ export class Person extends Walker {
   /** Hangs up (the hand comes down on its own). */
   endPhone(): void {
     this.phoneJob = null;
-    if (!this.task) this.timer = 0.3 + Math.random();
+    if (!this.task) this.timer = 0.3 + random();
   }
 
   /** Next leg of the call: the other end of the path, or a new spot. */
@@ -948,7 +949,7 @@ export class Person extends Walker {
   private pickScreen(): { kind: ScreenKind; variant: number } {
     const kind = screenKindOf(this.member.role);
     const own = screenSeed(this.member);
-    return { kind, variant: Math.random() < 0.7 ? own : Math.floor(Math.random() * screenVariants(kind)) };
+    return { kind, variant: random() < 0.7 ? own : Math.floor(random() * screenVariants(kind)) };
   }
 
   private get adhd(): boolean {
@@ -956,8 +957,8 @@ export class Person extends Walker {
   }
 
   protected override idleTime(): number {
-    if (this.phoneJob) return this.phoneJob.mode === 'pace' ? 0.2 + Math.random() * 0.8 : 0.3 + Math.random() * 2;
-    return this.adhd ? 0.3 + Math.random() * 1.5 : super.idleTime();
+    if (this.phoneJob) return this.phoneJob.mode === 'pace' ? 0.2 + random() * 0.8 : 0.3 + random() * 2;
+    return this.adhd ? 0.3 + random() * 1.5 : super.idleTime();
   }
 
   protected decide(nav: NavGrid): void {
@@ -967,29 +968,29 @@ export class Person extends Walker {
     }
     const seek = this.displaced;
     this.displaced = false;
-    if (this.member.look.phone && !seek && !this.talk && !this.snackLeft && Math.random() < PHONE_CHANCE) {
+    if (this.member.look.phone && !seek && !this.talk && !this.snackLeft && random() < PHONE_CHANCE) {
       this.startPhone(nav);
       return;
     }
-    if (this.member.look.vape && !seek && !this.snackLeft && Math.random() < VAPE_CHANCE) {
-      this.startVape(Math.random() < 0.35 ? 2 : 1);
+    if (this.member.look.vape && !seek && !this.snackLeft && random() < VAPE_CHANCE) {
+      this.startVape(random() < 0.35 ? 2 : 1);
       return;
     }
-    if (!seek && !this.snackLeft && Math.random() < PRINT_CHANCE && this.startPrint(nav)) return;
-    if (!seek && !this.snackLeft && Math.random() < FOOS_CHANCE && this.office?.challenge(this, nav)) return;
-    if (!seek && this.member.snacker && !this.cupHeld && !this.snackLeft && !this.talk && Math.random() < SNACK_CHANCE && this.startWanderRun(nav, true)) return;
-    if (!seek && !this.cupHeld && !this.snackLeft && !this.member.hatesCoffee && !this.talk && Math.random() < RUN_CHANCE && this.startWanderRun(nav)) return;
-    if (this.office && !this.snackLeft && (seek || Math.random() < (this.adhd ? WORK_CHANCE * 0.6 : WORK_CHANCE))) {
+    if (!seek && !this.snackLeft && random() < PRINT_CHANCE && this.startPrint(nav)) return;
+    if (!seek && !this.snackLeft && random() < FOOS_CHANCE && this.office?.challenge(this, nav)) return;
+    if (!seek && this.member.snacker && !this.cupHeld && !this.snackLeft && !this.talk && random() < SNACK_CHANCE && this.startWanderRun(nav, true)) return;
+    if (!seek && !this.cupHeld && !this.snackLeft && !this.member.hatesCoffee && !this.talk && random() < RUN_CHANCE && this.startWanderRun(nav)) return;
+    if (this.office && !this.snackLeft && (seek || random() < (this.adhd ? WORK_CHANCE * 0.6 : WORK_CHANCE))) {
       const desk = this.office.claim(this);
       if (desk) {
-        this.task = { desk, phase: 'approach', t: 0, from: { ...this.pos }, remaining: (WORK_TIME.min + Math.random() * (WORK_TIME.max - WORK_TIME.min)) * (this.adhd ? 0.3 : 1), retries: 0, retryIn: 0.5 };
+        this.task = { desk, phase: 'approach', t: 0, from: { ...this.pos }, remaining: (WORK_TIME.min + random() * (WORK_TIME.max - WORK_TIME.min)) * (this.adhd ? 0.3 : 1), retries: 0, retryIn: 0.5 };
         this.goTo(nav, desk.approach);
         return;
       }
     }
     // sometimes just look around instead of walking
-    if (Math.random() < (this.adhd ? 0.5 : 0.25)) {
-      this.yaw += (Math.random() - 0.5) * (this.adhd ? 4 : 2.4);
+    if (random() < (this.adhd ? 0.5 : 0.25)) {
+      this.yaw += (random() - 0.5) * (this.adhd ? 4 : 2.4);
       this.timer = this.idleTime();
       return;
     }
@@ -1034,7 +1035,7 @@ export class Person extends Walker {
         this.playerChat = null;
         this.petting = false;
         this.speaking = false;
-        this.timer = 0.4 + Math.random();
+        this.timer = 0.4 + random();
       } else {
         this.state = 'idle';
         this.timer = 1;
@@ -1259,7 +1260,7 @@ export class Person extends Walker {
     this.dropErrand(task);
     this.displaced = true;
     if (task.phase === 'approach') this.cancelTask();
-    else task.remaining = Math.min(task.remaining, 0.6 + Math.random() * 0.8);
+    else task.remaining = Math.min(task.remaining, 0.6 + random() * 0.8);
   }
 
   private isWalking(): boolean {
@@ -1277,7 +1278,7 @@ export class Person extends Walker {
     this.sit = 0;
     this.state = 'idle';
     this.path = [];
-    this.timer = 0.3 + Math.random();
+    this.timer = 0.3 + random();
     const p = this.pendingMeet;
     if (p) this.startMeetWalk(p.nav, p.seat, p.talk);
   }
@@ -1349,7 +1350,7 @@ export class Person extends Walker {
         if (j.t >= 1) {
           this.cancelMeet();
           this.sit = 0;
-          this.socialCooldown = 15 + Math.random() * 20;
+          this.socialCooldown = 15 + random() * 20;
         }
         return true;
       }
@@ -1384,7 +1385,7 @@ export class Person extends Walker {
     job.remaining -= dt;
     if (job.remaining <= 0) {
       this.cancelPrint();
-      this.timer = 0.3 + Math.random();
+      this.timer = 0.3 + random();
     }
     return true;
   }
@@ -1431,7 +1432,7 @@ export class Person extends Walker {
     job.remaining -= dt;
     if (job.remaining <= 0) {
       this.cancelFoos();
-      this.timer = 0.5 + Math.random();
+      this.timer = 0.5 + random();
     }
     return true;
   }
@@ -1446,7 +1447,7 @@ export class Person extends Walker {
     if (spot.occupant || this.foosJob) return false;
     this.interrupt();
     spot.occupant = this;
-    this.foosJob = { spot, partner, phase: 'approach', remaining: FOOS_TIME.min + Math.random() * (FOOS_TIME.max - FOOS_TIME.min), age: 0, retries: 0, retryIn: 0.5 };
+    this.foosJob = { spot, partner, phase: 'approach', remaining: FOOS_TIME.min + random() * (FOOS_TIME.max - FOOS_TIME.min), age: 0, retries: 0, retryIn: 0.5 };
     this.goTo(nav, spot.stand);
     return true;
   }
@@ -1459,7 +1460,7 @@ export class Person extends Walker {
     if (job.spot.occupant === this) job.spot.occupant = null;
     this.path = [];
     this.state = 'idle';
-    this.timer = 0.5 + Math.random();
+    this.timer = 0.5 + random();
     if (job.partner.foosJob?.partner === this) job.partner.cancelFoos();
   }
 
@@ -1488,7 +1489,7 @@ export class Person extends Walker {
     this.interrupt();
     spot.occupant = this;
     this.talk = talk;
-    this.coffeeJob = { spot, talk, phase: 'approach', t: 0, age: 0, retries: 0, retryIn: 0.5, offset: Math.random() * 7, dismissed: false };
+    this.coffeeJob = { spot, talk, phase: 'approach', t: 0, age: 0, retries: 0, retryIn: 0.5, offset: random() * 7, dismissed: false };
     this.goTo(nav, spot.stand);
   }
 
@@ -1517,8 +1518,8 @@ export class Person extends Walker {
     }
     this.path = [];
     this.state = 'idle';
-    this.timer = 0.3 + Math.random();
-    this.socialCooldown = Math.max(this.socialCooldown, 6 + Math.random() * 10);
+    this.timer = 0.3 + random();
+    this.socialCooldown = Math.max(this.socialCooldown, 6 + random() * 10);
   }
 
   private controlCoffee(dt: number, nav: NavGrid): boolean {
@@ -1594,7 +1595,7 @@ export class Person extends Walker {
       else {
         this.vapeJob = null;
         this.state = 'idle';
-        this.timer = 0.8 + Math.random() * 2;
+        this.timer = 0.8 + random() * 2;
       }
     }
     return true;
@@ -1605,7 +1606,7 @@ export class Person extends Walker {
     const pr = this.office?.printer;
     if (!pr || pr.occupant) return false;
     pr.occupant = this;
-    this.printJob = { phase: 'approach', remaining: PRINT_TIME.min + Math.random() * (PRINT_TIME.max - PRINT_TIME.min), retries: 0, retryIn: 0.5 };
+    this.printJob = { phase: 'approach', remaining: PRINT_TIME.min + random() * (PRINT_TIME.max - PRINT_TIME.min), retries: 0, retryIn: 0.5 };
     this.goTo(nav, pr.stand);
     return true;
   }

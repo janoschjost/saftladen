@@ -3,12 +3,13 @@ import type { MeetSeat } from './Meeting';
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { Person } from './Person';
 import type { ConversationKind, Talk } from './Social';
+import { random } from './rng';
 
 const FIRST = { min: 30, max: 70 }; // seconds after game start
 const PAUSE = { min: 60, max: 150 }; // seconds between two calls
 const STAY = { min: 18, max: 40 }; // seconds on the phone
 const GATHER_TIMEOUT = 45;
-const between = ({ min, max }: { min: number; max: number }) => min + Math.random() * (max - min);
+const between = ({ min, max }: { min: number; max: number }) => min + random() * (max - min);
 
 /** One person on the stool in the phone box, taking a call. Reuses the meeting-seat logic (walk, sit down, stand up). */
 export class PhoneBoothSession implements Talk {
@@ -139,6 +140,6 @@ export class PhoneBooth {
     this.timer = 10;
     const free = people.filter((p) => p.member.look.phone && p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob && !p.snackLeft && !p.phoneJob && !p.run);
     if (!free.length) return;
-    if (this.start(free[Math.floor(Math.random() * free.length)], nav)) this.timer = 0;
+    if (this.start(free[Math.floor(random() * free.length)], nav)) this.timer = 0;
   }
 }

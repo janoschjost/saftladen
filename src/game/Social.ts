@@ -2,6 +2,7 @@ import type { NavGrid, Vec2 } from './NavGrid';
 import type { Person } from './Person';
 import type { Traffic } from './Traffic';
 import { Chat, SIGNALS, pick, playBeat } from './Chatter';
+import { random } from './rng';
 
 export type ConversationKind = 'chat' | 'discussion';
 
@@ -18,8 +19,8 @@ export interface Talk {
 export function nextSpeaker(members: readonly Person[], current: Person, previous: Person | null): Person {
   const others = members.filter((m) => m !== current);
   if (!others.length) return current;
-  if (previous && previous !== current && others.includes(previous) && Math.random() < 0.45) return previous;
-  return others[Math.floor(Math.random() * others.length)];
+  if (previous && previous !== current && others.includes(previous) && random() < 0.45) return previous;
+  return others[Math.floor(random() * others.length)];
 }
 
 const LINK_DISTANCE = 1.7; // people closer than this count as "meeting"
@@ -118,7 +119,7 @@ export class Conversation {
     this.kind = members.length > 2 ? 'discussion' : 'chat';
     this.chat = new Chat();
     // friends have more to say
-    this.duration = (this.kind === 'chat' ? 6 + Math.random() * 7 : 10 + Math.random() * 10) * (1 + affinity.max(members) * 0.8);
+    this.duration = (this.kind === 'chat' ? 6 + random() * 7 : 10 + random() * 10) * (1 + affinity.max(members) * 0.8);
     this.speaker = members[0];
     this.assignSlots(nav);
     for (const m of members) m.talk = this;
@@ -142,7 +143,7 @@ export class Conversation {
 
   join(p: Person, nav: NavGrid): void {
     this.joiner = p;
-    const a = Math.random() * Math.PI * 2;
+    const a = random() * Math.PI * 2;
     const r = this.ringRadius(this.members.length + 1);
     this.members.push(p);
     p.talk = this;
@@ -183,7 +184,7 @@ export class Conversation {
         // turn over: a short silence, then somebody else answers
         this.text = '';
         for (const m of this.members) m.speaking = false;
-        this.speakerTimer = PAUSE[0] + Math.random() * (PAUSE[1] - PAUSE[0]);
+        this.speakerTimer = PAUSE[0] + random() * (PAUSE[1] - PAUSE[0]);
         if (this.leaving) this.dropMember(this.leaving);
       } else {
         this.turn();
@@ -212,14 +213,14 @@ export class Conversation {
       speaker = joiner;
       text = SIGNALS.join.symbol;
       playBeat(speaker, this.members, SIGNALS.join.reaction, 'wave');
-    } else if (this.members.length >= 3 && !this.leaving && this.time > this.duration * 0.5 && Math.random() < LEAVE_CHANCE) {
+    } else if (this.members.length >= 3 && !this.leaving && this.time > this.duration * 0.5 && random() < LEAVE_CHANCE) {
       // the one who is the least close to the others is the first to go
       const rest = this.members.filter((m) => m !== previous);
       speaker = rest.reduce((a, b) => (this.affinity.towards(b, this.members) < this.affinity.towards(a, this.members) ? b : a));
       text = SIGNALS.bye.symbol;
       playBeat(speaker, this.members, SIGNALS.bye.reaction, 'wave');
       this.leaving = speaker;
-    } else if (!this.switched && this.chat.turns >= SWITCH_AFTER && Math.random() < 0.3) {
+    } else if (!this.switched && this.chat.turns >= SWITCH_AFTER && random() < 0.3) {
       this.switched = true;
       speaker = nextSpeaker(this.members, previous, this.previous);
       text = SIGNALS.topic.symbol;
@@ -232,7 +233,7 @@ export class Conversation {
     this.previous = previous;
     this.speaker = speaker;
     this.text = text;
-    this.speakerTimer = 1.2 + Math.random() * 2;
+    this.speakerTimer = 1.2 + random() * 2;
     for (const m of this.members) m.speaking = m === speaker;
   }
 
@@ -244,7 +245,7 @@ export class Conversation {
     this.members.splice(i, 1);
     p.talk = null;
     p.speaking = false;
-    p.socialCooldown = 12 + Math.random() * 15;
+    p.socialCooldown = 12 + random() * 15;
     p.timer = 0.3;
     if (this.members.length >= 2) this.assignSlots(this.nav);
   }
@@ -256,8 +257,8 @@ export class Conversation {
     for (const m of this.members) {
       m.talk = null;
       m.speaking = false;
-      m.socialCooldown = 20 + Math.random() * 25;
-      m.timer = 0.3 + Math.random();
+      m.socialCooldown = 20 + random() * 25;
+      m.timer = 0.3 + random();
     }
   }
 }
@@ -277,7 +278,7 @@ export class Social {
   /** Everybody walks off to a quiet spot elsewhere and sits out of conversations for a while. */
   private clearOut(group: readonly Person[], nav: NavGrid, traffic: Traffic): void {
     for (const m of group) {
-      m.socialCooldown = 6 + Math.random() * 6;
+      m.socialCooldown = 6 + random() * 6;
       m.walkTo(nav, traffic.wanderSpot(m, 10, CLEAR_DISTANCE));
     }
   }
@@ -325,7 +326,7 @@ export class Social {
       if (c.members.length >= MAX_GROUP) continue;
       for (const p of free) {
         if (p.talk) continue;
-        if (Math.hypot(p.pos.x - c.center.x, p.pos.z - c.center.z) < LINK_DISTANCE + 0.8 && Math.random() < JOIN_CHANCE * (1 + this.affinity.towards(p, c.members) * 3)) {
+        if (Math.hypot(p.pos.x - c.center.x, p.pos.z - c.center.z) < LINK_DISTANCE + 0.8 && random() < JOIN_CHANCE * (1 + this.affinity.towards(p, c.members) * 3)) {
           if (traffic && traffic.bodiesNear(c.center, CROWD_RADIUS) > CROWD_LIMIT) {
             this.clearOut([p], nav, traffic); // too packed already: make room instead
             continue;
@@ -362,7 +363,7 @@ export class Social {
       const gz = group.reduce((t, m) => t + m.pos.z, 0) / group.length;
       if (this.active.some((c) => Math.hypot(c.center.x - gx, c.center.z - gz) < MIN_GROUP_SPACING)) continue;
       // friends stop for a chat much more readily than strangers
-      if (Math.random() >= Math.min(0.9, START_CHANCE[Math.min(group.length, MAX_GROUP)] * (1 + this.affinity.max(group) * 4))) continue;
+      if (random() >= Math.min(0.9, START_CHANCE[Math.min(group.length, MAX_GROUP)] * (1 + this.affinity.max(group) * 4))) continue;
       const cx = group.reduce((s, m) => s + m.pos.x, 0) / group.length;
       const cz = group.reduce((s, m) => s + m.pos.z, 0) / group.length;
       let center = { x: Math.min(Math.max(cx, 2), nav.cols * nav.cell - 2), z: Math.min(Math.max(cz, 2), nav.rows * nav.cell - 2) };
@@ -377,7 +378,7 @@ export class Social {
   /** Now and then somebody who is free looks up a good friend and walks over for a chat. */
   private seekFriends(free: readonly Person[], nav: NavGrid, traffic: Traffic): void {
     for (const p of free) {
-      if (p.talk || (this.seekUntil.get(p) ?? 0) > this.clock || Math.random() >= SEEK_CHANCE) continue;
+      if (p.talk || (this.seekUntil.get(p) ?? 0) > this.clock || random() >= SEEK_CHANCE) continue;
       let best: Person | null = null;
       let bestAffinity = SEEK_MIN;
       for (const o of free) {
@@ -391,7 +392,7 @@ export class Social {
         }
       }
       if (!best) continue;
-      this.seekUntil.set(p, this.clock + 15 + Math.random() * 15);
+      this.seekUntil.set(p, this.clock + 15 + random() * 15);
       p.walkTo(nav, traffic.openSpotNear(best.pos, 1.1, [p, best]));
     }
   }

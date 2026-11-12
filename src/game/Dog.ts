@@ -4,6 +4,7 @@ import { DOOR, DOOR_IN, DOOR_OUT } from './Door';
 import type { NavGrid } from './NavGrid';
 import type { Person } from './Person';
 import { Walker } from './Walker';
+import { random } from './rng';
 
 const FOLLOW_DISTANCE = 1.4; // dog starts running when the owner is further away than this
 const HEEL_DISTANCE = 0.9; // where the dog tries to end up
@@ -57,7 +58,7 @@ export class Dog extends Walker {
   /** Walk up to the person and enjoy the attention for `seconds`. */
   petBy(person: Person, seconds: number, nav: NavGrid): void {
     this.petted = { by: person, t: seconds };
-    this.petCooldown = seconds + 25 + Math.random() * 30;
+    this.petCooldown = seconds + 25 + random() * 30;
     const a = Math.atan2(this.pos.x - person.pos.x, this.pos.z - person.pos.z);
     const spot = nav.nearestWalkable({ x: person.pos.x + Math.sin(a) * 0.65, z: person.pos.z + Math.cos(a) * 0.65 }, 3);
     if (spot) this.goTo(nav, spot);
@@ -80,7 +81,7 @@ export class Dog extends Walker {
     this.portrait = opts.portrait ?? null;
     this.speed = opts.speed ?? this.speed;
     this.radius = opts.radius ?? this.radius;
-    this.side = opts.side ?? (Math.random() < 0.5 ? 1 : -1);
+    this.side = opts.side ?? (random() < 0.5 ? 1 : -1);
     this.root = rig.root;
     this.headHeight = rig.headHeight;
     this.id = opts.id ?? `dog-${owner.id}`;
@@ -201,7 +202,7 @@ export class Dog extends Walker {
       this.timer = 0.15;
     } else {
       this.turnTo(Math.atan2(dx, dz), 0.3);
-      if (Math.random() < 0.05) this.side *= -1;
+      if (random() < 0.05) this.side *= -1;
       this.timer = 0.2;
     }
   }

@@ -4,6 +4,7 @@ import { screenMaterial, type ScreenKind } from '../render/screens';
 import type { DeskPlacement, OfficeModel } from '../render/officeModel';
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { Person } from './Person';
+import { random } from './rng';
 
 export class Desk {
   occupant: Person | null = null;
@@ -162,7 +163,7 @@ export class Office {
     if (!f?.free) return false;
     const pool = this.people.filter((o) => o !== p && o.inOffice && !o.held && !o.controlled && !o.talk && !o.meetJob && !o.printJob && !o.foosJob && !o.vapeJob);
     if (!pool.length) return false;
-    const other = pool[Math.floor(Math.random() * pool.length)];
+    const other = pool[Math.floor(random() * pool.length)];
     return f.start(p, other, nav);
   }
 
@@ -206,7 +207,7 @@ export class Office {
     const pool = free.some((f) => !f.d.owner) ? free.filter((f) => !f.d.owner) : free;
     const near = pool.slice(0, 4);
     if (!near.length) return null;
-    const desk = near[Math.floor(Math.random() * near.length)].d;
+    const desk = near[Math.floor(random() * near.length)].d;
     desk.occupant = p;
     return desk;
   }

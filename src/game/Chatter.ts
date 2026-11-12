@@ -1,4 +1,5 @@
 import type { Person } from './Person';
+import { random } from './rng';
 
 /** A body-language beat: how somebody reacts while others talk (played by the game's `poseReaction`). */
 export type Reaction = 'laugh' | 'point' | 'shrug' | 'surprise' | 'nod' | 'think' | 'wave' | 'cheer';
@@ -43,11 +44,11 @@ export const SIGNALS = {
   topic: { symbol: '💡', reaction: 'point' as Reaction },
 };
 
-export const pick = <T>(list: readonly T[]): T => list[Math.floor(Math.random() * list.length)];
+export const pick = <T>(list: readonly T[]): T => list[Math.floor(random() * list.length)];
 
 function weighted(kind: 'chat' | 'discussion'): Beat {
   const total = BEATS.reduce((s, b) => s + b[kind], 0);
-  let r = Math.random() * total;
+  let r = random() * total;
   for (const b of BEATS) if ((r -= b[kind]) <= 0) return b;
   return BEATS[0];
 }
@@ -56,7 +57,7 @@ function weighted(kind: 'chat' | 'discussion'): Beat {
 export function playBeat(speaker: Person, listeners: readonly Person[], speakerReaction: Reaction, listenerReaction: Reaction | null): void {
   speaker.react(speakerReaction);
   if (!listenerReaction) return;
-  for (const l of listeners) if (l !== speaker && Math.random() < 0.55) l.react(listenerReaction, 0.15 + Math.random() * 0.5);
+  for (const l of listeners) if (l !== speaker && random() < 0.55) l.react(listenerReaction, 0.15 + random() * 0.5);
 }
 
 /** One thread of wordless talk: every turn is a bubble symbol plus matching body language for the speaker and the listeners. */

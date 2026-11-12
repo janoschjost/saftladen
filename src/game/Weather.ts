@@ -1,9 +1,10 @@
+import { random } from './rng';
 export type WeatherMode = 'auto' | 'sun' | 'rain';
 
 const DRY = [90, 220]; // seconds of dry weather between two showers
 const WET = [50, 130]; // seconds a shower lasts
 
-const between = ([a, b]: number[]) => a + Math.random() * (b - a);
+const between = ([a, b]: number[]) => a + random() * (b - a);
 
 /** Showers come and go by themselves (or the settings force sun / rain). `rain` eases 0..1 so the visuals fade. */
 export class Weather {

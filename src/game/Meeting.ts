@@ -3,6 +3,7 @@ import type { NavGrid, Vec2 } from './NavGrid';
 import type { Person } from './Person';
 import { Chat } from './Chatter';
 import { nextSpeaker, type ConversationKind, type Talk } from './Social';
+import { random } from './rng';
 
 /** A chair at the meeting table. */
 export interface MeetSeat {
@@ -23,7 +24,7 @@ const FIRST_MEETING = { min: 25, max: 50 }; // seconds after game start
 const PAUSE = { min: 70, max: 140 }; // seconds between two meetings
 const GROUP = { min: 3, max: 6 };
 
-const between = ({ min, max }: { min: number; max: number }) => min + Math.random() * (max - min);
+const between = ({ min, max }: { min: number; max: number }) => min + random() * (max - min);
 
 /** One meeting: people walk to the room, sit down, talk behind the closed door, then leave together. */
 export class Meeting implements Talk {
@@ -73,7 +74,7 @@ export class Meeting implements Talk {
         const next = nextSpeaker(this.members, this.speaker, this.previous);
         this.previous = this.speaker;
         this.speaker = next;
-        this.speakerTimer = 1.5 + Math.random() * 2.8;
+        this.speakerTimer = 1.5 + random() * 2.8;
         this.chat ??= new Chat();
         this.text = this.chat.next(this.speaker, this.members, this.kind);
         for (const m of this.members) m.speaking = m === this.speaker;
@@ -129,8 +130,8 @@ export class CasualChat implements Talk {
     this.speakerTimer -= dt;
     if (this.speakerTimer > 0) return;
     const others = this.members.filter((m) => m !== this.speaker);
-    this.speaker = others[Math.floor(Math.random() * others.length)] ?? this.speaker;
-    this.speakerTimer = 1.5 + Math.random() * 2.8;
+    this.speaker = others[Math.floor(random() * others.length)] ?? this.speaker;
+    this.speakerTimer = 1.5 + random() * 2.8;
     this.chat ??= new Chat();
     this.text = this.chat.next(this.speaker, this.members, this.kind);
     for (const m of this.members) m.speaking = m === this.speaker;
@@ -266,9 +267,9 @@ export class MeetingRoom {
     if (this.timer > 0) return;
     this.timer = 10;
     const free = people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob);
-    const n = Math.min(free.length, Math.round(GROUP.min + Math.random() * (GROUP.max - GROUP.min)));
+    const n = Math.min(free.length, Math.round(GROUP.min + random() * (GROUP.max - GROUP.min)));
     if (n < GROUP.min) return;
-    const group = free.sort(() => Math.random() - 0.5).slice(0, n);
+    const group = free.sort(() => random() - 0.5).slice(0, n);
     if (this.start(group, nav)) this.timer = 0;
   }
 }

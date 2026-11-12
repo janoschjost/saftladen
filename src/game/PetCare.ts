@@ -1,6 +1,7 @@
 import type { Dog } from './Dog';
 import type { NavGrid } from './NavGrid';
 import type { Person } from './Person';
+import { random } from './rng';
 
 const REACH = 1.5; // metres: a passer-by this close to a pet may stop to stroke it
 const CHECK = 0.4; // seconds between two looks
@@ -9,7 +10,7 @@ const OWNER_CHANCE = 0.02; // owners pet their own pet much less often (they are
 const STROKE = { min: 3, max: 6 }; // seconds
 const PERSON_GAP = { min: 35, max: 90 }; // seconds before the same person pets again
 
-const between = ({ min, max }: { min: number; max: number }) => min + Math.random() * (max - min);
+const between = ({ min, max }: { min: number; max: number }) => min + random() * (max - min);
 
 /** Passers-by stop to pet the office dogs and cats; pets bark / meow when somebody comes through the front door. */
 export class PetCare {
@@ -39,7 +40,7 @@ export class PetCare {
         const own = p === dog.owner;
         if (!own && p.moving < 0.3) continue; // strangers have to be passing by
         if (Math.hypot(p.pos.x - dog.pos.x, p.pos.z - dog.pos.z) > REACH) continue;
-        if (Math.random() > (own ? OWNER_CHANCE : CHANCE)) continue;
+        if (random() > (own ? OWNER_CHANCE : CHANCE)) continue;
         if (!p.petDog(dog.pos, between(STROKE))) continue;
         dog.petBy(p, p.playerChat?.total ?? 4, nav);
         this.next.set(p, this.clock + between(PERSON_GAP));
@@ -52,7 +53,7 @@ export class PetCare {
   /** Somebody walks in: pets nearby that are awake announce it. */
   greet(pets: readonly Dog[]): void {
     for (const dog of pets) {
-      if (dog.away || dog.sleep > 0.4 || dog.barkT > 0 || Math.random() > 0.6) continue;
+      if (dog.away || dog.sleep > 0.4 || dog.barkT > 0 || random() > 0.6) continue;
       dog.bark();
       this.onBark(dog);
     }

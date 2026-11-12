@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { seeded, type Rng } from '../game/rng';
 
 /** What a monitor shows, by kind of work. */
 export type ScreenKind = 'code' | 'design' | 'data' | 'sheet' | 'docs' | 'media';
@@ -7,20 +8,6 @@ const W = 192;
 const H = 120;
 
 type Ctx = CanvasRenderingContext2D;
-type Rng = () => number;
-
-/** Small seeded PRNG: every (kind, variant) pair draws the same picture each time. */
-function seeded(seed: number): Rng {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 const pick = <T,>(r: Rng, a: readonly T[]): T => a[Math.floor(r() * a.length)];
 const rect = (c: Ctx, col: string, x: number, y: number, w: number, h: number): void => {
   c.fillStyle = col;

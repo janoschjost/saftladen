@@ -1,4 +1,5 @@
 import { DOOR_SWING, type DoorRig } from '../render/officeModel';
+import { random } from './rng';
 
 /** how close somebody has to be to push a door open (metres) */
 const TRIGGER = 1.25;
@@ -17,10 +18,10 @@ interface State {
 }
 
 const pickRest = (): number => {
-  const r = Math.random();
+  const r = random();
   return r < 0.5 ? 0 : r < 0.7 ? 0.3 : 1;
 };
-const nextReroll = (): number => 30 + Math.random() * 90;
+const nextReroll = (): number => 30 + random() * 90;
 
 /** Interior doors: swing open when somebody walks through, otherwise rest closed, ajar or propped open. */
 export class Doors {
@@ -29,7 +30,7 @@ export class Doors {
   constructor(rigs: DoorRig[]) {
     this.states = rigs.map((rig) => {
       const rest = pickRest();
-      const s = { rig, open: rest, rest, hold: 0, reroll: Math.random() * 90, locked: false };
+      const s = { rig, open: rest, rest, hold: 0, reroll: random() * 90, locked: false };
       this.apply(s);
       return s;
     });
