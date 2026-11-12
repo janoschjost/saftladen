@@ -47,6 +47,7 @@ import { Social } from './Social';
 import { TimeOfDay, applySky, type SkyRig } from './TimeOfDay';
 import { Traffic } from './Traffic';
 import type { Walker } from './Walker';
+import { random } from './rng';
 
 const STEP = 1 / 60; // fixed simulation step
 const TALK_REACH = 2.6; // metres: how far the player can be from somebody to talk to them
@@ -333,7 +334,7 @@ export class Game {
       person.preferredHome = index % HOME_COUNT;
       const seat = this.savedSeats[m.id];
       if (seat) this.office.assign(person, seat);
-      if (Math.random() < 0.8) {
+      if (random() < 0.8) {
         const desk = this.office.claim(person, false);
         if (desk) person.sitAt(desk);
       }
@@ -475,7 +476,7 @@ export class Game {
           d.prev.z = free.z;
         }
       }
-      this.dragged.timer = 0.8 + Math.random();
+      this.dragged.timer = 0.8 + random();
       const landed = this.dragged;
       this.dragged = null;
       if (this.stage.hasPointerCapture(e.pointerId)) this.stage.releasePointerCapture(e.pointerId);
@@ -634,7 +635,7 @@ export class Game {
       p.interrupt();
     };
     const pickFree = (n: number): Person[] => {
-      const pool = free().sort(() => Math.random() - 0.5);
+      const pool = free().sort(() => random() - 0.5);
       return pool.slice(0, n);
     };
     const meeting = (n: number) => () => {
@@ -899,7 +900,7 @@ export class Game {
   private talkTo(p: Person, eye: { x: number; z: number }): void {
     const stopped = p.talkTo({ x: eye.x, z: eye.z }, 4);
     const lines = stopped ? ANSWERS : BUSY_ANSWERS;
-    this.reply = { who: p, text: lines[Math.floor(Math.random() * lines.length)], t: 3.5 };
+    this.reply = { who: p, text: lines[Math.floor(random() * lines.length)], t: 3.5 };
   }
 
   /** Starts a day as this person: they come to the office if they are away, then the camera moves behind them. */

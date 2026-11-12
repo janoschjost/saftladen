@@ -4,6 +4,7 @@ import type { SkyRig } from './TimeOfDay';
 import { Dog } from './Dog';
 import { Person } from './Person';
 import type { Walker } from './Walker';
+import { random } from './rng';
 
 const KONAMI = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'KeyB', 'KeyA'];
 const DISCO_SECONDS = 14;
@@ -65,7 +66,7 @@ export class Easter {
     this.series = s && s.who === w && s.t > 0 ? { who: w, n: s.n + 1, t: CLICK_GAP } : { who: w, n: 1, t: CLICK_GAP };
     const n = this.series.n;
     if (w instanceof Person && n >= PERSON_CLICKS && !this.angry && !w.held && !w.controlled) {
-      this.angry = { who: w, text: ANGRY_LINES[Math.floor(Math.random() * ANGRY_LINES.length)], t: ANGRY_SECONDS };
+      this.angry = { who: w, text: ANGRY_LINES[Math.floor(random() * ANGRY_LINES.length)], t: ANGRY_SECONDS };
       this.series = null;
     } else if (w instanceof Dog && n >= DOG_CLICKS && !this.flips.has(w)) {
       this.flips.set(w, 0);

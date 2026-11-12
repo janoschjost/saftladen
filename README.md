@@ -10,10 +10,13 @@ nvm use                # Node version from .nvmrc
 npm install
 npm run dev            # http://localhost:5173
 npm run build
+npm test               # vitest: simulation tests (src/**/*.test.ts), deterministic via a fixed seed
 npm run fetch-team     # re-scrape https://vitamin2.ch/agentur (names, roles, portraits -> public/team, src/data/team.raw.json)
 ```
 
 ## Structure
+
+- `src/game/rng.ts` – the one source of randomness: `random()` for the simulation (seedable, `?seed=<n>` in dev replays a start), `fxRandom()` for per-frame visuals, `seeded(n)` for fixed looks. Never use `Math.random()`
 
 - `src/data/team.ts` – hand-annotated look per person (hair, glasses, beard, clothes) derived from the portraits
 - `src/render/characterBuilder.ts` – builds the low-poly character from a `Look`

@@ -38,15 +38,15 @@ Rules:
 - `drag.booth` Dropping someone on the phone-booth stool makes them sit and take a call — `src/game/PhoneBooth.ts`
 
 ## Presence
-- `presence.share` About 36% of the team is out at any time, 45% of those in home office — `src/game/Presence.ts`
+- `presence.share` About 36% of the team is out at any time, 45% of those in home office — `src/game/Presence.ts`, test: `src/game/Presence.test.ts`
 - `presence.errand` Errands (25–70 s) and home office (90–220 s) go through the front door and porch; away people are hidden and not clickable — `src/game/Presence.ts`, `src/game/Door.ts`
-- `presence.hours` Office hours per person: habitual arrive / leave / lunch hour (`schedule` in team data, fallback core hours 08:00–17:30); every day at 04:00 each person gets a fresh plan with jitter, so arrivals and departures are staggered — `src/game/Presence.ts`, `src/data/team.ts` (#5)
-- `presence.lunch` Lunch at each person's own hour (short errand); some skip it or eat at the desk; 4+ out at once counts as the lunch break — `src/game/Presence.ts` (#5)
+- `presence.hours` Office hours per person: habitual arrive / leave / lunch hour (`schedule` in team data, fallback core hours 08:00–17:30); every day at 04:00 each person gets a fresh plan with jitter, so arrivals and departures are staggered — `src/game/Presence.ts`, `src/data/team.ts`, test: `src/game/Presence.test.ts` (#5)
+- `presence.lunch` Lunch at each person's own hour (short errand); some skip it or eat at the desk; 4+ out at once counts as the lunch break — `src/game/Presence.ts`, test: `src/game/Presence.test.ts` (#5)
 - `presence.errand-window` Errands and home office spells only between 07:30 and 18:00, not shortly before going home — `src/game/Presence.ts` (#5)
-- `presence.night-shift` Night owls: per-person chance to stay on into the night (desk lamp on; `nightHome` people from the home office, e.g. marco-rieser); some days a crunch keeps 2–4 more in — `src/game/Presence.ts`, `src/data/team.ts` (#5)
+- `presence.night-shift` Night owls: per-person chance to stay on into the night (desk lamp on; `nightHome` people from the home office, e.g. marco-rieser); some days a crunch keeps 2–4 more in — `src/game/Presence.ts`, `src/data/team.ts`, test: `src/game/Presence.test.ts` (#5)
 - `presence.door-flow` Arrivals and departures don't jam the front door: people walk in one after another, at most 3 on the way out at once, nobody enters while someone is leaving through it — `src/game/Presence.ts` (#5)
 - `presence.rain` Rain keeps people in: fewer leave, longer errands, more home office — `src/game/Presence.ts`
-- `presence.caps` Max 15 in the office, max 8 in home office (one per room); nobody returns while the office is full — `src/game/Presence.ts`
+- `presence.caps` Max 15 in the office, max 8 in home office (one per room); nobody returns while the office is full — `src/game/Presence.ts`, test: `src/game/Presence.test.ts`
 - `presence.homebodies` Homebodies are picked 6× more often, stay 2× longer, likely home at start — `src/game/Presence.ts`
 - `presence.schedule-debug` Today's plans in the console: `__game.presence.schedule` (with `?time=…`) — `src/game/Presence.ts` (#5)
 - `presence.strings` All presence wording (leave vs return labels, roster status, action buttons) comes from one table; going out and coming back have separate labels — `src/i18n/strings.ts` (#8)
@@ -55,7 +55,7 @@ Rules:
 - `presence.roster` Away roster: out / on the way / "zurück in …" countdown / Homeoffice; clicking a home-office person opens their feed — `src/ui/Roster.ts`
 
 ## Desks and work
-- `desk.ownership` Every model desk is a numbered workplace with one owner; the owner asks a squatter to leave; others take a free desk nearby, preferring unowned ones — `src/game/Office.ts`
+- `desk.ownership` Every model desk is a numbered workplace with one owner; the owner asks a squatter to leave; others take a free desk nearby, preferring unowned ones — `src/game/Office.ts`, test: `src/game/Office.test.ts`
 - `desk.work` People mostly go sit and work (90–240 s), type with jittering hands, glance at the screen — `src/game/Person.ts`, `src/game/Game.ts`
 - `desk.mug` Desk mug appears with the sitter, people sip, fill level visible — `src/game/Person.ts`, `src/render/officeModel.ts`
 - `desk.chair-call-vape` Phone people take calls and vapers take drags in the chair — `src/game/Person.ts`
@@ -88,7 +88,7 @@ Rules:
 - `social.walk-talk` Walk mode talk: person stops, faces the player and replies, unless busy — `src/game/Game.ts`, `src/game/Person.ts`
 
 ## Movement
-- `move.astar` A* on an 8-way grid, no corner cutting, no spawns in sealed pockets — `src/game/NavGrid.ts`
+- `move.astar` A* on an 8-way grid, no corner cutting, no spawns in sealed pockets — `src/game/NavGrid.ts`, test: `src/game/NavGrid.test.ts`
 - `move.traffic` Routes bend around crowds; wander spots go to quiet places — `src/game/Traffic.ts`
 - `move.passages` Narrow passages (doorways, corridors, gaps between desks, found from the nav grid) carry one direction at a time: oncoming walkers wait beside the entrance, sides take turns, head-on inside → one backs out; deadlock fallback detour → give way → push through; nobody loiters inside — `src/game/Passages.ts` (#3)
 - `move.passing` Keep right head-on, slow when close, back off nose to nose, re-plan or give up when stuck; idle people shuffle aside — `src/game/Walker.ts`
@@ -176,7 +176,8 @@ Rules:
 
 ## Dev tools
 - `dev.events` Dev events registry + panel (meetings 2/4/6, errand, home office, vape, printer, rain …) with status / "nicht möglich"; console `dev.list()`, `dev.trigger(id)` — `src/game/DevEvents.ts`, `src/ui/DevPanel.ts`
-- `dev.params` Dev-only query params: `?day[=id]`, `?snack[=id]`, `&time=14`, `&follow`; any of them exposes `window.__game` — `src/game/debugParams.ts`
+- `dev.params` Dev-only query params: `?day[=id]`, `?snack[=id]`, `&time=14`, `&follow`, `?seed=<n>`; any of them exposes `window.__game` — `src/game/debugParams.ts`
+- `dev.seed` One seedable random source for the simulation: same `?seed` → same start (plans, speeds, who is out); the console logs each page's seed. Per-frame visuals use their own stream — `src/game/rng.ts`, test: `src/game/rng.test.ts`, `src/game/Presence.test.ts` (#29)
 - `ui.panels` Side panels (settings, seats, dev, editor) close each other; dock panels (feeds, roster) behave as an accordion, honour reduced motion — `src/ui/exclusive.ts`, `src/ui/collapsible.ts`
 
 ## Removed on purpose

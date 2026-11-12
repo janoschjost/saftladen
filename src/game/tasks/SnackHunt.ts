@@ -3,6 +3,7 @@ import { box, merge, propMaterial } from '../../render/geo';
 import type { DayCtx, DayTask } from '../Day';
 import type { Vec2 } from '../NavGrid';
 import { spreadSpots } from './spots';
+import { random } from '../rng';
 
 const COUNT = 8;
 const PICKUP_RADIUS = 0.7;
@@ -83,7 +84,7 @@ export class SnackHunt implements DayTask {
       this.remove(p);
       this.got++;
       ctx.person.grabSnack();
-      ctx.say(QUIPS[Math.floor(Math.random() * QUIPS.length)]);
+      ctx.say(QUIPS[Math.floor(random() * QUIPS.length)]);
     }
   }
 

@@ -3,6 +3,7 @@ import type { NavGrid, Vec2 } from './NavGrid';
 import type { Gate } from './Passages';
 import type { Talk } from './Social';
 import type { Traffic } from './Traffic';
+import { random } from './rng';
 
 export type WalkerState = 'idle' | 'walk';
 
@@ -20,14 +21,14 @@ const GATE_PUSH = 4; // seconds a walker that gave way in vain ignores reservati
 export abstract class Walker {
   pos: Vec2;
   prev: Vec2;
-  yaw = Math.random() * Math.PI * 2;
+  yaw = random() * Math.PI * 2;
   prevYaw = this.yaw;
-  phase = Math.random() * 10;
+  phase = random() * 10;
   prevPhase = this.phase;
   moving = 0; // 0..1 eased walk amount (drives animation)
   state: WalkerState = 'idle';
   path: Vec2[] = [];
-  timer = Math.random() * 3;
+  timer = random() * 3;
   abstract speed: number;
   abstract radius: number;
   abstract root: THREE.Object3D;
@@ -46,7 +47,7 @@ export abstract class Walker {
   /** seconds this walker has been standing around inside a passage */
   private loiter = 0;
   /** how long this walker waits before it gives way (differs per walker, so two that block each other do not both leave) */
-  private gatePatience = GATE_PATIENCE + Math.random() * 3;
+  private gatePatience = GATE_PATIENCE + random() * 3;
   /** gave way at a passage and has not got through one since */
   private gateGaveWay = false;
   /** seconds this walker still pushes through passages regardless of reservations (deadlock fallback) */
@@ -54,7 +55,7 @@ export abstract class Walker {
   /** the traffic director (routes and destinations); set by the game */
   traffic: Traffic | null = null;
   /** which way this walker prefers to pass head-on (stable, so nobody dithers) */
-  private dodgePref: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
+  private dodgePref: 1 | -1 = random() < 0.5 ? 1 : -1;
   /** true while the user holds this walker with the mouse */
   held = false;
   /** conversation this walker is part of, if any */
@@ -261,7 +262,7 @@ export abstract class Walker {
       this.blockedTime = 0;
       this.path = [];
       this.state = 'idle';
-      this.timer = 0.3 + Math.random();
+      this.timer = 0.3 + random();
       return;
     }
 
@@ -287,7 +288,7 @@ export abstract class Walker {
           this.stuckCount = 0;
           this.path = [];
           this.state = 'idle';
-          this.timer = 0.2 + Math.random() * 0.5;
+          this.timer = 0.2 + random() * 0.5;
           return;
         }
         this.goTo(nav, goal, 12);
@@ -347,7 +348,7 @@ export abstract class Walker {
       this.gateGaveWay = true;
       this.path = [];
       this.state = 'idle';
-      this.timer = 0.2 + Math.random() * 0.5;
+      this.timer = 0.2 + random() * 0.5;
       return true;
     }
     if (this.gateWait > GATE_DETOUR && !this.gateDetoured) {
@@ -488,7 +489,7 @@ export abstract class Walker {
   }
 
   protected idleTime(): number {
-    return 1.5 + Math.random() * 5;
+    return 1.5 + random() * 5;
   }
 
   /** Walk to a random free cell, with random jitter so people don't stack on cell centres. */
@@ -509,7 +510,7 @@ export abstract class Walker {
 
   private follow(nav: NavGrid, path: Vec2[]): void {
     const j = nav.cell * 0.3;
-    this.path = path.map((p, i) => (i === path.length - 1 ? p : { x: p.x + (Math.random() - 0.5) * j, z: p.z + (Math.random() - 0.5) * j }));
+    this.path = path.map((p, i) => (i === path.length - 1 ? p : { x: p.x + (random() - 0.5) * j, z: p.z + (random() - 0.5) * j }));
     this.state = 'walk';
     this.stuckClock = 0;
     this.stuckFrom = { ...this.pos };

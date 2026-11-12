@@ -1,5 +1,6 @@
 import type { DayCtx } from '../Day';
 import type { Vec2 } from '../NavGrid';
+import { random } from '../rng';
 
 /** `count` free floor spots spread over the whole office: each next one is (one of) the free cells farthest from the player and all earlier spots. */
 export function spreadSpots(ctx: DayCtx, count: number): Vec2[] {
@@ -18,7 +19,7 @@ export function spreadSpots(ctx: DayCtx, count: number): Vec2[] {
     const scored = cells
       .map((c) => ({ c, d: Math.min(...anchors.map((a) => Math.hypot(a.x - c.x, a.z - c.z))) }))
       .sort((a, b) => b.d - a.d);
-    const pick = scored[Math.floor(Math.random() * Math.min(6, scored.length))].c;
+    const pick = scored[Math.floor(random() * Math.min(6, scored.length))].c;
     chosen.push(pick);
     anchors.push(pick);
   }

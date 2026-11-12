@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { WORLD } from './World';
+import { fxRandom } from '../game/rng';
 
 const DROPS = 1400;
 const TOP = 16;
@@ -31,13 +32,13 @@ export class RainFx {
   }
 
   private respawn(i: number, scatter: boolean): void {
-    const x = -MARGIN + Math.random() * (WORLD.width + MARGIN * 2);
-    const z = -MARGIN + Math.random() * (WORLD.depth + MARGIN * 2);
+    const x = -MARGIN + fxRandom() * (WORLD.width + MARGIN * 2);
+    const z = -MARGIN + fxRandom() * (WORLD.depth + MARGIN * 2);
     const inside = x > 0 && x < WORLD.width && z > 0 && z < WORLD.depth;
     this.x[i] = x;
     this.z[i] = z;
     this.floor[i] = inside ? ROOF_Y : 0;
-    this.y[i] = scatter ? this.floor[i] + Math.random() * (TOP - this.floor[i]) : TOP + Math.random() * 2;
+    this.y[i] = scatter ? this.floor[i] + fxRandom() * (TOP - this.floor[i]) : TOP + fxRandom() * 2;
   }
 
   /** `amount` 0..1 (weather.rain). Hidden entirely while dry. */

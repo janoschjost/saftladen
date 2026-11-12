@@ -5,6 +5,7 @@ import type { NavGrid } from './NavGrid';
 import type { Person } from './Person';
 import type { TimeOfDay } from './TimeOfDay';
 import type { Weather } from './Weather';
+import { random } from './rng';
 
 /** Share of the people on duty that is out of the office at any time (errands + home office). */
 const ABSENT_SHARE = 0.36;
@@ -47,9 +48,9 @@ const EXIT = { gap: [1, 3], max: 3, patience: 25 };
 const DOOR_CLEAR = { radius: 3.5, wait: 6 };
 const OFF = 9999; // "off duty": stays away until their next working day starts
 
-const between = ([a, b]: number[]) => a + Math.random() * (b - a);
+const between = ([a, b]: number[]) => a + random() * (b - a);
 /** -spread .. +spread, most likely near 0 */
-const jitter = (spread: number) => (Math.random() + Math.random() - 1) * spread;
+const jitter = (spread: number) => (random() + random() - 1) * spread;
 
 /** One person's working day, rolled fresh every morning from their habitual schedule. */
 interface DayPlan {
@@ -128,8 +129,8 @@ export class Presence {
     const s = p.member.schedule;
     const arrive = s.arrive + jitter(JITTER.arrive);
     const leave = Math.max(arrive + 2, s.leave + jitter(JITTER.leave));
-    const lunch = p.member.homebody || Math.random() < LUNCH.skip ? Infinity : s.lunch + jitter(JITTER.lunch);
-    const night = Math.random() < s.nightOwlChance;
+    const lunch = p.member.homebody || random() < LUNCH.skip ? Infinity : s.lunch + jitter(JITTER.lunch);
+    const night = random() < s.nightOwlChance;
     return { arrive, leave, end: night ? Math.max(leave + 1, between(NIGHT_END)) : leave, lunch, lunched: false, night };
   }
 
@@ -139,8 +140,8 @@ export class Presence {
     this.lunchers.clear();
     this.plans.clear();
     for (const p of this.people) this.plans.set(p, this.roll(p));
-    if (Math.random() >= CRUNCH.chance) return;
-    const pool = this.people.filter((p) => !p.member.homebody && !this.plans.get(p)!.night).sort(() => Math.random() - 0.5);
+    if (random() >= CRUNCH.chance) return;
+    const pool = this.people.filter((p) => !p.member.homebody && !this.plans.get(p)!.night).sort(() => random() - 0.5);
     for (const p of pool.slice(0, Math.round(between(CRUNCH.people)))) {
       const plan = this.plans.get(p)!;
       plan.night = true;
@@ -219,28 +220,28 @@ export class Presence {
     const onDuty = this.people.filter((p) => p.presence === 'in');
     this.onDuty = onDuty.length;
     if (hour < ERRANDS.from || hour >= ERRANDS.to) return; // early birds and the night shift sit at their desks
-    const homebodies = onDuty.filter((p) => p.member.homebody && Math.random() < HOMEBODY.startHome);
+    const homebodies = onDuty.filter((p) => p.member.homebody && random() < HOMEBODY.startHome);
     for (const p of homebodies) {
       p.homeVariant = this.freeVariant(p);
-      p.startAway('home', Math.random() * HOME[1] * HOMEBODY.stay + 6);
+      p.startAway('home', random() * HOME[1] * HOMEBODY.stay + 6);
     }
-    const pool = onDuty.filter((p) => !p.member.homebody).sort(() => Math.random() - 0.5);
+    const pool = onDuty.filter((p) => !p.member.homebody).sort(() => random() - 0.5);
     const n = Math.round(this.target * 0.8) - homebodies.length;
     let home = 0;
     for (const p of pool.slice(0, Math.max(0, n))) {
-      const kind = Math.random() < HOME_SHARE && home < MAX_HOME ? 'home' : 'errand';
+      const kind = random() < HOME_SHARE && home < MAX_HOME ? 'home' : 'errand';
       if (kind === 'home') {
         home++;
         p.homeVariant = this.freeVariant(p);
       }
-      p.startAway(kind, Math.random() * (kind === 'home' ? HOME[1] : ERRAND[1]) + 6);
+      p.startAway(kind, random() * (kind === 'home' ? HOME[1] : ERRAND[1]) + 6);
     }
     // too many left in the office: the rest starts in the home office
-    const staying = this.people.filter((p) => p.presence === 'in').sort(() => Math.random() - 0.5);
+    const staying = this.people.filter((p) => p.presence === 'in').sort(() => random() - 0.5);
     for (const p of staying.slice(MAX_OFFICE)) {
       const home = this.homeCount < MAX_HOME || p.member.homebody;
       if (home) p.homeVariant = this.freeVariant(p);
-      p.startAway(home ? 'home' : 'errand', Math.random() * (home ? HOME[1] : ERRAND[1]) + 6);
+      p.startAway(home ? 'home' : 'errand', random() * (home ? HOME[1] : ERRAND[1]) + 6);
     }
   }
 
@@ -259,12 +260,12 @@ export class Presence {
     const present = this.present;
     if (present < MAX_OFFICE) return false;
     // nobody walks back in while the office is full (0 = called back by the player: they do)
-    for (const p of this.people) if (p.presence === 'out' && p.awayKind !== 'off' && p.awayLeft > 0 && p.awayLeft < 5) p.awayLeft = 5 + Math.random() * 15;
+    for (const p of this.people) if (p.presence === 'out' && p.awayKind !== 'off' && p.awayLeft > 0 && p.awayLeft < 5) p.awayLeft = 5 + random() * 15;
     if (present === MAX_OFFICE) return false;
     if (this.people.some((p) => p.presence === 'leaving')) return false;
     const candidates = this.people.filter((p) => this.free(p) && !p.task);
     if (!candidates.length) return false;
-    const p = candidates[Math.floor(Math.random() * candidates.length)];
+    const p = candidates[Math.floor(random() * candidates.length)];
     const home = this.homeCount < MAX_HOME || p.member.homebody;
     if (home) p.homeVariant = this.freeVariant(p);
     p.leaveOffice(nav, home ? 'home' : 'errand', home ? between(HOME) : between(ERRAND));
@@ -361,7 +362,7 @@ export class Presence {
   private arrive(p: Person): void {
     const coming = this.people.filter((o) => o.presence === 'out' && o.awayKind === 'off' && o.awayLeft < 600).length;
     const full = this.present + coming >= MAX_OFFICE;
-    if (p.member.homebody ? Math.random() < HOMEBODY.startHome : full) {
+    if (p.member.homebody ? random() < HOMEBODY.startHome : full) {
       // no room: the day starts in the home office, or out and about when all home rooms are taken
       const home = p.member.homebody || this.homeCount < MAX_HOME;
       if (home) p.homeVariant = this.freeVariant(p);
@@ -369,7 +370,7 @@ export class Presence {
       p.awayLeft = home ? between(HOME) * (p.member.homebody ? HOMEBODY.stay : 1) : between(ERRAND);
       return;
     }
-    this.doorSlot = Math.max(this.doorSlot + between(DOOR_GAP), this.clock + Math.random());
+    this.doorSlot = Math.max(this.doorSlot + between(DOOR_GAP), this.clock + random());
     p.awayLeft = this.doorSlot - this.clock;
   }
 
@@ -442,7 +443,7 @@ export class Presence {
     if (!candidates.length) return;
     // homebodies get several tickets in the draw
     const draw = candidates.flatMap((c) => Array<Person>(c.member.homebody ? HOMEBODY.weight : 1).fill(c));
-    const p = draw[Math.floor(Math.random() * draw.length)];
+    const p = draw[Math.floor(random() * draw.length)];
     const stretch = this.weather.raining ? RAIN.errandStretch : 1;
     if (p.member.homebody) {
       // own room, so a full set of regular home offices doesn't keep them in
@@ -451,7 +452,7 @@ export class Presence {
       return;
     }
     const homeShare = this.weather.raining ? RAIN.homeShare : HOME_SHARE;
-    const home = Math.random() < homeShare && this.homeCount < MAX_HOME;
+    const home = random() < homeShare && this.homeCount < MAX_HOME;
     if (home) p.homeVariant = this.freeVariant(p);
     p.leaveOffice(nav, home ? 'home' : 'errand', home ? between(HOME) : between(ERRAND) * stretch);
   }

@@ -3,6 +3,7 @@ import { box, merge, propMaterial } from '../../render/geo';
 import type { DayCtx, DayTask } from '../Day';
 import type { Vec2 } from '../NavGrid';
 import { spreadSpots } from './spots';
+import { random } from '../rng';
 
 const COUNT = 6;
 const AT_ONCE = 3; // phones ringing at the same time
@@ -92,7 +93,7 @@ export class PhoneRush implements DayTask {
       this.scene?.remove(p.group);
       this.got++;
       ctx.person.takeCall(3.5);
-      ctx.say(QUIPS[Math.floor(Math.random() * QUIPS.length)]);
+      ctx.say(QUIPS[Math.floor(random() * QUIPS.length)]);
       if (this.spawned < COUNT) this.spawn();
     }
     this.ringClock -= dt;

@@ -3,13 +3,14 @@ import type { MeetSeat } from './Meeting';
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { Person } from './Person';
 import type { ConversationKind, Talk } from './Social';
+import { random } from './rng';
 
 const FIRST = { min: 20, max: 45 }; // seconds after game start
 const PAUSE = { min: 50, max: 110 }; // seconds between two visits
 const STAY = { min: 25, max: 55 }; // seconds the two sit together
 const GATHER_TIMEOUT = 45;
 type ModelSeat = OfficeModel['pod']['seats'][number];
-const between = ({ min, max }: { min: number; max: number }) => min + Math.random() * (max - min);
+const between = ({ min, max }: { min: number; max: number }) => min + random() * (max - min);
 
 /** Two people sitting together in the wooden pod. Reuses the meeting-room seat logic (walk, sit down, stand up). */
 export class PodSession implements Talk {
@@ -111,7 +112,7 @@ export class Pod {
     this.timer = 10;
     const free = people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob && !p.snackLeft);
     if (free.length < 2) return;
-    const pair = free.sort(() => Math.random() - 0.5).slice(0, 2);
+    const pair = free.sort(() => random() - 0.5).slice(0, 2);
     if (this.start(pair, nav)) this.timer = 0;
   }
 }

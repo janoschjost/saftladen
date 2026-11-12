@@ -1,3 +1,4 @@
+import { random } from './rng';
 export interface Vec2 {
   x: number;
   z: number;
@@ -99,8 +100,8 @@ export class NavGrid {
 
   randomWalkable(): { cx: number; cz: number } {
     for (let i = 0; i < 200; i++) {
-      const cx = Math.floor(Math.random() * this.cols);
-      const cz = Math.floor(Math.random() * this.rows);
+      const cx = Math.floor(random() * this.cols);
+      const cz = Math.floor(random() * this.rows);
       if (this.walkable(cx, cz)) return { cx, cz };
     }
     return { cx: 0, cz: 0 };

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { buildJacket } from '../render/jacketBuilder';
 import type { CoatHook, CoatRackRig } from '../render/officeModel';
 import type { Person } from './Person';
+import { random } from './rng';
 
 interface Peg {
   rack: CoatRackRig;
@@ -79,7 +80,7 @@ export class CoatRacks {
       const dist = Math.hypot(v.x - from.x, v.z - from.z);
       if (dist >= bestDist) continue;
       bestDist = dist;
-      best = free[Math.floor(Math.random() * free.length)];
+      best = free[Math.floor(random() * free.length)];
     }
     return best;
   }

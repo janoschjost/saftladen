@@ -4,6 +4,7 @@ import type { MeetSeat } from './Meeting';
 import type { Person } from './Person';
 import { Chat } from './Chatter';
 import { nextSpeaker, type ConversationKind, type Talk } from './Social';
+import { random } from './rng';
 
 /** Where one person stands in the kitchen coffee circle. */
 export interface CoffeeSpot {
@@ -32,7 +33,7 @@ const TABLE_PAUSE = { min: 40, max: 100 };
 const TABLE_STAY = { min: 25, max: 55 }; // seconds the sitters stay once all of them sit
 const TABLE_GATHER = 50;
 
-const between = ({ min, max }: { min: number; max: number }) => min + Math.random() * (max - min);
+const between = ({ min, max }: { min: number; max: number }) => min + random() * (max - min);
 
 /** A few people drinking a coffee together in the kitchen: walk over, stand in a circle with a cup, chat, leave together. */
 export class CoffeeBreak implements Talk {
@@ -76,7 +77,7 @@ export class CoffeeBreak implements Talk {
         const next = nextSpeaker(this.members, this.speaker, this.previous);
         this.previous = this.speaker;
         this.speaker = next;
-        this.speakerTimer = 2 + Math.random() * 3;
+        this.speakerTimer = 2 + random() * 3;
         this.chat ??= new Chat();
         this.text = this.chat.next(this.speaker, this.members, this.kind);
         for (const m of this.members) m.speaking = m === this.speaker;
@@ -177,7 +178,7 @@ export class Kitchen {
     if (this.table) return null;
     const free = this.seats.filter((s) => !s.occupant);
     // adjacent seats on the same bench: start at a random one, take neighbours
-    const first = Math.floor(Math.random() * free.length);
+    const first = Math.floor(random() * free.length);
     const picked = [...free.slice(first), ...free.slice(0, first)].slice(0, people.length);
     if (!picked.length) return null;
     const group = people.slice(0, picked.length);
@@ -244,9 +245,9 @@ export class Kitchen {
     this.timer = 10;
     if (this.users.some(Boolean)) return;
     const free = people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob && !p.snackLeft && !p.phoneJob && !p.run && !p.playerChat);
-    const n = Math.min(free.length, Math.round(GROUP.min + Math.random() * (GROUP.max - GROUP.min)));
+    const n = Math.min(free.length, Math.round(GROUP.min + random() * (GROUP.max - GROUP.min)));
     if (n < GROUP.min) return;
-    if (this.start(free.sort(() => Math.random() - 0.5).slice(0, n), nav)) this.timer = 0;
+    if (this.start(free.sort(() => random() - 0.5).slice(0, n), nav)) this.timer = 0;
   }
 
   private updateTable(dt: number, people: readonly Person[], nav: NavGrid): void {
@@ -262,7 +263,7 @@ export class Kitchen {
     this.tableTimer = 10;
     const free = people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob && !p.snackLeft && !p.phoneJob && !p.run && !p.playerChat && !p.coffeeJob);
     if (!free.length) return;
-    const n = Math.min(free.length, 1 + Math.floor(Math.random() * 3));
-    if (this.startTable(free.sort(() => Math.random() - 0.5).slice(0, n), nav)) this.tableTimer = 0;
+    const n = Math.min(free.length, 1 + Math.floor(random() * 3));
+    if (this.startTable(free.sort(() => random() - 0.5).slice(0, n), nav)) this.tableTimer = 0;
   }
 }

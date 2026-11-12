@@ -5,6 +5,7 @@ import { buildCharacter, type CharacterRig } from './characterBuilder';
 import { buildDog, type DogRig } from './dogBuilder';
 import { ball, box, cyl, merge, propMaterial } from './geo';
 import { SIT_DROP } from './officeBuilder';
+import { fxRandom, seeded } from '../game/rng';
 
 /**
  * Home offices: eight small rooms seen through the webcam of the person working there.
@@ -106,8 +107,7 @@ class Room {
 }
 
 // small deterministic random so the rooms look the same on every load
-let seed = 1;
-const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+let rnd = seeded(1); // reseeded per room (see HomeOffice constructor)
 const pick = <T>(a: readonly T[]): T => a[Math.floor(rnd() * a.length)];
 
 const BOOKS = ['#b5483a', '#3f6e8c', '#d8b04a', '#5a7a52', '#8a5a8c', '#e8e2d4', '#2f3e5a', '#c97a3c'];
@@ -1114,7 +1114,7 @@ const armGap = (a: ArmPose, b: ArmPose) => Math.abs(a.x - b.x) + Math.abs(a.z - 
 
 const mixPose = (a: ArmPose, b: ArmPose, k: number): ArmPose => ({ x: lerp(a.x, b.x, k), z: lerp(a.z, b.z, k), e: lerp(a.e, b.e, k), ez: lerp(a.ez, b.ez, k) });
 const X_AXIS = new THREE.Vector3(1, 0, 0);
-const rand = ([a, b]: [number, number]) => a + Math.random() * (b - a);
+const rand = ([a, b]: [number, number]) => a + fxRandom() * (b - a);
 
 /** One home office scene (one of the eight variants) with whoever is currently working there. */
 export class HomeOffice {
@@ -1123,7 +1123,7 @@ export class HomeOffice {
   private camera = new THREE.PerspectiveCamera(58, 1.6, 0.1, 40);
   private occupant: Occupant | null = null;
   private member: TeamMember | null = null;
-  private clock = Math.random() * 50;
+  private clock = fxRandom() * 50;
   private activity: Activity = 'wave';
   private actLeft = 2.2;
   private actT = 0;
@@ -1153,7 +1153,7 @@ export class HomeOffice {
   constructor(readonly variant: number) {
     this.style = STYLES[variant];
     this.scene.background = new THREE.Color(this.style.bg);
-    seed = 7 + variant * 31;
+    rnd = seeded(7 + variant * 31);
     const set = new Room();
     this.style.build(set);
     set.finish();
@@ -1237,7 +1237,7 @@ export class HomeOffice {
     // vapers keep their room permanently hazy
     this.scene.fog = rig.vape ? new THREE.FogExp2('#c9cdd2', (this.haze = HAZE.base)) : null;
     // some say hi when they sit down, the rest just start working
-    this.setActivity(Math.random() < GREET_CHANCE ? 'wave' : 'type');
+    this.setActivity(fxRandom() < GREET_CHANCE ? 'wave' : 'type');
   }
 
   /** Whether this room and occupant have what a signature move or extra break needs. */
@@ -1277,7 +1277,7 @@ export class HomeOffice {
       const sig = this.member?.signature;
       if (sig && this.canDo(sig)) pool.push(...Array<Activity>(SIGNATURE_PICKS).fill(sig));
       if (this.member?.adhd) pool.push(...ADHD_EXTRAS.filter((x) => this.canDo(x)));
-      this.setActivity(this.activity === 'type' ? pool[Math.floor(Math.random() * pool.length)] : 'type');
+      this.setActivity(this.activity === 'type' ? pool[Math.floor(fxRandom() * pool.length)] : 'type');
     }
     const t = this.clock;
     for (const tick of this.ticks) tick(t);

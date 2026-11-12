@@ -1,18 +1,11 @@
 import * as THREE from 'three';
+import { seeded } from '../game/rng';
 
 export type TattooKind = 'vine' | 'script' | 'dark';
 
 const W = 128;
 const H = 384;
 const cache = new Map<string, THREE.CanvasTexture>();
-
-function rng(seed: number) {
-  let s = seed >>> 0;
-  return () => {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-}
 
 function leaf(ctx: CanvasRenderingContext2D, x: number, y: number, len: number, ang: number) {
   ctx.save();
@@ -51,7 +44,7 @@ function draw(kind: TattooKind, face: 'front' | 'outer', seed: number): HTMLCanv
   c.width = W;
   c.height = H;
   const ctx = c.getContext('2d')!;
-  const r = rng(seed);
+  const r = seeded(seed);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   // ink under skin: soft blue-black, slightly translucent

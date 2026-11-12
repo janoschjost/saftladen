@@ -1,6 +1,7 @@
 import type { NavGrid, Vec2 } from './NavGrid';
 import { Passages } from './Passages';
 import type { Walker } from './Walker';
+import { random } from './rng';
 
 const RADIUS = 1.3; // how far a body's presence is felt (metres)
 const WALK_WEIGHT = 0.4; // moving bodies hurt less than standing ones: they are about to leave
@@ -150,7 +151,7 @@ export class Traffic {
       const { cx, cz } = this.nav.randomWalkable();
       const p = this.nav.center(cx, cz);
       const dist = Math.hypot(p.x - self.pos.x, p.z - self.pos.z);
-      const score = this.load(p, self) + dist * 0.02 + (dist < minDist ? 5 : 0) + Math.random() * 0.1;
+      const score = this.load(p, self) + dist * 0.02 + (dist < minDist ? 5 : 0) + random() * 0.1;
       if (score < bestScore) {
         bestScore = score;
         best = p;
