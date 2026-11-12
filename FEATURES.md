@@ -45,7 +45,7 @@ Rules:
 - `presence.lunch` Lunch at each person's own hour (short errand); some skip it or eat at the desk; 4+ out at once counts as the lunch break — `src/game/Presence.ts`, test: `src/game/Presence.test.ts`, url: `/?seed=1&time=12` (#5, #38)
 - `presence.errand-window` Errands and home office spells only between 07:30 and 18:00, not shortly before going home — `src/game/Presence.ts` (#5)
 - `presence.night-shift` Night owls: per-person chance to stay on into the night (desk lamp on; `nightHome` people from the home office, e.g. marco-rieser); some days a crunch keeps 2–4 more in — `src/game/Presence.ts`, `src/data/team.ts`, test: `src/game/Presence.test.ts`, url: `/?seed=1&time=22` (#5, #38)
-- `presence.door-flow` Arrivals and departures don't jam the front door: people walk in one after another, at most 3 on the way out at once, nobody enters while someone is leaving through it — `src/game/Presence.ts` (#5)
+- `presence.door-flow` Arrivals and departures don't jam the front door: people walk in one after another (at most 2 on their way in at once, 1.5–3.5 s apart), at most 3 on the way out at once, nobody enters while someone is leaving through it — `src/game/Presence.ts`, test: `src/game/Presence.test.ts`, url: `/?seed=1&time=8` (#5, #41)
 - `presence.rain` Rain keeps people in: fewer leave, longer errands, more home office — `src/game/Presence.ts`
 - `presence.caps` Max 15 in the office, max 8 in home office (one per room); nobody returns while the office is full — `src/game/Presence.ts`, test: `src/game/Presence.test.ts`
 - `presence.homebodies` Homebodies are picked 6× more often, stay 2× longer, likely home at start — `src/game/Presence.ts`
@@ -103,7 +103,7 @@ Rules:
 
 ## Pets
 - `pet.roster` Dogs Tala (Ramon), Ellie (Janosch), Harry (Nina), Mira (terrier, Fabian); cats Angus and Binx (Donata) — `src/data/team.ts`
-- `pet.owner` Pets stay beside their owner, lie down when the owner sits, sleep after 12 s, sometimes switch sides; leave and return with the owner — `src/game/Dog.ts`
+- `pet.owner` Pets stay beside their owner, lie down when the owner sits, sleep after 12 s, sometimes switch sides; leave and return with the owner: they arrive and vanish together with the owner (materialise effect), not walking ahead — `src/game/Dog.ts`, `src/game/Presence.ts`, url: `/?seed=1&time=11&event=errand` (#41)
 - `pet.petting` Passers-by within 1.5 m may stop and pet a pet (trots over, wags, happy hops); cooldowns per pet and per person — `src/game/PetCare.ts`
 - `pet.announce` Awake pets bark/meow when someone comes in the front door — `src/game/PetCare.ts`
 - `pet.player` The player's person can pet a pet — `src/game/Person.ts`
@@ -125,6 +125,8 @@ Rules:
 - `office.rooms` Rooms: GL Sizi annex, storage/craft room, kitchen, washroom, archive/printer room, photo studio/dark room, phone booth "PSST!", glass meeting room, lounge with pod + foosball + reception, east room — `src/render/officeModel.ts`
 - `office.teams` Team desk areas: Wassermelonen, Hashtag-Himbeeren, Kreative Kiwis, Digitale Birnen — `src/render/officeModel.ts`
 - `office.lettering` Wall lettering "FRISCHE IDEEN, DIE WIRKEN" (also on door leaves) — `src/render/officeModel.ts`
+- `office.entrance` Two-wing double entrance door in the front wall, right of the annex wall: each wing opens on its own, people use one of two lanes (one per wing); stone porch in front, wall corners close flush, the logo hangs above the door, softer sun shadows — `src/render/officeModel.ts`, `src/game/Door.ts`, `src/render/World.ts`, url: `/#walk@6.25,19.5,0` (#41)
+- `fx.materialise` People and pets materialise on the porch when they arrive and dissolve when they leave (sparkle column), the door stays quiet — `src/render/spawnFx.ts`, `src/game/Walker.ts`, url: `/?seed=1&time=11&event=errand#walk@6.25,18.5,0` (#41)
 - `office.glass-door` Glass wall and glass door across the hallway; frames and panes don't flicker (no coplanar faces) — `src/render/officeModel.ts` (#7)
 - `office.kiwi-birnen-wall` Divider wall between Kreative Kiwis and Digitale Birnen: corridor line to window wall in both plan scales, stops at the window pane, no overlap with the column — `src/render/officeModel.ts` (#6)
 - `office.coat-stands` Freestanding coat stands (round base, pole, hook arms; room-editor item `coat-rack`); no stand in the entrance. A person's long draped coat hangs on a hook exactly while they are in, on the stand nearest their desk, same hook again when free — `src/render/officeModel.ts`, `src/game/CoatRacks.ts`, `src/render/jacketBuilder.ts`, e2e: `e2e/office.spec.ts` (#4, #34)

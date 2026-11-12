@@ -30,8 +30,9 @@ import { PetCare } from './PetCare';
 import { Weather } from './Weather';
 import { Christmas } from './Christmas';
 import { RainFx } from '../render/rainFx';
+import { SpawnFx } from '../render/spawnFx';
 import { loadState, saveState } from '../ui/persist';
-import { DOOR } from './Door';
+import { DOOR_LANES } from './Door';
 import { Doors } from './Doors';
 import { Kitchen } from './Coffee';
 import { MeetingRoom } from './Meeting';
@@ -46,7 +47,7 @@ import { RoomEditor } from './RoomEditor';
 import { Social } from './Social';
 import { TimeOfDay, applySky, type SkyRig } from './TimeOfDay';
 import { Traffic } from './Traffic';
-import type { Walker } from './Walker';
+import { Walker } from './Walker';
 import { random } from './rng';
 
 const STEP = 1 / 60; // fixed simulation step
@@ -81,6 +82,7 @@ export class Game {
   private petCare = new PetCare();
   private hip = new THREE.Vector3();
   private rainFx!: RainFx;
+  private spawnFx!: SpawnFx;
   private xmas!: Christmas;
   private settings!: Settings;
   /** pets (dogs and cats), cached */
@@ -97,8 +99,8 @@ export class Game {
   private actions: Actions;
   private seats: Seats;
   private homes: Array<HomeOffice | null> = Array.from({ length: ROOM_COUNT }, () => null);
-  private entrance!: THREE.Object3D;
-  private doorOpen = 0;
+  private entrance!: { left: THREE.Object3D; right: THREE.Object3D };
+  private doorOpen = { left: 0, right: 0 };
   private doors!: Doors;
   private meetingRoom!: MeetingRoom;
   private pod!: Pod;
@@ -169,6 +171,7 @@ export class Game {
     this.timeControl = new TimeControl(this.tod);
     applySky(this.tod, this.sky);
     this.rainFx = new RainFx(this.scene);
+    this.spawnFx = new SpawnFx(this.scene);
     this.xmas = new Christmas(this.scene);
     const model = (this.model = buildOffice(this.scene));
     // the editor puts the furniture where the saved layout wants it, before anything is derived from its position
@@ -248,6 +251,7 @@ export class Game {
     this.coatRacks = new CoatRacks(model.coatRacks, this.people);
     this.coatRacks.update();
     for (const w of this.walkers) if (w instanceof Dog && w.owner.presence === 'out') w.sendAway(); // pets of people who start away
+    Walker.animate = true; // from now on arrivals and departures get a show
     this.bind();
     this.resize();
     // back to where the last visit ended (a deep link in the URL wins over the saved camera)
@@ -572,6 +576,7 @@ export class Game {
     this.tod.update(dt);
     applySky(this.tod, this.sky);
     this.updateEaster(dt);
+    this.updateSpawnFx(dt);
     this.updateWeather(dt);
     this.updateArrivals();
     if ((this.persistTimer -= dt) <= 0) {
@@ -588,6 +593,16 @@ export class Game {
     if (this.reply && (this.reply.t -= dt) <= 0) this.reply = null;
     this.render(this.acc / STEP);
     this.renderFeeds();
+  }
+
+  /** Materialise show for everybody who arrives or leaves. */
+  private updateSpawnFx(dt: number): void {
+    for (const w of this.walkers) {
+      w.stepFx(dt);
+      const e = w.takeFx();
+      if (e) this.spawnFx.burst(w.pos.x, w.pos.z, e, w.headHeight * w.root.scale.y);
+    }
+    this.spawnFx.update(dt);
   }
 
   /** Hidden gags: disco lights, a person who has had enough of the clicking. */
@@ -1211,7 +1226,7 @@ export class Game {
   }
 
   private render(alpha: number): void {
-    for (const w of this.walkers) if (!w.away) this.pose(w, alpha);
+    for (const w of this.walkers) if (!w.away || w.fx > 0) this.pose(w, alpha);
     this.updateHover();
     this.updateOverlay();
     this.renderer.render(this.scene, this.views.camera);
@@ -1229,8 +1244,8 @@ export class Game {
 
     const ph = THREE.MathUtils.lerp(w.prevPhase, w.phase, alpha);
     const dangle = Math.sin(performance.now() / 110) * 0.35 * (w.lift / 0.45);
-    const swing = Math.sin(ph) * 0.7 * w.moving + dangle;
-    const bob = Math.abs(Math.cos(ph)) * 0.05 * w.moving;
+    const swing = Math.sin(ph) * 0.42 * w.moving + dangle;
+    const bob = 0; // hip height now follows the planted foot (see the leg block below)
     const breathe = Math.sin(performance.now() / 600 + w.phase) * 0.008 * (1 - w.moving);
 
     if (w instanceof Person) {
@@ -1244,12 +1259,25 @@ export class Game {
       // standing: walk cycle (knees bend while a leg swings forward); sitting: thighs flat, shins down
       r.legL.rotation.x = swing * (1 - sit) - 1.5 * sit;
       r.legR.rotation.x = -swing * (1 - sit) - 1.5 * sit;
-      r.kneeL.rotation.x = Math.max(0, -swing) * 0.8 * (1 - sit) + 1.5 * sit;
-      r.kneeR.rotation.x = Math.max(0, swing) * 0.8 * (1 - sit) + 1.5 * sit;
-      r.legL.position.y = r.legR.position.y = 0.8 - SIT_DROP * sit;
+      // knee bends while the leg swings forward through the middle of the step (foot lifts off), not at the extremes
+      const cph = Math.cos(ph);
+      const kneeSwing = 1.1 * w.moving;
+      r.kneeL.rotation.x = Math.max(0, -cph) * kneeSwing * (1 - sit) + 0.06 * w.moving * (1 - sit) + 1.5 * sit;
+      r.kneeR.rotation.x = Math.max(0, cph) * kneeSwing * (1 - sit) + 0.06 * w.moving * (1 - sit) + 1.5 * sit;
+      // pelvis rides on the planted foot: lowest when the legs are spread, highest when they pass, so the feet touch the ground
+      let hip = 0.8;
+      if (sit < 0.01 && w.lift < 0.02 && w.moving > 0.01) {
+        const depth = (a: number, k: number) => 0.4 * Math.cos(a) + 0.4 * Math.cos(a + k);
+        // only part of the full drop: the legs are not perfectly stiff, and a full drop looks bouncy
+        hip = 0.8 + (Math.max(depth(r.legL.rotation.x, r.kneeL.rotation.x), depth(r.legR.rotation.x, r.kneeR.rotation.x)) - 0.8) * 0.5;
+      }
+      r.legL.position.y = r.legR.position.y = hip * (1 - sit) + (0.8 - SIT_DROP) * sit;
       r.armL.rotation.x = -swing * 0.8 * (1 - sit);
       r.armR.rotation.x = swing * 0.8 * (1 - sit);
-      r.body.position.y = (bob + breathe) * (1 - sit) - SIT_DROP * sit;
+      r.body.position.y = (hip - 0.8 + bob + breathe) * (1 - sit) - SIT_DROP * sit;
+      // gentle weight shift onto the planted leg
+      r.body.rotation.z = Math.cos(ph) * 0.035 * w.moving * (1 - sit);
+      r.body.position.x = Math.sin(ph) * 0.02 * w.moving * (1 - sit);
       if (w.working) {
         // typing: hands on the keyboard, small quick jitters, now and then a glance at the screen
         const t = performance.now() / 1000 + w.phase;
@@ -1273,6 +1301,11 @@ export class Game {
       }
       r.elbowL.rotation.set(0, 0, 0);
       r.elbowR.rotation.set(0, 0, 0);
+      if (!w.working && sit < 0.01) {
+        // relaxed walking arms: elbows bend more as the hand swings forward
+        r.elbowL.rotation.x = Math.min(0, r.armL.rotation.x) * 0.6 - 0.12 * w.moving;
+        r.elbowR.rotation.x = Math.min(0, r.armR.rotation.x) * 0.6 - 0.12 * w.moving;
+      }
       this.poseTired(w, r);
       if (r.vape) this.poseVape(w, r.vape, ph);
       if (r.phone) this.posePhone(w, r.phone);
@@ -1811,11 +1844,14 @@ export class Game {
     this.feeds.sync(entries);
   }
 
-  /** The front door swings open while somebody is on the way through it. */
+  /** Each wing of the front door swings open on its own while somebody is on the way through its lane. */
   private updateDoor(dt: number): void {
-    const near = this.walkers.some((w) => !w.away && Math.hypot(w.pos.x - DOOR.x, w.pos.z - DOOR.z) < 1.4);
-    this.doorOpen += ((near ? 1 : 0) - this.doorOpen) * Math.min(1, dt * 6);
-    this.entrance.rotation.y = -this.doorOpen * 1.7;
+    for (const lane of DOOR_LANES) {
+      const near = this.walkers.some((w) => !w.away && Math.abs(w.pos.x - lane.gate.x) < 0.6 && Math.abs(w.pos.z - lane.gate.z) < 1.4);
+      const k = lane.wing;
+      this.doorOpen[k] += ((near ? 1 : 0) - this.doorOpen[k]) * Math.min(1, dt * 6);
+      this.entrance[k].rotation.y = (k === 'left' ? -1 : 1) * this.doorOpen[k] * 1.7;
+    }
     this.doors.update(
       dt,
       [...this.walkers.filter((w) => !w.away).map((w) => w.pos), ...(this.views.mode === 'walk' ? [this.views.eye] : [])],

@@ -1,6 +1,6 @@
 import type * as THREE from 'three';
 import type { DogRig } from '../render/dogBuilder';
-import { DOOR, DOOR_IN, DOOR_OUT } from './Door';
+import { DOOR } from './Door';
 import type { NavGrid } from './NavGrid';
 import type { Person } from './Person';
 import { Walker } from './Walker';
@@ -88,18 +88,35 @@ export class Dog extends Walker {
     this.root.userData.walker = this;
     this.timer = 0;
     this.companion = owner;
+    owner.pets.push(this);
   }
 
   override get fixed(): boolean {
     return this.away || !!this.script;
   }
 
-  /** Disappear (owner is out); comes back through the door after the owner. */
+  /** On the porch in front of the door (arrived there, waiting for the owner to vanish with them). */
+  get onPorch(): boolean {
+    return !this.script && this.pos.z > DOOR.z;
+  }
+
+  /** Disappear (together with the owner, or when the owner is gone already). Does nothing when already away. */
   sendAway(): void {
-    this.setAway(true);
-    this.doorWait = 0.6;
     this.outWait = 0;
     this.headingOut = false;
+    if (this.away) return;
+    this.setAway(true);
+    this.doorWait = 0.6;
+  }
+
+  /** Appear on the porch at the same moment as the owner and walk in with them. */
+  arriveWith(owner: Person): void {
+    if (!this.away) return;
+    this.setAway(false);
+    this.pos = { ...owner.lane.out, x: owner.lane.out.x + 0.2 };
+    this.prev = { ...this.pos };
+    this.yaw = this.prevYaw = Math.PI;
+    this.startScript(owner.lane.in, this.speed * 0.9);
   }
 
   /** Pets leave through the door with their owner and come back after them. */
@@ -113,19 +130,25 @@ export class Dog extends Walker {
       this.outWait = 0;
       this.headingOut = false;
     }
-    if (o.presence === 'out' && this.away) return true;
     if (this.away) {
+      // normally the pet appears together with the owner (`arriveWith`); this is only the fallback when the owner is in again
+      if (o.presence !== 'in') return true;
       this.doorWait -= dt;
       if (this.doorWait > 0) return true;
-      this.setAway(false);
-      this.pos = { ...DOOR_OUT, x: DOOR_OUT.x + 0.3 };
-      this.prev = { ...this.pos };
-      this.yaw = this.prevYaw = Math.PI;
-      this.startScript(DOOR_IN, this.speed * 0.9);
+      this.arriveWith(o);
       return true;
     }
     if (this.script) {
-      if (!this.runScript(dt) && o.presence !== 'in') this.sendAway(); // reached the porch
+      if (this.fx < 1) {
+        this.moving += (0 - this.moving) * Math.min(1, dt * 8); // still materialising: wait for the show
+        return true;
+      }
+      this.runScript(dt);
+      return true;
+    }
+    if (this.onPorch && o.presence !== 'in') {
+      // sits on the porch until the owner is out; they make us vanish together
+      this.moving += (0 - this.moving) * Math.min(1, dt * 8);
       return true;
     }
     const pet = this.petted;
@@ -147,24 +170,24 @@ export class Dog extends Walker {
       if (!this.headingOut) {
         // drop whatever we were doing and run for the door
         this.headingOut = true;
-        this.goTo(nav, DOOR_IN);
+        this.goTo(nav, this.owner.lane.in);
         return false;
       }
       if (this.state === 'walk') return false;
-      if (Math.hypot(DOOR_IN.x - this.pos.x, DOOR_IN.z - this.pos.z) < 0.9) {
-        this.startScript(DOOR_OUT, this.speed);
+      if (Math.hypot(this.owner.lane.in.x - this.pos.x, this.owner.lane.in.z - this.pos.z) < 0.9) {
+        this.startScript(this.owner.lane.out, this.speed);
         return true;
       }
       this.retry -= dt;
       if (this.retry <= 0) {
         this.retry = 0.4;
-        this.goTo(nav, DOOR_IN);
+        this.goTo(nav, this.owner.lane.in);
       }
       return this.state === 'idle';
     }
     // owner changed their mind while we were already on the porch
     if (this.pos.z > DOOR.z) {
-      this.startScript(DOOR_IN, this.speed);
+      this.startScript(this.owner.lane.in, this.speed);
       return true;
     }
     return false;
@@ -182,7 +205,9 @@ export class Dog extends Walker {
     this.happy += ((this.petted && this.state !== 'walk' ? 1 : 0) - this.happy) * Math.min(1, dt * 5);
     if (this.barkT > 0) this.barkT -= dt;
     if (this.petCooldown > 0) this.petCooldown -= dt;
-    const settle = this.owner.sit > 0.5 && this.owner.presence === 'in' && !this.away && this.state === 'idle' && this.moving < 0.1;
+    const atDesk = this.owner.sit > 0.5 && this.owner.presence === 'in';
+    const onPorch = this.onPorch && this.owner.presence !== 'in'; // sits down on the porch until the owner is out and vanishes with them
+    const settle = (atDesk || onPorch) && !this.away && this.state === 'idle' && this.moving < 0.1;
     this.lie += ((settle ? 1 : 0) - this.lie) * Math.min(1, dt * 3);
     this.lying = settle ? this.lying + dt : 0;
     const asleep = settle && this.lying > SLEEP_AFTER;

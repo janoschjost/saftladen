@@ -5,12 +5,13 @@ import type { TeamMember } from '../data/types';
 import type { CharacterRig } from '../render/characterBuilder';
 import { SIT_DROP } from '../render/officeBuilder';
 import { screenVariants, type ScreenKind } from '../render/screens';
-import { DOOR_IN, DOOR_OUT } from './Door';
+import { DOOR_LANES, pickDoorLane, type DoorLane } from './Door';
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { MeetSeat } from './Meeting';
 import type { CoffeeSpot, Kitchen, MachineSpot } from './Coffee';
 import type { Desk, FoosSpot, Office } from './Office';
 import type { Talk } from './Social';
+import type { Dog } from './Dog';
 import { Walker } from './Walker';
 import { random } from './rng';
 
@@ -209,6 +210,8 @@ export class Person extends Walker {
   awayKind: AwayKind | null = null;
   /** seconds until this person comes back (counts down while `out`) */
   awayLeft = 0;
+  /** pets that come and go with this person (registered by `Dog`) */
+  pets: Dog[] = [];
   /** which of the home office variants this person works from */
   homeVariant = 0;
   /** the home office this person likes best (used when it is free) */
@@ -359,15 +362,19 @@ export class Person extends Walker {
     return this.presence === 'in';
   }
 
+  /** the wing of the entrance door this person uses on the current trip */
+  lane: DoorLane = DOOR_LANES[0];
+
   /** Walk to the door and leave; comes back after `seconds`. */
   leaveOffice(nav: NavGrid, kind: AwayKind, seconds: number): void {
     this.cancelTask();
+    this.lane = pickDoorLane();
     this.presence = 'leaving';
     this.awayKind = kind;
     this.awayLeft = seconds;
     this.presenceRetries = 0;
     this.presenceRetry = 0;
-    this.goTo(nav, DOOR_IN);
+    this.goTo(nav, this.lane.in);
   }
 
   /** Start the game already outside. */
@@ -383,10 +390,12 @@ export class Person extends Walker {
   private comeBack(): void {
     this.presence = 'returning';
     this.setAway(false);
-    this.pos = { ...DOOR_OUT };
-    this.prev = { ...DOOR_OUT };
+    this.lane = pickDoorLane();
+    this.pos = { ...this.lane.out };
+    this.prev = { ...this.lane.out };
     this.yaw = this.prevYaw = Math.PI;
-    this.startScript(DOOR_IN, this.speed * 0.9);
+    this.startScript(this.lane.in, this.speed * 0.9);
+    for (const d of this.pets) d.arriveWith(this);
   }
 
   /** Called back before they got out of the door. */
@@ -419,30 +428,40 @@ export class Person extends Walker {
           if (this.runScript(dt)) return true;
           this.presence = 'out';
           this.setAway(true);
+          for (const d of this.pets) d.sendAway(); // pets vanish with the owner, wherever they are
           return true;
         }
         if (this.isWalking()) return false; // normal walking to the door
         this.moving += (0 - this.moving) * Math.min(1, dt * 8);
-        if (Math.hypot(DOOR_IN.x - this.pos.x, DOOR_IN.z - this.pos.z) < 0.7) {
-          this.startScript(DOOR_OUT);
+        if (Math.hypot(this.lane.in.x - this.pos.x, this.lane.in.z - this.pos.z) < 0.7) {
+          this.startScript(this.lane.out);
           return true;
         }
         this.presenceRetry -= dt;
         if (this.presenceRetry <= 0) {
           this.presenceRetry = 0.5;
-          this.goTo(nav, DOOR_IN);
+          this.goTo(nav, this.lane.in);
           if (!this.isWalking() && ++this.presenceRetries > 8) this.abortLeaving();
         }
         return true;
       }
       case 'out':
         this.awayLeft -= dt;
-        if (this.awayLeft <= 0) this.comeBack();
+        // pets still around (not yet despawned) hold up the arrival: both appear together
+        if (this.awayLeft <= 0) {
+          if (this.pets.some((d) => !d.away)) this.awayLeft = 0.3;
+          else this.comeBack();
+        }
         return true;
       case 'returning':
         if (this.held) {
           this.abortLeaving();
           return false;
+        }
+        if (this.fx < 1) {
+          // still materialising: stand there until the show is over, then walk in
+          this.moving += (0 - this.moving) * Math.min(1, dt * 8);
+          return true;
         }
         if (this.runScript(dt)) return true;
         this.presence = 'in';

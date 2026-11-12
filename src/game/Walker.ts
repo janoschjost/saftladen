@@ -94,9 +94,59 @@ export abstract class Walker {
     return false;
   }
 
+  /** Off until the game has set up (the initial cast appears without a show). */
+  static animate = false;
+  /** 0..1 how far materialised: the arrival / departure show scales the model with this. */
+  fx = 1;
+  private fxEvent: 'in' | 'out' | null = null;
+  private baseScale: THREE.Vector3 | null = null;
+
+  /** Pending 'in' / 'out' effect to play at the walker's spot (read once). */
+  takeFx(): 'in' | 'out' | null {
+    const e = this.fxEvent;
+    this.fxEvent = null;
+    return e;
+  }
+
+  /** Advances the materialise animation: shrinks into a light beam on leaving, pops back with an overshoot on arriving. */
+  stepFx(dt: number): void {
+    const target = this.away ? 0 : 1;
+    if (this.fx === target) return;
+    this.baseScale ??= this.root.scale.clone();
+    this.fx = Math.max(0, Math.min(1, this.fx + Math.sign(target - this.fx) * (dt / (this.away ? 0.55 : 0.9))));
+    const f = this.fx;
+    let sx: number;
+    let sy: number;
+    if (this.away) {
+      sx = Math.pow(f, 1.8);
+      sy = (1 + (1 - f) * 0.7) * Math.sqrt(f);
+    } else {
+      const k = Math.max(0, (f - 0.25) / 0.75); // the beam lands first, then the body unfolds
+      const back = (v: number) => 1 + 2.2 * Math.pow(v - 1, 3) + 1.2 * Math.pow(v - 1, 2); // easeOutBack
+      sx = back(k);
+      sy = back(Math.min(1, k * 1.25));
+    }
+    this.root.scale.set(this.baseScale.x * sx, this.baseScale.y * sy, this.baseScale.z * sx);
+    if (this.fx === target) {
+      this.root.scale.copy(this.baseScale);
+      this.root.visible = !this.away;
+    }
+  }
+
   setAway(away: boolean): void {
     this.away = away;
-    this.root.visible = !away;
+    if (!Walker.animate) {
+      this.fx = away ? 0 : 1;
+      this.root.visible = !away;
+    } else {
+      this.fxEvent = away ? 'out' : 'in';
+      if (!away) {
+        this.fx = 0;
+        this.baseScale ??= this.root.scale.clone();
+        this.root.scale.set(0, 0, 0);
+        this.root.visible = true;
+      }
+    }
     if (away) {
       this.path = [];
       this.state = 'idle';
