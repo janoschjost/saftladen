@@ -27,5 +27,18 @@ test('place.meeting-tv: black without a meeting, slides in a meeting', async ({ 
 test('place.meeting-tv: a lunch round plays kart racing', async ({ page }) => {
   const errors = await openGame(page, '', undefined, 'event=meeting-kart');
   await until(page, (g) => g.meetingRoom.tv === 'kart', undefined, 90_000);
+  // everybody watches the TV, not each other
+  await until(
+    page,
+    (g) => {
+      const tv = g.meetingRoom.tvPos;
+      return g.meetingRoom.current.members.every((p: any) => {
+        const want = Math.atan2(tv.x - p.pos.x, tv.z - p.pos.z);
+        return Math.abs(Math.atan2(Math.sin(p.yaw - want), Math.cos(p.yaw - want))) < 0.2;
+      });
+    },
+    undefined,
+    20_000,
+  );
   expect(errors).toEqual([]);
 });

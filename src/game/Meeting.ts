@@ -80,6 +80,8 @@ export class Meeting implements Talk {
     }
 
     if (this.phase === 'session') {
+      // a kart round: everybody turns to the TV, not to each other
+      if (this.screen === 'kart') for (const m of this.members) m.meetFocus = this.room.tvPos;
       this.speakerTimer -= dt;
       if (this.speakerTimer <= 0) {
         const next = nextSpeaker(this.members, this.speaker, this.previous);
@@ -96,6 +98,7 @@ export class Meeting implements Talk {
         this.room.setClosed(false, nav);
         for (const m of this.members) {
           m.speaking = false;
+          m.meetFocus = null;
           m.dismissMeeting();
         }
       }
@@ -115,6 +118,7 @@ export class Meeting implements Talk {
     this.closed = false;
     for (const m of this.members) {
       m.speaking = false;
+      m.meetFocus = null;
       m.dismissMeeting();
     }
     return false;
@@ -212,6 +216,11 @@ export class MeetingRoom {
     const xs = this.model.seats.map((s) => s.x);
     const zs = this.model.seats.map((s) => s.z);
     return p.x >= Math.min(...xs) - m && p.x <= Math.max(...xs) + m && p.z >= Math.min(...zs) - m && p.z <= Math.max(...zs) + m;
+  }
+
+  /** where the TV hangs */
+  get tvPos(): Vec2 {
+    return this.model.tv;
   }
 
   get doorPos(): Vec2 {
