@@ -6,6 +6,7 @@ Current state: the real office (reconstructed from walkthrough photos, 41 x 15 m
 ## Run
 
 ```
+nvm use                # Node version from .nvmrc
 npm install
 npm run dev            # http://localhost:5173
 npm run build
