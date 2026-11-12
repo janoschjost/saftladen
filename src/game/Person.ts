@@ -1332,6 +1332,12 @@ export class Person extends Walker {
           this.cancelMeet();
           return false;
         }
+        if (this.sit > 0.01) {
+          // pulled out of the chair by an event: stand up first, only then walk to the room
+          this.sit = Math.max(0, this.sit - dt * 4);
+          this.moving += (0 - this.moving) * ease;
+          return true;
+        }
         if (this.isWalking()) return false;
         this.moving += (0 - this.moving) * ease;
         if (Math.hypot(s.approach.x - this.pos.x, s.approach.z - this.pos.z) < 0.6 && nav.lineClear(this.pos, s.approach)) {
