@@ -52,6 +52,11 @@ const looks: Record<string, Look> = {
   'philip-gygax': { skin: LIGHT, hair: '#2a2420', style: 'short', beard: 'stubble', top: '#1f5a58', bottom: '#35507a', heightM: 1.8 },
 };
 
+// Zlatko's little son (shows up in his home office)
+const sons: Record<string, Look> = {
+  'zlatko-pesic': { skin: FAIR, hair: '#e9cf86', style: 'short', tee: true, shorts: true, top: '#d94b3a', bottom: JEANS, heightM: 1.05, build: 0.8 },
+};
+
 const fallback: Look = { skin: LIGHT, hair: '#4a3426', style: 'short', top: '#9aa7b5', bottom: '#2b2e36' };
 
 // Dogs that appear in the portraits
@@ -165,7 +170,8 @@ const schedules: Record<string, Partial<Schedule>> = {
   'marianne-hofstetter': { arrive: 7.75, leave: 17.25 },
   'nina-bauer': { arrive: 8, leave: 17.75, lunch: 12.25 },
   'julia-renz': { arrive: 8.75, leave: 17.5, lunch: 12.5 },
-  'zlatko-pesic': { arrive: 9, leave: 17.5 },
+  // works remotely: in the office on about one day in eight (configurable: visitChance)
+  'zlatko-pesic': { arrive: 9, leave: 17.5, visitChance: 0.12 },
 };
 
 /** Alter egos (#32): Marco turns into Kompensiertier Kurt when he goes home, see src/game/AlterEgo.ts. */
@@ -189,6 +195,7 @@ export const team: TeamMember[] = raw.map((p) => ({
   cats: cats[p.id],
   speed: speeds[p.id],
   adhd: adhd.has(p.id),
+  son: sons[p.id],
   homebody: homebodies.has(p.id),
   schedule: { ...CORE_HOURS, ...schedules[p.id] },
   alterEgo: alterEgos[p.id],
