@@ -33,6 +33,7 @@ CI runs build and Vitest on every push. The Playwright job costs Actions minutes
 
 - `src/data/team.ts` – hand-annotated look per person (hair, glasses, beard, clothes) derived from the portraits
 - `src/render/characterBuilder.ts` – builds the low-poly character from a `Look`
+- `src/render/kurtBuilder.ts`, `src/game/AlterEgo.ts` – Kompensiertier Kurt, Marco's alter ego: a second skin on his rig and the rules for when he shows (going home, some home office spells, his monitor)
 - `src/render/officeModel.ts` – the office itself (walls, rooms, desks, furniture, roof), ported from `office-model/index.html`; also yields the desk placements and walking blockers
 - `src/render/Views.ts` – view modes: Orbit (2, default), Iso (1), Plan (3), Walk (4, WASD + drag to look, collides with the nav grid; roof shown); deep links `#orbit`, `#plan`, `#walk@x,z,yaw`
 - `src/render/World.ts`, `IsoCamera.ts` – parquet slab, light, iso camera (drag = pan, wheel = zoom)

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { HOME_ROOMS, type HomeBreak, type SignatureMove, type TeamMember } from '../data/types';
 import { buildCat } from './catBuilder';
 import { buildCharacter, type CharacterRig } from './characterBuilder';
+import { addKurt } from './kurtBuilder';
 import { buildDog, type DogRig } from './dogBuilder';
 import { ball, box, cyl, merge, propMaterial } from './geo';
 import { SIT_DROP } from './officeBuilder';
@@ -1005,6 +1006,7 @@ function occupantOf(member: TeamMember, fresh = false): Occupant {
   let o = fresh ? undefined : occupants.get(member.id);
   if (o) return o;
   const rig = buildCharacter(member.homeLook ? { ...member.look, ...member.homeLook } : member.look);
+  if (member.alterEgo) addKurt(rig); // shown on some spells instead of the person (see setOccupant)
   const pets: Occupant['pets'] = [];
   if (member.dog) pets.push({ rig: buildDog(member.dog), spot: new THREE.Vector3(-1.15, 0, 0.35), yaw: 0.5, onDesk: false });
   for (const [i, c] of (member.cats ?? []).entries()) pets.push({ rig: buildCat(c.kind), spot: new THREE.Vector3(i % 2 ? -0.6 : 0.55, 0.74, 0.45), yaw: i % 2 ? 0.5 : -0.4, onDesk: true }); // either side of the laptop
@@ -1276,8 +1278,11 @@ export class HomeOffice {
     return this.member?.id ?? null;
   }
 
-  /** Put somebody into the room (or empty it with null). `fresh` builds private figures, so another scene keeps its own. */
-  setOccupant(member: TeamMember | null, fresh = false): void {
+  /** the occupant works as their alter ego this spell (Kurt, #32) */
+  alter = false;
+
+  /** Put somebody into the room (or empty it with null). `fresh` builds private figures, so another scene keeps its own. `alter`: as their alter ego. */
+  setOccupant(member: TeamMember | null, fresh = false, alter = false): void {
     if (this.occupant) {
       this.scene.remove(this.occupant.rig.root);
       if (this.occupant.swimRig) this.scene.remove(this.occupant.swimRig.root);
@@ -1289,8 +1294,10 @@ export class HomeOffice {
     this.hung = 0; // a new stay, a fresh rack
     this.pieces.forEach((m) => (m.visible = false));
     this.occupant = member ? occupantOf(member, fresh) : null;
+    this.alter = !!this.occupant?.rig.setAlter && alter;
     if (!this.occupant) return;
     const { rig, pets } = this.occupant;
+    rig.setAlter?.(this.alter);
     rig.root.position.set(0, 0, 0);
     const tilt = this.style.recline ?? 0;
     if (tilt) {

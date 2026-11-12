@@ -792,6 +792,16 @@
             font-weight: 700;
         }
 
+        &__alter {
+            display: block;
+            margin: 0.75rem 0 0;
+            pointer-events: auto;
+
+            &[hidden] {
+                display: none;
+            }
+        }
+
         &__controls {
             position: absolute;
             bottom: 1.5rem;

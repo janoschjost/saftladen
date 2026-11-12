@@ -45,6 +45,8 @@ class Stub {
   vapeJob = null;
   task = null;
   pos = { x: 0, z: 0 };
+  /** every walk out of the door: kind and whether an alter ego transforms (#32) */
+  leaves: Array<{ kind: AwayKind; transform: boolean }> = [];
   private walk = 0;
 
   constructor(readonly member: TeamMember) {}
@@ -55,7 +57,8 @@ class Stub {
   get inOffice(): boolean {
     return this.presence === 'in';
   }
-  leaveOffice(_nav: NavGrid, kind: AwayKind, seconds: number): void {
+  leaveOffice(_nav: NavGrid, kind: AwayKind, seconds: number, transform = false): void {
+    this.leaves.push({ kind, transform });
     this.presence = 'leaving';
     this.awayKind = kind;
     this.awayLeft = seconds;
@@ -124,7 +127,7 @@ function runDay(seed: number, from = 5, to = 23, raining = false) {
       });
     }
   }
-  return { samples, plans, people };
+  return { samples, plans, people, presence, nav };
 }
 
 describe('presence', () => {
@@ -204,5 +207,27 @@ describe('presence', () => {
       expect(samples.some((s) => s.returning > 0)).toBe(true);
       for (const s of samples) expect(s.returning).toBeLessThanOrEqual(2);
     }
+  });
+
+  it('kurt.behavior: Marco transforms when going home (end of day, home office), never for errands, lunch or a manual send', () => {
+    let homeSpells = 0;
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const { people } = runDay(seed);
+      const marco = people.find((p) => p.id === 'marco-rieser')!;
+      expect(marco.leaves.some((l) => l.kind === 'off' || l.kind === 'home')).toBe(true);
+      for (const l of marco.leaves) expect(l.transform).toBe(l.kind !== 'errand');
+      homeSpells += marco.leaves.filter((l) => l.kind === 'home').length;
+      for (const p of people) if (!p.member.alterEgo) expect(p.leaves.every((l) => !l.transform)).toBe(true);
+    }
+    expect(homeSpells).toBeGreaterThan(0);
+    // sent home by hand (H / action card): stays Marco
+    const { people, presence, nav } = runDay(1, 5, 11);
+    const marco = people.find((p) => p.id === 'marco-rieser')!;
+    if (marco.presence !== 'in') marco.presence = 'in';
+    marco.leaves = [];
+    presence.send(marco as unknown as Person, 'home', nav);
+    presence.send(marco as unknown as Person, 'errand', nav);
+    expect(marco.leaves.length).toBeGreaterThan(0);
+    expect(marco.leaves.every((l) => !l.transform)).toBe(true);
   });
 });

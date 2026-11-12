@@ -16,13 +16,15 @@ export interface AwayEntry {
 }
 
 const t = strings.presence;
+/** Portraits are files in public/ or rendered data URLs (Kurt). */
+const srcOf = (portrait: string) => (portrait.startsWith('data:') ? portrait : import.meta.env.BASE_URL + portrait);
 
 /** "Not in the office" list: who is out and who works from home. Clicking a home-office person opens their live feed. */
 export class Roster {
   private root = document.getElementById('away') as HTMLElement;
   private list = document.getElementById('away-list') as HTMLElement;
   private count = document.getElementById('away-count') as HTMLElement;
-  private rows = new Map<string, { el: HTMLButtonElement; status: HTMLElement; kind: string }>();
+  private rows = new Map<string, { el: HTMLButtonElement; status: HTMLElement; kind: string; name: HTMLElement; avatar: HTMLElement; label: string; portrait: string | null }>();
 
   constructor(
     private onPick: (id: string) => void,
@@ -55,7 +57,7 @@ export class Roster {
         const avatar = document.createElement(e.portrait ? 'img' : 'span');
         avatar.className = 'm-away__avatar';
         if (avatar instanceof HTMLImageElement) {
-          avatar.src = import.meta.env.BASE_URL + e.portrait;
+          avatar.src = srcOf(e.portrait!);
           avatar.alt = '';
           avatar.width = 32;
           avatar.height = 32;
@@ -80,7 +82,7 @@ export class Roster {
         back.addEventListener('click', () => this.onBack(e.id));
         li.append(el, back);
         this.list.appendChild(li);
-        row = { el, status, kind: '' };
+        row = { el, status, kind: '', name, avatar, label: e.name, portrait: e.portrait };
         this.rows.set(e.id, row);
       }
       if (row.kind !== e.kind) {
@@ -88,6 +90,15 @@ export class Roster {
         row.el.dataset.kind = e.kind;
         row.el.classList.toggle('is-home', e.kind === 'home');
         row.el.title = t.hint[e.kind];
+      }
+      if (row.label !== e.name) {
+        // the same person under another name (Marco walking out as Kurt)
+        row.label = e.name;
+        row.name.textContent = e.name.split(' ')[0];
+      }
+      if (row.portrait !== e.portrait && row.avatar instanceof HTMLImageElement && e.portrait) {
+        row.portrait = e.portrait;
+        row.avatar.src = srcOf(e.portrait);
       }
       const text = awayStatus(e.kind, e.phase, e.left);
       if (row.status.textContent !== text) row.status.textContent = text;

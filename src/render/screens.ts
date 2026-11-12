@@ -705,3 +705,33 @@ function hudText(c: Ctx, text: string, x: number, y: number, size: number, col: 
   c.fillStyle = col;
   c.fillText(text, x, y);
 }
+
+let kurtScreen: THREE.MeshBasicMaterial | null = null;
+
+/** Marco's monitor while he is away during block times (#32): Kurt's picture on a warm background. */
+export function kurtScreenMaterial(portrait: string | null): THREE.MeshBasicMaterial {
+  if (kurtScreen) return kurtScreen;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const c = canvas.getContext('2d')!;
+  rect(c, '#f3d9a8', 0, 0, W, H);
+  rect(c, '#5f6b2a', 0, H - 18, W, 18);
+  c.fillStyle = '#f3d9a8';
+  c.font = '700 11px "Avenir Next", "Helvetica Neue", Arial, sans-serif';
+  c.textAlign = 'center';
+  c.fillText('KOMPENSIERT', W / 2, H - 5);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  if (portrait) {
+    const img = new Image();
+    img.onload = () => {
+      const s = H - 22;
+      c.drawImage(img, (W - s) / 2, 2, s, s);
+      tex.needsUpdate = true;
+    };
+    img.src = portrait;
+  }
+  kurtScreen = new THREE.MeshBasicMaterial({ map: tex });
+  return kurtScreen;
+}
