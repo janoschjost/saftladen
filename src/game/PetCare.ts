@@ -1,6 +1,7 @@
 import type { Dog } from './Dog';
 import type { NavGrid } from './NavGrid';
 import type { Person } from './Person';
+import { PET_HEIGHT } from './petPose';
 import { random } from './rng';
 
 const REACH = 1.5; // metres: a passer-by this close to a pet may stop to stroke it
@@ -41,7 +42,7 @@ export class PetCare {
         if (!own && p.moving < 0.3) continue; // strangers have to be passing by
         if (Math.hypot(p.pos.x - dog.pos.x, p.pos.z - dog.pos.z) > REACH) continue;
         if (random() > (own ? OWNER_CHANCE : CHANCE)) continue;
-        if (!p.petDog(dog.pos, between(STROKE))) continue;
+        if (!p.petDog(dog.pos, between(STROKE), dog.isCat ? PET_HEIGHT.cat : PET_HEIGHT.dog)) continue;
         dog.petBy(p, p.playerChat?.total ?? 4, nav);
         this.next.set(p, this.clock + between(PERSON_GAP));
         this.onPet(dog, p);
