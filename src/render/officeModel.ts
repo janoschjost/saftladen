@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Vec2 } from '../game/NavGrid';
+import type { RoomLamp } from '../game/RoomLight';
 import { screenOffMaterial, type DeskRig } from './officeBuilder';
 import { tvMaterial } from './screens';
 import { planClutter, type DeskProp, type DeskPlantSpot } from './deskClutter';
@@ -88,7 +89,7 @@ export interface OfficeModel {
   /** numbered sprites above every room (blue), toggled in the settings */
   roomLabels: THREE.Group;
   /** glass meeting room: doorway centre, table centre and the 8 chairs (game coordinates, yaw = facing the table) */
-  meeting: { doorPos: Vec2; center: Vec2; tv: Vec2; seats: Array<{ x: number; z: number; yaw: number }> };
+  meeting: { doorPos: Vec2; center: Vec2; tv: Vec2; seats: Array<{ x: number; z: number; yaw: number }>; lamp: RoomLamp };
   /** the two bench seats in the wooden pod (game coordinates, yaw = facing out of the pod) */
   pod: { center: Vec2; seats: Array<{ x: number; z: number; yaw: number }> };
   /** kitchen: where the coffee group gathers (game coordinates, in front of the espresso machine), the machine itself and the two spots to stand at it */
@@ -177,6 +178,8 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   const toiletCabins: OfficeModel['toilets']['cabins'] = [];
   /** WC cabin interiors (game coordinates): nobody walks in there, the toilet goer is scripted in through the door */
   const toiletInside: THREE.Box3[] = [];
+  /** the glass meeting room's ceiling lamp: off-white strip that glows warm when RoomLight switches it on */
+  const meetLamp: RoomLamp = { glow: new THREE.MeshLambertMaterial({ color: 0xf3efe6, emissive: 0xffd98a, emissiveIntensity: 0 }), at: { x: 0, z: 0 }, y: 2.0 };
   const kitchenCenter: Vec2 = { x: 0, z: 0 };
   const kitchenMachine: Vec2 = { x: 0, z: 0 };
   const tableSeats: Array<{ x: number; z: number; yaw: number }> = [];
@@ -2135,10 +2138,12 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     box(0.7, 0.72, 0.07, 23, 0, 4.0, mat.black);
     box(0.7, 0.72, 0.07, 23, 0, 8.0, mat.black);
     // linear LED pendant over the table
+    // (its LED strip glows while the room light is on, see RoomLight.ts; the anchor moves with the lamp in the editor)
     item('pendant', 'meeting-linear-light', 'Hängelampe', () => {
       box(0.07, 0.07, 2.6, 23, 2.15, 6.0, mat.white);
-      box(0.04, 0.01, 2.55, 23, 2.145, 6.0, mat.lampWarm);
+      box(0.04, 0.01, 2.55, 23, 2.145, 6.0, meetLamp.glow);
       for (const lz of [5.0, 7.0]) cyl(0.004, 0.004, 1.1, 23, 2.2, lz, mat.black, world, 4);
+      meetLamp.at = track({ x: gx(23), z: gz(6.0) });
     });
     meetCenter.x = gx(23);
     meetCenter.z = gz(6.0);
@@ -2495,7 +2500,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   } else scene.add(paper);
   const printer = { stand: printerStand, paper };
 
-  const meeting = { doorPos: { x: ax(20.65), z: az(CORR) }, center: meetCenter, tv: meetTv, seats: meetSeats };
+  const meeting = { doorPos: { x: ax(20.65), z: az(CORR) }, center: meetCenter, tv: meetTv, seats: meetSeats, lamp: meetLamp };
   // the strip south of the wall, east of the annex, is outside: block it so nobody walks out through the entrance doorway into thin air
   blockers.push(new THREE.Box3(new THREE.Vector3(ax(ANNEX.x1), 0, OFFICE_D), new THREE.Vector3(OFFICE_W, 1.2, OFFICE_D + ANNEX_D)));
   blockers.push(...toiletInside);
