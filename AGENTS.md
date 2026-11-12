@@ -24,7 +24,7 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
      - interactions and UI (keys, hashes, panels, parts working together) → Playwright, `e2e/*.spec.ts`, reading the game through the `?test` hook (see README).
      - purely visual changes → checked in the browser.
    - Every criterion has been checked in the running app.
-   - `FEATURES.md` is updated: add or change the lines for this issue, ending with `(#N)`. Every line you touched still works.
+   - `FEATURES.md` is updated: add or change the lines for this issue, ending with `(#N)`. Every line you touched still works. Each line you add or change gets a `url:` where a URL can show it (see the rules at the top of `FEATURES.md`).
 6. **PR.** Rebase first. On conflicts keep both sides' behavior, never just yours, then re-check the affected `FEATURES.md` lines.
    ```sh
    git fetch origin && git rebase origin/main && npm run build && npm test && npm run test:e2e
@@ -33,7 +33,7 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
    cd ../saftladen && git worktree remove ../saftladen-issue-N
    ```
    `--assignee @me` assigns the PR to the dev whose `gh` login runs the session.
-   The PR body starts with `Closes #N` on its own line, so merging closes the issue. Then come `## What changed`, `## Acceptance criteria` (checked, with how each was verified) and optionally `## Notes`. See `gh pr view 23`.
+   The PR body starts with `Closes #N` on its own line, so merging closes the issue. Then come `## What changed`, `## Try it`, `## Acceptance criteria` (checked, with how each was verified) and optionally `## Notes`. `## Try it` has one clickable link per added or changed `FEATURES.md` line: its id and `http://localhost:5173` + its `url:`, e.g. `- place.meeting: http://localhost:5173/?seed=1&time=11&event=meeting-room`. Lines without a URL: say how to see them. See `gh pr view 23`.
 
 ## Commits
 
