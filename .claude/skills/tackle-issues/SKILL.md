@@ -31,8 +31,8 @@ Leftover worktree folders of abandoned sessions are not removed automatically: l
 Repeat until no eligible issue is left:
 
 1. **Pick** the next eligible issue (see below).
-2. Run the **`AGENTS.md` workflow** for it, steps 2–6: claim → worktree → implement → done → PR. Claim exits 2 → go back to 1. A `model:*` label hands this step to a subagent (see **Model labels**).
-3. Once the PR is open, go straight back to 1. Don't wait for review or merge.
+2. Run the **`AGENTS.md` workflow** for it, steps 2–7: claim → worktree → implement → done → PR → CI green. Claim exits 2 → go back to 1. A `model:*` label hands this step to a subagent (see **Model labels**).
+3. Once the PR's checks are green and its worktree is removed, go straight back to 1. Don't wait for review or merge.
 
 Skip an issue without claiming it if it is unclear, needs a product decision, or depends on an unmerged PR. Leave a short comment with the open question instead. If you have to give up after claiming, release it (`scripts/issue.sh release`).
 
@@ -42,7 +42,7 @@ At the end, report: issue → PR link (plus the model, if a label picked one), a
 
 Without a label you work the issue yourself, on the session model. With `model:haiku`, `model:sonnet` or `model:opus`, hand loop step 2 to a subagent on that model: `Agent` tool, `subagent_type: "general-purpose"`, `model` taken from the label, no `isolation` (the workflow makes its own worktree). Brief it with:
 
-> Work issue #N of this repo through the `AGENTS.md` workflow, steps 2–6: claim → worktree → implement → done → PR. Read `AGENTS.md`, `README.md`, the issue and all of its comments first. You are authorized to branch, commit, push, open the PR and label, comment on and assign the issue. Never merge, push to `main` or close issues by hand. If the issue is unclear or blocked, release it with `scripts/issue.sh release N "<reason>"` and stop. Report the PR link, or why there is none.
+> Work issue #N of this repo through the `AGENTS.md` workflow, steps 2–7: claim → worktree → implement → done → PR → CI green. Read `AGENTS.md`, `README.md`, the issue and all of its comments first. You are authorized to branch, commit, push, open the PR and label, comment on and assign the issue. Never merge, push to `main` or close issues by hand. If the issue is unclear or blocked, release it with `scripts/issue.sh release N "<reason>"` and stop. Report the PR link, or why there is none.
 
 Wait for its report, then go back to loop step 1. Devs set the label when they know an issue is trivial or hard: `gh issue edit N --add-label model:opus`, or as the last argument of `scripts/issue.sh new`. Add or change these labels only when a dev asks for that model, never on your own judgment.
 
