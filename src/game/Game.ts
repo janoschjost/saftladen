@@ -887,6 +887,16 @@ export class Game {
     devEvents.register({ id: 'errand', group: strings.presence.event.group, label: strings.presence.event.someoneLeaves.errand, run: away('errand') });
     devEvents.register({ id: 'home', group: strings.presence.event.group, label: strings.presence.event.someoneLeaves.home, run: away('home') });
     devEvents.register({
+      id: 'home-laundry',
+      group: strings.presence.event.group,
+      label: 'Jemand im Homeoffice hängt Wäsche auf',
+      run: () => {
+        const home = this.homes.find((h) => h?.occupied && h.startLaundry());
+        const who = this.people.find((p) => p.id === home?.occupantId);
+        return who ? `${who.member.name.split(' ')[0]} hängt Wäsche auf` : null;
+      },
+    });
+    devEvents.register({
       id: 'rain',
       group: 'Wetter',
       label: 'Regen an / aus',

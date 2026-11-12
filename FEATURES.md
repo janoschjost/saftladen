@@ -151,6 +151,7 @@ Rules:
 - `home.rooms` 8 webcam rooms: Schlafzimmer, Küchentisch, Wohnzimmer-Sofa, Balkon, Arbeitszimmer, Dachstock, Skandi-Studio, Gamer-Höhle — `src/render/homeOffice.ts`, url: `/#homes` (#38)
 - `home.beach` Marco Hefti's own room "Liegestuhl, Thailand": deck chair, laptop on lap, cocktail, sea, palms, longtail boat; he swims — `src/render/homeOffice.ts`
 - `home.activities` Activity loop: typing, sip, dumbbell stretch, think, call, wave, away, yawn, controller; arrival wave (35%) — `src/render/homeOffice.ts`
+- `home.laundry` Laundry round in rooms with space (Schlafzimmer, Küchentisch, Balkon, Dachstock, Skandi-Studio): stands up, carries a bundle to the drying rack, hangs 2-3 pieces, sits down; the pieces stay on the rack for the whole stay (rack holds 8); not in the sofa, gamer or beach room — `src/render/homeOffice.ts`, `src/render/laundry.ts`, test: `src/render/laundry.test.ts`, e2e: `e2e/events.spec.ts`, url: `/?seed=1&time=11&event=home-laundry#homes` (#62)
 - `home.signatures` Signature moves: Marco swims, Donata's desk cats walk past the lens (catwalk), Devin curls — `src/render/homeOffice.ts`, `src/data/team.ts`
 - `home.adhd` ADHD extras (Delya, Sandro): fidget spinner, chair spin, snack run, pacing — `src/render/homeOffice.ts`
 - `home.coffee-hater` Coffee haters spit the coffee out and drink a can — `src/render/homeOffice.ts`

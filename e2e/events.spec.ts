@@ -25,6 +25,12 @@ for (const [id, event, reached] of cases) {
   });
 }
 
+test('home.laundry (?event=home-laundry#homes)', async ({ page }) => {
+  const errors = await openGame(page, 'homes', undefined, 'event=home-laundry');
+  await until(page, (g) => g.homes.some((h: { laundryHung: number } | null) => h && h.laundryHung >= 1), undefined, 60_000);
+  expect(errors).toEqual([]);
+});
+
 test('dev.event: unknown id only warns, the game starts normally', async ({ page }) => {
   const warnings: string[] = [];
   page.on('console', (m) => m.type() === 'warning' && warnings.push(m.text()));
