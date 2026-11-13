@@ -9,10 +9,11 @@ const other = team.find((m) => !m.alterEgo)!;
 describe('kurt', () => {
   it('kurt.behavior: only going home transforms, and only Marco', () => {
     expect(marco.alterEgo).toBe('kurt');
-    expect(transformsOnLeave(marco, 'end')).toBe(true);
+    expect(transformsOnLeave(marco, 'off')).toBe(true);
     expect(transformsOnLeave(marco, 'home')).toBe(true);
-    for (const r of ['errand', 'lunch', 'manual'] as const) expect(transformsOnLeave(marco, r)).toBe(false);
-    expect(transformsOnLeave(other, 'end')).toBe(false);
+    expect(transformsOnLeave(marco, 'errand')).toBe(false); // errands and lunch
+    expect(transformsOnLeave(marco, 'home', true)).toBe(false); // sent by hand
+    expect(transformsOnLeave(other, 'off')).toBe(false);
   });
 
   it('kurt.home: about one home office spell in five shows Kurt; nobody else ever', () => {

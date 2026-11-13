@@ -1045,7 +1045,6 @@ export class Game {
         return 'Die Tiere melden sich';
       },
     });
-    // Kurt (#32): Marco goes home as Kurt (spin, poof, out of the door), or to the home office as Kurt; back after two minutes
     // Kurt (#32): Marco goes home as Kurt (spin, poof, out of the door); or right away in the home office as Kurt, or out on
     // an errand (his empty desk shows Kurt from 08:30 to 17:00); back after two minutes
     const kurt = (kind: 'off' | 'home' | 'errand') => () => {

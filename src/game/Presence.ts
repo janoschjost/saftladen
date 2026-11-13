@@ -5,7 +5,6 @@ import type { NavGrid } from './NavGrid';
 import type { Person } from './Person';
 import type { TimeOfDay } from './TimeOfDay';
 import type { Weather } from './Weather';
-import { transformsOnLeave } from './AlterEgo';
 import { random } from './rng';
 
 /** Share of the people on duty that is out of the office at any time (errands + home office). */
@@ -274,7 +273,7 @@ export class Presence {
     const p = candidates[Math.floor(random() * candidates.length)];
     const home = this.homeCount < MAX_HOME || p.member.homebody;
     if (home) p.homeVariant = this.freeVariant(p);
-    p.leaveOffice(nav, home ? 'home' : 'errand', home ? between(HOME) : between(ERRAND), transformsOnLeave(p.member, home ? 'home' : 'errand'));
+    p.leaveOffice(nav, home ? 'home' : 'errand', home ? between(HOME) : between(ERRAND));
     return true;
   }
 
@@ -291,14 +290,14 @@ export class Presence {
       p.homeVariant = this.freeVariant(p);
     }
     if (this.duty(p, this.workHour) !== 'duty') this.overridden.add(p);
-    p.leaveOffice(nav, kind, 600);
+    p.leaveOffice(nav, kind, 600, true);
   }
 
   /** Dev event: off home as if their day ended (an alter ego spins and walks out as itself); back after `seconds`. */
   goHome(p: Person, nav: NavGrid, seconds: number): boolean {
     if (!this.free(p)) return false;
     this.overridden.add(p);
-    p.leaveOffice(nav, 'off', seconds, transformsOnLeave(p.member, 'end'));
+    p.leaveOffice(nav, 'off', seconds);
     return true;
   }
 
@@ -386,7 +385,7 @@ export class Presence {
         if (!this.free(p) || !this.exitFree) return;
         this.exit(p);
         if (kind === 'home') p.homeVariant = this.freeVariant(p);
-        p.leaveOffice(nav, kind, OFF, transformsOnLeave(p.member, kind === 'off' ? 'end' : 'home'));
+        p.leaveOffice(nav, kind, OFF);
         break;
       case 'leaving':
       case 'out':
@@ -493,12 +492,12 @@ export class Presence {
     if (p.member.homebody) {
       // own room, so a full set of regular home offices doesn't keep them in
       p.homeVariant = this.freeVariant(p);
-      p.leaveOffice(nav, 'home', between(HOME) * HOMEBODY.stay, transformsOnLeave(p.member, 'home'));
+      p.leaveOffice(nav, 'home', between(HOME) * HOMEBODY.stay);
       return;
     }
     const homeShare = this.weather.raining ? RAIN.homeShare : HOME_SHARE;
     const home = random() < homeShare && this.homeCount < MAX_HOME;
     if (home) p.homeVariant = this.freeVariant(p);
-    p.leaveOffice(nav, home ? 'home' : 'errand', home ? between(HOME) : between(ERRAND) * stretch, transformsOnLeave(p.member, home ? 'home' : 'errand'));
+    p.leaveOffice(nav, home ? 'home' : 'errand', home ? between(HOME) : between(ERRAND) * stretch);
   }
 }

@@ -189,18 +189,14 @@ function shin(): THREE.BufferGeometry[] {
  */
 export function addKurt(rig: CharacterRig): void {
   const parts: THREE.Object3D[] = [];
-  const add = (bone: THREE.Object3D, geo: THREE.BufferGeometry[]) => {
-    const m = mesh(geo);
+  const add = (bone: THREE.Object3D, part: THREE.BufferGeometry[] | THREE.Object3D) => {
+    const m = Array.isArray(part) ? mesh(part) : part;
     m.visible = false;
     bone.add(m);
     parts.push(m);
     return m;
   };
   add(rig.body, bodyParts(Math.abs(rig.armL.position.x)));
-  const t = tail();
-  t.visible = false;
-  rig.body.add(t);
-  parts.push(t);
   add(rig.armL, upperArm());
   add(rig.armR, upperArm());
   add(rig.elbowL, foreArm());
@@ -209,25 +205,28 @@ export function addKurt(rig: CharacterRig): void {
   add(rig.legR, thigh());
   add(rig.kneeL, shin());
   add(rig.kneeR, shin());
-  rig.tail = t;
+  rig.tail = add(rig.body, tail());
   rig.setAlter = (on) => {
     for (const s of rig.skin) s.visible = !on;
     for (const p of parts) p.visible = on;
   };
 }
 
+/** A fresh rig of the given person, shown as Kurt (for the pictures). */
+function kurtRig(look: Look): CharacterRig {
+  const rig = buildCharacter(look);
+  addKurt(rig);
+  rig.setAlter!(true);
+  return rig;
+}
+
 /** Kurt's profile picture (tooltip, roster, his office monitor), rendered once on the given person's rig. */
 export function kurtPortrait(look: Look): string | null {
-  return petPortrait('kurt', () => {
-    const rig = buildCharacter(look);
-    addKurt(rig);
-    rig.setAlter!(true);
-    return { root: rig.root, face: { r: 0.4, y: 1.62, z: 0.12 } };
-  });
+  return petPortrait('kurt', () => ({ root: kurtRig(look).root, face: { r: 0.4, y: 1.62, z: 0.12 } }));
 }
 
 /** Frames of the waving loop on Marco's monitor (#32). */
-export const KURT_WAVE_FRAMES = 12;
+const KURT_WAVE_FRAMES = 12;
 let wave: HTMLCanvasElement[] | null | undefined;
 
 /**
@@ -237,12 +236,7 @@ let wave: HTMLCanvasElement[] | null | undefined;
 export function kurtWave(look: Look): HTMLCanvasElement[] | null {
   if (wave !== undefined) return wave;
   wave = portraitFrames(
-    () => {
-      const rig = buildCharacter(look);
-      addKurt(rig);
-      rig.setAlter!(true);
-      return Object.assign(rig, { face: { r: 0.62, y: 1.4, z: 0.1 } });
-    },
+    () => Object.assign(kurtRig(look), { face: { r: 0.62, y: 1.4, z: 0.1 } }),
     KURT_WAVE_FRAMES,
     (rig, i) => {
       const a = (i / KURT_WAVE_FRAMES) * Math.PI * 2;

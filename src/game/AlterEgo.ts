@@ -1,4 +1,5 @@
 import type { TeamMember } from '../data/types';
+import type { AwayKind } from './Person';
 import { stream, type Rng } from './rng';
 
 /**
@@ -15,11 +16,9 @@ export const KURT = {
   screen: { from: 8.5, to: 17 },
 };
 
-/** Why somebody walks out of the door. Only going home turns an alter ego on (not lunch, errands or a hand-sent person). */
-export type LeaveReason = 'end' | 'home' | 'errand' | 'lunch' | 'manual';
-
-export function transformsOnLeave(member: Pick<TeamMember, 'alterEgo'>, reason: LeaveReason): boolean {
-  return !!member.alterEgo && (reason === 'end' || reason === 'home');
+/** Only going home (end of day, home office) turns an alter ego on: not errands or lunch, nor somebody sent out by hand. */
+export function transformsOnLeave(member: Pick<TeamMember, 'alterEgo'>, kind: AwayKind, manual = false): boolean {
+  return !!member.alterEgo && kind !== 'errand' && !manual;
 }
 
 /** Kurt's own dice: same seed, same Kurt spells, without shifting the simulation's numbers. */

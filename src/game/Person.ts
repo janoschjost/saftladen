@@ -13,7 +13,7 @@ import type { Desk, FoosSpot, Office } from './Office';
 import type { Talk } from './Social';
 import type { Dog } from './Dog';
 import { Walker } from './Walker';
-import { KURT, rollHomeAlter } from './AlterEgo';
+import { KURT, rollHomeAlter, transformsOnLeave } from './AlterEgo';
 import { random } from './rng';
 
 const WORK_CHANCE = 0.75; // chance per decision to go sit down instead of wandering
@@ -408,8 +408,8 @@ export class Person extends Walker {
   /** the wing of the entrance door this person uses on the current trip */
   lane: DoorLane = DOOR_LANES[0];
 
-  /** Walk to the door and leave; comes back after `seconds`. `transform`: going home, an alter ego spins and walks out as itself. */
-  leaveOffice(nav: NavGrid, kind: AwayKind, seconds: number, transform = false): void {
+  /** Walk to the door and leave; comes back after `seconds`. Going home (not `manual`ly sent), an alter ego spins and walks out as itself. */
+  leaveOffice(nav: NavGrid, kind: AwayKind, seconds: number, manual = false): void {
     this.cancelTask();
     this.lane = pickDoorLane();
     this.presence = 'leaving';
@@ -417,7 +417,7 @@ export class Person extends Walker {
     this.awayLeft = seconds;
     this.presenceRetries = 0;
     this.presenceRetry = 0;
-    this.spin = transform && this.member.alterEgo && !this.alter ? KURT.spin : 0;
+    this.spin = transformsOnLeave(this.member, kind, manual) && !this.alter ? KURT.spin : 0;
     this.goTo(nav, this.lane.in);
   }
 

@@ -32,7 +32,7 @@ const run = (p: Person, seconds: number, until?: () => boolean) => {
 describe('kurt.behavior: Person', () => {
   it('kurt.behavior: going home spins him into Kurt (poof), out of the door he is Marco again, back in as Marco', () => {
     const p = marcoAtDoor();
-    p.leaveOffice(nav, 'off', 3, true);
+    p.leaveOffice(nav, 'off', 3);
     expect(p.spin).toBe(KURT.spin);
     const skin = () => p.rig.skin.every((s) => !s.visible);
     run(p, KURT.spin * 0.4);
@@ -51,10 +51,10 @@ describe('kurt.behavior: Person', () => {
 
   it('kurt.behavior: an errand (no transform) keeps him Marco; being called back mid-spin turns him back', () => {
     const p = marcoAtDoor();
-    p.leaveOffice(nav, 'errand', 3, false);
+    p.leaveOffice(nav, 'errand', 3);
     expect(run(p, 5, () => p.alter)).toBe(false);
     const q = marcoAtDoor();
-    q.leaveOffice(nav, 'home', 60, true);
+    q.leaveOffice(nav, 'home', 60);
     run(q, KURT.spin * 0.7);
     expect(q.alter).toBe(true);
     q.cancelLeave();

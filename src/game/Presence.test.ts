@@ -3,6 +3,7 @@ import { team } from '../data/team';
 import type { TeamMember } from '../data/types';
 import type { NavGrid } from './NavGrid';
 import type { AwayKind, Person } from './Person';
+import { transformsOnLeave } from './AlterEgo';
 import { Presence } from './Presence';
 import { hourOf, type TimeOfDay } from './TimeOfDay';
 import type { Weather } from './Weather';
@@ -57,8 +58,8 @@ class Stub {
   get inOffice(): boolean {
     return this.presence === 'in';
   }
-  leaveOffice(_nav: NavGrid, kind: AwayKind, seconds: number, transform = false): void {
-    this.leaves.push({ kind, transform });
+  leaveOffice(_nav: NavGrid, kind: AwayKind, seconds: number, manual = false): void {
+    this.leaves.push({ kind, transform: transformsOnLeave(this.member, kind, manual) });
     this.presence = 'leaving';
     this.awayKind = kind;
     this.awayLeft = seconds;
