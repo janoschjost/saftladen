@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { team } from '../data/team';
-import { buildCharacter } from '../render/characterBuilder';
+import { buildCharacter, type CharacterRig } from '../render/characterBuilder';
+import { addKurt } from '../render/kurtBuilder';
+import { KURT } from '../game/AlterEgo';
+import { strings } from '../i18n/strings';
 import { buildCat } from '../render/catBuilder';
 import { buildDog } from '../render/dogBuilder';
 import { HOME_COUNT, HOME_LABELS, HomeOffice } from '../render/homeOffice';
@@ -22,6 +25,11 @@ export class CharacterPicker {
   private homeCaption = document.getElementById('picker-home-caption') as HTMLElement;
   private homeSelect = document.getElementById('picker-home') as HTMLSelectElement;
   private spinBtn = document.getElementById('picker-spin') as HTMLButtonElement;
+  private alterBtn = document.getElementById('picker-alter') as HTMLButtonElement;
+  /** the figure on the turntable (to swap in an alter ego) */
+  private rig: CharacterRig | null = null;
+  /** showing the selected person's alter ego (Kurt, #32) */
+  private alter = false;
   private openBtn = document.getElementById('open-picker') as HTMLButtonElement;
 
   private renderer: THREE.WebGLRenderer | null = null;
@@ -109,6 +117,7 @@ export class CharacterPicker {
     document.getElementById('picker-left')!.addEventListener('click', () => this.turn(-TURN_STEP));
     document.getElementById('picker-right')!.addEventListener('click', () => this.turn(TURN_STEP));
     this.spinBtn.addEventListener('click', () => this.setAutoSpin(!this.autoSpin));
+    this.alterBtn.addEventListener('click', () => this.setAlter(!this.alter));
     this.homeSelect.addEventListener('change', () => {
       assignHomeRoom(team[this.index].id, this.homeSelect.value === '' ? null : Number(this.homeSelect.value));
       this.updateHomeSelect();
@@ -186,6 +195,12 @@ export class CharacterPicker {
       });
     }
     const rig = buildCharacter(m.look);
+    if (m.alterEgo) addKurt(rig);
+    this.rig = rig;
+    this.alter = false;
+    this.alterBtn.hidden = !m.alterEgo;
+    this.alterBtn.setAttribute('aria-pressed', 'false');
+    this.alterBtn.textContent = `Als ${KURT.name}`;
     rig.root.traverse((o) => {
       if (o instanceof THREE.Mesh) o.castShadow = true;
     });
@@ -219,6 +234,19 @@ export class CharacterPicker {
     });
   }
 
+  /** Turntable and home office preview show the selected person's alter ego (true) or the person (false). */
+  private setAlter(on: boolean): void {
+    const m = team[this.index];
+    if (!m.alterEgo || !this.rig?.setAlter) return;
+    this.alter = on;
+    this.rig.setAlter(on);
+    this.alterBtn.setAttribute('aria-pressed', String(on));
+    this.alterBtn.textContent = on ? `Als ${m.name.split(' ')[0]}` : `Als ${KURT.name}`;
+    this.nameEl.textContent = on ? KURT.name : m.name;
+    this.roleEl.textContent = on ? strings.alterEgo.role : m.role;
+    this.showHome();
+  }
+
   /** Room shown for a person: their special / assigned room, else a stable pick among the rooms nobody else owns. */
   private roomFor(id: string): number {
     const own = homeRoomOf(id);
@@ -241,7 +269,7 @@ export class CharacterPicker {
     }
     if (this.home && this.home !== home) this.home.setOccupant(null);
     this.home = home;
-    home.setOccupant(m, true);
+    home.setOccupant(m, true, this.alter);
     this.homeCaption.textContent = HOME_LABELS[room];
   }
 

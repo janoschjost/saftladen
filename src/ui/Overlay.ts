@@ -71,10 +71,12 @@ export class Overlay {
     this.onNames?.(on);
   }
 
-  placeLabels(items: Array<{ id: string; x: number; y: number; hidden?: boolean }>): void {
+  placeLabels(items: Array<{ id: string; x: number; y: number; hidden?: boolean; name?: string }>): void {
     for (const it of items) {
       const el = this.labelEls.get(it.id);
       if (!el) continue;
+      const name = it.name?.split(' ')[0];
+      if (name && el.textContent !== name) el.textContent = name; // e.g. Marco walking out as Kurt
       if (el.style.visibility !== (it.hidden ? 'hidden' : '')) el.style.visibility = it.hidden ? 'hidden' : '';
       if (it.hidden) continue;
       const w = el.offsetWidth;

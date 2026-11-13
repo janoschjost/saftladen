@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { team } from '../data/team';
 import shippedSeats from '../data/seats.json';
 import { HOME_LABELS, HomeOffice, ROOM_COUNT, heldPoses, type ArmPose } from '../render/homeOffice';
+import { kurtPortrait, kurtWave } from '../render/kurtBuilder';
+import { PoofFx } from '../render/poofFx';
 import { petPortrait } from '../render/petPortrait';
 import { SIT_DROP } from '../render/officeBuilder';
 import { Views, type ViewMode } from '../render/Views';
@@ -26,6 +28,7 @@ import { Settings } from '../ui/Settings';
 import { TimeControl } from '../ui/TimeControl';
 import { devEvents } from './DevEvents';
 import { DeskLights } from './DeskLights';
+import type { Desk } from './Office';
 import { CoatRacks } from './CoatRacks';
 import { Easter } from './Easter';
 import { Dog } from './Dog';
@@ -42,6 +45,7 @@ import { CROUCH_SECONDS, PET_HEIGHT, petPose, smooth } from './petPose';
 import { applySky, type SkyRig } from './TimeOfDay';
 import { Sim } from './Sim';
 import { Walker } from './Walker';
+import { kurtOnScreen } from './AlterEgo';
 import { random } from './rng';
 
 const STEP = 1 / 60; // fixed simulation step
@@ -88,6 +92,9 @@ export class Game {
   private editor!: RoomEditor;
   private overlay: Overlay;
   private hip = new THREE.Vector3();
+  private poofFx = new PoofFx(this.scene);
+  /** alter egos whose desk monitor shows Kurt right now, with that desk (see updateAlterEgos) */
+  private kurtScreens = new Map<Person, Desk>();
   private rainFx!: RainFx;
   private spawnFx!: SpawnFx;
   private xmas!: Christmas;
@@ -607,6 +614,7 @@ export class Game {
       this.saveSession();
     }
     this.deskLights.update(dt);
+    this.updateAlterEgos(dt);
     this.coatRacks.update();
     this.office.updateScreens(dt);
     this.timeControl.sync();
@@ -625,6 +633,36 @@ export class Game {
       if (e) this.spawnFx.burst(w.pos.x, w.pos.z, e, w.headHeight * w.root.scale.y);
     }
     this.spawnFx.update(dt);
+  }
+
+  /** Kurt (#32): the poof when Marco turns into him or back, and Kurt on the monitor of Marco's empty desk. */
+  private updateAlterEgos(dt: number): void {
+    for (const p of this.people) {
+      if (!p.poof) continue;
+      p.poof = false;
+      if (!p.away) this.poofFx.burst(p.pos.x, 0.9, p.pos.z);
+    }
+    this.poofFx.update(dt);
+    for (const p of this.people) {
+      if (!p.member.alterEgo) continue;
+      const desk = p.homeDesk;
+      const on = !!desk && kurtOnScreen({ hour: this.tod.hour, presence: p.presence, awayKind: p.awayKind, deskUsed: !!desk.occupant });
+      const shown = this.kurtScreens.get(p);
+      if (shown && (!on || shown !== desk)) {
+        // off, or his desk changed (seat editor): the old monitor goes back to normal
+        this.kurtScreens.delete(p);
+        if (!shown.occupant) shown.setScreen(false); // a new sitter has already switched on their own screen
+      }
+      if (on && desk && !this.kurtScreens.has(p)) {
+        desk.showKurt(kurtWave(p.member.look));
+        this.kurtScreens.set(p, desk);
+      }
+    }
+  }
+
+  /** Profile picture of a person as they look right now (Kurt's is rendered from the rig). */
+  private portraitOf(p: Person, alter = p.asAlter): string | null {
+    return alter ? kurtPortrait(p.member.look) ?? p.member.portrait : p.member.portrait;
   }
 
   /** Hidden gags: disco lights, a person who has had enough of the clicking. */
@@ -1011,6 +1049,32 @@ export class Game {
         return 'Die Tiere melden sich';
       },
     });
+    // Kurt (#32): Marco goes home as Kurt (spin, poof, out of the door); or right away in the home office as Kurt, or out on
+    // an errand (his empty desk shows Kurt from 08:30 to 17:00); back after two minutes
+    const kurt = (kind: 'off' | 'home' | 'errand') => () => {
+      const p = this.people.find((o) => o.member.alterEgo);
+      if (!p) return null;
+      if (kind === 'off' && p.presence === 'out') {
+        this.presence.callBack(p); // the next try (e.g. `?event=` retries) sends him off again
+        return null;
+      }
+      if (p.presence === 'leaving' || p.presence === 'returning') return null;
+      if (p.presence === 'in') {
+        if (!this.presence.free(p)) return null; // tied up (meeting, foosball, ...): not out of the middle of it
+        this.release(p);
+        drop(p);
+      }
+      if (kind === 'off') {
+        if (!this.presence.goHome(p, this.nav, 120)) return null;
+      } else {
+        this.presence.awayNow(p, kind, 120);
+        if (kind === 'home') p.homeAlter = true;
+      }
+      return strings.alterEgo.event[kind];
+    };
+    devEvents.register({ id: 'kurt-walkout', group: strings.presence.event.group, label: strings.alterEgo.label.off, run: kurt('off') });
+    devEvents.register({ id: 'kurt-home', group: strings.presence.event.group, label: strings.alterEgo.label.home, run: kurt('home') });
+    devEvents.register({ id: 'kurt-screen', group: strings.presence.event.group, label: strings.alterEgo.label.errand, run: kurt('errand') });
     devEvents.register({
       id: 'all-back',
       group: strings.presence.event.group,
@@ -1581,6 +1645,11 @@ export class Game {
       this.poseEmote(w, r);
       this.poseEaster(w, r);
       this.poseGameboy(w, r);
+      if (r.tail) {
+        // Kurt's tail sways from side to side with the steps, and rests still otherwise
+        r.tail.rotation.y = Math.sin(ph) * 0.35 * w.moving;
+        r.tail.rotation.x = -0.15 * sit;
+      }
       this.hinge(r);
     } else if (w instanceof Dog) {
       const r = w.rig;
@@ -2005,13 +2074,13 @@ export class Game {
     }
     if (this.selected?.away) this.selected = null;
     this.actions.show(
-      this.selected instanceof Person && this.selected.inOffice ? this.selected.member.name : null,
+      this.selected instanceof Person && this.selected.inOffice ? this.selected.displayName : null,
       this.presence.homeFull,
       !!this.selected && this.selected === this.steered,
       !!this.selected && this.selected === this.followed,
     );
     if (active instanceof Person) {
-      this.overlay.showTooltip(active.member.name, active.member.role, active.member.portrait, this.project(active));
+      this.overlay.showTooltip(active.displayName, active.asAlter ? strings.alterEgo.role : active.member.role, this.portraitOf(active), this.project(active));
     } else if (active instanceof Dog) {
       this.overlay.showTooltip(active.name, '',active.portrait, this.project(active));
     } else {
@@ -2072,8 +2141,8 @@ export class Game {
         this.presence.away
           .map((p) => ({
             id: p.id,
-            name: p.member.name,
-            portrait: p.member.portrait,
+            name: p.displayName,
+            portrait: this.portraitOf(p),
             kind: p.awayKind === 'home' ? ('home' as const) : ('errand' as const),
             phase: p.presence === 'leaving' ? ('leave' as const) : p.presence === 'returning' ? ('return' as const) : ('out' as const),
             left: p.awayLeft,
@@ -2085,7 +2154,7 @@ export class Game {
       this.office.desks.map((d) => ({ number: d.number, hidden: false, ...this.projectPoint(d.seat.x, 1.3, d.seat.z) })),
     );
     if (this.overlay.namesVisible) {
-      this.overlay.placeLabels(this.people.map((p) => ({ id: p.id, hidden: p.away, ...this.project(p, 0.1) })));
+      this.overlay.placeLabels(this.people.map((p) => ({ id: p.id, name: p.displayName, hidden: p.away, ...this.project(p, 0.1) })));
     }
   }
 
@@ -2097,14 +2166,14 @@ export class Game {
       const room = this.homes[v];
       if (!who && !room?.occupied) continue;
       const home = (this.homes[v] ??= new HomeOffice(v));
-      if (who && home.occupantId !== who.id) home.setOccupant(who.member);
+      if (who && (home.occupantId !== who.id || home.alter !== who.homeAlter)) home.setOccupant(who.member, false, who.homeAlter);
       else if (!who && home.occupied) home.setOccupant(null);
       if (who) {
         home.update(dt);
         this.feeds.setActivity(who.id, home.activityLabel);
       }
     }
-    const entries = atHome.map((p) => ({ id: p.id, name: p.member.name, variant: p.homeVariant, room: HOME_LABELS[p.homeVariant] }));
+    const entries = atHome.map((p) => ({ id: p.id, name: p.displayName, variant: p.homeVariant, room: HOME_LABELS[p.homeVariant] }));
     this.feeds.sync(entries);
   }
 

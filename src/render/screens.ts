@@ -319,7 +319,8 @@ const SETS: Record<ScreenKind, Draw[]> = { code, design, data, sheet, docs, medi
 
 /** One shared texture per kind + picture: the still picture, plus the canvas the GPU texture shows. */
 interface Entry {
-  kind: ScreenKind;
+  /** what it shows: a role's work, or Kurt (#32) */
+  kind: ScreenKind | 'kurt';
   mat: THREE.MeshBasicMaterial;
   tex: THREE.CanvasTexture;
   live: HTMLCanvasElement;
@@ -329,6 +330,8 @@ interface Entry {
   /** animation clock, runs faster while somebody types */
   t: number;
   seed: number;
+  /** a pre-rendered loop played on top of `base` (Kurt waving) */
+  frames?: HTMLCanvasElement[];
 }
 
 const cache = new Map<string, Entry>();
@@ -383,19 +386,25 @@ export function tickScreens(dt: number, typing: ReadonlySet<THREE.Material>): vo
   acc = 0;
   for (const e of cache.values()) {
     if (e.uses <= 0) continue;
-    e.t += step * (typing.has(e.mat) ? 1 : 0.25);
+    e.t += step * (typing.has(e.mat) || e.frames ? 1 : 0.25); // a loop plays at its own pace, nobody types at it
     const c = e.live.getContext('2d')!;
     paint(c, e);
     e.tex.needsUpdate = true;
   }
 }
 
+const LOOP_FPS = 8; // frames per second of a pre-rendered loop (Kurt waving)
 const HEAD = 10; // title / toolbar strip that stays put while the content moves
 
 /** Redraws the base picture and animates on top of it. */
 function paint(c: Ctx, e: Entry): void {
   const { t, base } = e;
   c.drawImage(base, 0, 0);
+  if (e.frames?.length) {
+    const s = H - 20;
+    c.drawImage(e.frames[Math.floor(t * LOOP_FPS) % e.frames.length], (W - s) / 2, 0, s, s);
+    return;
+  }
   switch (e.kind) {
     case 'code':
     case 'docs': {
@@ -704,4 +713,28 @@ function hudText(c: Ctx, text: string, x: number, y: number, size: number, col: 
   c.strokeText(text, x, y);
   c.fillStyle = col;
   c.fillText(text, x, y);
+}
+
+/** Marco's monitor while he is away during block times (#32): Kurt waving on a warm background, below "KOMPENSIERT". */
+export function kurtScreenMaterial(frames: HTMLCanvasElement[] | null): THREE.MeshBasicMaterial {
+  let e = cache.get('kurt');
+  if (!e) {
+    const base = mk();
+    const c = base.getContext('2d')!;
+    rect(c, '#f3d9a8', 0, 0, W, H);
+    rect(c, '#5f6b2a', 0, H - 18, W, 18);
+    c.fillStyle = '#f3d9a8';
+    c.font = '700 11px "Avenir Next", "Helvetica Neue", Arial, sans-serif';
+    c.textAlign = 'center';
+    c.fillText('KOMPENSIERT', W / 2, H - 5);
+    const live = mk();
+    const tex = new THREE.CanvasTexture(live);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.MeshBasicMaterial({ map: tex });
+    e = { kind: 'kurt', mat, tex, live, base, uses: 0, t: 0, seed: 0, frames: frames ?? undefined };
+    paint(live.getContext('2d')!, e);
+    cache.set('kurt', e);
+    byMat.set(mat, e);
+  }
+  return e.mat;
 }

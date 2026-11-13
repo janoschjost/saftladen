@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { team } from '../data/team';
 import { buildCat } from '../render/catBuilder';
 import { buildCharacter } from '../render/characterBuilder';
+import { addKurt } from '../render/kurtBuilder';
 import { buildDog, type DogRig } from '../render/dogBuilder';
 import { HOME_COUNT } from '../render/homeOffice';
 import { buildOffice, CORRIDOR_POINT, type OfficeModel } from '../render/officeModel';
@@ -131,7 +132,9 @@ export class Sim {
       this.scene.add(w.root);
     };
     for (const [index, m] of team.entries()) {
-      const person = new Person(m, buildCharacter(m.look), free());
+      const rig = buildCharacter(m.look);
+      if (m.alterEgo) addKurt(rig);
+      const person = new Person(m, rig, free());
       person.office = this.office;
       person.kitchen = this.kitchen;
       this.office.people.push(person);

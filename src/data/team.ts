@@ -168,6 +168,9 @@ const schedules: Record<string, Partial<Schedule>> = {
   'zlatko-pesic': { arrive: 9, leave: 17.5 },
 };
 
+/** Alter egos (#32): Marco turns into Kompensiertier Kurt when he goes home, see src/game/AlterEgo.ts. */
+const alterEgos: Record<string, TeamMember['alterEgo']> = { 'marco-rieser': 'kurt' };
+
 export const team: TeamMember[] = raw.map((p) => ({
   id: p.id,
   name: p.name,
@@ -188,4 +191,5 @@ export const team: TeamMember[] = raw.map((p) => ({
   adhd: adhd.has(p.id),
   homebody: homebodies.has(p.id),
   schedule: { ...CORE_HOURS, ...schedules[p.id] },
+  alterEgo: alterEgos[p.id],
 }));

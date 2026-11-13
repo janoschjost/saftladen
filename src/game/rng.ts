@@ -6,6 +6,8 @@
  * - `fxRandom()` is for presentation that runs once per rendered frame (particles, webcam feeds, menu idles). Its call
  *   count depends on the frame rate, so it gets its own stream and never shifts the simulation's numbers.
  * - `seeded(n)` makes a private generator for things that must look the same every time (screens, tattoos, rooms).
+ * - `stream(salt)` is a side stream of the game's seed for a rare roll that must not shift `random()` (Kurt's spells):
+ *   same seed, same rolls, and the simulation plays out as if it did not exist.
  */
 export type Rng = () => number;
 
@@ -24,12 +26,23 @@ export function seeded(seed: number): Rng {
 let sim: Rng;
 let fx: Rng;
 let current = 0;
+const side = new Map<number, Rng>();
 
 /** Restarts both streams from `n`. Call before the game (or a test) creates anything that rolls dice. */
 export function setSeed(n: number): void {
   current = n >>> 0;
   sim = seeded(current);
   fx = seeded(current ^ 0x9e3779b9);
+  side.clear();
+}
+
+/** Side stream `salt` of the game's seed (restarts with `setSeed`). */
+export function stream(salt: number): Rng {
+  return () => {
+    let r = side.get(salt);
+    if (!r) side.set(salt, (r = seeded(current ^ salt)));
+    return r();
+  };
 }
 
 /** The seed of the running game (log it to replay a run). */

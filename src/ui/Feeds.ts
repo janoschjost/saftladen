@@ -40,7 +40,12 @@ export class Feeds {
       this.tilesEls.delete(id);
     }
     for (const e of entries) {
-      if (this.tilesEls.has(e.id)) continue;
+      const tile = this.tilesEls.get(e.id);
+      if (tile) {
+        const name = tile.el.querySelector('.m-feed__name') as HTMLElement;
+        if (name.textContent !== e.name.split(' ')[0]) name.textContent = e.name.split(' ')[0];
+        continue;
+      }
       const el = document.createElement('button');
       el.type = 'button';
       el.className = 'm-feed';

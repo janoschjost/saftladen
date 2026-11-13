@@ -13,6 +13,7 @@ import type { Desk, FoosSpot, Office } from './Office';
 import type { Talk } from './Social';
 import type { Dog } from './Dog';
 import { Walker } from './Walker';
+import { KURT, rollHomeAlter, transformsOnLeave } from './AlterEgo';
 import { random } from './rng';
 
 const WORK_CHANCE = 0.75; // chance per decision to go sit down instead of wandering
@@ -212,7 +213,17 @@ export class Person extends Walker {
   petHeight = 0.4;
   /** last frame time of the pet pose (s), to ease it in real time */
   petClock = 0;
-  awayKind: AwayKind | null = null;
+  private kind: AwayKind | null = null;
+  /** shows the alter ego right now (walking out after the spin) */
+  alter = false;
+  /** this home office spell shows the alter ego in the feed (rolled when the spell starts) */
+  homeAlter = false;
+  /** sent out by hand on the current trip: an alter ego stays itself, also if the plan turns it into going home */
+  private leftManually = false;
+  /** seconds left of the spin on the spot before walking out as the alter ego */
+  spin = 0;
+  /** set when the skin swaps (a poof for the game to show at this person), cleared by the game */
+  poof = false;
   /** seconds until this person comes back (counts down while `out`) */
   awayLeft = 0;
   /** pets that come and go with this person (registered by `Dog`) */
@@ -291,6 +302,32 @@ export class Person extends Walker {
     this.id = member.id;
     if (member.speed) this.speed = member.speed;
     this.root.userData.walker = this;
+  }
+
+  get awayKind(): AwayKind | null {
+    return this.kind;
+  }
+
+  /** Every home office spell (by day, at night, or right from the start) rolls whether the feed shows the alter ego. */
+  set awayKind(k: AwayKind | null) {
+    if (k === 'home' && this.kind !== 'home') this.homeAlter = rollHomeAlter(this.member);
+    this.kind = k;
+  }
+
+  /** The alter ego is what people see: walking out after the spin, or in the home office feed. */
+  get asAlter(): boolean {
+    return this.alter || (this.presence === 'out' && this.kind === 'home' && this.homeAlter);
+  }
+
+  /** Name for labels, tooltip, roster and feeds. */
+  get displayName(): string {
+    return this.asAlter ? KURT.name : this.member.name;
+  }
+
+  private setAlter(on: boolean): void {
+    if (this.alter === on) return;
+    this.alter = on;
+    this.rig.setAlter?.(on);
   }
 
   get headHeight(): number {
@@ -373,16 +410,24 @@ export class Person extends Walker {
   /** the wing of the entrance door this person uses on the current trip */
   lane: DoorLane = DOOR_LANES[0];
 
-  /** Walk to the door and leave; comes back after `seconds`. */
-  leaveOffice(nav: NavGrid, kind: AwayKind, seconds: number): void {
+  /** Walk to the door and leave; comes back after `seconds`. Going home (not `manual`ly sent), an alter ego spins and walks out as itself. */
+  leaveOffice(nav: NavGrid, kind: AwayKind, seconds: number, manual = false): void {
     this.cancelTask();
+    this.leftManually = manual;
     this.lane = pickDoorLane();
     this.presence = 'leaving';
     this.awayKind = kind;
     this.awayLeft = seconds;
     this.presenceRetries = 0;
     this.presenceRetry = 0;
+    this.spin = transformsOnLeave(this.member, kind, manual) && !this.alter ? KURT.spin : 0;
     this.goTo(nav, this.lane.in);
+  }
+
+  /** Plans changed while away or on the way out (lunch became the end of the day): going home now, an alter ego still spins first. */
+  leaveAs(kind: AwayKind): void {
+    this.awayKind = kind;
+    if (this.presence === 'leaving' && !this.script && !this.alter && this.spin === 0 && transformsOnLeave(this.member, kind, this.leftManually)) this.spin = KURT.spin;
   }
 
   /** Start the game already outside. */
@@ -392,10 +437,13 @@ export class Person extends Walker {
     this.presence = 'out';
     this.awayKind = kind;
     this.awayLeft = seconds;
+    this.spin = 0;
+    this.setAlter(false);
     this.setAway(true);
   }
 
   private comeBack(): void {
+    this.setAlter(false); // always back in as Marco
     this.presence = 'returning';
     this.setAway(false);
     this.lane = pickDoorLane();
@@ -412,6 +460,9 @@ export class Person extends Walker {
   }
 
   private abortLeaving(): void {
+    if (this.alter || this.spin > 0) this.poof = true; // back to themselves
+    this.spin = 0;
+    this.setAlter(false);
     this.presence = 'in';
     this.awayKind = null;
     this.script = null;
@@ -432,10 +483,22 @@ export class Person extends Walker {
           this.moving += (0 - this.moving) * Math.min(1, dt * 8);
           return true;
         }
+        if (this.spin > 0) {
+          // going home: spin on the spot, swap into the alter ego halfway (poof), then off to the door
+          this.spin = Math.max(0, this.spin - dt);
+          this.yaw += (dt / KURT.spin) * Math.PI * 4;
+          this.moving += (0 - this.moving) * Math.min(1, dt * 8);
+          if (!this.alter && this.spin <= KURT.spin / 2) {
+            this.setAlter(true);
+            this.poof = true;
+          }
+          if (this.spin === 0) this.goTo(nav, this.lane.in);
+          return true;
+        }
         if (this.script) {
           if (this.runScript(dt)) return true;
           this.presence = 'out';
-          this.setAway(true);
+          this.setAway(true); // still Kurt while he fades out of the doorway, Marco again once gone (see 'out')
           for (const d of this.pets) d.sendAway(); // pets vanish with the owner, wherever they are
           return true;
         }
@@ -454,6 +517,7 @@ export class Person extends Walker {
         return true;
       }
       case 'out':
+        if (this.alter && this.fx === 0) this.setAlter(false); // through the door and gone: Marco again
         this.awayLeft -= dt;
         // pets still around (not yet despawned) hold up the arrival: both appear together
         if (this.awayLeft <= 0) {

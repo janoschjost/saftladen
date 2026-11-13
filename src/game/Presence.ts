@@ -256,7 +256,7 @@ export class Presence {
   }
 
   /** Somebody who is not tied up right now (talk, meeting, printer, ...) and so free to walk out. */
-  private free(p: Person): boolean {
+  free(p: Person): boolean {
     return p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob;
   }
 
@@ -290,7 +290,26 @@ export class Presence {
       p.homeVariant = this.freeVariant(p);
     }
     if (this.duty(p, this.workHour) !== 'duty') this.overridden.add(p);
-    p.leaveOffice(nav, kind, 600);
+    p.leaveOffice(nav, kind, 600, true);
+  }
+
+  /** Dev event: off home as if their day ended (an alter ego spins and walks out as itself); back after `seconds`. */
+  goHome(p: Person, nav: NavGrid, seconds: number): boolean {
+    if (!this.free(p)) return false;
+    this.overridden.add(p);
+    p.leaveOffice(nav, 'off', seconds);
+    return true;
+  }
+
+  /** Dev events: straight out of the office (no walk to the door), into the home office or on an errand; back after `seconds`. */
+  awayNow(p: Person, kind: 'home' | 'errand', seconds: number): void {
+    this.overridden.add(p);
+    if (kind === 'home') {
+      const room = (p.homeVariant = this.freeVariant(p));
+      // home office full: the room is taken, whoever works there comes back to the office (one person per room)
+      for (const o of this.people) if (o !== p && o.awayKind === 'home' && (o.presence === 'out' || o.presence === 'leaving') && o.homeVariant === room) this.callBack(o);
+    }
+    p.startAway(kind, seconds);
   }
 
   /** Bring somebody back to the office. */
@@ -376,7 +395,7 @@ export class Presence {
       case 'out':
         if (p.awayKind === kind && p.awayLeft >= OFF - 1) return;
         if (kind === 'home' && p.awayKind !== 'home') p.homeVariant = this.freeVariant(p);
-        p.awayKind = kind;
+        p.leaveAs(kind);
         p.awayLeft = OFF;
         break;
       default:

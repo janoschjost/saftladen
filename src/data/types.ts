@@ -100,4 +100,6 @@ export interface TeamMember {
   homebody?: boolean; // works from home a lot and is never out on errands
   speed?: number; // walking speed override (default: random 1.0-1.5)
   schedule: Schedule; // habitual office hours
+  /** turns into this alter ego when going home (Kompensiertier Kurt, see src/game/AlterEgo.ts) */
+  alterEgo?: 'kurt';
 }

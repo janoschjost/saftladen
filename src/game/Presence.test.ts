@@ -3,6 +3,7 @@ import { team } from '../data/team';
 import type { TeamMember } from '../data/types';
 import type { NavGrid } from './NavGrid';
 import type { AwayKind, Person } from './Person';
+import { transformsOnLeave } from './AlterEgo';
 import { Presence } from './Presence';
 import { hourOf, type TimeOfDay } from './TimeOfDay';
 import type { Weather } from './Weather';
@@ -45,6 +46,8 @@ class Stub {
   vapeJob = null;
   task = null;
   pos = { x: 0, z: 0 };
+  /** every walk out of the door: kind and whether an alter ego transforms (#32) */
+  leaves: Array<{ kind: AwayKind; transform: boolean; manual: boolean }> = [];
   private walk = 0;
 
   constructor(readonly member: TeamMember) {}
@@ -55,11 +58,18 @@ class Stub {
   get inOffice(): boolean {
     return this.presence === 'in';
   }
-  leaveOffice(_nav: NavGrid, kind: AwayKind, seconds: number): void {
+  leaveOffice(_nav: NavGrid, kind: AwayKind, seconds: number, manual = false): void {
+    this.leaves.push({ kind, transform: transformsOnLeave(this.member, kind, manual), manual });
     this.presence = 'leaving';
     this.awayKind = kind;
     this.awayLeft = seconds;
     this.walk = WALK;
+  }
+  leaveAs(kind: AwayKind): void {
+    this.awayKind = kind;
+    const last = this.leaves.at(-1);
+    // Person.leaveAs: re-targeted on the way out, an alter ego going home now still transforms (unless sent by hand)
+    if (this.presence === 'leaving' && last) Object.assign(last, { kind, transform: last.transform || transformsOnLeave(this.member, kind, last.manual) });
   }
   startAway(kind: AwayKind, seconds: number): void {
     this.presence = 'out';
@@ -124,7 +134,7 @@ function runDay(seed: number, from = 5, to = 23, raining = false) {
       });
     }
   }
-  return { samples, plans, people };
+  return { samples, plans, people, presence, nav };
 }
 
 describe('presence', () => {
@@ -204,5 +214,46 @@ describe('presence', () => {
       expect(samples.some((s) => s.returning > 0)).toBe(true);
       for (const s of samples) expect(s.returning).toBeLessThanOrEqual(2);
     }
+  });
+
+  it('kurt.behavior: Marco transforms when going home (end of day, home office), never for errands, lunch or a manual send', () => {
+    let homeSpells = 0;
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const { people } = runDay(seed);
+      const marco = people.find((p) => p.id === 'marco-rieser')!;
+      expect(marco.leaves.some((l) => l.kind === 'off' || l.kind === 'home')).toBe(true);
+      for (const l of marco.leaves) expect(l.transform).toBe(l.kind !== 'errand');
+      homeSpells += marco.leaves.filter((l) => l.kind === 'home').length;
+      for (const p of people) if (!p.member.alterEgo) expect(p.leaves.every((l) => !l.transform)).toBe(true);
+    }
+    expect(homeSpells).toBeGreaterThan(0);
+    // sent home by hand (H / action card): stays Marco
+    const { people, presence, nav } = runDay(1, 5, 11);
+    const marco = people.find((p) => p.id === 'marco-rieser')!;
+    if (marco.presence !== 'in') marco.presence = 'in';
+    marco.leaves = [];
+    presence.send(marco as unknown as Person, 'home', nav);
+    presence.send(marco as unknown as Person, 'errand', nav);
+    expect(marco.leaves.length).toBeGreaterThan(0);
+    expect(marco.leaves.every((l) => !l.transform)).toBe(true);
+  });
+
+  it('kurt.home: the dev event never puts Marco into a taken room; whoever sits there comes back', () => {
+    const { people, presence } = runDay(1, 5, 11);
+    const marco = people.find((p) => p.id === 'marco-rieser')!;
+    for (const p of people) if (p.awayKind === 'home') p.startAway('errand', 600); // nobody at home yet
+    // home office full: every room taken by somebody else
+    const others = people.filter((p) => p !== marco).slice(0, 8);
+    others.forEach((p, i) => {
+      p.startAway('home', 600);
+      p.homeVariant = i;
+    });
+    presence.awayNow(marco as unknown as Person, 'home', 120);
+    const sharing = others.filter((p) => p.homeVariant === marco.homeVariant);
+    expect(sharing.length).toBeGreaterThan(0);
+    for (const p of sharing) expect(p.awayLeft).toBe(0); // on the way back to the office
+    for (const p of people) p.update(STEP);
+    const home = people.filter((p) => p.awayKind === 'home' && p.presence === 'out').map((p) => p.homeVariant);
+    expect(new Set(home).size).toBe(home.length);
   });
 });
