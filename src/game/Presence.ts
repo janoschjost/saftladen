@@ -293,6 +293,11 @@ export class Presence {
     return p.inOffice && !p.held && !p.controlled && !p.talk && !p.playerChat && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob;
   }
 
+  /** Free to be sent out by the simulation: not busy, not on the way somewhere, not the remote worker on his visit (he came to see the team; only lunch and the end of the day take him out). */
+  private sendable(p: Person): boolean {
+    return this.free(p) && !p.task && !this.isVisitor(p);
+  }
+
   /** Office over capacity: sends one person to the home office, holds back those about to return. Returns true if somebody left. */
   private capOffice(nav: NavGrid): boolean {
     const present = this.present;
@@ -301,8 +306,7 @@ export class Presence {
     for (const p of this.people) if (p.presence === 'out' && p.awayKind !== 'off' && p.awayLeft > 0 && p.awayLeft < 5) p.awayLeft = 5 + random() * 15;
     if (present === MAX_OFFICE) return false;
     if (this.people.some((p) => p.presence === 'leaving')) return false;
-    // never the remote worker on his visit: he came to see the team (no errands for him either, only lunch)
-    const candidates = this.people.filter((p) => this.free(p) && !p.task && !this.isVisitor(p));
+    const candidates = this.people.filter((p) => this.sendable(p));
     if (!candidates.length) return false;
     const p = candidates[Math.floor(random() * candidates.length)];
     const home = this.roomFree || p.member.homebody;
@@ -583,7 +587,7 @@ export class Presence {
     // enough people out already; a full office still lets somebody go, so that those waiting outside get their turn
     if ((this.away.length >= this.target && this.present < MAX_OFFICE) || leaving >= 2) return;
     const candidates = this.people.filter((p) => {
-      if (!this.free(p) || p.task || this.overridden.has(p) || this.isVisitor(p)) return false;
+      if (!this.sendable(p) || this.overridden.has(p)) return false;
       const plan = this.planOf(p);
       // not right before lunch or going home
       return this.duty(p, hour) === 'duty' && hour < plan.leave - ERRANDS.beforeLeave && (plan.lunched || hour < plan.lunch - 0.5);

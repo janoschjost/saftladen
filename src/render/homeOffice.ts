@@ -781,15 +781,17 @@ const SON_FACE = 1.4;
 const SON_SPOT = { z: 0.1, frame: 0.6, clear: 0.55, head: 1.05 };
 /** Papa's hands while he listens: off the keyboard, resting on the edge of the desk / in the lap */
 const SON_LISTEN: ArmPose = { x: -0.45, z: 0.12, e: -1.0, ez: 0 };
-/** speech bubble: width as a share of the frame's width; where its tail tip sits on the canvas (share of width / height) */
-const SON_BUBBLE = { width: 0.42, tipX: 54 / 512, tipY: 152 / 160 };
+/** the bubble's canvas (px) and where its tail tip sits on it */
+const BUBBLE_PX = { w: 512, h: 160, tipX: 54, tipY: 152 };
+/** the son's bubble is this share of the frame's width */
+const SON_BUBBLE_WIDTH = 0.42;
 const SON_LINES = ['Papa, spielst du mit mir?', 'Papa, ich habe Hunger!', 'Schau mal, ein Bagger!', 'Papaaa, wann bist du fertig?', 'Darf ich auch mal tippen?', 'Papa, ich muss mal!'];
 
 /** a speech bubble as a sprite (text is redrawn per line) */
 function bubbleSprite(): THREE.Sprite {
   const c = document.createElement('canvas');
-  c.width = 512;
-  c.height = 160;
+  c.width = BUBBLE_PX.w;
+  c.height = BUBBLE_PX.h;
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
@@ -810,7 +812,7 @@ function drawBubble(s: THREE.Sprite, text: string): void {
   g.beginPath();
   g.roundRect(8, 8, c.width - 16, 110, 34);
   g.moveTo(70, 116);
-  g.lineTo(54, 152);
+  g.lineTo(BUBBLE_PX.tipX, BUBBLE_PX.tipY);
   g.lineTo(110, 116);
   g.fill();
   g.stroke();
@@ -1411,7 +1413,12 @@ export class HomeOffice {
       this.occupant.headset ??= headset();
       rig.body.add(this.occupant.headset);
     }
-    if (this.occupant.son) this.scene.add(this.occupant.son.rig.root, this.occupant.son.bubble);
+    if (this.occupant.son) {
+      const { rig: sonRig, bubble } = this.occupant.son;
+      bubble.position.copy(this.sonBubble);
+      bubble.scale.set(this.sonBubbleSize.x, this.sonBubbleSize.y, 1);
+      this.scene.add(sonRig.root, bubble);
+    }
     for (const p of pets) {
       p.rig.root.position.copy(p.spot);
       if (p.onDesk) p.rig.root.position.y = this.desk ?? p.spot.y; // on this room's desk top
@@ -1427,19 +1434,19 @@ export class HomeOffice {
   /** The boy's spot and bubble from this room's webcam (the webcams look along -z from in front of the desk). */
   private placeSon(): void {
     const cam = this.camera.position;
-    const d = Math.max(0.3, cam.z - SON_SPOT.z);
-    const halfH = d * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
-    const halfW = halfH * this.camera.aspect;
+    const view = this.camera.getViewSize(Math.max(0.3, cam.z - SON_SPOT.z), new THREE.Vector2());
+    const halfW = view.x / 2;
+    const halfH = view.y / 2;
     const x = -Math.max(SON_SPOT.clear, halfW * SON_SPOT.frame);
     this.sonAt.set(x, 0, SON_SPOT.z);
     this.sonOff.set(-halfW - 0.6, 0, SON_SPOT.z);
-    const w = halfW * 2 * SON_BUBBLE.width;
-    const h = (w * 160) / 512;
+    const w = view.x * SON_BUBBLE_WIDTH;
+    const h = (w * BUBBLE_PX.h) / BUBBLE_PX.w;
     this.sonBubbleSize.set(w, h);
     // tail tip just above his head, the whole bubble inside the frame
     const top = cam.y + halfH - 0.02;
-    const y = Math.min(SON_SPOT.head + 0.04 + (SON_BUBBLE.tipY - 0.5) * h, top - h / 2);
-    this.sonBubble.set(x + (0.5 - SON_BUBBLE.tipX) * w, y, SON_SPOT.z);
+    const y = Math.min(SON_SPOT.head + 0.04 + (BUBBLE_PX.tipY / BUBBLE_PX.h - 0.5) * h, top - h / 2);
+    this.sonBubble.set(x + (0.5 - BUBBLE_PX.tipX / BUBBLE_PX.w) * w, y, SON_SPOT.z);
   }
 
   /** The son's visits: every so often (while Papa is just typing) he walks in, says something and leaves again. */
@@ -1494,8 +1501,6 @@ export class HomeOffice {
       r.body.rotation.set(0.05 + Math.sin(t * 3) * 0.03, 0, 0);
     }
     son.bubble.visible = !walking;
-    son.bubble.position.copy(this.sonBubble);
-    son.bubble.scale.set(this.sonBubbleSize.x, this.sonBubbleSize.y, 1);
   }
 
   /** Whether this room and occupant have what a signature move or extra break needs. */
