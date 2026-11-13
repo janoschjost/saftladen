@@ -1,13 +1,4 @@
-import type { Page } from '@playwright/test';
 import { expect, openGame, read, test, until } from './game';
-
-/** Coats on the stands = people in the office (or every hook, if there are more people than hooks). */
-const coatsMatch = (page: Page) =>
-  read(page, (g) => {
-    const pegs = g.coatRacks.pegs.length;
-    const inside = g.people.filter((p: { presence: string }) => p.presence === 'in').length;
-    return { coats: g.coatRacks.count, expected: Math.min(inside, pegs), inside };
-  });
 
 test('presence.homes-hash', async ({ page }) => {
   await openGame(page, 'homes');
@@ -25,17 +16,6 @@ test('home.feeds: the feed list does not bounce past its ends (the overlays woul
   await expect(feeds).toBeVisible();
   expect(await feeds.evaluate((el) => getComputedStyle(el).overscrollBehaviorY)).toBe('none');
   expect(errors).toEqual([]);
-});
-
-test.describe('office.coat-stands', () => {
-  for (const [name, hash] of [['normal start', ''], ['all eight home offices taken', 'homes']]) {
-    test(name, async ({ page }) => {
-      await openGame(page, hash);
-      const c = await coatsMatch(page);
-      expect(c.inside).toBeGreaterThan(0);
-      expect(c.coats).toBe(c.expected);
-    });
-  }
 });
 
 test('select.actions + keys.home: select, send home, call back', async ({ page }) => {

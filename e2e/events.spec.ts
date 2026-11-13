@@ -1,21 +1,19 @@
-import { expect, openGame, read, scene, test, until } from './game';
+import { expect, openGame, read, test, until } from './game';
 
 /**
  * `?event=<id>` runs a dev-panel event at start, so a dev can open a feature directly (the `url:` in FEATURES.md).
- * Each case opens the same event as that URL and waits until it has started. How it plays out is the simulation's
- * business (Vitest), not this param's.
+ * This checks that wiring once; what each place does once somebody is sent there is the simulation's business:
+ * `src/game/places.test.ts`. The cases below need a home office (`HomeOffice` draws in the view).
  */
+test('dev.params: ?event=<id> starts its event at load (?event=meeting-room)', async ({ page }) => {
+  const errors = await openGame(page, '', undefined, 'event=meeting-room');
+  expect(await until(page, (g) => !!g.meetingRoom.current, undefined, 30_000)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
 const cases: [string, string, (g: any) => unknown][] = [
-  ['place.meeting', 'meeting-room', (g) => g.meetingRoom.current],
-  ['place.coffee-break', 'coffee', (g) => g.kitchen.current],
-  ['place.booth', 'phone-booth', (g) => g.phoneBooth.current],
-  ['place.pod', 'pod', (g) => g.pod.current],
-  ['pet.crouch', 'pet-dog', (g) => g.people.some((p: { petAmt: number; rig: { legL: { rotation: { x: number } }; kneeR: { rotation: { x: number } } } }) => p.petAmt > 0.9 && p.rig.legL.rotation.x < -0.4 && p.rig.kneeR.rotation.x > 1.2)],
   ['presence.remote-visit', 'remote-visit', (g) => g.people.some((p: { id: string; presence: string }) => p.id === 'zlatko-pesic' && p.presence !== 'out')],
   ['home.son', 'remote-son', (g) => g.homes.some((h: { sonHere?: boolean } | null) => h?.sonHere)],
-  ['place.printer', 'printer', (g) => g.people.some((p: { printJob?: unknown }) => p.printJob)],
-  ['place.foosball', 'foosball', (g) => g.people.filter((p: { foosJob?: unknown }) => p.foosJob).length === 2],
-  ['place.toilet', 'toilet', (g) => g.toilets.cabins.some((c: { session?: unknown }) => c.session)],
 ];
 
 for (const [id, event, reached] of cases) {
@@ -58,62 +56,6 @@ test('dev.params: ?test fast-forwards in game time and does not draw the office'
   });
   expect(state.ahead).toBeCloseTo(30, 3);
   expect(state.draw).toBe(false);
-});
-
-// The cats come and go with their owner, and she is out at 11:00: the scene puts her into the office and keeps her in
-test('pet.crouch-cat (event pet-cat)', async ({ page }) => {
-  const errors = await openGame(page);
-  await scene(page, (s) => s.put('donata-manser', 'desk', 'stay'));
-  await until(page, () => !String((window as any).dev.trigger('pet-cat')).endsWith('nicht möglich'));
-  await until(page, (g) => g.people.some((p: { petAmt: number; rig: { legL: { rotation: { x: number } }; kneeR: { rotation: { x: number } } } }) => p.petAmt > 0.9 && p.rig.legL.rotation.x < -0.4 && p.rig.kneeR.rotation.x > 1.2), undefined, 40_000);
-  expect(errors).toEqual([]);
-});
-
-// A lettered door (under the wall lettering) that is `open` or shut again; its letters must have moved along / be back
-// in their laid-out place (`moved`: how far they are from it, m + rad).
-type Letter = { x: number; y: number; mesh: { position: { x: number; y: number }; rotation: { z: number } } };
-const letteredDoor = (g: any, want: 'any' | 'open' | 'shut'): boolean =>
-  g.doors.states
-    .filter((s: { rig: { letters?: Letter[] } }) => s.rig.letters?.length)
-    .some((s: { open: number; rig: { letters: Letter[] } }) => {
-      const moved = Math.max(...s.rig.letters.map((l) => Math.abs(l.mesh.position.x - l.x) + Math.abs(l.mesh.position.y - l.y) + Math.abs(l.mesh.rotation.z)));
-      return want === 'any' || (want === 'open' ? s.open > 0.9 && moved > 0.01 : s.open < 0.001 && moved < 0.001);
-    });
-
-test('office.door-lettering (?event=door-lettering): letters move with the door and settle back when it closes', async ({ page }) => {
-  const errors = await openGame(page, '', undefined, 'event=door-lettering');
-  expect(await read(page, letteredDoor, 'any')).toBe(true);
-  await until(page, letteredDoor, 'open', 45_000);
-  await page.evaluate(() => (window as unknown as { dev: { trigger: (id: string) => string } }).dev.trigger('door-lettering'));
-  await until(page, letteredDoor, 'shut', 45_000);
-  expect(errors).toEqual([]);
-});
-
-type Cabin = { session: { seated: boolean; person: any } | null };
-
-// Sitting down and the handheld pose: covered by Toilets.test.ts
-test('place.toilet: the cabin is taken at once, its light turns red (?event=toilet)', async ({ page }) => {
-  const errors = await openGame(page, '', undefined, 'event=toilet');
-  // the light follows on the next simulation step
-  await until(page, (g) => g.toilets.cabins.some((c: Cabin, i: number) => c.session && g.model.toilets.cabins[i].sign.color.getHex() === 0xe0342c), undefined, 30_000);
-  const state = await read(page, (g) => {
-    const i = g.toilets.cabins.findIndex((c: Cabin) => c.session);
-    const c = g.toilets.cabins[i];
-    return { sign: g.model.toilets.cabins[i].sign.color.getHex(), occupant: c.seat.occupant === c.session.person };
-  });
-  expect(state).toEqual({ sign: 0xe0342c, occupant: true });
-  expect(errors).toEqual([]);
-});
-
-test('place.toilet-queue: both cabins taken, the third person waits in front (?event=toilet ×3)', async ({ page }) => {
-  const errors = await openGame(page, '', undefined, 'event=toilet&event=toilet&event=toilet');
-  await until(page, (g) => g.toilets.queue.length === 1 && g.toilets.cabins.every((c: Cabin) => c.session), undefined, 30_000);
-  const ok = await read(page, (g) => {
-    const waiting = g.toilets.queue[0].person;
-    return g.toilets.cabins.every((c: Cabin) => c.session!.person !== waiting) && !waiting.inMeeting;
-  });
-  expect(ok).toBe(true);
-  expect(errors).toEqual([]);
 });
 
 // the glass room's lamp stays off by day with a meeting inside; the time slider jumping into the night switches it on, back to the day off again

@@ -1,4 +1,4 @@
-import { expect, openGame, read, test, until } from './game';
+import { expect, openGame, test, until } from './game';
 
 test('desk.screens-live: a working monitor shows moving content', async ({ page }) => {
   const errors = await openGame(page);
@@ -14,21 +14,5 @@ test('desk.screens-live: a working monitor shows moving content', async ({ page 
   };
   const a = await until(page, shot);
   await until(page, shot, a, 10_000);
-  expect(errors).toEqual([]);
-});
-
-// These check what the event sets up right away;
-// how the TV follows the meeting (black → screen once all sit, kart players face the TV) is in src/game/Meeting.test.ts.
-test('place.meeting-tv: black without a meeting, a meeting brings slides', async ({ page }) => {
-  const errors = await openGame(page, '', undefined, 'event=meeting-room');
-  expect(await read(page, (g) => g.meetingRoom.tv)).toBe('off');
-  await until(page, (g) => g.meetingRoom.current?.screen === 'slides', undefined, 30_000);
-  expect(await read(page, (g) => g.meetingRoom.tv)).toBe('off'); // still gathering: black until everybody sits
-  expect(errors).toEqual([]);
-});
-
-test('place.meeting-tv: a lunch round is a kart race', async ({ page }) => {
-  const errors = await openGame(page, '', undefined, 'event=meeting-kart');
-  await until(page, (g) => g.meetingRoom.current?.screen === 'kart', undefined, 30_000);
   expect(errors).toEqual([]);
 });
