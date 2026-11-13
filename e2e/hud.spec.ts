@@ -183,10 +183,13 @@ test('actions.sheet + actions.search: A toggles the sheet, previews, number keys
 test('actions.camera + actions.handback: Drucken flies to Orbit and follows the lead; a wheel hands back, Esc flies to the overview', async ({ page }) => {
   await openGame(page);
   await page.keyboard.press('1'); // from Iso
-  await page.keyboard.press('a');
-  await freeStations(page); // right before the card: the game runs on while the sheet opens
-  await page.locator('#action-cards .m-card[data-action="printer"]').click();
-  expect(await read(page, (g) => g.views.mode)).toBe('orbit');
+  // the game runs on while the sheet opens: somebody may take the printer just before the click ("nicht möglich"), then again
+  await expect(async () => {
+    if ((await page.locator('#open-actions').getAttribute('aria-expanded')) !== 'true') await page.keyboard.press('a');
+    await freeStations(page);
+    await page.locator('#action-cards .m-card[data-action="printer"]').click();
+    expect(await read(page, (g) => g.views.mode)).toBe('orbit');
+  }).toPass({ timeout: 20_000 });
   const a = await read(page, (g) => g.action && { printing: !!g.action.lead?.printJob, owned: g.action.owned });
   expect(a).toMatchObject({ printing: true, owned: true });
   expect(await read(page, (g) => g.views.flying)).toBe(true);
