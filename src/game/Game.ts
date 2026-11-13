@@ -582,7 +582,7 @@ export class Game {
     const dt = Math.min(MAX_FRAME, (now - this.last) / 1000);
     this.last = now;
     // pause stops the whole game (and so does `frozen`, for the tests); 10x / 25x run the whole office faster
-    this.step(dt, this.frozen ? 0 : this.timeScale());
+    this.step(this.frozen ? 0 : dt, this.timeScale());
     this.render(this.acc / STEP);
     this.renderFeeds();
   }
@@ -618,6 +618,7 @@ export class Game {
     this.updateDay(dt);
     this.updateSteer(dt);
     this.updateAction(dt);
+    this.sim.presence.applyJump(); // a jump made while paused: nothing steps then
     while (this.acc >= STEP) {
       this.sim.step(STEP);
       setTvMode(this.meetingRoom.tv);

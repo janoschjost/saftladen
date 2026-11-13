@@ -70,8 +70,12 @@ test.describe('clock', () => {
     await expect(page.locator('#time-slider')).toHaveValue(String(Math.round((await read(page, (g) => g.tod.cycle)) * 1000)));
     await page.locator('#open-env').click();
     // into the night: dark at once, everybody but the night shift goes home
+    const inside = await read(page, (g) => g.people.filter((p: { presence: string }) => p.presence === 'in').length);
     await dialTo(page, 23.5);
     await expect(page.locator('#clock-time')).toHaveText('23:30');
+    // paused: nothing steps, yet the jump is applied by the next frame (people on their way out already left their desks' presence)
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(r)));
+    expect(await read(page, (g, n) => g.people.filter((p: { presence: string }) => p.presence === 'in').length < n, inside)).toBe(true);
     expect(await read(page, (g) => [g.tod.night, g.tod.day < 0.05])).toEqual([true, true]);
     await until(page, (g) => g.scene.background.getHSL({}).l < 0.15, undefined, 60_000); // the sky, on the next frame
     await until(page, (g) => {

@@ -493,14 +493,18 @@ export class Presence {
     this.checkTimer = 0;
   }
 
+  /** The player jumped in time since last looked: puts everybody where the new time wants them. `Game` calls it every frame too, so a jump while paused applies at once. */
+  applyJump(): void {
+    if (this.tod.jumps === this.seenJumps) return;
+    const newDay = this.tod.picks !== this.seenPicks;
+    this.seenJumps = this.tod.jumps;
+    this.seenPicks = this.tod.picks;
+    this.jump(newDay);
+  }
+
   update(dt: number, nav: NavGrid): void {
     this.clock += dt;
-    if (this.tod.jumps !== this.seenJumps) {
-      const newDay = this.tod.picks !== this.seenPicks;
-      this.seenJumps = this.tod.jumps;
-      this.seenPicks = this.tod.picks;
-      this.jump(newDay);
-    }
+    this.applyJump();
     const hour = this.workHour;
     if (hour < this.lastHour - 20) this.rollDay(); // past 04:00 (a smaller step back is the player moving the clock)
     this.lastHour = hour;
