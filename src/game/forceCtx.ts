@@ -6,7 +6,7 @@ import type { Sim } from './Sim';
  * `forceState` on a real office: how each state is set off on the `Sim`, the same way the dev events do (pulled out of
  * whatever they were doing first). `release` hands a person back from the player's steering (the view's job).
  */
-export function simForceCtx(sim: Sim, release: (p: Person) => void = () => {}): ForceCtx<Person & ForcePerson> {
+export function simForceCtx(sim: Sim, release: (p: Person) => void): ForceCtx<Person & ForcePerson> {
   const drop = (p: Person) => sim.drop(p);
   return {
     people: sim.people,

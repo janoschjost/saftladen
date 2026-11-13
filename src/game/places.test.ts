@@ -218,7 +218,7 @@ describe('dev.force', () => {
   };
   const forced = (homes = false) => {
     const sim = office(homes);
-    return { sim, force: forceRunner(simForceCtx(sim)), who: (id: string) => sim.people.find((p) => p.id === id)! };
+    return { sim, force: forceRunner(simForceCtx(sim, () => {})) }; // no player steering anybody
   };
 
   it('dev.force: sends a person to a meeting, then the sim goes on; a second meeting is refused', () => {
@@ -236,7 +236,7 @@ describe('dev.force', () => {
   });
 
   it('dev.force: desk, errand and coffee break take effect; away or already there is refused', () => {
-    const { sim, force, who } = forced();
+    const { sim, force } = forced();
     const [a, b, c] = crew(sim, ...GROUP.slice(0, 3));
     sim.scenario.put('michael-eberle', 'desk', 'free');
     expect(force('michael-eberle', 'desk')).toContain('nicht möglich (sitzt schon am Platz)');
@@ -249,7 +249,7 @@ describe('dev.force', () => {
     ok(force(c.id, 'break'), 'Pause');
     expect(sim.kitchen.current?.members.includes(c)).toBe(true);
     expect(force(b.id, 'desk')).toContain('nicht möglich'); // away
-    expect(who(b.id).inOffice).toBe(false);
+    expect(b.inOffice).toBe(false);
   });
 
   it('dev.force: wc sends a person to a free cabin, nicht möglich when both are taken', () => {
