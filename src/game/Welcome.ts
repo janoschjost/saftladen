@@ -41,7 +41,7 @@ export class Welcome {
 
   private greet(v: Person, people: Person[], social: Social): void {
     const near = people
-      .filter((o) => o !== v && o.inOffice && !o.held && !o.controlled && !o.talk && !o.playerChat && !o.inMeeting && !o.run && !o.meetJob && !o.printJob && !o.foosJob && !o.vapeJob && !o.coffeeJob && !o.phoneJob)
+      .filter((o) => o !== v && o.inOffice && !o.held && !o.controlled && !o.talk && !o.playerChat && !o.inMeeting && !o.snackLeft && !o.run && !o.meetJob && !o.printJob && !o.foosJob && !o.vapeJob && !o.coffeeJob && !o.phoneJob)
       .map((o) => ({ o, dx: v.pos.x - o.pos.x, dz: v.pos.z - o.pos.z }))
       .map((n) => ({ ...n, d: Math.hypot(n.dx, n.dz) || 1 }))
       .sort((a, b) => a.d - b.d)

@@ -676,7 +676,7 @@ export class Person extends Walker {
     if (this.drinkAmt < 0.005) this.drinkAmt = 0;
     this.updateEmote(dt);
     const rc = this.reaction;
-    if (rc && ((rc.t += dt) >= rc.dur || (!this.talk && !rc.free) || this.moving > 0.3)) this.reaction = null;
+    if (rc && ((rc.t += dt) >= rc.dur || (!rc.free && (!this.talk || this.moving > 0.3)))) this.reaction = null;
     super.update(dt, nav, others);
     this.clock += dt;
     if (this.rig.setMood && (this.moodTimer -= dt) <= 0) {

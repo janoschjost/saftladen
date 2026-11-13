@@ -1359,7 +1359,11 @@ export class HomeOffice {
     if (this.occupant) {
       this.scene.remove(this.occupant.rig.root);
       if (this.occupant.swimRig) this.scene.remove(this.occupant.swimRig.root);
-      if (this.occupant.son) this.scene.remove(this.occupant.son.rig.root, this.occupant.son.bubble);
+      if (this.occupant.son) {
+        // the occupant is cached per person: a visit cut short must not come back with the next stay
+        this.occupant.son.rig.root.visible = this.occupant.son.bubble.visible = false;
+        this.scene.remove(this.occupant.son.rig.root, this.occupant.son.bubble);
+      }
       for (const p of this.occupant.pets) this.scene.remove(p.rig.root);
       if (this.occupant.headset) this.occupant.rig.body.remove(this.occupant.headset);
       this.occupant.bundle.visible = false;

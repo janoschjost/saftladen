@@ -430,12 +430,12 @@ export class Presence {
   private sendOff(p: Person, kind: 'off' | 'home', nav: NavGrid): void {
     // a regular remote day needs a room: somebody makes room, he comes in as soon as it is free
     if (kind === 'home' && p.awayKind !== 'home' && this.homeCount >= MAX_HOME && this.planOf(p).remote) {
-      // the one who has been away longest comes back to the office to make room (one at a time)
+      // the one who would be back soonest anyway comes back to the office to make room (one at a time)
       let o: Person | null = null;
       for (const x of this.people) {
         if (x.awayKind !== 'home') continue;
         if (x.presence === 'returning' || (x.presence === 'out' && x.awayLeft <= 1)) return; // somebody already leaves a room
-        if (x.presence !== 'out' || x.member.homebody || this.nightHomers.has(x) || this.overridden.has(x)) continue;
+        if (x.presence !== 'out' || x.homeVariant >= HOME_COUNT || x.member.homebody || this.nightHomers.has(x) || this.overridden.has(x)) continue; // own rooms free none of the shared ones
         if (x.awayLeft < OFF / 2 && (!o || x.awayLeft < o.awayLeft)) o = x;
       }
       if (o) o.awayLeft = 0.5;
