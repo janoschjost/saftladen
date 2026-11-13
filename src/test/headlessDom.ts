@@ -1,15 +1,21 @@
 /**
  * Just enough `document` for Node (Vitest) to build the office and the characters: the builders paint their textures
  * on canvases. Here a canvas accepts every drawing call and draws nothing. Simulation tests call this first; logic
- * tests don't, so a DOM access that sneaks into logic still fails there.
+ * tests don't, so a DOM access that sneaks into logic still fails there (Vitest runs each test file on its own).
  */
 export function installHeadlessDom(): void {
-  const g = globalThis as Record<string, unknown>;
+  const g = globalThis as Record<string | symbol, unknown>;
   if (g.document) return;
-  // a 2D context: any property is a function that returns something measurable, so `measureText(...).width` works
+  // A 2D context where any property can be called, read on, or used as a number (it counts as 0), so
+  // `ctx.measureText(s).width / 2` and `ctx.getImageData(...).data` work.
+  const fixed: Record<string | symbol, () => unknown> = {
+    canvas: () => canvas(),
+    data: () => new Uint8ClampedArray(4),
+    [Symbol.toPrimitive]: () => () => 0,
+  };
   const context = (): unknown =>
     new Proxy(function () {}, {
-      get: (_t, key) => (key === 'canvas' ? canvas() : key === 'width' || key === 'data' ? (key === 'width' ? 0 : new Uint8ClampedArray(4)) : context()),
+      get: (_target, key) => (fixed[key] ?? context)(),
       set: () => true,
       apply: () => context(),
     });

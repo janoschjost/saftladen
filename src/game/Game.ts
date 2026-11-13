@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { team } from '../data/team';
 import shippedSeats from '../data/seats.json';
 import { HOME_LABELS, HomeOffice, ROOM_COUNT, heldPoses, type ArmPose } from '../render/homeOffice';
+import { petPortrait } from '../render/petPortrait';
 import { SIT_DROP } from '../render/officeBuilder';
 import { Views, type ViewMode } from '../render/Views';
 import { Bubbles } from '../render/Bubbles';
@@ -208,10 +209,11 @@ export class Game {
       seats: this.savedSeats,
       homes: location.hash.includes('homes'),
       // the editor puts the furniture where the saved layout wants it, before anything is derived from its position
+      portrait: petPortrait,
+      // disco: everybody who is up stops and dances on the spot; an angry person stands and fumes
+      stands: (w) => (this.easter.disco > 0.3 && w instanceof Person && w.inOffice && w.sit < 0.05 && !w.held && !w.controlled) || this.easter.angry?.who === w,
       prepare: (m) => (this.editor = new RoomEditor(this.scene, m.items, WORLD, () => this.sim.relayout())),
     });
-    // disco: everybody who is up stops and dances on the spot; an angry person stands and fumes
-    this.sim.stands = (w) => (this.easter.disco > 0.3 && w instanceof Person && w.inOffice && w.sit < 0.05 && !w.held && !w.controlled) || this.easter.angry?.who === w;
     const model = this.model;
     this.timeControl = new TimeControl(this.tod);
     applySky(this.tod, this.sky);
@@ -315,8 +317,6 @@ export class Game {
     this.renderer.setAnimationLoop((t) => this.frame(t));
   }
 
-
-
   private restoreSeats(): void {
     let local: Record<string, number> | null = null;
     try {
@@ -356,8 +356,6 @@ export class Game {
     void this.writeSeats(out);
     this.seats.setOwners(this.seatOwners());
   }
-
-
 
   private bind(): void {
     window.addEventListener('resize', () => this.resize());
@@ -623,7 +621,6 @@ export class Game {
   /** Materialise show for everybody who arrives or leaves. */
   private updateSpawnFx(dt: number): void {
     for (const w of this.walkers) {
-      w.stepFx(dt);
       const e = w.takeFx();
       if (e) this.spawnFx.burst(w.pos.x, w.pos.z, e, w.headHeight * w.root.scale.y);
     }
@@ -1460,8 +1457,6 @@ export class Game {
     this.views.setSprint(p.steer.run && this.views.mode === 'third');
     this.views.follow(p.pos.x, p.pos.z, dt);
   }
-
-
 
   private render(alpha: number): void {
     for (const w of this.walkers) if (!w.away || w.fx > 0) this.pose(w, alpha);

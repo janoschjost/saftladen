@@ -2,10 +2,9 @@ import * as THREE from 'three';
 import { team } from '../data/team';
 import { buildCat } from '../render/catBuilder';
 import { buildCharacter } from '../render/characterBuilder';
-import { buildDog } from '../render/dogBuilder';
+import { buildDog, type DogRig } from '../render/dogBuilder';
 import { HOME_COUNT } from '../render/homeOffice';
 import { buildOffice, CORRIDOR_POINT, type OfficeModel } from '../render/officeModel';
-import { petPortrait } from '../render/petPortrait';
 import { NAV_CELL, WORLD } from '../render/World';
 import { Kitchen } from './Coffee';
 import { Dog } from './Dog';
@@ -38,6 +37,10 @@ export interface SimOptions {
   seats?: Record<string, number>;
   /** all eight home offices are taken from the start (`#homes`, for a look at the rooms) */
   homes?: boolean;
+  /** picture of a pet for the UI, from a fresh rig; a view renders one, without a view pets have none */
+  portrait?: (key: string, build: () => DogRig) => string | null;
+  /** somebody who stands still this step instead of acting (the view's disco and angry easter eggs) */
+  stands?: (w: Walker) => boolean;
   /** called with the built office before anything is derived from where its furniture stands (the room editor moves it) */
   prepare?: (model: OfficeModel) => void;
 }
@@ -68,11 +71,11 @@ export class Sim {
   readonly tod = new TimeOfDay();
   readonly weather = new Weather();
   readonly petCare = new PetCare();
-  /** somebody who stands still this step instead of acting (the view's disco and angry easter eggs) */
-  stands: (w: Walker) => boolean = () => false;
+  private stands: (w: Walker) => boolean;
 
-  constructor({ scene = new THREE.Scene(), cycle, seats = {}, homes = false, prepare }: SimOptions = {}) {
+  constructor({ scene = new THREE.Scene(), cycle, seats = {}, homes = false, portrait = () => null, stands = () => false, prepare }: SimOptions = {}) {
     this.scene = scene;
+    this.stands = stands;
     resetDoorLanes();
     if (cycle !== undefined) {
       this.tod.setCycle(cycle);
@@ -92,7 +95,7 @@ export class Sim {
     this.toilets = new Toilets(model.toilets, this.nav);
     this.toilets.onLocked = (cabin, locked) => this.doors.setLocked(cabin.doorPos, locked);
     this.toilets.onOccupied = (cabin, occupied) => model.toilets.cabins[this.toilets.cabins.indexOf(cabin)]?.sign.color.setHex(occupied ? 0xe0342c : 0x3fbf5a);
-    this.spawn(seats);
+    this.spawn(seats, portrait);
     this.pets = this.walkers.filter((w): w is Dog => w instanceof Dog);
     this.presence = new Presence(this.people, this.tod, this.weather);
     this.presence.seed(homes);
@@ -118,7 +121,7 @@ export class Sim {
     this.toilets.relayout(this.nav);
   }
 
-  private spawn(seats: Record<string, number>): void {
+  private spawn(seats: Record<string, number>, portrait: NonNullable<SimOptions['portrait']>): void {
     const free = () => {
       const { cx, cz } = this.nav.randomWalkable();
       return this.nav.center(cx, cz);
@@ -144,7 +147,7 @@ export class Sim {
       if (m.dog) {
         add(
           new Dog(m.dogName ?? `Hund von ${m.name}`, buildDog(m.dog), person, this.petStart(person, 1, 1), {
-            portrait: petPortrait(`dog:${m.dog}`, () => buildDog(m.dog!)),
+            portrait: portrait(`dog:${m.dog}`, () => buildDog(m.dog!)),
           }),
         );
       }
@@ -154,7 +157,7 @@ export class Sim {
           new Dog(name, buildCat(kind), person, this.petStart(person, side, -1), {
             id: `cat-${person.id}-${i}`,
             label: 'Bürokatze',
-            portrait: petPortrait(`cat:${kind}`, () => buildCat(kind)),
+            portrait: portrait(`cat:${kind}`, () => buildCat(kind)),
             speed: 2.0 + i * 0.2,
             radius: 0.2,
             side,
@@ -190,6 +193,8 @@ export class Sim {
     this.separate();
     this.separate();
     this.separate();
+    // appearing at and vanishing from the door takes time, and arriving waits for it: the view only adds the sparkle
+    for (const w of this.walkers) w.stepFx(dt);
   }
 
   /** Soft collision: push overlapping walkers apart and keep them on the floor. */

@@ -62,7 +62,7 @@ Rules:
 - `presence.lunch` Lunch at each person's own hour (short errand); some skip it or eat at the desk; 4+ out at once counts as the lunch break — `src/game/Presence.ts`, test: `src/game/Presence.test.ts`, url: `/?seed=1&time=12` (#5, #38)
 - `presence.errand-window` Errands and home office spells only between 07:30 and 18:00, not shortly before going home — `src/game/Presence.ts` (#5)
 - `presence.night-shift` Night owls: per-person chance to stay on into the night (desk lamp on; `nightHome` people from the home office, e.g. marco-rieser); some days a crunch keeps 2–4 more in — `src/game/Presence.ts`, `src/data/team.ts`, test: `src/game/Presence.test.ts`, url: `/?seed=1&time=22` (#5, #38)
-- `presence.door-flow` Arrivals and departures don't jam the front door: people walk in one after another (at most 2 on their way in at once, 1.5–3.5 s apart), at most 3 on the way out at once, nobody enters while someone is leaving through it — `src/game/Presence.ts`, test: `src/game/Presence.test.ts`, url: `/?seed=1&time=8` (#5, #41)
+- `presence.door-flow` Arrivals and departures don't jam the front door: people walk in one after another (at most 2 on their way in at once, 1.5–3.5 s apart), at most 3 on the way out at once, nobody enters while someone is leaving through it — `src/game/Presence.ts`, test: `src/game/Presence.test.ts`, `src/game/Sim.test.ts`, url: `/?seed=1&time=8` (#5, #41, #110)
 - `presence.rain` Rain keeps people in: fewer leave, longer errands, more home office — `src/game/Presence.ts`
 - `presence.caps` Max 15 in the office, max 8 in home office (one per room); nobody returns while the office is full — `src/game/Presence.ts`, test: `src/game/Presence.test.ts`
 - `presence.homebodies` Homebodies are picked 6× more often, stay 2× longer, likely home at start — `src/game/Presence.ts`
@@ -114,7 +114,7 @@ Rules:
 - `move.traffic` Routes bend around crowds; wander spots go to quiet places — `src/game/Traffic.ts`
 - `move.passages` Narrow passages (doorways, corridors, gaps between desks, found from the nav grid) carry one direction at a time: oncoming walkers wait beside the entrance, sides take turns, head-on inside → one backs out; deadlock fallback detour → give way → push through; nobody loiters inside — `src/game/Passages.ts` (#3)
 - `move.passing` Keep right head-on, slow when close, back off nose to nose (only one of two walkers coming at each other backs off, the other edges past), re-plan or give up when stuck; idle people shuffle aside — `src/game/Walker.ts`, test: `src/game/Walker.test.ts`, url: `/?seed=1&time=11&event=foosball` (#39)
-- `move.collision` Overlapping walkers are pushed apart; walls and furniture are solid — `src/game/Sim.ts`, `src/game/NavGrid.ts`, test: `src/game/Sim.test.ts` (#110)
+- `move.collision` Overlapping walkers are pushed apart; walls and furniture are solid — `src/game/Sim.ts`, `src/game/NavGrid.ts`, test: `src/game/Sim.test.ts`, url: `/?seed=1&time=11` (#110)
 
 ## Doors
 - `door.auto` Interior doors swing open within 1.25 m and stay open 0.9 s after — `src/game/Doors.ts`

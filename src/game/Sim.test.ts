@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { installHeadlessDom } from '../test/headlessDom';
 import { setSeed } from './rng';
 import { Sim } from './Sim';
+import { Walker } from './Walker';
 
 installHeadlessDom();
 
@@ -9,6 +10,7 @@ installHeadlessDom();
 function run(seed: number, seconds: number): Sim {
   setSeed(seed);
   const sim = new Sim();
+  Walker.animate = true; // as in the game: from now on arriving and leaving take their time
   for (let i = 0; i < seconds * 60; i++) sim.step(1 / 60);
   return sim;
 }
@@ -26,6 +28,18 @@ describe('dev.seed', () => {
     expect(places(a)).not.toBe(places(new Sim()));
     expect(places(run(1, 30))).toBe(places(a));
     expect(places(run(2, 30))).not.toBe(places(a));
+  });
+
+  it('presence.door-flow: somebody called back from outside appears at the door and walks in', () => {
+    setSeed(1);
+    const sim = new Sim();
+    Walker.animate = true;
+    const out = sim.people.find((p) => p.presence === 'out' && p.awayKind !== 'off')!;
+    expect(out).toBeDefined();
+    sim.presence.callBack(out);
+    for (let i = 0; i < 60 * 60 && out.presence !== 'in'; i++) sim.step(1 / 60);
+    expect(out.presence).toBe('in');
+    expect(out.fx).toBe(1);
   });
 
   it('move.collision: after a minute nobody stands inside a wall or outside the office', () => {
