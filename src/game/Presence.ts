@@ -432,7 +432,11 @@ export class Presence {
   letGo(p: Person): void {
     const was = this.kept.delete(p);
     this.overridden.delete(p);
-    if (was && p.presence === 'out') p.awayLeft = 0; // as if called back: in even when the office is full
+    if (was && p.presence === 'out') {
+      // in right away, even when the office is full: not queued at the door, where a full office would push them back again
+      p.awayLeft = 0;
+      this.admitted.add(p);
+    }
   }
 
   /** Bring somebody back to the office. */
