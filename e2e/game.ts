@@ -5,7 +5,8 @@ export const SEED = 1;
 export const HOUR = 11;
 
 /**
- * Opens the game with the read-only test hook (`?test` exposes `window.__game`, dev server only) and waits until it
+ * Opens the game with the test hook (`?test` exposes `window.__game`, dev server only; the office is not drawn unless
+ * `query` has `draw`) and waits until it
  * is up: hook there, loader gone. `query` adds dev params, e.g. `event=coffee`. Returns the console errors and uncaught exceptions seen so far (and later).
  */
 export async function openGame(page: Page, hash = '', hour = HOUR, query = ''): Promise<string[]> {

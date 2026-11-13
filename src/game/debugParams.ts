@@ -14,7 +14,8 @@ import { getSeed, setSeed } from './rng';
  *   ?action=<id>      starts an Aktionen card (`src/data/actions.ts`, e.g. ?action=printer) or any dev event like the
  *                     sheet does: the camera flies in Orbit to the person it moves; retried until it can run
  *   ?test             exposes `window.__game` (test hook for the Playwright tests in e2e/: read the state, fast-forward
- *                     with `advance(seconds)`) and renders cheap: no shadows, no antialiasing (software WebGL)
+ *                     with `advance(seconds)`) and does not draw the office: the tests render WebGL in software, and
+ *                     compiling the shaders is most of a page's start. ?test&draw draws it, without shadows and antialiasing
  * Example: http://localhost:5173/?snack&time=14&follow
  */
 

@@ -1,8 +1,10 @@
 import { expect, test } from '@playwright/test';
 import { openGame, read, until } from './game';
 
+// These tests draw the office (`&draw`): the only ones that notice a shader or a draw call failing.
+
 test('load', async ({ page }) => {
-  const errors = await openGame(page);
+  const errors = await openGame(page, '', undefined, 'draw');
   await expect(page.locator('#stage canvas')).toBeVisible();
   await expect(page.locator('body')).not.toHaveClass(/is-loading/);
   expect(await read(page, (g) => g.people.length)).toBeGreaterThan(10);
@@ -14,7 +16,7 @@ test('load', async ({ page }) => {
 
 test.describe('keys', () => {
   test('keys.roof', async ({ page }) => {
-    await openGame(page);
+    await openGame(page, '', undefined, 'draw');
     expect(await read(page, (g) => g.views.mode)).toBe('orbit');
     const before = await read(page, (g) => g.roof.visible);
     await page.keyboard.press('r');
@@ -28,7 +30,7 @@ test.describe('keys', () => {
   });
 
   test('keys.names', async ({ page }) => {
-    await openGame(page);
+    await openGame(page, '', undefined, 'draw');
     const label = page.locator('#labels .m-label').first();
     expect(await read(page, (g) => g.overlay.namesVisible)).toBe(false);
     await expect(label).toBeHidden();
@@ -40,7 +42,7 @@ test.describe('keys', () => {
   });
 
   test('view.iso + view.orbit + view.plan + view.walk: keys 1-4', async ({ page }) => {
-    await openGame(page);
+    await openGame(page, '', undefined, 'draw');
     for (const [key, mode] of [['1', 'iso'], ['3', 'plan'], ['4', 'walk'], ['2', 'orbit']] as const) {
       await page.keyboard.press(key);
       expect(await read(page, (g) => g.views.mode)).toBe(mode);
@@ -55,12 +57,12 @@ test.describe('keys', () => {
 
 test.describe('view.deeplinks', () => {
   test('#plan opens the plan view', async ({ page }) => {
-    await openGame(page, 'plan');
+    await openGame(page, 'plan', undefined, 'draw');
     expect(await read(page, (g) => g.views.mode)).toBe('plan');
   });
 
   test('#walk@x,z,yaw opens the walk view there', async ({ page }) => {
-    await openGame(page, 'walk@20,7,1.5');
+    await openGame(page, 'walk@20,7,1.5', undefined, 'draw');
     expect(await read(page, (g) => g.views.mode)).toBe('walk');
     const eye = await read(page, (g) => g.views.eye);
     expect(eye.x).toBeCloseTo(20, 0);

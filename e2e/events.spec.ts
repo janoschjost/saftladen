@@ -35,15 +35,15 @@ test('dev.params: unknown ?event id only warns, the game starts normally', async
   expect(errors).toEqual([]);
 });
 
-test('dev.params: ?test fast-forwards in game time and renders cheap', async ({ page }) => {
+test('dev.params: ?test fast-forwards in game time and does not draw the office', async ({ page }) => {
   await openGame(page);
   const before = await read(page, (g) => g.clock);
   const state = await read(page, (g) => {
     g.advance(30);
-    return { clock: g.clock, shadows: g.renderer.shadowMap.enabled, pixelRatio: g.renderer.getPixelRatio() };
+    return { clock: g.clock, draw: g.draw, shadows: g.renderer.shadowMap.enabled, pixelRatio: g.renderer.getPixelRatio() };
   });
   expect(state.clock - before).toBeCloseTo(30, 1);
-  expect(state).toMatchObject({ shadows: false, pixelRatio: 1 });
+  expect(state).toEqual({ clock: state.clock, draw: false, shadows: false, pixelRatio: 1 });
 });
 
 // Donata (cats) is out with seeds 1 and 2, so the cat case uses seed 3

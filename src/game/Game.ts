@@ -188,11 +188,18 @@ export class Game {
   /** Dev hooks that follow game time instead of wall time (retries of `?event`), so `advance` takes them along. */
   readonly tickers = new Set<(dt: number) => void>();
 
-  /** `cheap`: no antialiasing, no shadows, pixel ratio 1. For the e2e tests, which render WebGL in software. */
+  private draw: boolean;
+
+  /**
+   * For the e2e tests, which render WebGL in software. `cheap`: no antialiasing, no shadows, pixel ratio 1.
+   * `draw: false`: the office and the home office feeds are not drawn at all (everything else runs: poses, overlays,
+   * world matrices for clicks and labels), which saves compiling the shaders, most of the time a page needs to start.
+   */
   constructor(
     private stage: HTMLElement,
-    { cheap = false } = {},
+    { cheap = false, draw = true } = {},
   ) {
+    this.draw = draw;
     this.renderer = new THREE.WebGLRenderer({ antialias: !cheap });
     this.renderer.setPixelRatio(cheap ? 1 : Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = !cheap;
@@ -1610,7 +1617,10 @@ export class Game {
     this.updateHover();
     this.updateOverlay();
     if (this.previews.length) this.renderPreviews();
-    this.renderer.render(this.scene, this.views.camera);
+    if (this.draw) return this.renderer.render(this.scene, this.views.camera);
+    // what drawing does on the side and picking and labels rely on
+    this.scene.updateMatrixWorld();
+    this.views.camera.updateMatrixWorld();
   }
 
   /** Interpolated transform + procedural walk cycle. */
@@ -2269,7 +2279,7 @@ export class Game {
   private renderFeeds(): void {
     const tiles = this.feeds.tiles();
     this.overlay.maskOut(tiles.map((t) => t.clip));
-    if (!tiles.length) return;
+    if (!tiles.length || !this.draw) return;
     const r = this.renderer;
     const h = window.innerHeight;
     r.setScissorTest(true);
