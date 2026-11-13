@@ -56,7 +56,8 @@ Show the dev every finding as it will be posted and let them edit or drop each.
 ## 5. Finish
 
 1. `scripts/issue.sh release N "reviewed"` (removes `in review`).
-2. All OK and checks green → ask "Merge PR #N?". Yes → `gh pr merge N --squash --delete-branch`. Never merge without that yes.
-3. Stop the dev server (`lsof -ti tcp:<port> | xargs kill`) and `cd ../saftladen && git worktree remove ../saftladen-pr-N`, unless the dev wants to keep testing.
+2. The e2e tests must have run green on the PR's last commit: `gh pr checks N` lists `E2E (Playwright)`. Not there → `gh pr edit N --add-label e2e`, then `gh pr checks N --watch`. Red → that is a finding (step 4), no merge.
+3. All OK and checks green, e2e included → ask "Merge PR #N?". Yes → `gh pr merge N --squash --delete-branch`. Never merge without that yes.
+4. Stop the dev server (`lsof -ti tcp:<port> | xargs kill`) and `cd ../saftladen && git worktree remove ../saftladen-pr-N`, unless the dev wants to keep testing.
 
 The dev wants to stop early → still post what was found so far (with their OK) and release the PR. Never leave it claimed.

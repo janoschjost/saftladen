@@ -19,11 +19,12 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
    `npm run dev` in a worktree picks the next free port from 5174 (the main checkout keeps 5173).
 4. **Implement.** Read the issue and all of its comments. Follow `README.md` and the existing code. Keep the change scoped to the issue.
 5. **Done means:**
-   - `npm run build` passes. CI (`.github/workflows/ci.yml`) runs build and Vitest on every PR; a red check is not done. The e2e tests run on CI only with the `e2e` label (~5 Actions minutes per run), so run them locally and note the result in the PR body. Add the label (`gh pr edit --add-label e2e`) only when the PR changes the e2e setup itself: `e2e/`, `playwright.config.ts`, the `?test` hook or the CI workflow. Otherwise leave it to the reviewer.
+   - `npm run build` passes. CI (`.github/workflows/ci.yml`) runs build and Vitest on every PR; a red check is not done. The e2e tests run on CI only with the `e2e` label (Actions minutes are limited), so run them locally and note the result in the PR body. A failing local run is not done, whatever the load on the machine: the waits count game time, not seconds. A test that also fails on `main` → say so in the PR body and link its issue (open one if there is none). Add the label (`gh pr edit --add-label e2e`) whenever the PR adds or changes a file under `e2e/`, `playwright.config.ts`, the `?test` hook or the CI workflow: a spec must have run on CI before it reaches `main`. Other PRs get it from the reviewer (`/review-pr`).
    - `npm test` and `npm run test:e2e` pass, and new or changed behavior has a test named after the `FEATURES.md` id:
-     - logic → Vitest, `*.test.ts` next to the code. Logic a test needs is pulled apart from rendering; randomness comes from `src/game/rng.ts` (`setSeed` in tests), never `Math.random()`.
-     - interactions and UI (keys, hashes, panels, parts working together) → Playwright, `e2e/*.spec.ts`, reading the game through the `?test` hook (see README).
-     - purely visual changes → checked in the browser.
+     - logic and what the simulation does over time (who walks where, what a meeting, a door or a pet does) → Vitest, `*.test.ts` next to the code, stepping the part by hand (`update(dt)` in a loop, see `Meeting.test.ts`, `Presence.test.ts`). Logic a test needs is pulled apart from rendering; randomness comes from `src/game/rng.ts` (`setSeed` in tests), never `Math.random()`.
+     - what only a browser can show (keys, clicks, hashes, panels, the DOM, a URL starting the right thing) → Playwright, `e2e/*.spec.ts`, reading the game through the `?test` hook (see README). Don't repeat a Vitest test there.
+     - purely visual changes → checked in the browser. Purely visual means: no change to state, timing, input handling or URLs. Anything else needs a test.
+     - the test's title starts with the exact id (`'place.meeting: …'`).
    - Every criterion has been checked in the running app.
    - `FEATURES.md` is updated: add or change the lines for this issue, ending with `(#N)`. Every line you touched still works. Each line you add or change gets a `url:` where a URL can show it (see the rules at the top of `FEATURES.md`).
    - The diff has been through one pass of `/simplify` and one of `/code-review` (medium), in that order, both limited to this branch's diff:
