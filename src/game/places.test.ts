@@ -78,6 +78,7 @@ describe('places', () => {
     sim.step(STEP);
     expect(sim.meetingRoom.current?.screen).toBe('slides');
     expect(sim.meetingRoom.tv).toBe('off'); // still gathering: black until everybody sits
+    expect(run(sim, 90, () => sim.meetingRoom.tv === 'slides')).toBe(true);
   });
 
   it('place.meeting-tv: a lunch round is a kart race', () => {
@@ -85,6 +86,7 @@ describe('places', () => {
     sim.meetingRoom.start(crew(sim, ...GROUP.slice(0, 3)), sim.nav, 'kart');
     sim.step(STEP);
     expect(sim.meetingRoom.current?.screen).toBe('kart');
+    expect(run(sim, 90, () => sim.meetingRoom.tv === 'kart')).toBe(true);
   });
 
   it('place.coffee-break: three go to the kitchen and chat there', () => {
@@ -122,8 +124,8 @@ describe('places', () => {
     const table = sim.office.foosball!;
     expect(table.free).toBe(true);
     expect(table.start(a, b, sim.nav)).toBe(true);
-    expect(a.foosJob && b.foosJob).toBeTruthy();
     expect(table.free).toBe(false);
+    expect(run(sim, 60, () => a.foosJob?.phase === 'play' && b.foosJob?.phase === 'play')).toBe(true);
   });
 
   it('place.toilet: the cabin is taken at once, its light turns red', () => {

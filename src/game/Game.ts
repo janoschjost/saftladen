@@ -226,8 +226,9 @@ export class Game {
       homes: location.hash.includes('homes'),
       // the editor puts the furniture where the saved layout wants it, before anything is derived from its position
       portrait: petPortrait,
-      // disco: everybody who is up stops and dances on the spot; an angry person stands and fumes
+      // the interior doors open for the player's eye in the walk view too
       doorsSee: () => (this.views?.mode === 'walk' ? [this.views.eye] : []),
+      // disco: everybody who is up stops and dances on the spot; an angry person stands and fumes
       stands: (w) => (this.easter.disco > 0.3 && w instanceof Person && w.inOffice && w.sit < 0.05 && !w.held && !w.controlled) || this.easter.angry?.who === w,
       prepare: (m) => (this.editor = new RoomEditor(this.scene, m.items, WORLD, () => this.sim.relayout())),
     });
@@ -648,6 +649,7 @@ export class Game {
     this.deskLights.update(dt);
     this.updateAlterEgos(dt);
     this.meetingLight.update(dt);
+    this.sim.coatRacks.update(); // also while time stands still: a presence change made then (clock jump, dev panel) shows at once
     this.office.updateScreens(dt);
     this.updateHomes(dt);
     this.updateDoor(dt);
