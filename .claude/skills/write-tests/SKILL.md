@@ -11,6 +11,8 @@ description: How to write and change tests in this repo - which kind (Vitest for
 
 Build the part with plain data and step it by hand: `setSeed(n)`, then `update(1 / 60)` in a loop until the state is there (`Meeting.test.ts`, `Presence.test.ts`, `Walker.test.ts`). Randomness comes from `src/game/rng.ts`, never `Math.random()`. A part that cannot be built without a canvas: pull the logic out first.
 
+The whole office runs in Node too: `new Sim()` (`src/game/Sim.ts`) is the real layout, nav grid, people and pets without a renderer, `sim.step(1 / 60)` moves it on. Call `installHeadlessDom()` (`src/test/headlessDom.ts`) at the top of such a test file: the builders paint textures on canvases, and that gives them one that draws nothing. See `Sim.test.ts`. Use it for what several parts do together over time (somebody walks to a meeting, a pet follows its owner out); a single part stays a test of that part.
+
 ## Playwright: what only a browser shows
 
 The tests run against a bundle (`vite build --mode e2e`), opened with `?test`. That mode has three properties, and every rule below follows from them:
