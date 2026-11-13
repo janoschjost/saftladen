@@ -216,9 +216,50 @@ describe('presence', () => {
     }
   });
 
+  it('presence.caps: called back into a full office, they come in right away, one after another', () => {
+    for (const seed of [1, 2, 3]) {
+      const { people, presence, nav } = runDay(seed, 5, 11);
+      const step = () => {
+        presence.update(STEP, nav); // the clock stands still at 11:00
+        for (const p of people) p.update(STEP);
+      };
+      // a full office: whoever is missing to 15 is back at the desk already
+      const present = () => people.filter((p) => p.presence === 'in' || p.presence === 'returning').length;
+      for (const p of people) {
+        if (present() >= 15 || p.presence !== 'out' || p.awayKind === 'off') continue;
+        p.presence = 'in';
+        p.awayKind = null;
+      }
+      expect(present()).toBe(15);
+      const away = people.filter((p) => p.presence === 'out' && p.awayKind !== 'off');
+      expect(away.length).toBeGreaterThan(2);
+      // one called back from the roster: in within seconds, not held outside until somebody else leaves
+      const one = away[0];
+      presence.callBack(one as unknown as Person);
+      let t = 0;
+      for (; t < 30 && one.presence !== 'in'; t += STEP) step();
+      expect(one.presence, `seed ${seed}`).toBe('in');
+      expect(t).toBeLessThan(10);
+      // "all back": everybody comes in (the office makes room by sending others out), at most 2 on their way in at once
+      const rest = away.slice(1);
+      const arrived = new Set<Stub>();
+      presence.callAllBack();
+      for (t = 0; t < 180 && arrived.size < rest.length; t += STEP) {
+        step();
+        for (const p of rest) if (p.presence === 'in') arrived.add(p);
+        expect(people.filter((p) => p.presence === 'returning').length).toBeLessThanOrEqual(2);
+      }
+      expect(rest.filter((p) => !arrived.has(p)).map((p) => p.id), `seed ${seed}`).toEqual([]);
+      // the office makes room again: back down to 15
+      for (t = 0; t < 180 && present() > 15; t += STEP) step();
+      expect(present(), `seed ${seed}`).toBeLessThanOrEqual(15);
+    }
+  });
+
   it('kurt.behavior: Marco transforms when going home (end of day, home office), never for errands, lunch or a manual send', () => {
     let homeSpells = 0;
-    for (const seed of [1, 2, 3, 4, 5, 6]) {
+    // seeds where Marco walks out of the door for home at least once (on 5 his day ends while he is out on an errand)
+    for (const seed of [1, 2, 3, 4, 6, 7]) {
       const { people } = runDay(seed);
       const marco = people.find((p) => p.id === 'marco-rieser')!;
       expect(marco.leaves.some((l) => l.kind === 'off' || l.kind === 'home')).toBe(true);
