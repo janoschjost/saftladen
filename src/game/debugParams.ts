@@ -13,7 +13,8 @@ import { getSeed, setSeed } from './rng';
  *                     repeat it for several (?event=rain&event=coffee). FEATURES.md links each feature to such a URL.
  *   ?action=<id>      starts an Aktionen card (`src/data/actions.ts`, e.g. ?action=printer) or any dev event like the
  *                     sheet does: the camera flies in Orbit to the person it moves; retried until it can run
- *   ?test             only exposes `window.__game` (read-only test hook for the Playwright tests in e2e/)
+ *   ?test             exposes `window.__game` (test hook for the Playwright tests in e2e/: read the state, fast-forward
+ *                     with `advance(seconds)`) and renders cheap: no shadows, no antialiasing (software WebGL)
  * Example: http://localhost:5173/?snack&time=14&follow
  */
 
@@ -46,7 +47,7 @@ export function applyDebugParams(game: Game): void {
     }
   }
   if (q.has('day')) game.startDay(q.get('day') || 'jan-hasler');
-  for (const id of q.getAll('event')) runEvent(id);
+  for (const id of q.getAll('event')) runEvent(game, id);
   for (const id of q.getAll('action')) runAction(game, id);
   if (!q.has('snack')) return;
 
@@ -58,7 +59,7 @@ export function applyDebugParams(game: Game): void {
 
   // retry until the person is free and the machine spot is not taken, then stop
   let started = false;
-  window.setInterval(() => {
+  game.tickers.add(() => {
     g.presence.overridden.add(person); // no more errands / lunch for this person
     if (person.presence === 'out' && person.awayKind !== 'off') person.awayLeft = 0; // back to the office right away
     if (!started && person.presence === 'in' && !person.meetJob && !person.talk) {
@@ -76,35 +77,54 @@ export function applyDebugParams(game: Game): void {
       g.views.persp.position.set(p.x + Math.sin(person.yaw + 0.7) * 1.8, 3.0, p.z + Math.cos(person.yaw + 0.7) * 1.8);
       g.views.orbit.update?.();
     }
-  }, 100);
+  });
+}
+
+/** Calls `attempt` every half second of game time until it returns true; after a minute `giveUp` instead. */
+function retry(game: Game, attempt: () => boolean, giveUp: () => void): void {
+  let t = 0;
+  let next = 0;
+  const tick = (dt: number): void => {
+    t += dt;
+    if (t < next) return;
+    next = t + 0.5;
+    if (attempt()) game.tickers.delete(tick);
+    else if (t > 60) {
+      giveUp();
+      game.tickers.delete(tick);
+    }
+  };
+  game.tickers.add(tick);
 }
 
 /**
  * Dev events are registered by id; an unknown id only warns, the game starts normally. An event that can't run yet
  * (nobody free, table busy, the person still on the way in) is retried for up to a minute.
  */
-function runEvent(id: string): void {
+function runEvent(game: Game, id: string): void {
   const ev = devEvents.list().find((e) => e.id === id);
   if (!ev) return console.warn(`[debug] no event "${id}", see dev.list()`);
-  const t0 = performance.now();
-  const timer = window.setInterval(() => {
-    const r = ev.run();
-    if (r !== null) console.info(`[debug] event ${id}: ${r || ev.label}`);
-    else if (performance.now() - t0 > 60_000) console.warn(`[debug] event ${id}: not possible`);
-    else return;
-    window.clearInterval(timer);
-  }, 500);
+  retry(
+    game,
+    () => {
+      const r = ev.run();
+      if (r !== null) console.info(`[debug] event ${id}: ${r || ev.label}`);
+      return r !== null;
+    },
+    () => console.warn(`[debug] event ${id}: not possible`),
+  );
 }
 
 /** Like `runEvent`, but through the Aktionen sheet's path: chip, Orbit, camera follows. */
 function runAction(game: Game, id: string): void {
-  const t0 = performance.now();
-  const timer = window.setInterval(() => {
-    const r = game.startAction(id, true);
-    if (r === 'unknown') console.warn(`[debug] no action "${id}"`);
-    else if (r === 'started') console.info(`[debug] action ${id} started`);
-    else if (performance.now() - t0 > 60_000) console.warn(`[debug] action ${id}: not possible`);
-    else return;
-    window.clearInterval(timer);
-  }, 500);
+  retry(
+    game,
+    () => {
+      const r = game.startAction(id, true);
+      if (r === 'unknown') console.warn(`[debug] no action "${id}"`);
+      else if (r === 'started') console.info(`[debug] action ${id} started`);
+      return r === 'unknown' || r === 'started';
+    },
+    () => console.warn(`[debug] action ${id}: not possible`),
+  );
 }

@@ -181,12 +181,21 @@ export class Game {
   private ring: THREE.Mesh;
   private savedSeats: Record<string, number> = {};
   private acc = 0;
+  /** game time in seconds: wall time, but capped per frame and taken along by `advance` */
+  private clock = 0;
   private last = performance.now();
 
-  constructor(private stage: HTMLElement) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = true;
+  /** Dev hooks that follow game time instead of wall time (retries of `?event`), so `advance` takes them along. */
+  readonly tickers = new Set<(dt: number) => void>();
+
+  /** `cheap`: no antialiasing, no shadows, pixel ratio 1. For the e2e tests, which render WebGL in software. */
+  constructor(
+    private stage: HTMLElement,
+    { cheap = false } = {},
+  ) {
+    this.renderer = new THREE.WebGLRenderer({ antialias: !cheap });
+    this.renderer.setPixelRatio(cheap ? 1 : Math.min(window.devicePixelRatio, 2));
+    this.renderer.shadowMap.enabled = !cheap;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     stage.appendChild(this.renderer.domElement);
 
@@ -645,7 +654,23 @@ export class Game {
   private frame(now: number): void {
     const dt = Math.min(MAX_FRAME, (now - this.last) / 1000);
     this.last = now;
+    this.step(dt);
+    this.render(this.acc / STEP);
+    this.renderFeeds();
+  }
+
+  /**
+   * Test hook: runs the game `seconds` ahead in fixed steps without drawing. The e2e tests wait in game time with
+   * it, so a wait takes the same number of steps however slow the machine renders.
+   */
+  advance(seconds: number): void {
+    for (let i = Math.round(seconds / STEP); i > 0; i--) this.step(STEP);
+  }
+
+  /** Everything a frame does except drawing it. */
+  private step(dt: number): void {
     this.acc += dt;
+    this.clock += dt;
     this.updateDay(dt);
     this.updateSteer(dt);
     this.updateFollow(dt);
@@ -673,8 +698,7 @@ export class Game {
     this.updateDoor(dt);
     this.updateAim();
     if (this.reply && (this.reply.t -= dt) <= 0) this.reply = null;
-    this.render(this.acc / STEP);
-    this.renderFeeds();
+    for (const tick of this.tickers) tick(dt);
   }
 
   /** Materialise show for everybody who arrives or leaves. */
@@ -1784,7 +1808,7 @@ export class Game {
   /** Stroking a pet: a crouch (legs, hips, a little spine), head down at the animal, one hand stroking. Eases in and out (~0.4 s) and ends as soon as the petting does or is cut short (picked up, walking off, a talk). */
   private posePet(w: Person, r: Person['rig']): void {
     const on = w.petting && w.moving < 0.2 && !w.held && w.sit < 0.05;
-    const now = performance.now() / 1000;
+    const now = this.clock; // game time: the crouch keeps up when the game is fast-forwarded
     const dt = Math.min(0.1, Math.max(0, now - w.petClock));
     w.petClock = now;
     w.petAmt = Math.min(1, Math.max(0, w.petAmt + (on ? 1 : -1) * (dt / CROUCH_SECONDS)));

@@ -15,7 +15,9 @@ const hideLoader = (): void => {
 
 try {
   if (import.meta.env.DEV) applySeedParam();
-  const game = new Game(document.getElementById('stage') as HTMLElement);
+  const game = new Game(document.getElementById('stage') as HTMLElement, {
+    cheap: import.meta.env.DEV && new URLSearchParams(location.search).has('test'),
+  });
   if (import.meta.env.DEV) void import('./game/debugParams').then((m) => m.applyDebugParams(game));
   if (import.meta.env.DEV) void import('./game/DevForce').then((m) => m.installForceState(game));
   new CharacterPicker();

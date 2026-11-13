@@ -13,7 +13,7 @@ export async function openGame(page: Page, hash = '', hour = HOUR, query = ''): 
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(`/?test&seed=${SEED}&time=${hour}${query ? `&${query}` : ''}${hash ? `#${hash}` : ''}`);
-  // generous: CI renders WebGL in software, the first frames there take seconds
+  // generous: CI renders WebGL in software, building the scene and the first frames take seconds there
   await page.waitForFunction(() => !!window.__game, undefined, { timeout: 30_000 });
   await expect(page.locator('#loader')).toHaveCount(0, { timeout: 30_000 });
   return errors;
@@ -28,10 +28,28 @@ export function read<T, A = undefined>(page: Page, fn: (g: any, arg: A) => T, ar
   ) as Promise<T>;
 }
 
-/** Waits until `fn` (run in the page against the game) returns something truthy. */
+/**
+ * Waits until `fn` (run in the page against the game) returns something truthy. `timeout` is game time (ms): the game
+ * is fast-forwarded half a second at a time (`advance`, no drawing) with one drawn frame in between, as poses and
+ * overlays are set while drawing. So a wait takes the same number of simulation steps on a slow machine as on a fast one.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function until<A = undefined>(page: Page, fn: (g: any, arg: A) => unknown, arg?: A, timeout = 20_000): Promise<void> {
-  await expect.poll(() => read(page, fn, arg), { timeout }).toBeTruthy();
+  const reached = await page.evaluate(
+    async ([src, a, seconds]) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const g = window.__game as any;
+      const test = new Function('g', 'a', `return (${src})(g, a)`);
+      for (let t = 0; ; t += 0.5) {
+        await new Promise((r) => requestAnimationFrame(r));
+        if (test(g, a)) return true;
+        if (t >= seconds) return false;
+        g.advance(0.5);
+      }
+    },
+    [fn.toString(), arg, timeout / 1000] as const,
+  );
+  expect(reached, `not reached within ${timeout / 1000} game seconds: ${fn.toString()}`).toBe(true);
 }
 
 /**
