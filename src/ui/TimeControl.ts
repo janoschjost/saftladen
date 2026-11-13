@@ -66,9 +66,11 @@ export class TimeControl {
     this.slider.addEventListener('pointerdown', () => (this.dragging = true));
     window.addEventListener('pointerup', () => (this.dragging = false), { passive: true });
     // live while dragging (the light follows), a jump once let go (the people follow)
-    this.slider.addEventListener('input', () => tod.setCycle(Number(this.slider.value) / 1000));
+    this.slider.addEventListener('input', () => {
+      tod.setCycle(Number(this.slider.value) / 1000);
+      this.sync();
+    });
     this.slider.addEventListener('change', () => tod.jumpTo(Number(this.slider.value) / 1000));
-    this.slider.addEventListener('input', () => this.sync());
     this.auto.addEventListener('change', () => {
       this.tod.pinned = false;
       this.setAuto(this.auto.checked);
@@ -186,13 +188,13 @@ export class TimeControl {
       this.shownAngle = angle;
       this.hand.setAttribute('transform', `rotate(${angle})`);
     }
-    const state = `${tod.weekday}|${tod.auto ? tod.speed : 0}`;
+    const state = `${tod.weekday}|${tod.scale}`;
     if (state !== this.shownState) {
       this.shownState = state;
       if (document.activeElement !== this.day) this.day.value = String(tod.weekday);
       this.day.title = DAY_NAMES[tod.weekday];
       this.auto.checked = tod.auto;
-      for (const b of this.speeds) b.setAttribute('aria-pressed', String(Number(b.dataset.speed) === (tod.auto ? tod.speed : 0)));
+      for (const b of this.speeds) b.setAttribute('aria-pressed', String(Number(b.dataset.speed) === tod.scale));
     }
     if (popover && tod.night !== this.night) {
       this.night = tod.night;

@@ -589,7 +589,7 @@ export class Game {
 
   /** Game seconds per real second the player picked: 0 while paused, else 1x / 10x / 25x. */
   private timeScale(): number {
-    return this.tod.auto ? this.tod.speed : 0;
+    return this.tod.scale;
   }
 
   /**
@@ -606,9 +606,8 @@ export class Game {
    */
   private step(dt: number, speed = 1): void {
     const game = dt * speed;
-    const chunks = Math.ceil(game / MAX_FRAME);
+    const chunks = Math.max(1, Math.ceil(game / MAX_FRAME));
     for (let i = 0; i < chunks; i++) this.stepWorld(game / chunks);
-    if (chunks === 0) this.stepWorld(0);
     this.stepView(dt);
   }
 

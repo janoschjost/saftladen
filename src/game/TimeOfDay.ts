@@ -63,6 +63,10 @@ export class TimeOfDay {
   pinned = false;
   /** how fast the game runs while `auto` (one of SPEEDS); `Game` scales the time it hands to `update` and the simulation by it */
   speed: Speed = 1;
+  /** game seconds per real second: 0 while paused, else `speed` */
+  get scale(): number {
+    return this.auto ? this.speed : 0;
+  }
   /** 0 = Monday .. 6 = Sunday; moves on at midnight */
   weekday = 0;
   /** counts the player's jumps in time (dial, slider, weekday): Presence then puts everybody where the new time wants them */
