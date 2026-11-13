@@ -19,6 +19,7 @@ import { cycleOf } from './TimeOfDay';
  *   ?test             for the Playwright tests in e2e/: exposes `window.__game` (read the state), time stands still
  *                     (only `__game.advance(seconds)` moves the game, so nothing changes between two steps of a
  *                     test) and the office is not drawn (the tests render WebGL in software). ?test&draw draws it.
+ *                     It also keeps the welcome card away; ?test&welcome=1 shows it as on a first visit.
  * Example: http://localhost:5173/?snack&time=14&follow
  */
 

@@ -11,6 +11,20 @@ export type AwayPhase = 'leave' | 'out' | 'return';
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 export const strings = {
+  /** the welcome card for first-time visitors */
+  welcome: {
+    title: 'Willkommen im Saftladen',
+    help: 'Hilfe',
+    start: "Los geht's",
+    /** speech bubble of the greeting GL member */
+    greeting: (first: string) => `Hoi, ich bin ${first} von der Geschäftsleitung. Schön, dass du vorbeischaust! Kurz, bevor es losgeht:`,
+    bullets: [
+      'Der Saftladen ist unsere Agentur als kleine Spielwelt: Das Team arbeitet, plaudert und pausiert ganz von selbst.',
+      'Schau dich um mit den Ansichten 1–4 (Iso, Orbit, Grundriss, Rundgang). Klick auf eine Person, um ihr zu folgen.',
+      'Oben rechts: die Sonne für Wetter und Tageszeit, das Zahnrad für Einstellungen, Figuren und Plätze. Mit A startest du Aktionen.',
+    ],
+  },
+
   presence: {
     /** the "not in the office" list */
     panel: {

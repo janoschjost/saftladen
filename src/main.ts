@@ -3,6 +3,7 @@ import { Game } from './game/Game';
 import { applySeedParam } from './game/debugParams';
 import { CharacterPicker } from './ui/CharacterPicker';
 import { DayMenu } from './ui/DayMenu';
+import { Welcome } from './ui/Welcome';
 
 const hideLoader = (): void => {
   const loader = document.getElementById('loader');
@@ -26,6 +27,7 @@ try {
   if (dev) void import('./game/DevForce').then((m) => m.installForceState(game));
   new CharacterPicker();
   new DayMenu((id) => game.startDay(id));
+  new Welcome((held) => (game.paused = held));
 } finally {
   const fontsReady = document.fonts ? document.fonts.ready : Promise.resolve();
   void fontsReady.then(() => requestAnimationFrame(() => requestAnimationFrame(hideLoader)));

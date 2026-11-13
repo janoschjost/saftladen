@@ -589,6 +589,9 @@ export class Game {
     this.views.resize(w, h);
   }
 
+  /** held while a full-screen card (welcome) is up: no game time passes, the scene still renders */
+  paused = false;
+
   private frame(now: number): void {
     const dt = Math.min(MAX_FRAME, (now - this.last) / 1000);
     this.last = now;
@@ -598,9 +601,9 @@ export class Game {
     this.renderFeeds();
   }
 
-  /** Game seconds per real second the player picked: 0 while paused, else 1x / 10x / 25x. */
+  /** Game seconds per real second the player picked: 0 while paused (or while the welcome card holds the game), else 1x / 10x / 25x. */
   private timeScale(): number {
-    return this.tod.scale;
+    return this.paused ? 0 : this.tod.scale;
   }
 
   /**
