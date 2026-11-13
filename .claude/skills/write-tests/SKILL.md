@@ -43,4 +43,4 @@ Its waits assumed the game runs by itself. Change the import to `./game`; replac
 - "not reached within N game seconds": the state never came. Read the predicate in the message; the game ran N seconds of simulation, a slow machine is not the reason. Usually the scene was not set (somebody at the printer, the person not in the office).
 - Fails once in a few runs: something still depends on wall time or on a second read after the world moved. Find it; do not raise a timeout and do not add a retry.
 - Fails on `main` too: say so in the PR body and link its issue (open one if there is none).
-- CI only: the e2e job uploads `test-results/` (trace of the failed test) as the artifact `playwright-traces`.
+- CI only: the e2e job uploads `test-results/` as the artifact `playwright-traces`: the error context of every failure, and a trace of the second attempt (CI records no trace on the first run, it doubles the run time). A test that passed on the second attempt is flaky and still fails the run; reproduce it locally with `--repeat-each`, where every failure has a trace.
