@@ -223,6 +223,11 @@ export class MeetingRoom {
     return this.model.tv;
   }
 
+  /** How many people (in the office, not carried by the player) are inside the room right now; drives its lamp at night. */
+  occupants(people: readonly Person[]): number {
+    return people.filter((p) => p.inOffice && !p.held && this.contains(p.pos)).length;
+  }
+
   get doorPos(): Vec2 {
     return this.model.doorPos;
   }

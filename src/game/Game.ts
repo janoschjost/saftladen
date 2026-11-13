@@ -29,6 +29,7 @@ import { TimeControl } from '../ui/TimeControl';
 import { devEvents } from './DevEvents';
 import { DeskLights } from './DeskLights';
 import type { Desk } from './Office';
+import { RoomLight } from './RoomLight';
 import { CoatRacks } from './CoatRacks';
 import { Easter } from './Easter';
 import { Dog } from './Dog';
@@ -117,6 +118,7 @@ export class Game {
   private persistTimer = 2;
   private sky!: SkyRig;
   private deskLights!: DeskLights;
+  private meetingLight!: RoomLight;
   private coatRacks!: CoatRacks;
   private easter!: Easter;
   private timeControl!: TimeControl;
@@ -228,6 +230,7 @@ export class Game {
     this.easter = new Easter(this.scene);
     this.roof = model.roof;
     this.entrance = model.entrance;
+    this.meetingLight = new RoomLight(this.scene, model.meeting.lamp, this.tod, () => this.meetingRoom.occupants(this.people));
     this.views = new Views(stage, this.renderer.domElement, this.nav, (mode) => {
       this.roof.visible = mode === 'walk' ? true : mode === 'plan' || mode === 'third' ? false : this.roofWanted;
       if (mode !== 'third' && this.day && this.day.state !== 'waiting') this.endDay(false); // the player switched the camera away
@@ -615,6 +618,7 @@ export class Game {
     }
     this.deskLights.update(dt);
     this.updateAlterEgos(dt);
+    this.meetingLight.update(dt);
     this.coatRacks.update();
     this.office.updateScreens(dt);
     this.timeControl.sync();

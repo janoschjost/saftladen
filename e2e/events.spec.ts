@@ -107,3 +107,22 @@ test('place.toilet-queue: both cabins taken, the third person waits in front (?e
   expect(ok).toBe(true);
   expect(errors).toEqual([]);
 });
+
+// the glass room's lamp stays off by day with a meeting inside; the time slider jumping into the night switches it on, back to the day off again
+test('place.meeting-lamp (?event=meeting-room, time slider jumps)', async ({ page }) => {
+  const errors = await openGame(page, '', undefined, 'event=meeting-room');
+  await until(page, (g) => g.meetingRoom.occupants(g.people) >= 2, undefined, 150_000);
+  expect(await read(page, (g) => g.meetingLight.level)).toBe(0);
+  // the slider value is the cycle position in thousandths: 953 = 22:00, 362 = 11:00
+  const slide = (v: number) =>
+    page.evaluate((v) => {
+      const s = document.getElementById('time-slider') as HTMLInputElement;
+      s.value = String(v);
+      s.dispatchEvent(new Event('input'));
+    }, v);
+  await slide(953);
+  await until(page, (g) => g.tod.hour > 21 && g.meetingRoom.occupants(g.people) > 0 && g.meetingLight.level > 0.9, undefined, 60_000);
+  await slide(362);
+  await until(page, (g) => g.tod.hour < 12 && g.meetingLight.level === 0, undefined, 60_000);
+  expect(errors).toEqual([]);
+});
