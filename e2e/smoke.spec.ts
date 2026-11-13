@@ -8,9 +8,13 @@ test('load', async ({ page }) => {
   await expect(page.locator('#stage canvas')).toBeVisible();
   await expect(page.locator('body')).not.toHaveClass(/is-loading/);
   expect(await read(page, (g) => g.people.length)).toBeGreaterThan(10);
-  // the loop runs: the simulation advances
-  const t0 = await read(page, (g) => g.last);
-  await until(page, (g, t) => g.last > t, t0);
+  // frames are drawn, but under ?test time stands still between them
+  const t0 = await read(page, (g) => ({ frame: g.renderer.info.render.frame, clock: g.clock }));
+  await expect.poll(() => read(page, (g) => g.renderer.info.render.frame)).toBeGreaterThan(t0.frame + 2);
+  expect(await read(page, (g) => g.clock)).toBe(t0.clock);
+  // unfrozen, as in the real game, the loop itself moves the game on with the clock on the wall
+  await read(page, (g) => void (g.frozen = false));
+  await expect.poll(() => read(page, (g) => g.clock)).toBeGreaterThan(t0.clock + 0.2);
   expect(errors).toEqual([]);
 });
 

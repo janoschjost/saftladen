@@ -189,6 +189,8 @@ export class Game {
   readonly tickers = new Set<(dt: number) => void>();
 
   private draw: boolean;
+  /** e2e tests: time stands still between frames, only `advance` moves the game on. Nothing changes between two steps of a test. */
+  private frozen: boolean;
 
   /**
    * For the e2e tests, which render WebGL in software. `cheap`: no antialiasing, no shadows, pixel ratio 1.
@@ -197,9 +199,10 @@ export class Game {
    */
   constructor(
     private stage: HTMLElement,
-    { cheap = false, draw = true } = {},
+    { cheap = false, draw = true, frozen = false } = {},
   ) {
     this.draw = draw;
+    this.frozen = frozen;
     this.renderer = new THREE.WebGLRenderer({ antialias: !cheap });
     this.renderer.setPixelRatio(cheap ? 1 : Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = !cheap;
@@ -659,7 +662,7 @@ export class Game {
   }
 
   private frame(now: number): void {
-    const dt = Math.min(MAX_FRAME, (now - this.last) / 1000);
+    const dt = this.frozen ? 0 : Math.min(MAX_FRAME, (now - this.last) / 1000);
     this.last = now;
     this.step(dt);
     this.render(this.acc / STEP);

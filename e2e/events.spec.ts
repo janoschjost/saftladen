@@ -57,25 +57,24 @@ test('pet.crouch-cat (?event=pet-cat)', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-// the lettered doors under the wall lettering; `moved` = how far its letters are from their laid-out place (m + rad)
+// A lettered door (under the wall lettering) that is `open` or shut again; its letters must have moved along / be back
+// in their laid-out place (`moved`: how far they are from it, m + rad).
 type Letter = { x: number; y: number; mesh: { position: { x: number; y: number }; rotation: { z: number } } };
-type LetteredDoor = { open: number; moved: number };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const letteredDoors = (g: any): LetteredDoor[] =>
+const letteredDoor = (g: any, want: 'any' | 'open' | 'shut'): boolean =>
   g.doors.states
     .filter((s: { rig: { letters?: Letter[] } }) => s.rig.letters?.length)
-    .map((s: { open: number; rig: { letters: Letter[] } }) => ({
-      open: s.open,
-      moved: Math.max(...s.rig.letters.map((l) => Math.abs(l.mesh.position.x - l.x) + Math.abs(l.mesh.position.y - l.y) + Math.abs(l.mesh.rotation.z))),
-    }));
+    .some((s: { open: number; rig: { letters: Letter[] } }) => {
+      const moved = Math.max(...s.rig.letters.map((l) => Math.abs(l.mesh.position.x - l.x) + Math.abs(l.mesh.position.y - l.y) + Math.abs(l.mesh.rotation.z)));
+      return want === 'any' || (want === 'open' ? s.open > 0.9 && moved > 0.01 : s.open < 0.001 && moved < 0.001);
+    });
 
 test('office.door-lettering (?event=door-lettering): letters move with the door and settle back when it closes', async ({ page }) => {
   const errors = await openGame(page, '', undefined, 'event=door-lettering');
-  const doors = () => read(page, letteredDoors);
-  expect((await doors()).length).toBeGreaterThan(0);
-  await expect.poll(async () => (await doors()).some((d) => d.open > 0.9 && d.moved > 0.01), { timeout: 45_000 }).toBe(true);
+  expect(await read(page, letteredDoor, 'any')).toBe(true);
+  await until(page, letteredDoor, 'open', 45_000);
   await page.evaluate(() => (window as unknown as { dev: { trigger: (id: string) => string } }).dev.trigger('door-lettering'));
-  await expect.poll(async () => (await doors()).some((d) => d.open < 0.001 && d.moved < 0.001), { timeout: 45_000 }).toBe(true);
+  await until(page, letteredDoor, 'shut', 45_000);
   expect(errors).toEqual([]);
 });
 

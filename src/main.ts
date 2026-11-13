@@ -21,7 +21,7 @@ try {
   // ?test (e2e): the office is not drawn; ?test&draw draws it, without shadows and antialiasing
   const query = new URLSearchParams(location.search);
   const test = dev && query.has('test');
-  const game = new Game(document.getElementById('stage') as HTMLElement, { cheap: test, draw: !test || query.has('draw') });
+  const game = new Game(document.getElementById('stage') as HTMLElement, { cheap: test, draw: !test || query.has('draw'), frozen: test });
   if (dev) void import('./game/debugParams').then((m) => m.applyDebugParams(game));
   if (dev) void import('./game/DevForce').then((m) => m.installForceState(game));
   new CharacterPicker();

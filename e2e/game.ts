@@ -13,15 +13,13 @@ export async function openGame(page: Page, hash = '', hour = HOUR, query = ''): 
   const errors: string[] = [];
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   page.on('pageerror', (e) => errors.push(e.message));
-  const t0 = Date.now(); // TEMP timing
   await page.goto(`/?test&seed=${SEED}&time=${hour}${query ? `&${query}` : ''}${hash ? `#${hash}` : ''}`);
-  const t1 = Date.now();
   // generous: CI renders WebGL in software, building the scene and the first frames take seconds there
   await page.waitForFunction(() => !!window.__game, undefined, { timeout: 30_000 });
-  const t2 = Date.now();
   // faded or gone: a fading loader lets clicks through, no need to wait for the fade
   await expect(page.locator('#loader:not(.is-done)')).toHaveCount(0, { timeout: 30_000 });
-  console.log(`TIMING goto ${t1 - t0} hook ${t2 - t1} loader ${Date.now() - t2}`);
+  // under ?test time stands still: only `advance` (and so `until`) moves the game. One second in, everybody has made a first move.
+  await page.evaluate(() => (window.__game as { advance(s: number): void }).advance(1));
   return errors;
 }
 
@@ -35,7 +33,8 @@ export function read<T, A = undefined>(page: Page, fn: (g: any, arg: A) => T, ar
 }
 
 /**
- * Waits until `fn` (run in the page against the game) returns something truthy. `timeout` is game time (ms): the game
+ * Waits until `fn` (run in the page against the game) returns something truthy. Under `?test` the game stands still
+ * between the steps of a test, so nothing changes behind its back. `timeout` is game time (ms): the game
  * is fast-forwarded half a second at a time (`advance`, no drawing) with one drawn frame in between, as poses and
  * overlays are set while drawing. So a wait takes the same number of simulation steps on a slow machine as on a fast one.
  * Returns what `fn` returned: use that instead of reading again, the game runs on in between.

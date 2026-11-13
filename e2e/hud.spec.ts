@@ -173,7 +173,7 @@ test('actions.sheet + actions.search: A toggles the sheet, previews, number keys
   await page.keyboard.press('a');
   await page.locator('#action-search').fill('');
   await page.locator('#action-cards .m-card').first().focus();
-  await freeStations(page); // the game ran on meanwhile: somebody may stand at the coffee machine again
+  await freeStations(page); // the waits above moved the game on: somebody may stand at the coffee machine again
   await page.keyboard.press('3'); // Kaffee, not the plan view
   await expect(sheet).toBeHidden();
   expect(await read(page, (g) => g.views.mode)).toBe('orbit');
@@ -182,14 +182,11 @@ test('actions.sheet + actions.search: A toggles the sheet, previews, number keys
 
 test('actions.camera + actions.handback: Drucken flies to Orbit and follows the lead; a wheel hands back, Esc flies to the overview', async ({ page }) => {
   await openGame(page);
+  await freeStations(page);
   await page.keyboard.press('1'); // from Iso
-  // the game runs on while the sheet opens: somebody may take the printer just before the click ("nicht möglich"), then again
-  await expect(async () => {
-    if ((await page.locator('#open-actions').getAttribute('aria-expanded')) !== 'true') await page.keyboard.press('a');
-    await freeStations(page);
-    await page.locator('#action-cards .m-card[data-action="printer"]').click();
-    expect(await read(page, (g) => g.views.mode)).toBe('orbit');
-  }).toPass({ timeout: 20_000 });
+  await page.keyboard.press('a');
+  await page.locator('#action-cards .m-card[data-action="printer"]').click();
+  expect(await read(page, (g) => g.views.mode)).toBe('orbit');
   const a = await read(page, (g) => g.action && { printing: !!g.action.lead?.printJob, owned: g.action.owned });
   expect(a).toMatchObject({ printing: true, owned: true });
   expect(await read(page, (g) => g.views.flying)).toBe(true);
@@ -232,17 +229,18 @@ test('place.meeting: people called out of their chair stand up and walk to the r
     const w = window as unknown as { __game: any; __gliding: string[]; __walked: number };
     w.__gliding = [];
     w.__walked = 0;
-    setInterval(() => {
+    // every simulation step
+    w.__game.tickers.add(() => {
       for (const p of w.__game.people) {
         if (p.meetPhase !== 'approach' || p.moving <= 0.5) continue;
         w.__walked++;
         if (p.sit > 0.3) w.__gliding.push(`${p.id} sit=${p.sit.toFixed(2)}`);
       }
-    }, 50);
+    });
   });
   await read(page, (g) => g.startAction('meeting'));
-  // enough samples of people walking to the room (not the whole meeting: the sim is slow on CI)
-  await expect.poll(() => page.evaluate(() => (window as unknown as { __walked: number }).__walked), { timeout: 60_000 }).toBeGreaterThan(10);
+  // enough samples of people walking to the room
+  await until(page, () => (window as unknown as { __walked: number }).__walked > 100, undefined, 60_000);
   expect(await page.evaluate(() => (window as unknown as { __gliding: string[] }).__gliding)).toEqual([]);
 });
 
