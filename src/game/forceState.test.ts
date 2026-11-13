@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { forceState, type ForceCtx, type ForcePerson } from './forceState';
+import { forceState, refusalText, type ForceCtx, type ForcePerson } from './forceState';
 import { setSeed } from './rng';
 
 const person = (id: string, over: Partial<ForcePerson> = {}): ForcePerson => ({ id, member: { name: `${id} Muster` }, inOffice: true, held: false, controlled: false, working: false, ...over });
@@ -74,5 +74,21 @@ describe('dev.forceState (dev.force)', () => {
     expect(forceState(c, 'zz', 'desk')).toContain('unbekannt');
     expect(forceState(c, 'a', 'sleep')).toContain('unbekannt');
     expect(calls).toEqual([]);
+  });
+});
+
+describe('dev.force refusal texts (dev.force)', () => {
+  const p = (over: Partial<ForcePerson> = {}) => person('Marco', over);
+
+  it('names the reason for each refusal', () => {
+    expect(refusalText(p({ inOffice: false }), 'meeting')).toBe('Marco: Meeting nicht möglich (nicht im Büro)');
+    expect(refusalText(p({ held: true }), 'wc')).toContain('beschäftigt');
+    expect(refusalText(p({ controlled: true }), 'desk')).toContain('beschäftigt');
+    expect(refusalText(p({ working: true }), 'desk')).toContain('sitzt schon am Platz');
+    expect(refusalText(p(), 'desk')).toContain('kein freier Platz');
+    expect(refusalText(p(), 'home')).toContain('Homeoffice voll');
+    expect(refusalText(p(), 'wc')).toContain('beide WC-Kabinen belegt');
+    expect(refusalText(p(), 'meeting')).toContain('Meetingraum belegt');
+    expect(refusalText(p(), 'break')).toContain('Küche belegt');
   });
 });

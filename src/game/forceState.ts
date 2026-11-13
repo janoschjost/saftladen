@@ -72,3 +72,28 @@ export function forceState<P extends ForcePerson>(ctx: ForceCtx<P>, personId: st
   }
   return ok ? label : null;
 }
+
+/** Why `forceState` said no, as text for the dev panel. Person problems first, then what the game refused. */
+export function refusalReason(p: ForcePerson, state: ForceState): string {
+  if (!p.inOffice) return 'nicht im Büro';
+  if (p.held || p.controlled) return 'beschäftigt';
+  switch (state) {
+    case 'desk':
+      return p.working ? 'sitzt schon am Platz' : 'kein freier Platz';
+    case 'errand':
+      return 'gerade im Gespräch';
+    case 'home':
+      return 'Homeoffice voll oder im Gespräch';
+    case 'wc':
+      return 'beide WC-Kabinen belegt oder im Gespräch';
+    case 'meeting':
+      return 'Meetingraum belegt oder zu wenig Leute frei';
+    default:
+      return 'Küche belegt oder zu wenig Leute frei';
+  }
+}
+
+/** The status line for a refused request: "Marco: Meeting nicht möglich (nicht im Büro)". */
+export function refusalText(p: ForcePerson, state: ForceState): string {
+  return `${p.member.name.split(' ')[0]}: ${FORCE_LABELS[state]} nicht möglich (${refusalReason(p, state)})`;
+}

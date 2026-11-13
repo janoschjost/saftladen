@@ -1,6 +1,6 @@
 import { DevPeople } from '../ui/DevPeople';
 import type { Game } from './Game';
-import { forceState, type ForceCtx, type ForcePerson } from './forceState';
+import { FORCE_STATES, forceState, refusalText, type ForceCtx, type ForcePerson, type ForceState } from './forceState';
 import type { Person } from './Person';
 
 /**
@@ -10,7 +10,6 @@ import type { Person } from './Person';
 export function installForceState(game: Game): void {
   const g = game as any;
   const people: (Person & ForcePerson)[] = g.people;
-  const first = (p: Person) => p.member.name.split(' ')[0];
   /** Same as the dev events: pulls the people out of whatever they were doing. */
   const drop = (p: Person) => {
     g.social.leave(p);
@@ -50,11 +49,18 @@ export function installForceState(game: Game): void {
   const run = (id: string, state: string): string => {
     const r = forceState(ctx, id, state);
     const who = people.find((p) => p.id === id);
-    return r ?? `${who ? first(who) : id}: ${state} nicht möglich`;
+    if (r !== null || !who || !(FORCE_STATES as readonly string[]).includes(state)) return r ?? `${id}: ${state} nicht möglich`;
+    return refusalText(who, state as ForceState);
   };
-  Object.assign((window as unknown as { dev: object }).dev, { forceState: run });
+  Object.assign((window as unknown as { dev: object }).dev, {
+    forceState: run,
+  });
   new DevPeople(
-    people.map((p) => ({ id: p.id, name: p.member.name })),
+    people.map((p) => ({
+      id: p.id,
+      name: p.member.name,
+      away: () => !p.inOffice,
+    })),
     run,
   );
 }
