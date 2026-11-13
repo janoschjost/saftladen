@@ -69,7 +69,10 @@ export class TimeControl {
     this.slider.addEventListener('input', () => tod.setCycle(Number(this.slider.value) / 1000));
     this.slider.addEventListener('change', () => tod.jumpTo(Number(this.slider.value) / 1000));
     this.slider.addEventListener('input', () => this.sync());
-    this.auto.addEventListener('change', () => this.setAuto(this.auto.checked));
+    this.auto.addEventListener('change', () => {
+      this.tod.pinned = false;
+      this.setAuto(this.auto.checked);
+    });
     this.buildDial();
     this.bindDial();
     for (const [i, name] of WEEKDAYS.entries()) this.day.add(new Option(name, String(i)));
@@ -81,6 +84,7 @@ export class TimeControl {
       b.addEventListener('click', () => {
         const s = Number(b.dataset.speed);
         if (s !== 0) this.setSpeed(s as Speed);
+        this.tod.pinned = false;
         this.setAuto(s !== 0);
         this.sync();
       });

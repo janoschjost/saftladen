@@ -25,6 +25,17 @@ describe('time of day', () => {
     expect(p.cycle).toBe(c);
   });
 
+  it('time.cycle: a pinned clock (?time=) stands still until it is let go', () => {
+    const t = new TimeOfDay();
+    t.pinned = true;
+    const c = t.cycle;
+    t.update(100);
+    expect(t.cycle).toBe(c);
+    t.pinned = false;
+    t.update(100);
+    expect(t.cycle).toBeGreaterThan(c);
+  });
+
   it('time.weekday: the weekday moves on at midnight, Sunday is followed by Monday', () => {
     const t = new TimeOfDay();
     expect(t.weekdayName).toBe('Mo');

@@ -36,7 +36,7 @@ export function applyDebugParams(game: Game): void {
 
   const time = Number(q.get('time'));
   if (q.has('time') && Number.isFinite(time)) {
-    g.tod.auto = false;
+    g.tod.pinned = true;
     g.tod.setCycle(cycleOf(time));
   }
   if (q.has('day')) game.startDay(q.get('day') || 'jan-hasler');

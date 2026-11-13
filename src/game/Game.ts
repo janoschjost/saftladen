@@ -582,9 +582,14 @@ export class Game {
     const dt = Math.min(MAX_FRAME, (now - this.last) / 1000);
     this.last = now;
     // pause stops the whole game (and so does `frozen`, for the tests); 10x / 25x run the whole office faster
-    this.step(dt, this.frozen || !this.tod.auto ? 0 : this.tod.speed);
+    this.step(dt, this.frozen ? 0 : this.timeScale());
     this.render(this.acc / STEP);
     this.renderFeeds();
+  }
+
+  /** Game seconds per real second the player picked: 0 while paused, else 1x / 10x / 25x. */
+  private timeScale(): number {
+    return this.tod.auto ? this.tod.speed : 0;
   }
 
   /**

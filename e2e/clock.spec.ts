@@ -1,5 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
-import { openGame, read, until } from './game';
+import type { Page } from '@playwright/test';
+import { expect, openGame, read, test, until } from './game';
 
 /** Presses on the HUD dial at a clock hour (midnight at the top, clockwise) and lets go there, optionally dragging from `from`. */
 async function dialTo(page: Page, hour: number, from?: number): Promise<void> {
@@ -21,37 +21,54 @@ test.describe('clock', () => {
     await expect(page.locator('#clock-time')).toHaveText('11:00');
     await expect(page.locator('#clock-day')).toHaveValue('0');
     await expect(page.locator('#clock-dial')).toHaveAttribute('aria-valuenow', String(11 * 60));
-    // ?time freezes the clock: shown as paused
-    await expect(page.locator('#clock [data-speed="0"]')).toHaveAttribute('aria-pressed', 'true');
-    await page.locator('#clock [data-speed="60"]').click();
-    await until(page, (g) => g.tod.hour > 11.1, undefined, 60_000);
+    // ?time pins the clock at that hour while the game runs on, until a speed button lets it go
+    await until(page, (g) => g.clock > 20, undefined, 60_000);
+    expect(await read(page, (g) => [g.tod.pinned, g.tod.clock])).toEqual([true, '11:00']);
+    await page.locator('#clock [data-speed="1"]').click();
+    expect(await read(page, (g) => g.tod.pinned)).toBe(false);
+    await until(page, (g) => g.tod.hour > 11.1, undefined, 120_000);
     const [shown, clock] = await Promise.all([page.locator('#clock-time').textContent(), read(page, (g) => g.tod.clock)]);
-    expect(shown!.slice(0, 4)).toBe(clock.slice(0, 4)); // same ten minutes (the clock races at 60x)
+    expect(shown).toBe(clock);
     expect(errors).toEqual([]);
   });
 
-  test('time.speed: pause, 1x, 10x, 60x set the clock speed and are remembered', async ({ page }) => {
+  test('time.speed: pause, 1x, 10x, 25x run the whole game at that speed and are remembered', async ({ page }) => {
     await openGame(page);
-    for (const s of [10, 1, 60]) {
+    expect(await read(page, (g) => g.timeScale())).toBe(1); // ?time pins the clock, the game runs
+    for (const s of [10, 1, 25]) {
       await page.locator(`#clock [data-speed="${s}"]`).click();
-      expect(await read(page, (g) => [g.tod.auto, g.tod.speed])).toEqual([true, s]);
+      expect(await read(page, (g) => [g.tod.auto, g.tod.speed, g.timeScale()])).toEqual([true, s, s]);
       await expect(page.locator(`#clock [data-speed="${s}"]`)).toHaveAttribute('aria-pressed', 'true');
       await expect(page.locator('#clock [aria-pressed="true"]')).toHaveCount(1);
     }
-    const h = await read(page, (g) => g.tod.hour);
-    await until(page, (g, h0) => g.tod.hour > h0 + 0.05, h, 60_000);
+    // five real seconds at 25x: the clock and the whole simulation (game clock, who walks where) are 125 game seconds on
+    const run = (seconds: number) =>
+      read(page, (g, n) => {
+        const t0 = [g.clock, g.tod.cycle];
+        for (let i = 0; i < n * 4; i++) g.step(0.25, g.timeScale());
+        return [g.clock - t0[0], (g.tod.cycle - t0[1]) * 600];
+      }, seconds);
+    const [simulated, clock] = await run(5);
+    expect(simulated).toBeCloseTo(125, 3);
+    expect(clock).toBeCloseTo(125, 3);
+    // pause stops everything, speed stays remembered
     await page.locator('#clock [data-speed="0"]').click();
-    expect(await read(page, (g) => g.tod.auto)).toBe(false);
+    expect(await read(page, (g) => [g.tod.auto, g.timeScale()])).toEqual([false, 0]);
     await expect(page.locator('#time-auto')).not.toBeChecked();
-    expect(await page.evaluate(() => [localStorage.getItem('saftladen.time.auto'), localStorage.getItem('saftladen.time.speed')])).toEqual(['0', '60']);
+    expect(await run(5)).toEqual([0, 0]);
+    expect(await page.evaluate(() => [localStorage.getItem('saftladen.time.auto'), localStorage.getItem('saftladen.time.speed')])).toEqual(['0', '25']);
   });
 
   test('time.jump: dragging the hand jumps the time, light and people follow', async ({ page }) => {
     await openGame(page);
+    await page.locator('#clock [data-speed="0"]').click(); // jumping works while paused
     await dialTo(page, 15, 11);
-    expect(await read(page, (g) => [Math.round(g.tod.hour * 60), g.tod.jumps])).toEqual([15 * 60, 1]);
+    expect(await read(page, (g) => [Math.round(g.tod.hour * 60), g.tod.jumps, g.tod.auto])).toEqual([15 * 60, 1, false]); // and the game stays paused
     await expect(page.locator('#clock-time')).toHaveText('15:00');
-    expect(await read(page, (g) => g.timeControl.slider.value)).toBe(String(Math.round((await read(page, (g) => g.tod.cycle)) * 1000)));
+    // the slider in the environment popover catches up when it opens
+    await page.locator('#open-env').click();
+    await expect(page.locator('#time-slider')).toHaveValue(String(Math.round((await read(page, (g) => g.tod.cycle)) * 1000)));
+    await page.locator('#open-env').click();
     // into the night: dark at once, everybody but the night shift goes home
     await dialTo(page, 23.5);
     await expect(page.locator('#clock-time')).toHaveText('23:30');

@@ -59,6 +59,8 @@ export class TimeOfDay {
   cycle = START;
   /** the clock advances by itself (false = paused) */
   auto = true;
+  /** dev URLs (`?time=`): the clock stands still at the given hour while the game runs on; a click on a speed button lets it go */
+  pinned = false;
   /** how fast the game runs while `auto` (one of SPEEDS); `Game` scales the time it hands to `update` and the simulation by it */
   speed: Speed = 1;
   /** 0 = Monday .. 6 = Sunday; moves on at midnight */
@@ -81,7 +83,7 @@ export class TimeOfDay {
   }
 
   update(dt: number): void {
-    if (!this.auto) return;
+    if (!this.auto || this.pinned) return;
     const c = this.cycle + dt / CYCLE_SECONDS; // `dt` is game time: Game already scaled it by `speed`
     if (c >= 1) this.weekday = (this.weekday + 1) % WEEKDAYS.length; // past midnight: the next day
     this.setCycle(c);
