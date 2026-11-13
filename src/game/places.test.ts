@@ -48,8 +48,7 @@ function crew(sim: Sim, ...ids: string[]): Person[] {
 
 const GROUP = ['oscar-grob', 'andrew-jelley', 'linda-peter', 'milica-rakic', 'alyosha-krajnc'];
 
-// Minutes of game time for 43 people: seconds of wall time on a CI runner, more than Vitest's default 5 s
-describe('places', { timeout: 60_000 }, () => {
+describe('places', () => {
   it('place.meeting: people called out of their chair stand up and walk to the room, nobody glides sitting', () => {
     const sim = office();
     const group = crew(sim, ...GROUP);
@@ -170,7 +169,7 @@ describe('places', { timeout: 60_000 }, () => {
   }
 });
 
-describe('office', { timeout: 60_000 }, () => {
+describe('office', () => {
   // A lettered door (under the wall lettering) that is `open` or shut again; its letters must have moved along / be
   // back in their laid-out place (how far they are from it, m + rad).
   type Letter = { x: number; y: number; mesh: { position: { x: number; y: number }; rotation: { z: number } } };
@@ -212,7 +211,7 @@ describe('office', { timeout: 60_000 }, () => {
 });
 
 // `dev.forceState` on a real office (the panel buttons themselves: e2e/force-state.spec.ts)
-describe('dev.force', { timeout: 60_000 }, () => {
+describe('dev.force', () => {
   const ok = (r: string, label: string) => {
     expect(r).toContain(label);
     expect(r).not.toContain('nicht möglich');
