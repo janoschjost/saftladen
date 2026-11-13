@@ -20,7 +20,7 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
 4. **Implement.** Read the issue and all of its comments. Follow `README.md` and the existing code. Keep the change scoped to the issue.
 5. **Done means:**
    - `npm run build` passes. CI (`.github/workflows/ci.yml`) runs build and Vitest on every PR; a red check is not done. The e2e tests run on CI only with the `e2e` label (Actions minutes are limited), so run them locally and note the result in the PR body. A failing local run is not done, whatever the load on the machine: the waits count game time, not seconds. A test that also fails on `main` → say so in the PR body and link its issue (open one if there is none). Add the label (`gh pr edit --add-label e2e`) whenever the PR adds or changes a file under `e2e/`, `playwright.config.ts`, the `?test` hook or the CI workflow: a spec must have run on CI before it reaches `main`. Other PRs get it from the reviewer (`/review-pr`).
-   - `npm test` and `npm run test:e2e` pass, and new or changed behavior has a test. Which kind and how to write it: **Writing tests** below.
+   - `npm test` and `npm run test:e2e` pass, and new or changed behavior has a test. Which kind: **Writing tests** below; how: the `write-tests` skill.
    - Every criterion has been checked in the running app.
    - `FEATURES.md` is updated: add or change the lines for this issue, ending with `(#N)`. Every line you touched still works. Each line you add or change gets a `url:` where a URL can show it (see the rules at the top of `FEATURES.md`).
    - The diff has been through one pass of `/simplify` and one of `/code-review` (medium), in that order, both limited to this branch's diff:
@@ -47,7 +47,7 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
 
 ## Writing tests
 
-Three kinds. Pick the cheapest one that can fail for the right reason.
+**Before writing or changing a test, load the `write-tests` skill** (`.claude/skills/write-tests/SKILL.md`). The rules that always hold:
 
 | What changes | Test | Where |
 |---|---|---|
@@ -55,29 +55,10 @@ Three kinds. Pick the cheapest one that can fail for the right reason.
 | What only a browser can show: keys, clicks, hashes, panels, the DOM, a URL starting the right thing | Playwright | `e2e/*.spec.ts` |
 | Purely visual: no change to state, timing, input handling or URLs | by eye, in the running app | none |
 
-Every test's title starts with the exact `FEATURES.md` id it guards (`'place.meeting: …'`, several ids joined with ` + `), and the line in `FEATURES.md` names the test file (`test:` / `e2e:`).
-
-**Vitest.** Build the part with plain data and step it by hand: `setSeed(n)`, then `update(1 / 60)` in a loop until the state is there (`Meeting.test.ts`, `Presence.test.ts`, `Walker.test.ts`). Randomness comes from `src/game/rng.ts`, never `Math.random()`. A part that cannot be built without a canvas: pull the logic out first.
-
-**Playwright.** The tests run against a bundle (`vite build --mode e2e`), opened with `?test`. That mode has three properties, and every rule below follows from them:
-
-1. **Time stands still.** The game only moves when the test fast-forwards it. Nothing changes between two steps of a test, on any machine.
-2. **Nothing is drawn.** No test may look at pixels of the office. One smoke test opens `?test&draw` and draws it the way players see it.
-3. **Seed, hour and date are pinned** (`seed=1`, `time=11`, a day in June).
-
-Rules:
-- Import `test`, `expect`, `openGame`, `read`, `until` from `./game`, never `test` from `@playwright/test` (that one does not pin the date).
-- Start with `openGame(page, hash, hour, query, seed)`. It returns the console errors: end the test with `expect(errors).toEqual([])`.
-- Let time pass with `until(page, (g, arg) => state, arg, gameMs)`. It fast-forwards until the state is there and **returns it**. The timeout is game time. For a fixed stretch: `read(page, (g) => g.advance(seconds))`.
-- Use what `until` returns. A second `read` afterwards is fine (time stands still), but after the next `until` the world has moved on.
-- Never wait in wall time for the game: no `waitForTimeout`, no `expect.poll` or `toPass` on game state, no `setInterval` in the page. They hang, because the game does not move by itself. To watch every simulation step: `g.tickers.add(() => …)`. (`expect.poll` on the DOM, which follows the browser, is fine.)
-- The function given to `read` / `until` runs in the page: it sees `g` and `arg`, nothing from the spec file.
-- Set the scene, don't hope for it: `?event=<id>` in `query`, `dev.forceState(id, state)`, `freeStations(page)` right before an action that needs the printer or the coffee machine. After an `until` somebody may stand there again.
-- A `url:` in `FEATURES.md` must start every `event=` / `action=` it names; `feature-urls.spec.ts` fails otherwise.
-
-Before the PR: `npm run test:e2e`, and for a new or changed spec `npx playwright test <file> --repeat-each 5`. A spec that fails once in five is not done.
-
-**Rebasing a branch whose specs are older than this.** Its waits assumed the game runs by itself. Change the import to `./game`; replace `expect.poll` / `toPass` / `setInterval` on game state with `until` (or `g.tickers`); drop hand-written `page.goto('/?test…')` in favour of `openGame`; remove waits that were only there "because CI is slow".
+- A test's title starts with the exact `FEATURES.md` id it guards.
+- Playwright tests open the game with `?test`: time stands still until the test fast-forwards it, the office is not drawn, seed, hour and date are pinned. So never wait in wall time for the game (`waitForTimeout`, `expect.poll` or `toPass` on game state): use `until()`.
+- Import `test`, `expect` and the helpers from `e2e/game.ts`, never `test` from `@playwright/test`.
+- A failing test is not done, whatever the load on the machine.
 
 ## Review
 

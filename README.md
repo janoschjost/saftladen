@@ -21,7 +21,7 @@ npm run fetch-team     # re-scrape https://vitamin2.ch/agentur (names, roles, po
 - What only a browser can show (keys, clicks, URL hashes, panels) → Playwright (`e2e/*.spec.ts`). First time: `npx playwright install chromium`. The tests run against a bundle opened with `?test`: time stands still until a test fast-forwards it, the office is not drawn, seed, hour and date are pinned. `npx playwright test --ui` to debug, traces of failures land in `test-results/`.
 - Purely visual changes → check them in the browser (no screenshot tests yet).
 
-How to write them, with the rules that keep them fast and stable: **Writing tests** in `AGENTS.md`.
+How to write them, with the rules that keep them fast and stable: **Writing tests** in `AGENTS.md` and `.claude/skills/write-tests/SKILL.md`.
 
 Feature URLs: each `FEATURES.md` line can carry a `url:`, a dev-server path that shows the feature right away, e.g. `http://localhost:5173/?seed=1&time=11&event=meeting-room`. Dev-only params (see `src/game/debugParams.ts`): `?seed=<n>` same start, `&time=<h>` frozen clock, `#iso` `#orbit` `#plan` `#walk[@x,z,yaw]` view, `#homes` all home offices taken, `?day[=id]` day mode, `?snack[=id]&follow` chips run, `?event=<id>` runs a dev-panel event at start (ids: `dev.list()` in the console; repeatable, retried until it can run, an unknown id only warns), and `?action=<id>` starts an Aktionen card (or any dev event) the way the sheet does, camera flight included. `e2e/feature-urls.spec.ts` opens every `url:`, so they don't rot. PRs list the URLs of the lines they touch under `## Try it`.
 
