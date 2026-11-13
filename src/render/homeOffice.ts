@@ -765,6 +765,66 @@ const SNACK = { up: 0.6, out: 2.2, back: 3.4, in: 5.0, sat: 5.6 };
 const SPIT = { sip: 0.7, spit: 1.3, away: 2.0, grab: 2.7, drink: 3.3, done: 5.4 };
 /** a signature move gets this many tickets in the break draw (out of ~12 normal ones): it happens only now and then */
 const SIGNATURE_PICKS = 1;
+/**
+ * The little son's visit (seconds): walks in from the left, stands next to the chair and talks, then leaves again.
+ * He comes by every `gap` seconds.
+ */
+const SON = { walkIn: 1.6, talk: 6.2, walkOut: 1.6, gap: [25, 70] as [number, number] };
+const SON_TOTAL = SON.walkIn + SON.talk + SON.walkOut;
+/** which way Papa turns to look at the boy, which way the boy faces (mostly to Papa, a little to the webcam) */
+const SON_TURN = -1.2;
+const SON_FACE = 1.4;
+/**
+ * Where the boy stands, per room (the webcams sit at different distances): beside Papa, behind the desk's back edge
+ * (desks reach from z 0.2 towards the webcam), at this share of the frame's half width left of the centre (never
+ * closer to Papa than `clear` m), his head at `head` m. Papa rolls his chair back `roll` m to face him.
+ */
+const SON_SPOT = { z: -0.25, frame: 0.6, clear: 0.7, head: 1.05, frameTop: 0.94, roll: 0.3 };
+/** Papa's hands while he listens: off the keyboard, resting on the edge of the desk / in the lap */
+const SON_LISTEN: ArmPose = { x: -0.45, z: 0.12, e: -1.0, ez: 0 };
+/** the bubble's canvas (px) and where its tail tip sits on it */
+const BUBBLE_PX = { w: 512, h: 160, tipX: 54, tipY: 152 };
+/** the son's bubble is this share of the frame's width */
+const SON_BUBBLE_WIDTH = 0.42;
+const SON_LINES = ['Papa, spielst du mit mir?', 'Papa, ich habe Hunger!', 'Schau mal, ein Bagger!', 'Papaaa, wann bist du fertig?', 'Darf ich auch mal tippen?', 'Papa, ich muss mal!'];
+
+/** a speech bubble as a sprite (text is redrawn per line) */
+function bubbleSprite(): THREE.Sprite {
+  const c = document.createElement('canvas');
+  c.width = BUBBLE_PX.w;
+  c.height = BUBBLE_PX.h;
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  m.scale.set(1.1, 0.34, 1);
+  m.renderOrder = 10;
+  m.visible = false;
+  return m;
+}
+
+function drawBubble(s: THREE.Sprite, text: string): void {
+  const mat = s.material as THREE.SpriteMaterial;
+  const c = mat.map!.image as HTMLCanvasElement;
+  const g = c.getContext('2d')!;
+  g.clearRect(0, 0, c.width, c.height);
+  g.fillStyle = '#ffffff';
+  g.strokeStyle = '#2a2a30';
+  g.lineWidth = 6;
+  g.beginPath();
+  g.roundRect(8, 8, c.width - 16, 110, 34);
+  g.moveTo(70, 116);
+  g.lineTo(BUBBLE_PX.tipX, BUBBLE_PX.tipY);
+  g.lineTo(110, 116);
+  g.fill();
+  g.stroke();
+  g.fillStyle = '#2a2a30';
+  g.font = 'bold 44px system-ui, sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(text, c.width / 2, 64, c.width - 48);
+  mat.map!.needsUpdate = true;
+}
+
 /** share of people who wave into the webcam when they start working from home */
 const GREET_CHANCE = 0.35;
 /** where the cat stops, right in front of the lens (world, y = on the desk) */
@@ -890,6 +950,8 @@ interface Occupant {
   spray?: THREE.Object3D;
   /** the same person in swimwear, swapped in out of sight for a swim */
   swimRig?: CharacterRig;
+  /** a little child that now and then walks into the picture (TeamMember.son) */
+  son?: { rig: CharacterRig; bubble: THREE.Sprite };
   /** prop-holding arm poses solved for this person's shoulders */
   held: HeldPoses;
 }
@@ -1019,6 +1081,11 @@ function occupantOf(member: TeamMember, fresh = false): Occupant {
     rig.body.add(o.spray);
   }
   if (member.swimLook) o.swimRig = buildCharacter({ ...member.look, ...member.homeLook, ...member.swimLook });
+  if (member.son) {
+    const sonRig = buildCharacter(member.son);
+    sonRig.root.visible = false;
+    o.son = { rig: sonRig, bubble: bubbleSprite() };
+  }
   rig.elbowL.add(o.mug);
   rig.body.add(o.gamepad, o.yawn, o.bundle);
   occupants.set(member.id, o);
@@ -1221,6 +1288,14 @@ export class HomeOffice {
   /** this round of laundry: pieces on the rack when it began, and how many it hangs */
   private roundBase = 0;
   private roundSize = 0;
+  /** seconds into the son's visit (negative: not here) and until the next one */
+  private sonT = -1;
+  private sonNext = rand(SON.gap);
+  /** where the boy comes in (off the left edge of the frame) and stops, where his bubble sits and how big it is */
+  private sonOff = new THREE.Vector3();
+  private sonAt = new THREE.Vector3();
+  private sonView = new THREE.Vector2();
+  private sonTop = new THREE.Vector3();
 
   constructor(readonly variant: number) {
     this.style = STYLES[variant];
@@ -1260,7 +1335,20 @@ export class HomeOffice {
     this.scene.add(screen);
   }
 
+  /** Whether the son is in the picture right now. */
+  get sonHere(): boolean {
+    return this.sonT >= 0;
+  }
+
+  /** Calls the son in at the next quiet moment. False when this room has no son. */
+  callSon(): boolean {
+    if (!this.occupant?.son) return false;
+    this.sonNext = Math.min(this.sonNext, 0);
+    return true;
+  }
+
   get activityLabel(): string {
+    if (this.sonT >= 0) return 'Sohn will was';
     if (this.activity === 'sip' && this.style.drink === 'cocktail') return 'Cocktailpause';
     return ACTIVITY_LABEL[this.activity];
   }
@@ -1286,6 +1374,11 @@ export class HomeOffice {
     if (this.occupant) {
       this.scene.remove(this.occupant.rig.root);
       if (this.occupant.swimRig) this.scene.remove(this.occupant.swimRig.root);
+      if (this.occupant.son) {
+        // the occupant is cached per person: a visit cut short must not come back with the next stay
+        this.occupant.son.rig.root.visible = this.occupant.son.bubble.visible = false;
+        this.scene.remove(this.occupant.son.rig.root, this.occupant.son.bubble);
+      }
       for (const p of this.occupant.pets) this.scene.remove(p.rig.root);
       if (this.occupant.headset) this.occupant.rig.body.remove(this.occupant.headset);
       this.occupant.bundle.visible = false;
@@ -1295,6 +1388,8 @@ export class HomeOffice {
     this.pieces.forEach((m) => (m.visible = false));
     this.occupant = member ? occupantOf(member, fresh) : null;
     this.alter = !!this.occupant?.rig.setAlter && alter;
+    this.sonT = -1;
+    this.sonNext = rand(SON.gap);
     if (!this.occupant) return;
     const { rig, pets } = this.occupant;
     rig.setAlter?.(this.alter);
@@ -1318,6 +1413,7 @@ export class HomeOffice {
       this.occupant.headset ??= headset();
       rig.body.add(this.occupant.headset);
     }
+    if (this.occupant.son) this.scene.add(this.occupant.son.rig.root, this.occupant.son.bubble);
     for (const p of pets) {
       p.rig.root.position.copy(p.spot);
       if (p.onDesk) p.rig.root.position.y = this.desk ?? p.spot.y; // on this room's desk top
@@ -1328,6 +1424,83 @@ export class HomeOffice {
     this.scene.fog = rig.vape ? new THREE.FogExp2('#c9cdd2', (this.haze = HAZE.base)) : null;
     // some say hi when they sit down, the rest just start working
     this.setActivity(fxRandom() < GREET_CHANCE ? 'wave' : 'type');
+  }
+
+  /**
+   * The boy's spot and bubble from this room's webcam as it draws right now (rooms place it at different distances,
+   * feed tiles and the enlarged feed differ in shape): the webcams look along -z from in front of the desk.
+   */
+  private placeSon(bubble: THREE.Sprite): void {
+    const cam = this.camera;
+    cam.updateProjectionMatrix();
+    cam.updateMatrixWorld();
+    const view = cam.getViewSize(Math.max(0.3, cam.position.z - SON_SPOT.z), this.sonView);
+    const x = -Math.max(SON_SPOT.clear, (view.x / 2) * SON_SPOT.frame);
+    this.sonAt.set(x, 0, SON_SPOT.z);
+    this.sonOff.set(-view.x / 2 - 0.6, 0, SON_SPOT.z);
+    const w = view.x * SON_BUBBLE_WIDTH;
+    const h = (w * BUBBLE_PX.h) / BUBBLE_PX.w;
+    // tail tip just above his head ...
+    bubble.scale.set(w, h, 1);
+    bubble.position.set(x + (0.5 - BUBBLE_PX.tipX / BUBBLE_PX.w) * w, SON_SPOT.head + 0.04 + (BUBBLE_PX.tipY / BUBBLE_PX.h - 0.5) * h, SON_SPOT.z);
+    // ... unless that pushes the bubble out of the top of the frame (the webcam looks down a little)
+    const top = this.sonTop.set(bubble.position.x, bubble.position.y + h / 2, SON_SPOT.z).project(cam).y;
+    if (top > SON_SPOT.frameTop) bubble.position.y -= ((top - SON_SPOT.frameTop) * view.y) / 2;
+  }
+
+  /** The son's visits: every so often (while Papa is just typing) he walks in, says something and leaves again. */
+  private updateSon(dt: number): void {
+    const son = this.occupant?.son;
+    if (!son) return;
+    if (this.sonT < 0) {
+      this.sonNext -= dt;
+      if (this.sonNext > 0 || this.activity !== 'type' || this.style.lapCam) return;
+      this.sonT = 0;
+      drawBubble(son.bubble, SON_LINES[Math.floor(fxRandom() * SON_LINES.length)]);
+      son.rig.root.visible = true;
+    } else if ((this.sonT += dt) >= SON_TOTAL) {
+      this.sonT = -1;
+      this.sonNext = rand(SON.gap);
+      son.rig.root.visible = false;
+      son.bubble.visible = false;
+      return;
+    }
+    this.placeSon(son.bubble);
+    const r = son.rig;
+    const T = this.sonT;
+    const t = this.clock;
+    const outAt = SON.walkIn + SON.talk;
+    const walking = T < SON.walkIn || T >= outAt;
+    if (walking) {
+      const k = T < SON.walkIn ? T / SON.walkIn : 1 - (T - outAt) / SON.walkOut;
+      r.root.position.lerpVectors(this.sonOff, this.sonAt, k);
+      r.root.rotation.set(0, T < SON.walkIn ? Math.PI / 2 : -Math.PI / 2, 0);
+      const swing = Math.sin(t * 12) * 0.6;
+      r.legL.rotation.x = swing;
+      r.legR.rotation.x = -swing;
+      r.kneeL.rotation.x = r.kneeR.rotation.x = 0.15;
+      r.armL.rotation.set(-swing * 0.8, 0, 0);
+      r.armR.rotation.set(swing * 0.8, 0, 0);
+      r.elbowL.rotation.set(-0.2, 0, 0);
+      r.elbowR.rotation.set(-0.2, 0, 0);
+      r.body.position.y = Math.abs(Math.sin(t * 12)) * 0.025;
+      r.body.rotation.set(0, 0, 0);
+    } else {
+      const u = T - SON.walkIn;
+      r.root.position.copy(this.sonAt);
+      r.root.rotation.set(0, SON_FACE, 0);
+      r.legL.rotation.x = r.legR.rotation.x = 0;
+      r.kneeL.rotation.x = r.kneeR.rotation.x = 0.05;
+      // talks with a hand up towards Papa (tugging at his sleeve), then waves goodbye
+      const bye = u > SON.talk - 1.2;
+      r.armR.rotation.set(bye ? -0.3 : -1.1 + Math.sin(t * 7) * 0.18, 0, bye ? 1.2 : 0.15);
+      r.elbowR.rotation.set(bye ? 0 : -0.3, 0, bye ? 1.5 + Math.sin(t * 10) * 0.35 : 0);
+      r.armL.rotation.set(0, 0, -0.08);
+      r.elbowL.rotation.set(-0.1, 0, 0);
+      r.body.position.y = Math.abs(Math.sin(t * 5)) * 0.012;
+      r.body.rotation.set(0.05 + Math.sin(t * 3) * 0.03, 0, 0);
+    }
+    son.bubble.visible = !walking;
   }
 
   /** Whether this room and occupant have what a signature move or extra break needs. */
@@ -1374,6 +1547,8 @@ export class HomeOffice {
     this.clock += dt;
     this.actT += dt;
     this.actLeft -= dt;
+    this.updateSon(dt);
+    if (this.sonT >= 0) this.actLeft = Math.max(this.actLeft, 0.5); // he has Papa's full attention
     if (this.actLeft <= 0) {
       const skip: readonly string[] = this.member?.skipBreaks ?? [];
       const pool: Activity[] = ACTIVITIES.filter((b) => !skip.includes(b));
@@ -1645,6 +1820,19 @@ export class HomeOffice {
     }
     if (a !== 'laundry') o0.bundle.visible = false;
     for (const [i, m] of this.pieces.entries()) m.visible = i < this.hung;
+    if (this.sonT >= 0) {
+      // turns to the boy while he stands there, nods along
+      const near = Math.min(1, this.sonT / SON.walkIn, (SON_TOTAL - this.sonT) / SON.walkOut);
+      if (this.chair && !recl && !stand) {
+        // rolls back from the desk and swivels round to him
+        chairTurn = SON_TURN * near;
+        chairBack = Math.max(chairBack, SON_SPOT.roll * near);
+      } else yaw = SON_TURN * near;
+      // stops typing and listens
+      Object.assign(L, mixPose(L, SON_LISTEN, near));
+      Object.assign(R, mixPose(R, SON_LISTEN, near));
+      lean += 0.04 * near + Math.sin(t * 2.4) * 0.015 * near;
+    }
     const tilt = recl;
     ease(this.poseL, L, k);
     ease(this.poseR, R, k);

@@ -72,6 +72,11 @@ export interface Schedule {
   nightOwlChance: number;
   /** does the night shift from the home office instead of the desk */
   nightHome?: boolean;
+  /**
+   * Works remotely: only this share of the days (0..1) is spent in the office, on all other days the working day
+   * is spent in the home office. Left out = comes in every day.
+   */
+  visitChance?: number;
 }
 
 export interface TeamMember {
@@ -97,6 +102,7 @@ export interface TeamMember {
   dogName?: string;
   cats?: Array<{ kind: 'tabby' | 'tortie'; name: string }>; // cats following this person
   adhd?: boolean; // restless: short idle/work spells, fidgets
+  son?: Look; // little boy who now and then walks into the home office scene
   homebody?: boolean; // works from home a lot and is never out on errands
   speed?: number; // walking speed override (default: random 1.0-1.5)
   schedule: Schedule; // habitual office hours

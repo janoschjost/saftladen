@@ -170,6 +170,8 @@ export class Game {
   /** speech bubbles in the scene (read by the e2e tests: `__game.bubbles.state`) */
   private bubbles = new Bubbles(this.scene);
   private bubbleClock = 0;
+  /** dev: how many times the son was called into the home office (`HomeOffice.callSon` takes it from here) */
+  private sonCalls = 0;
   private keys = new Set<string>();
   /** Shift is down (fallback when the Shift keydown went missing, e.g. pressed before the window had focus) */
   private shift = false;
@@ -1037,13 +1039,40 @@ export class Game {
 
     const away = (kind: 'errand' | 'home') => () => {
       const p = pickFree(1)[0];
-      if (!p || (kind === 'home' && this.presence.homeFull)) return null;
+      // a full home office: somebody gives up their room for them (and comes back to the office)
+      if (!p || !this.presence.send(p, kind, this.nav, true)) return null;
       this.release(p);
-      this.presence.send(p, kind, this.nav);
       return strings.presence.event.leaves[kind](p.member.name.split(' ')[0]);
     };
     devEvents.register({ id: 'errand', group: strings.presence.event.group, label: strings.presence.event.someoneLeaves.errand, run: away('errand') });
     devEvents.register({ id: 'home', group: strings.presence.event.group, label: strings.presence.event.someoneLeaves.home, run: away('home') });
+    const zlatko = () => this.people.find((p) => p.member.schedule.visitChance !== undefined);
+    devEvents.register({
+      id: 'remote-visit',
+      group: strings.presence.event.group,
+      label: strings.presence.event.remoteVisit,
+      run: () => {
+        const p = zlatko();
+        if (!p || p.inOffice) return null; // already here
+        this.presence.setVisit(p, true);
+        this.presence.callBack(p);
+        return strings.presence.event.visits(p.member.name.split(' ')[0]);
+      },
+    });
+    devEvents.register({
+      id: 'remote-son',
+      group: strings.presence.event.group,
+      label: strings.presence.event.remoteSon,
+      run: () => {
+        const p = zlatko();
+        if (!p?.member.son || !this.presence.roomFor(p)) return null;
+        // a remote day again: his plan sends him to the home office (a room is freed if need be), the son comes once he is there
+        this.presence.setVisit(p, false);
+        this.release(p);
+        this.sonCalls++;
+        return strings.presence.event.sonComes(p.member.name.split(' ')[0]);
+      },
+    });
     devEvents.register({
       id: 'pet-errand',
       group: strings.presence.event.group,
@@ -2131,12 +2160,14 @@ export class Game {
     const meet = this.meetingRoom.current;
     const coffee = this.kitchen.current;
     const rep = this.reply;
+    const call = this.sim.welcome.call;
     const say = (id: string, text: string, who: Walker) => ({ id, text, head: this.headTop(who) });
     const bubbleDt = this.clock - this.bubbleClock;
     this.bubbleClock = this.clock;
     this.bubbles.update(
       [
         ...(this.easter.angry && !this.easter.angry.who.away ? [say(`angry-${this.easter.angry.who.id}`, this.easter.angry.text, this.easter.angry.who)] : []),
+        ...(call && !call.who.away ? [say(`welcome-${call.who.id}`, call.text, call.who)] : []),
         ...(rep && !rep.who.away ? [say(`reply-${rep.who.id}`, rep.text, rep.who)] : []),
         ...this.social.active.filter((c) => c.phase !== 'gather' && c.text).map((c) => say(c.speaker.id, c.text, c.speaker)),
         ...(coffee?.phase === 'chat' ? [say(coffee.speaker.id, coffee.text, coffee.speaker)] : []),
@@ -2210,6 +2241,7 @@ export class Game {
       const home = (this.homes[v] ??= new HomeOffice(v));
       if (who && (home.occupantId !== who.id || home.alter !== who.homeAlter)) home.setOccupant(who.member, false, who.homeAlter);
       else if (!who && home.occupied) home.setOccupant(null);
+      if (who && this.sonCalls > 0 && home.callSon()) this.sonCalls--;
       if (who) {
         home.update(dt);
         this.feeds.setActivity(who.id, home.activityLabel);

@@ -256,6 +256,37 @@ describe('presence', () => {
     const home = people.filter((p) => p.awayKind === 'home' && p.presence === 'out').map((p) => p.homeVariant);
     expect(new Set(home).size).toBe(home.length);
   });
+
+  it('presence.remote-visit: Zlatko is rarely in the office, the other days he works from the home office', () => {
+    const idx = team.findIndex((m) => m.id === 'zlatko-pesic');
+    expect(team[idx].schedule.visitChance).toBeGreaterThan(0);
+    let visits = 0;
+    let remoteDay = false;
+    let visitDay = false;
+    for (let seed = 1; seed <= 40; seed++) {
+      const { samples, plans } = runDay(seed, 5, 19);
+      const plan = plans.get('zlatko-pesic')!;
+      const during = samples.filter((s) => s.hour > plan.arrive + 0.3 && s.hour < plan.leave - 0.3);
+      if (plan.remote) {
+        remoteDay = true;
+        // never at the desk, in the home office nearly all day (he waits for a free room at most a little while)
+        const at = (s: { states: string }) => s.states.slice(idx * 2, idx * 2 + 2);
+        for (const s of during) expect(at(s)[0]).not.toBe('i');
+        expect(during.filter((s) => at(s) === 'oh').length / during.length).toBeGreaterThan(0.8);
+      } else {
+        visits++;
+        visitDay = true;
+        expect(during.some((s) => s.states[idx * 2] === 'i')).toBe(true);
+      }
+    }
+    expect(remoteDay && visitDay).toBe(true);
+    expect(visits / 40).toBeLessThan(0.35); // rare (chance 0.12)
+    // everybody else comes in every day
+    for (const seed of [1, 2, 3]) {
+      const { plans } = runDay(seed, 5, 5.1);
+      for (const [id, plan] of plans) if (id !== 'zlatko-pesic') expect(plan.remote, id).toBe(false);
+    }
+  });
 });
 
 describe('time jumps', () => {

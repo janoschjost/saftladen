@@ -11,6 +11,8 @@ const cases: [string, string, (g: any) => unknown][] = [
   ['place.booth', 'phone-booth', (g) => g.phoneBooth.current],
   ['place.pod', 'pod', (g) => g.pod.current],
   ['pet.crouch', 'pet-dog', (g) => g.people.some((p: { petAmt: number; rig: { legL: { rotation: { x: number } } } }) => p.petAmt > 0.9 && p.rig.legL.rotation.x < -0.4)],
+  ['presence.remote-visit', 'remote-visit', (g) => g.people.some((p: { id: string; presence: string }) => p.id === 'zlatko-pesic' && p.presence !== 'out')],
+  ['home.son', 'remote-son', (g) => g.homes.some((h: { sonHere?: boolean } | null) => h?.sonHere)],
   ['place.printer', 'printer', (g) => g.people.some((p: { printJob?: unknown }) => p.printJob)],
   ['place.foosball', 'foosball', (g) => g.people.filter((p: { foosJob?: unknown }) => p.foosJob).length === 2],
   ['place.toilet', 'toilet', (g) => g.toilets.cabins.some((c: { session?: unknown }) => c.session)],
@@ -28,6 +30,13 @@ for (const [id, event, reached] of cases) {
 test('home.laundry (?event=home-laundry#homes)', async ({ page }) => {
   const errors = await openGame(page, 'homes', undefined, 'event=home-laundry');
   await until(page, (g) => g.homes.some((h: { laundryHung: number } | null) => h && h.laundryHung >= 1), undefined, 60_000);
+  expect(errors).toEqual([]);
+});
+
+// all eight home offices taken by hand: Zlatko still gets one (somebody gives theirs up) and the son comes
+test('home.son (?event=remote-son#homes)', async ({ page }) => {
+  const errors = await openGame(page, 'homes', undefined, 'event=remote-son');
+  await until(page, (g) => g.homes.some((h: { sonHere?: boolean } | null) => h?.sonHere), undefined, 120_000);
   expect(errors).toEqual([]);
 });
 
