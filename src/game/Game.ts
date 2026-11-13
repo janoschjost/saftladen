@@ -303,7 +303,7 @@ export class Game {
     this.ring.visible = false;
     this.scene.add(this.ring);
 
-    if (import.meta.env.DEV) {
+    if (import.meta.env.DEV || import.meta.env.MODE === 'e2e') {
       this.debug = new DebugOverlays(this.scene);
       registerDevSection(overlaySection(this.debug));
       // console: dev.overlay('grid' | 'states' | 'paths', true)
@@ -1569,7 +1569,7 @@ export class Game {
     }
     this.updateHover();
     this.updateOverlay();
-    if (import.meta.env.DEV) this.debug?.update(this.clock, this.walkers, this.nav, this.views.camera);
+    if (import.meta.env.DEV || import.meta.env.MODE === 'e2e') this.debug?.update(this.clock, this.walkers, this.nav, this.views.camera);
     if (this.previews.length) this.renderPreviews();
     if (this.draw) this.renderer.render(this.scene, this.views.camera);
   }

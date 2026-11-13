@@ -54,6 +54,6 @@ export class DevPanel {
       }
       this.body.append(h, wrap);
     }
-    if (import.meta.env.DEV) for (const section of devSections()) section(this.body, this.status);
+    if (import.meta.env.DEV || import.meta.env.MODE === 'e2e') for (const section of devSections()) section(this.body, this.status);
   }
 }
