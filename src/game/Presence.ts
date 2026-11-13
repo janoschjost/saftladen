@@ -194,14 +194,14 @@ export class Presence {
   /** Dev: the remote worker comes to the office today (or goes back to the home office). */
   setVisit(p: Person, visit: boolean): void {
     const plan = this.planOf(p);
+    if (plan.remote === !visit) return; // already so today: keeps the greeting and the hours
     plan.remote = !visit;
     plan.greeted = false;
-    if (visit) {
-      plan.arrive = Math.min(plan.arrive, this.workHour - 0.01);
-      plan.end = plan.leave = Math.max(plan.leave, this.workHour + 3);
-      plan.lunch = Infinity;
-    }
     this.overridden.delete(p);
+    // from now on, for a few hours at least
+    plan.arrive = Math.min(plan.arrive, this.workHour - 0.01);
+    plan.end = plan.leave = Math.max(plan.leave, this.workHour + 3);
+    plan.lunch = Infinity;
     if (visit) this.nightHomers.delete(p); // an ordinary return through the door, not a night shift ending
   }
 
@@ -313,10 +313,11 @@ export class Presence {
   /** A home office room for somebody who is not in a hurry: leaves one free for each remote worker still waiting for theirs. */
   private get roomFree(): boolean {
     const hour = this.workHour;
-    const waiting = this.people.filter((p) => {
+    let waiting = 0;
+    for (const p of this.people) {
       const plan = this.planOf(p);
-      return plan.remote && hour >= plan.arrive && hour < plan.end && p.awayKind !== 'home' && !this.overridden.has(p);
-    }).length;
+      if (plan.remote && hour >= plan.arrive && hour < plan.end && p.awayKind !== 'home' && !this.overridden.has(p)) waiting++;
+    }
     return this.homeCount < MAX_HOME - waiting;
   }
 
@@ -429,9 +430,14 @@ export class Presence {
   private sendOff(p: Person, kind: 'off' | 'home', nav: NavGrid): void {
     // a regular remote day needs a room: somebody makes room, he comes in as soon as it is free
     if (kind === 'home' && p.awayKind !== 'home' && this.homeCount >= MAX_HOME && this.planOf(p).remote) {
-      // the one who has been away longest comes back to the office to make room
-      const spare = this.people.filter((o) => o.presence === 'out' && o.awayKind === 'home' && !o.member.homebody && !this.nightHomers.has(o) && !this.overridden.has(o) && o.awayLeft > 1 && o.awayLeft < OFF / 2);
-      const o = spare.sort((x, y) => x.awayLeft - y.awayLeft)[0];
+      // the one who has been away longest comes back to the office to make room (one at a time)
+      let o: Person | null = null;
+      for (const x of this.people) {
+        if (x.awayKind !== 'home') continue;
+        if (x.presence === 'returning' || (x.presence === 'out' && x.awayLeft <= 1)) return; // somebody already leaves a room
+        if (x.presence !== 'out' || x.member.homebody || this.nightHomers.has(x) || this.overridden.has(x)) continue;
+        if (x.awayLeft < OFF / 2 && (!o || x.awayLeft < o.awayLeft)) o = x;
+      }
       if (o) o.awayLeft = 0.5;
       return;
     }

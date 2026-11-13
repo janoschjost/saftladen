@@ -282,8 +282,10 @@ describe('presence', () => {
     expect(remoteDay && visitDay).toBe(true);
     expect(visits / 40).toBeLessThan(0.35); // rare (chance 0.12)
     // everybody else comes in every day
-    const { plans } = runDay(3, 5, 5.1);
-    expect([...plans.values()].filter((p) => p.remote).length).toBeLessThanOrEqual(1);
+    for (const seed of [1, 2, 3]) {
+      const { plans } = runDay(seed, 5, 5.1);
+      for (const [id, plan] of plans) if (id !== 'zlatko-pesic') expect(plan.remote, id).toBe(false);
+    }
   });
 });
 

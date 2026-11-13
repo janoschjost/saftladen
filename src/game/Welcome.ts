@@ -16,18 +16,18 @@ export class Welcome {
   /** the call over the first greeter ("Zlatko! 🎉") while the cheer lasts */
   call: { who: Person; text: string; t: number } | null = null;
   /** greeters walking over to the visitor (held there until their cheer is done) */
-  private walkers: Array<{ p: Person; t: number; cheered: boolean }> = [];
+  private walkers: Array<{ p: Person; pin: Person['scripted']; t: number; cheered: boolean }> = [];
   private last = new Map<Person, Person['presence']>();
 
   update(dt: number, people: Person[], presence: Presence, social: Social): void {
     for (const p of people) {
       const was = this.last.get(p);
-      if (p.presence === 'in' && (was === 'returning' || was === 'leaving') && presence.claimGreeting(p)) this.greet(p, people, social);
+      if (p.presence === 'in' && was !== 'in' && presence.claimGreeting(p) && was !== undefined) this.greet(p, people, social); // already here at the start: nobody to welcome
       this.last.set(p, p.presence);
     }
     if (this.call && (this.call.t -= dt) <= 0) this.call = null;
-    this.walkers = this.walkers.filter((w) => {
-      const s = w.p.scripted;
+    if (this.walkers.length) this.walkers = this.walkers.filter((w) => {
+      const s = w.p.scripted === w.pin ? w.pin : null; // somebody else may have taken them over meanwhile
       if (s?.arrived && !w.cheered && w.p.moving < 0.2) {
         w.cheered = true;
         w.t = WELCOME.hold;
@@ -41,26 +41,27 @@ export class Welcome {
 
   private greet(v: Person, people: Person[], social: Social): void {
     const near = people
-      .filter((o) => o !== v && o.inOffice && !o.held && !o.controlled && !o.talk && !o.meetJob && !o.printJob && !o.foosJob && !o.vapeJob && !o.coffeeJob && !o.phoneJob)
-      .sort((a, b) => Math.hypot(a.pos.x - v.pos.x, a.pos.z - v.pos.z) - Math.hypot(b.pos.x - v.pos.x, b.pos.z - v.pos.z))
+      .filter((o) => o !== v && o.inOffice && !o.held && !o.controlled && !o.talk && !o.playerChat && !o.inMeeting && !o.run && !o.meetJob && !o.printJob && !o.foosJob && !o.vapeJob && !o.coffeeJob && !o.phoneJob)
+      .map((o) => ({ o, dx: v.pos.x - o.pos.x, dz: v.pos.z - o.pos.z }))
+      .map((n) => ({ ...n, d: Math.hypot(n.dx, n.dz) || 1 }))
+      .sort((a, b) => a.d - b.d)
       .slice(0, WELCOME.crowd);
     let walkers = 0;
-    for (const o of near) {
+    for (const { o, dx, dz, d } of near) {
       social.leave(o);
-      const dx = v.pos.x - o.pos.x;
-      const dz = v.pos.z - o.pos.z;
-      const d = Math.hypot(dx, dz) || 1;
       if (walkers < WELCOME.walkers && d > WELCOME.stand && d < WELCOME.reach && !o.task) {
         walkers++;
         o.interrupt();
         o.pinTo({ at: { x: v.pos.x - (dx / d) * WELCOME.stand, z: v.pos.z - (dz / d) * WELCOME.stand }, yaw: Math.atan2(dx, dz), walk: true });
-        this.walkers.push({ p: o, t: WELCOME.timeout, cheered: false });
+        this.walkers.push({ p: o, pin: o.scripted, t: WELCOME.timeout, cheered: false });
       } else {
         o.talkTo(v.pos, WELCOME.hold); // turns to the visitor unless tied to a desk
         o.welcome(gesture(), 0.2 + random() * 0.8);
       }
     }
-    if (v.talkTo(near[0]?.pos ?? v.pos, WELCOME.hold)) v.welcome('wave', 0.6);
-    if (near[0]) this.call = { who: near[0], text: `${v.member.name.split(' ')[0]}! 🎉`, t: WELCOME.hold };
+    const first = near[0]?.o;
+    if (!first) return;
+    if (v.talkTo(first.pos, WELCOME.hold)) v.welcome('wave', 0.6);
+    this.call = { who: first, text: `${v.member.name.split(' ')[0]}! 🎉`, t: WELCOME.hold };
   }
 }

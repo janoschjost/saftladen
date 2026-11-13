@@ -1050,30 +1050,27 @@ export class Game {
     devEvents.register({
       id: 'remote-visit',
       group: strings.presence.event.group,
-      label: 'Remote-Kollege kommt ins Büro',
+      label: strings.presence.event.remoteVisit,
       run: () => {
         const p = zlatko();
         if (!p || (this.presence.isVisitor(p) && p.inOffice)) return null;
         this.presence.setVisit(p, true);
         this.presence.callBack(p);
-        return `${p.member.name.split(' ')[0]} kommt ins Büro`;
+        return strings.presence.event.visits(p.member.name.split(' ')[0]);
       },
     });
     devEvents.register({
       id: 'remote-son',
       group: strings.presence.event.group,
-      label: 'Sohn im Homeoffice (Zlatko)',
+      label: strings.presence.event.remoteSon,
       run: () => {
         const p = zlatko();
         if (!p?.member.son) return null;
-        if (p.presence === 'in' || this.presence.isVisitor(p)) {
-          this.presence.setVisit(p, false);
-          this.release(p);
-          if (this.presence.homeFull) return null;
-          this.presence.send(p, 'home', this.nav);
-        }
+        // a remote day again: his plan sends him to the home office (a room is freed if need be), the son comes once he is there
+        this.presence.setVisit(p, false);
+        this.release(p);
         this.sonCalls++;
-        return `Der Sohn von ${p.member.name.split(' ')[0]} kommt rein`;
+        return strings.presence.event.sonComes(p.member.name.split(' ')[0]);
       },
     });
     devEvents.register({
