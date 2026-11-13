@@ -185,7 +185,7 @@ export class Game {
   private clock = 0;
   private last = performance.now();
 
-  /** Dev hooks that follow game time instead of wall time (retries of `?event`), so `advance` takes them along. */
+  /** Dev and test hooks called every step: they follow game time instead of wall time, so `advance` takes them along. */
   readonly tickers = new Set<(dt: number) => void>();
 
   private draw: boolean;
@@ -1638,10 +1638,10 @@ export class Game {
     w.root.rotation.y = w.prevYaw + dy * alpha;
 
     const ph = THREE.MathUtils.lerp(w.prevPhase, w.phase, alpha);
-    const dangle = Math.sin((this.clock * 1000) / 110) * 0.35 * (w.lift / 0.45);
+    const dangle = Math.sin(this.clock / 0.11) * 0.35 * (w.lift / 0.45);
     const swing = Math.sin(ph) * 0.42 * w.moving + dangle;
     const bob = 0; // hip height now follows the planted foot (see the leg block below)
-    const breathe = Math.sin((this.clock * 1000) / 600 + w.phase) * 0.008 * (1 - w.moving);
+    const breathe = Math.sin(this.clock / 0.6 + w.phase) * 0.008 * (1 - w.moving);
 
     if (w instanceof Person) {
       const r = w.rig;
@@ -1762,7 +1762,7 @@ export class Game {
       const cs = Math.cos(th);
       const h = 0.44; // torso centre height: the body rolls around it
       const bx = h * sn;
-      const by = r.body.position.y + h * (1 - cs) - 0.03 * z + Math.sin((this.clock * 1000) / 1100 + w.phase) * 0.012 * z;
+      const by = r.body.position.y + h * (1 - cs) - 0.03 * z + Math.sin(this.clock / 1.1 + w.phase) * 0.012 * z;
       r.body.rotation.z = th;
       r.body.position.x = bx;
       r.body.position.y = by;
@@ -1773,7 +1773,7 @@ export class Game {
         l.position.set(q.x * cs - 0.32 * sn + bx, q.x * sn + 0.32 * cs + by, q.z);
         if (z > 0) l.rotation.x = THREE.MathUtils.lerp(l.rotation.x, i < 2 ? -0.5 : 0.5, z);
       });
-      r.tail.rotation.y = Math.sin((this.clock * 1000) / 90 + w.phase) * (0.35 + 0.4 * w.moving + 0.5 * w.happy) * (1 - 0.7 * lie) * (1 - z);
+      r.tail.rotation.y = Math.sin(this.clock / 0.09 + w.phase) * (0.35 + 0.4 * w.moving + 0.5 * w.happy) * (1 - 0.7 * lie) * (1 - z);
       this.poseZzz(w, z, r.face, -r.face.y * sn + bx, r.face.y * cs + by);
       // easter eggs: backflip after five clicks, hopping to the beat of the disco
       w.root.rotation.order = 'YXZ';
@@ -2177,9 +2177,8 @@ export class Game {
     const coffee = this.kitchen.current;
     const rep = this.reply;
     const say = (id: string, text: string, who: Walker) => ({ id, text, head: this.headTop(who) });
-    const now = this.clock * 1000;
-    const bubbleDt = Math.min(0.1, (now - this.bubbleClock) / 1000);
-    this.bubbleClock = now;
+    const bubbleDt = Math.min(0.1, this.clock - this.bubbleClock);
+    this.bubbleClock = this.clock;
     this.bubbles.update(
       [
         ...(this.easter.angry && !this.easter.angry.who.away ? [say(`angry-${this.easter.angry.who.id}`, this.easter.angry.text, this.easter.angry.who)] : []),

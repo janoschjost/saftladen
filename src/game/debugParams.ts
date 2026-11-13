@@ -89,11 +89,9 @@ function retry(game: Game, attempt: () => boolean, giveUp: () => void): void {
     t += dt;
     if (t < next) return;
     next = t + 0.5;
-    if (attempt()) game.tickers.delete(tick);
-    else if (t > 60) {
-      giveUp();
-      game.tickers.delete(tick);
-    }
+    const done = attempt();
+    if (!done && t > 60) giveUp();
+    if (done || t > 60) game.tickers.delete(tick);
   };
   game.tickers.add(tick);
 }

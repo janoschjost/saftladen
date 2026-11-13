@@ -36,7 +36,6 @@ test('dev.params: unknown ?event id only warns, the game starts normally', async
 
 test('dev.params: ?test fast-forwards in game time and does not draw the office', async ({ page }) => {
   await openGame(page);
-  // one call: no frame runs in between and adds its own time
   const state = await read(page, (g) => {
     const before = g.clock;
     g.advance(30);
@@ -77,7 +76,7 @@ test('office.door-lettering (?event=door-lettering): letters move with the door 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Cabin = { session: { seated: boolean; person: any } | null };
 
-// Sitting down and the handheld pose need the walk to the washroom (minutes in software WebGL): covered by Toilets.test.ts
+// Sitting down and the handheld pose: covered by Toilets.test.ts
 test('place.toilet: the cabin is taken at once, its light turns red (?event=toilet)', async ({ page }) => {
   const errors = await openGame(page, '', undefined, 'event=toilet');
   // the light follows on the next simulation step

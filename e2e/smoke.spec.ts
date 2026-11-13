@@ -1,6 +1,5 @@
 import { expect, openGame, read, test, until } from './game';
 
-
 test('load', async ({ page }) => {
   const errors = await openGame(page);
   await expect(page.locator('#stage canvas')).toBeVisible();
@@ -16,7 +15,7 @@ test('load', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-// The only test that draws (`&draw`), the way players see it: shadows, antialiasing, the home office feeds. Slow in
+// The only test that draws (`&draw`), the way players see it, shadows and home office feeds included. Slow in
 // software WebGL, so on a small canvas and for a few frames. A shader that no longer compiles fails here.
 test('load: the office is drawn without errors', async ({ page }) => {
   await page.setViewportSize({ width: 480, height: 270 });

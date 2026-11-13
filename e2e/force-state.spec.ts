@@ -1,4 +1,4 @@
-import { expect, openGame, read, test, until } from './game';
+import { expect, freeStations, openGame, read, test, until } from './game';
 
 // the dev module loads after the game: wait for `dev.forceState`
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -48,20 +48,11 @@ test('dev.force: desk, errand and coffee break take effect', async ({ page }) =>
   await until(page, (g, id) => g.people.find((p: { id: string }) => p.id === id).task, ids[0]);
   expect(await force(page, ids[1], 'errand')).toContain('Besorgung');
   await until(page, (g, id) => g.people.find((p: { id: string }) => p.id === id).presence !== 'in', ids[1]);
-  // the game ran on meanwhile: pick somebody who is still there, empty the kitchen and force the break in one go
-  const pause = await read(
-    page,
-    (g, taken) => {
-      const dev = (window as any).dev; // eslint-disable-line @typescript-eslint/no-explicit-any
-      if (g.kitchen.current) dev.trigger('coffee-end');
-      for (const p of g.people) p.cancelCoffee();
-      const who = g.people.find((p: any) => p.inOffice && !p.held && !p.controlled && !taken.includes(p.id)); // eslint-disable-line @typescript-eslint/no-explicit-any
-      return { id: who.id as string, status: dev.forceState(who.id, 'break') as string };
-    },
-    [ids[0], ids[1]],
-  );
-  expect(pause.status).toContain('Pause');
-  await until(page, (g, id) => g.kitchen.current?.members?.some((p: { id: string }) => p.id === id) ?? !!g.kitchen.current, pause.id);
+  // the waits above moved the game on: take somebody who is still there, and an empty kitchen
+  await freeStations(page);
+  const third = await read(page, (g, taken) => g.people.find((p: any) => p.inOffice && !p.held && !p.controlled && !taken.includes(p.id)).id as string, [ids[0], ids[1]]); // eslint-disable-line @typescript-eslint/no-explicit-any
+  expect(await force(page, third, 'break')).toContain('Pause');
+  await until(page, (g, id) => g.kitchen.current?.members?.some((p: { id: string }) => p.id === id) ?? !!g.kitchen.current, third);
   // away person: nothing possible
   expect(await force(page, ids[1], 'desk')).toContain('nicht möglich');
 });

@@ -17,7 +17,7 @@ test('desk.screens-live: a working monitor shows moving content', async ({ page 
   expect(errors).toEqual([]);
 });
 
-// Walking the group into the room takes minutes in software WebGL, so these check what the event sets up right away;
+// These check what the event sets up right away;
 // how the TV follows the meeting (black → screen once all sit, kart players face the TV) is in src/game/Meeting.test.ts.
 test('place.meeting-tv: black without a meeting, a meeting brings slides', async ({ page }) => {
   const errors = await openGame(page, '', undefined, 'event=meeting-room');

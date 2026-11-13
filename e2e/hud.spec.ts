@@ -1,6 +1,6 @@
 import { expect, freeStations, openGame, read, test, until } from './game';
 
-// Few page loads on purpose: CI renders in software and every openGame costs seconds.
+// Few page loads on purpose: every openGame costs seconds on a CI runner.
 
 test('hud.minimal + hud.modes: only title, gear, Aktionen and the key line; Rundgang has its own way back', async ({ page }) => {
   const errors = await openGame(page);
@@ -172,7 +172,6 @@ test('actions.sheet + actions.search: A toggles the sheet, previews, number keys
   await page.keyboard.press('a');
   await page.locator('#action-search').fill('');
   await page.locator('#action-cards .m-card').first().focus();
-  await freeStations(page); // the waits above moved the game on: somebody may stand at the coffee machine again
   await page.keyboard.press('3'); // Kaffee, not the plan view
   await expect(sheet).toBeHidden();
   expect(await read(page, (g) => g.views.mode)).toBe('orbit');

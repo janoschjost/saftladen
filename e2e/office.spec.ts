@@ -67,16 +67,17 @@ test('select.actions + keys.home: select, send home, call back', async ({ page }
   expect(await read(page, (g) => g.presence.homeFull)).toBe(false);
   await expect(page.locator('#actions-home')).toBeEnabled();
 
-  // the game refuses while the person is busy (a chat may start in the meantime): press again until they set off
-  await expect(async () => {
-    await read(page, (g) => g.advance(0.5)); // a refusal passes with game time, not with seconds on a slow machine
+  // the game refuses while the person is busy (in a chat): press again, half a game second later, until they set off
+  let state = { presence: '', kind: '' };
+  for (let tries = 0; tries < 40 && state.presence !== 'leaving'; tries++) {
     await page.locator('#actions-home').click();
-    const p = await read(page, (g, id) => {
+    state = await read(page, (g, id) => {
       const o = g.people.find((q: any) => q.id === id);
       return { presence: o.presence, kind: o.awayKind };
     }, picked);
-    expect(p).toEqual({ presence: 'leaving', kind: 'home' });
-  }).toPass({ timeout: 20_000, intervals: [500] });
+    if (state.presence !== 'leaving') await read(page, (g) => g.advance(0.5));
+  }
+  expect(state).toEqual({ presence: 'leaving', kind: 'home' });
 
   // H calls the selected person back (still selected: they are on the way to the door)
   expect(await read(page, (g) => g.selected?.id)).toBe(picked);
