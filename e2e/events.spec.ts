@@ -1,4 +1,4 @@
-import { expect, openGame, read, test, until } from './game';
+import { expect, openGame, read, scene, test, until } from './game';
 
 /**
  * `?event=<id>` runs a dev-panel event at start, so a dev can open a feature directly (the `url:` in FEATURES.md).
@@ -60,9 +60,11 @@ test('dev.params: ?test fast-forwards in game time and does not draw the office'
   expect(state.draw).toBe(false);
 });
 
-// The cats' owner is out at 11:00 with seeds 1 and 2 (the event needs her in the office), so the cat case uses seed 3
-test('pet.crouch-cat (?event=pet-cat)', async ({ page }) => {
-  const errors = await openGame(page, '', undefined, 'event=pet-cat', 3);
+// The cats come and go with their owner, and she is out at 11:00: the scene puts her into the office and keeps her in
+test('pet.crouch-cat (event pet-cat)', async ({ page }) => {
+  const errors = await openGame(page);
+  await scene(page, (s) => s.put('donata-manser', 'desk', 'stay'));
+  await until(page, () => !String((window as any).dev.trigger('pet-cat')).endsWith('nicht möglich'));
   await until(page, (g) => g.people.some((p: { petAmt: number; rig: { legL: { rotation: { x: number } }; kneeR: { rotation: { x: number } } } }) => p.petAmt > 0.9 && p.rig.legL.rotation.x < -0.4 && p.rig.kneeR.rotation.x > 1.2), undefined, 40_000);
   expect(errors).toEqual([]);
 });

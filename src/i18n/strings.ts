@@ -41,6 +41,8 @@ export const strings = {
     /** where a person is while away */
     state: {
       errand: (seconds: number) => `Weg · zurück in ${clock(seconds)}`,
+      /** out with no return in sight (a scene holds them out) */
+      held: 'Weg',
       home: 'Homeoffice',
     },
     /** tooltip of a row in the list */
@@ -87,5 +89,6 @@ export function awayStatus(kind: AwayKindLabel, phase: AwayPhase, secondsLeft: n
   const p = strings.presence;
   if (phase === 'leave') return p.action.leave[kind];
   if (phase === 'return') return p.action.return;
-  return kind === 'home' ? p.state.home : p.state.errand(secondsLeft);
+  if (kind === 'home') return p.state.home;
+  return Number.isFinite(secondsLeft) ? p.state.errand(secondsLeft) : p.state.held;
 }

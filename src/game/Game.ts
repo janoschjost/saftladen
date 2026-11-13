@@ -81,6 +81,8 @@ export class Game {
   private get social(): Sim['social'] { return this.sim.social; }
   private get traffic(): Sim['traffic'] { return this.sim.traffic; }
   private get presence(): Sim['presence'] { return this.sim.presence; }
+  /** states a scene (tests, the console): `__game.scenario.put('marco', 'desk')` */
+  get scenario(): Sim['scenario'] { return this.sim.scenario; }
   private get tod(): Sim['tod'] { return this.sim.tod; }
   private get weather(): Sim['weather'] { return this.sim.weather; }
   private get petCare(): Sim['petCare'] { return this.sim.petCare; }
@@ -748,10 +750,7 @@ export class Game {
   private registerDevEvents(): void {
     const free = () => this.people.filter((p) => p.inOffice && !p.held && !p.controlled);
     /** Pulls a person out of their conversation / desk / printer run so a dev event can take over. */
-    const drop = (p: Person) => {
-      this.social.leave(p);
-      p.interrupt();
-    };
+    const drop = (p: Person) => this.sim.drop(p);
     const pickFree = (n: number): Person[] => {
       const pool = free().sort(() => random() - 0.5);
       return pool.slice(0, n);
@@ -1301,8 +1300,7 @@ export class Game {
       other: (id) => this.people.find((p) => p.id === id) ?? null,
       seat: (p) => this.daySeat(p),
       pin: (p, spot) => {
-        this.social.leave(p);
-        p.interrupt();
+        this.sim.drop(p);
         p.pinTo(spot);
       },
       release: (p) => p.unpin(),
@@ -1311,16 +1309,8 @@ export class Game {
 
   /** Sits the person at their own desk (somebody sitting there is asked to move) and pins them there. */
   private daySeat(p: Person): boolean {
-    const desk = p.homeDesk ?? this.office.desks.find((k) => !k.occupant) ?? null;
+    const desk = this.sim.seat(p);
     if (!desk) return false;
-    this.social.leave(p);
-    const sitting = p.task?.desk === desk && p.task.phase === 'work';
-    if (!sitting) {
-      p.interrupt();
-      if (desk.occupant && desk.occupant !== p) desk.occupant.evictFromDesk(desk);
-      if (desk.pending === p) desk.pending = null;
-      p.sitDownAt(desk);
-    }
     p.pinTo({ at: desk.seat, yaw: desk.yaw, sit: true });
     return true;
   }

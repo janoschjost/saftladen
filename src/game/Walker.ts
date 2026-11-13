@@ -133,6 +133,23 @@ export abstract class Walker {
     }
   }
 
+  /** Stands at `at` now, without a walk. */
+  placeAt(at: Vec2): void {
+    this.pos = { ...at };
+    this.prev = { ...at };
+    this.path = [];
+    this.state = 'idle';
+  }
+
+  /** There at once, fully materialised: no arrival show (a scene puts somebody into the office). */
+  appearNow(): void {
+    this.away = false;
+    this.fx = 1;
+    this.fxEvent = null;
+    if (this.baseScale) this.root.scale.copy(this.baseScale);
+    this.root.visible = true;
+  }
+
   setAway(away: boolean): void {
     this.away = away;
     if (!Walker.animate) {

@@ -108,9 +108,11 @@ export class Meeting implements Talk {
     return this.members.length > 0;
   }
 
-  /** drops everybody (game reset, abort) */
+  /** Over on the spot: the door opens, everybody drops out where they are. */
   abort(nav: NavGrid): void {
+    const members = [...this.members];
     this.finish(nav);
+    for (const m of members) m.cancelMeet();
   }
 
   private finish(nav: NavGrid): boolean {
@@ -297,6 +299,12 @@ export class MeetingRoom {
       this.lunchRolled = false;
       this.kartPending = false;
     }
+  }
+
+  /** Ends a running meeting on the spot: the room is free at once. */
+  abort(nav: NavGrid): void {
+    this.current?.abort(nav);
+    this.current = null;
   }
 
   update(dt: number, people: readonly Person[], nav: NavGrid, hour = 0): void {

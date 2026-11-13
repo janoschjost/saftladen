@@ -202,6 +202,12 @@ export class Kitchen {
     return null;
   }
 
+  /** Ends a running coffee break on the spot: everybody drops out where they stand, the kitchen is free at once. */
+  abort(): void {
+    for (const m of this.current?.members ?? []) m.cancelCoffee();
+    this.current = null;
+  }
+
   /** `p` is done at the machine (or gave up). */
   releaseMachine(p: Person): void {
     this.users = this.users.map((u) => (u === p ? null : u));

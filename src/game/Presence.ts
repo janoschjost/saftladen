@@ -98,6 +98,8 @@ export class Presence {
   /** the clock's `jumps` / `picks` already handled */
   private seenJumps: number;
   private seenPicks: number;
+  /** people a scene holds where they are, in or out (`keep`): no plan, lunch, errand or call back moves them */
+  private kept = new Set<Person>();
 
   constructor(
     private people: readonly Person[],
@@ -293,9 +295,9 @@ export class Presence {
     return this.people.filter((p) => p.presence === 'in' || p.presence === 'returning').length;
   }
 
-  /** Somebody who is not tied up right now (talk, meeting, printer, ...) and so free to walk out. */
+  /** Somebody who is not tied up right now (talk, meeting, printer, ...) nor held by a scene, and so free to walk out. */
   free(p: Person): boolean {
-    return p.inOffice && !p.held && !p.controlled && !p.talk && !p.playerChat && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob;
+    return !this.kept.has(p) && p.inOffice && !p.held && !p.controlled && !p.talk && !p.playerChat && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob;
   }
 
   /** Free to be sent out by the simulation: not busy, not on the way somewhere, not the remote worker on his visit (he came to see the team; only lunch and the end of the day take him out). */
@@ -378,7 +380,7 @@ export class Presence {
    * office and `p` gets that room (the dev event).
    */
   send(p: Person, kind: 'home' | 'errand', nav: NavGrid, takeRoom = false): boolean {
-    if (p.presence !== 'in' || p.held || p.controlled || p.talk) return false;
+    if (p.presence !== 'in' || p.held || p.controlled || p.talk || this.kept.has(p)) return false;
     if (p.member.homebody) kind = 'home'; // never out on errands
     if (kind === 'home') {
       if (this.homeFull && homeRoomOf(p.id) === null) {
@@ -402,6 +404,7 @@ export class Presence {
 
   /** Dev events: straight out of the office (no walk to the door), into the home office or on an errand; back after `seconds`. */
   awayNow(p: Person, kind: 'home' | 'errand', seconds: number): void {
+    if (this.kept.has(p)) return;
     this.overridden.add(p);
     if (kind === 'home') {
       this.moveInto(p, this.freeVariant(p));
@@ -409,8 +412,32 @@ export class Presence {
     p.startAway(kind, seconds);
   }
 
+  /** The schedule does not move this person: the player did by hand today, or a scene holds them. */
+  private leftAlone(p: Person): boolean {
+    return this.overridden.has(p) || this.kept.has(p);
+  }
+
+  /** A scene holds this person where they are: in the office they stay in, out they stay out, until `letGo`. */
+  keep(p: Person): void {
+    this.kept.add(p);
+    if (p.presence === 'out') p.awayLeft = Infinity;
+    this.lunchers.delete(p);
+    this.nightHomers.delete(p);
+  }
+
+  /**
+   * The schedule has them again (also somebody the player moved by hand today): who was kept out comes back in, and
+   * leaves again if their day is over.
+   */
+  letGo(p: Person): void {
+    const was = this.kept.delete(p);
+    this.overridden.delete(p);
+    if (was && p.presence === 'out') p.awayLeft = 0; // as if called back: in even when the office is full
+  }
+
   /** Bring somebody back to the office. */
   callBack(p: Person): void {
+    if (this.kept.has(p)) return;
     if (this.duty(p, this.workHour) !== 'duty') this.overridden.add(p);
     if (p.presence === 'out') p.awayLeft = 0;
     else p.cancelLeave();
@@ -546,7 +573,7 @@ export class Presence {
     for (const p of this.people) {
       const duty = this.duty(p, hour);
       if (duty !== 'off') onDuty++;
-      if (this.overridden.has(p)) continue;
+      if (this.leftAlone(p)) continue;
       if (duty !== 'duty') {
         this.sendOff(p, duty, nav);
         continue;
@@ -576,7 +603,7 @@ export class Presence {
     for (const p of this.people) {
       const plan = this.planOf(p);
       plan.lunched = hour >= plan.lunch + 0.5;
-      if (this.overridden.has(p)) continue;
+      if (this.leftAlone(p)) continue;
       const duty = this.duty(p, hour);
       if (duty === 'duty' || !this.free(p)) continue;
       if (duty === 'home') {
@@ -620,7 +647,7 @@ export class Presence {
     // enough people out already; a full office still lets somebody go, so that those waiting outside get their turn
     if ((this.away.length >= this.target && this.present < MAX_OFFICE) || leaving >= 2) return;
     const candidates = this.people.filter((p) => {
-      if (!this.sendable(p) || this.overridden.has(p)) return false;
+      if (!this.sendable(p) || this.leftAlone(p)) return false;
       const plan = this.planOf(p);
       // not right before lunch or going home
       return this.duty(p, hour) === 'duty' && hour < plan.leave - ERRANDS.beforeLeave && (plan.lunched || hour < plan.lunch - 0.5);
