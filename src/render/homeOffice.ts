@@ -771,11 +771,18 @@ const SIGNATURE_PICKS = 1;
  */
 const SON = { walkIn: 1.6, talk: 6.2, walkOut: 1.6, gap: [25, 70] as [number, number] };
 const SON_TOTAL = SON.walkIn + SON.talk + SON.walkOut;
-/** which way Papa turns to look at the boy, which way the boy faces */
-const SON_TURN = -0.55;
-const SON_FACE = 1.15;
-const SON_OFF = new THREE.Vector3(-2.4, 0, -0.2);
-const SON_AT = new THREE.Vector3(-0.7, 0, -0.2);
+/** which way Papa turns to look at the boy, which way the boy faces (half to Papa, half to the webcam) */
+const SON_TURN = -1.0;
+const SON_FACE = 1.4;
+/**
+ * Where the boy stands, per room (the webcams sit at different distances): just in front of Papa's chair, at this
+ * share of the frame's half width left of the centre (never closer to Papa than `clear` m), his head at `head` m.
+ */
+const SON_SPOT = { z: 0.1, frame: 0.6, clear: 0.55, head: 1.05 };
+/** Papa's hands while he listens: off the keyboard, resting on the edge of the desk / in the lap */
+const SON_LISTEN: ArmPose = { x: -0.45, z: 0.12, e: -1.0, ez: 0 };
+/** speech bubble: width as a share of the frame's width; where its tail tip sits on the canvas (share of width / height) */
+const SON_BUBBLE = { width: 0.42, tipX: 54 / 512, tipY: 152 / 160 };
 const SON_LINES = ['Papa, spielst du mit mir?', 'Papa, ich habe Hunger!', 'Schau mal, ein Bagger!', 'Papaaa, wann bist du fertig?', 'Darf ich auch mal tippen?', 'Papa, ich muss mal!'];
 
 /** a speech bubble as a sprite (text is redrawn per line) */
@@ -1281,6 +1288,11 @@ export class HomeOffice {
   /** seconds into the son's visit (negative: not here) and until the next one */
   private sonT = -1;
   private sonNext = rand(SON.gap);
+  /** where the boy comes in (off the left edge of the frame) and stops, where his bubble sits and how big it is */
+  private sonOff = new THREE.Vector3();
+  private sonAt = new THREE.Vector3();
+  private sonBubble = new THREE.Vector3();
+  private sonBubbleSize = new THREE.Vector2();
 
   constructor(readonly variant: number) {
     this.style = STYLES[variant];
@@ -1296,6 +1308,7 @@ export class HomeOffice {
     this.camera.fov = set.webcam.fov;
     this.camera.position.set(...set.webcam.pos);
     this.camera.lookAt(...set.webcam.look);
+    this.placeSon();
     this.scene.add(set.group);
     if (this.style.rack) {
       this.pieces = laundryPieces();
@@ -1411,6 +1424,24 @@ export class HomeOffice {
     this.setActivity(fxRandom() < GREET_CHANCE ? 'wave' : 'type');
   }
 
+  /** The boy's spot and bubble from this room's webcam (the webcams look along -z from in front of the desk). */
+  private placeSon(): void {
+    const cam = this.camera.position;
+    const d = Math.max(0.3, cam.z - SON_SPOT.z);
+    const halfH = d * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    const halfW = halfH * this.camera.aspect;
+    const x = -Math.max(SON_SPOT.clear, halfW * SON_SPOT.frame);
+    this.sonAt.set(x, 0, SON_SPOT.z);
+    this.sonOff.set(-halfW - 0.6, 0, SON_SPOT.z);
+    const w = halfW * 2 * SON_BUBBLE.width;
+    const h = (w * 160) / 512;
+    this.sonBubbleSize.set(w, h);
+    // tail tip just above his head, the whole bubble inside the frame
+    const top = cam.y + halfH - 0.02;
+    const y = Math.min(SON_SPOT.head + 0.04 + (SON_BUBBLE.tipY - 0.5) * h, top - h / 2);
+    this.sonBubble.set(x + (0.5 - SON_BUBBLE.tipX) * w, y, SON_SPOT.z);
+  }
+
   /** The son's visits: every so often (while Papa is just typing) he walks in, says something and leaves again. */
   private updateSon(dt: number): void {
     const son = this.occupant?.son;
@@ -1435,8 +1466,8 @@ export class HomeOffice {
     const walking = T < SON.walkIn || T >= outAt;
     if (walking) {
       const k = T < SON.walkIn ? T / SON.walkIn : 1 - (T - outAt) / SON.walkOut;
-      r.root.position.lerpVectors(SON_OFF, SON_AT, k);
-      r.root.rotation.set(0, Math.atan2(SON_AT.x - SON_OFF.x, SON_AT.z - SON_OFF.z) + (T < SON.walkIn ? 0 : Math.PI), 0);
+      r.root.position.lerpVectors(this.sonOff, this.sonAt, k);
+      r.root.rotation.set(0, T < SON.walkIn ? Math.PI / 2 : -Math.PI / 2, 0);
       const swing = Math.sin(t * 12) * 0.6;
       r.legL.rotation.x = swing;
       r.legR.rotation.x = -swing;
@@ -1449,7 +1480,7 @@ export class HomeOffice {
       r.body.rotation.set(0, 0, 0);
     } else {
       const u = T - SON.walkIn;
-      r.root.position.copy(SON_AT);
+      r.root.position.copy(this.sonAt);
       r.root.rotation.set(0, SON_FACE, 0);
       r.legL.rotation.x = r.legR.rotation.x = 0;
       r.kneeL.rotation.x = r.kneeR.rotation.x = 0.05;
@@ -1463,7 +1494,8 @@ export class HomeOffice {
       r.body.rotation.set(0.05 + Math.sin(t * 3) * 0.03, 0, 0);
     }
     son.bubble.visible = !walking;
-    son.bubble.position.set(SON_AT.x - 0.05, 1.5, SON_AT.z);
+    son.bubble.position.copy(this.sonBubble);
+    son.bubble.scale.set(this.sonBubbleSize.x, this.sonBubbleSize.y, 1);
   }
 
   /** Whether this room and occupant have what a signature move or extra break needs. */
@@ -1787,6 +1819,9 @@ export class HomeOffice {
       // turns to the boy while he stands there, nods along
       const near = Math.min(1, this.sonT / SON.walkIn, (SON_TOTAL - this.sonT) / SON.walkOut);
       yaw = SON_TURN * near;
+      // stops typing and listens
+      Object.assign(L, mixPose(L, SON_LISTEN, near));
+      Object.assign(R, mixPose(R, SON_LISTEN, near));
       lean += 0.04 * near + Math.sin(t * 2.4) * 0.015 * near;
     }
     const tilt = recl;
