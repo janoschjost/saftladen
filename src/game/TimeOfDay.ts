@@ -17,6 +17,12 @@ const ANCHORS: ReadonlyArray<readonly [number, number]> = [
   [1, 24],
 ];
 
+/** Clock speeds the player can pick: 1x = one day in `CYCLE_SECONDS`. */
+export const SPEEDS = [1, 10, 25] as const;
+export type Speed = (typeof SPEEDS)[number];
+/** Days of the week, Monday first (`TimeOfDay.weekday` indexes this). */
+export const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'] as const;
+
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 const smooth = (a: number, b: number, x: number) => {
   const t = clamp01((x - a) / (b - a));
@@ -51,8 +57,22 @@ export function cycleOf(hour: number): number {
 export class TimeOfDay {
   /** 0..1 position in the cycle (0 = midnight); the slider moves this */
   cycle = START;
-  /** the clock advances by itself */
+  /** the clock advances by itself (false = paused) */
   auto = true;
+  /** dev URLs (`?time=`): the clock stands still at the given hour while the game runs on; a click on a speed button lets it go */
+  pinned = false;
+  /** how fast the game runs while `auto` (one of SPEEDS); `Game` scales the time it hands to `update` and the simulation by it */
+  speed: Speed = 1;
+  /** game seconds per real second: 0 while paused, else `speed` */
+  get scale(): number {
+    return this.auto ? this.speed : 0;
+  }
+  /** 0 = Monday .. 6 = Sunday; moves on at midnight */
+  weekday = 0;
+  /** counts the player's jumps in time (dial, slider, weekday): Presence then puts everybody where the new time wants them */
+  jumps = 0;
+  /** counts the days the player picked: Presence rolls fresh plans for each */
+  picks = 0;
   hour = 0;
   /** 0 = dark night .. 1 = full daylight */
   day = 1;
@@ -67,7 +87,33 @@ export class TimeOfDay {
   }
 
   update(dt: number): void {
-    if (this.auto) this.setCycle(this.cycle + dt / CYCLE_SECONDS);
+    if (!this.auto || this.pinned) return;
+    const c = this.cycle + dt / CYCLE_SECONDS; // `dt` is game time: Game already scaled it by `speed`
+    if (c >= 1) this.weekday = (this.weekday + 1) % WEEKDAYS.length; // past midnight: the next day
+    this.setCycle(c);
+  }
+
+  /** The player jumps to another time of the same day: light and night state follow at once, people via `jumps`. */
+  jumpTo(cycle: number): void {
+    this.setCycle(cycle);
+    this.night = this.day < 0.45;
+    this.jumps++;
+  }
+
+  /** Clock hour (0..24) -> `jumpTo`. */
+  jumpToHour(hour: number): void {
+    this.jumpTo(cycleOf(((hour % 24) + 24) % 24)); // hours wrap around midnight
+  }
+
+  /** The player picks a day of the week: a fresh working day at the same time of day. */
+  pickWeekday(day: number): void {
+    this.weekday = ((Math.round(day) % WEEKDAYS.length) + WEEKDAYS.length) % WEEKDAYS.length;
+    this.picks++;
+    this.jumps++;
+  }
+
+  get weekdayName(): string {
+    return WEEKDAYS[this.weekday];
   }
 
   setCycle(c: number): void {
@@ -76,8 +122,9 @@ export class TimeOfDay {
   }
 
   get clock(): string {
-    const h = Math.floor(this.hour) % 24;
-    const m = Math.floor((this.hour % 1) * 60);
+    const total = Math.floor(this.hour * 60 + 1e-6); // a jump to 23:00 lands a hair below it
+    const h = Math.floor(total / 60) % 24;
+    const m = total % 60;
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   }
 

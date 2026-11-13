@@ -1,6 +1,7 @@
 import { devEvents } from './DevEvents';
 import type { Game } from './Game';
 import { getSeed, setSeed } from './rng';
+import { cycleOf } from './TimeOfDay';
 
 /**
  * Dev only, URL params for testing:
@@ -35,16 +36,8 @@ export function applyDebugParams(game: Game): void {
 
   const time = Number(q.get('time'));
   if (q.has('time') && Number.isFinite(time)) {
-    const tod = g.tod;
-    tod.auto = false;
-    let lo = 0;
-    let hi = 1;
-    for (let i = 0; i < 40; i++) {
-      const mid = (lo + hi) / 2;
-      tod.setCycle(mid);
-      if (tod.hour < time) lo = mid;
-      else hi = mid;
-    }
+    g.tod.pinned = true;
+    g.tod.setCycle(cycleOf(time));
   }
   if (q.has('day')) game.startDay(q.get('day') || 'jan-hasler');
   for (const id of q.getAll('event')) runEvent(game, id);

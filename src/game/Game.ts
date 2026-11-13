@@ -175,7 +175,7 @@ export class Game {
   private ring: THREE.Mesh;
   private savedSeats: Record<string, number> = {};
   private acc = 0;
-  /** game time in seconds: wall time, but capped per frame, taken along by `advance` and standing still while frozen. Poses and bubbles animate on it. */
+  /** game time in seconds: wall time times the clock speed, capped per frame, taken along by `advance` and standing still while paused or frozen. Poses and bubbles animate on it. */
   private clock = 0;
   private last = performance.now();
 
@@ -183,7 +183,7 @@ export class Game {
   readonly tickers = new Set<(dt: number) => void>();
 
   private draw: boolean;
-  /** e2e tests: time stands still between frames, only `advance` moves the game on. Nothing changes between two steps of a test. */
+  /** e2e tests: time stands still between frames (like pause), only `advance` moves the game on. Nothing changes between two steps of a test. */
   private frozen: boolean;
 
   /**
@@ -224,6 +224,7 @@ export class Game {
       prepare: (m) => (this.editor = new RoomEditor(this.scene, m.items, WORLD, () => this.sim.relayout())),
     });
     const model = this.model;
+    if (Number.isInteger(saved.weekday) && saved.weekday! >= 0 && saved.weekday! < 7) this.tod.weekday = saved.weekday!;
     this.timeControl = new TimeControl(this.tod);
     applySky(this.tod, this.sky);
     this.deskLights = new DeskLights(this.scene, this.office, this.tod);
@@ -578,11 +579,17 @@ export class Game {
   }
 
   private frame(now: number): void {
-    const dt = this.frozen ? 0 : Math.min(MAX_FRAME, (now - this.last) / 1000);
+    const dt = Math.min(MAX_FRAME, (now - this.last) / 1000);
     this.last = now;
-    this.step(dt);
+    // pause stops the whole game (and so does `frozen`, for the tests); 10x / 25x run the whole office faster
+    this.step(this.frozen ? 0 : dt, this.timeScale());
     this.render(this.acc / STEP);
     this.renderFeeds();
+  }
+
+  /** Game seconds per real second the player picked: 0 while paused, else 1x / 10x / 25x. */
+  private timeScale(): number {
+    return this.tod.scale;
   }
 
   /**
@@ -590,17 +597,28 @@ export class Game {
    * it, so a wait takes the same number of steps however slow the machine renders.
    */
   advance(seconds: number): void {
-    for (let i = Math.round(seconds / STEP); i > 0; i--) this.step(STEP);
+    for (let i = Math.round(seconds / STEP); i > 0; i--) this.step(STEP); // ignores pause and speed: a test waits in game seconds
   }
 
-  /** Everything a frame does except drawing it. */
-  private step(dt: number): void {
+  /**
+   * Everything a frame does except drawing it. `dt` is real time (camera, panels), `speed` how many game seconds pass
+   * per real second: the world runs in chunks of at most one slow frame, so 25x behaves like 25 ordinary frames.
+   */
+  private step(dt: number, speed = 1): void {
+    const game = dt * speed;
+    const chunks = Math.max(1, Math.ceil(game / MAX_FRAME));
+    for (let i = 0; i < chunks; i++) this.stepWorld(game / chunks);
+    this.stepView(dt);
+  }
+
+  /** The part of a step that is game time: stands still while paused, runs faster at 10x / 25x. */
+  private stepWorld(dt: number): void {
     this.acc += dt;
     this.clock += dt;
     this.updateDay(dt);
     this.updateSteer(dt);
-    this.updateFollow(dt);
     this.updateAction(dt);
+    this.sim.presence.applyJump(); // a jump made while paused: nothing steps then
     while (this.acc >= STEP) {
       this.sim.step(STEP);
       setTvMode(this.meetingRoom.tv);
@@ -612,22 +630,27 @@ export class Game {
     this.updateSpawnFx(dt);
     this.updateWeather(dt);
     this.updateArrivals();
-    if ((this.persistTimer -= dt) <= 0) {
-      this.persistTimer = 2;
-      this.saveSession();
-    }
     this.deskLights.update(dt);
     this.updateAlterEgos(dt);
     this.meetingLight.update(dt);
     this.coatRacks.update();
     this.office.updateScreens(dt);
-    this.timeControl.sync();
-    this.views.update(dt);
     this.updateHomes(dt);
     this.updateDoor(dt);
+    if (dt > 0) for (const tick of this.tickers) tick(dt); // not on a frame while time stands still
+  }
+
+  /** The part of a step that follows real time: camera, panels, the persist timer. Works while paused. */
+  private stepView(dt: number): void {
+    this.updateFollow(dt);
+    this.timeControl.sync();
+    this.views.update(dt);
     this.updateAim();
     if (this.reply && (this.reply.t -= dt) <= 0) this.reply = null;
-    if (dt > 0) for (const tick of this.tickers) tick(dt); // not on a frame while time stands still
+    if ((this.persistTimer -= dt) <= 0) {
+      this.persistTimer = 2;
+      this.saveSession();
+    }
   }
 
   /** Materialise show for everybody who arrives or leaves. */
@@ -679,9 +702,9 @@ export class Game {
     }
   }
 
-  /** Remembers time of day, camera and selection for the next visit. */
+  /** Remembers time of day, weekday, camera and selection for the next visit. */
   private saveSession(): void {
-    saveState({ cycle: this.tod.cycle, view: this.views.snapshot(), selected: this.selected instanceof Person ? this.selected.id : undefined });
+    saveState({ cycle: this.tod.cycle, weekday: this.tod.weekday, view: this.views.snapshot(), selected: this.selected instanceof Person ? this.selected.id : undefined });
   }
 
   /** Showers: rain streaks and a greyer, darker light. */
@@ -2124,7 +2147,7 @@ export class Game {
       const home = absent.filter((p) => p.awayKind === 'home').length;
       const inside = this.people.filter((p) => p.presence === 'in').length;
       const pets = this.walkers.filter((w) => w instanceof Dog && !w.away).length;
-      const meta = [this.tod.clock, strings.presence.count.inOffice(inside)];
+      const meta = [strings.presence.count.inOffice(inside)];
       if (this.weather.rain > 0.3) meta.push('Regen');
       if (this.presence.lunch) meta.push('Mittagspause');
       if (absent.length) {

@@ -91,6 +91,9 @@ export class Presence {
   private nightHomers = new Set<Person>();
   /** people the player moved by hand outside their hours: the schedule leaves them alone for the rest of the day */
   private overridden = new Set<Person>();
+  /** the clock's `jumps` / `picks` already handled */
+  private seenJumps: number;
+  private seenPicks: number;
 
   constructor(
     private people: readonly Person[],
@@ -99,6 +102,8 @@ export class Presence {
   ) {
     this.rollDay();
     this.lastHour = this.workHour;
+    this.seenJumps = tod.jumps;
+    this.seenPicks = tod.picks;
   }
 
   /** Clock hour of the running working day: 04:00 .. 28:00 (hours after midnight count on). */
@@ -463,8 +468,43 @@ export class Presence {
     this.onDuty = onDuty;
   }
 
+  /**
+   * The player jumped in time (picked another day: fresh plans first). Lunch is settled for the new hour, who is now
+   * off duty and free vanishes at once (busy people follow as soon as they are free), and who is now on duty walks
+   * in through the door one after the other (followPlans, right on the next tick).
+   */
+  private jump(newDay: boolean): void {
+    if (newDay) this.rollDay();
+    const hour = (this.lastHour = this.workHour);
+    for (const p of this.people) {
+      const plan = this.planOf(p);
+      plan.lunched = hour >= plan.lunch + 0.5;
+      if (this.overridden.has(p)) continue;
+      const duty = this.duty(p, hour);
+      if (duty === 'duty' || !this.free(p)) continue;
+      if (duty === 'home') {
+        p.homeVariant = this.freeVariant(p);
+        this.nightHomers.add(p);
+      }
+      this.lunchers.delete(p);
+      p.startAway(duty, OFF);
+      for (const d of p.pets ?? []) d.sendAway();
+    }
+    this.checkTimer = 0;
+  }
+
+  /** The player jumped in time since last looked: puts everybody where the new time wants them. `Game` calls it every frame too, so a jump while paused applies at once. */
+  applyJump(): void {
+    if (this.tod.jumps === this.seenJumps) return;
+    const newDay = this.tod.picks !== this.seenPicks;
+    this.seenJumps = this.tod.jumps;
+    this.seenPicks = this.tod.picks;
+    this.jump(newDay);
+  }
+
   update(dt: number, nav: NavGrid): void {
     this.clock += dt;
+    this.applyJump();
     const hour = this.workHour;
     if (hour < this.lastHour - 20) this.rollDay(); // past 04:00 (a smaller step back is the player moving the clock)
     this.lastHour = hour;
