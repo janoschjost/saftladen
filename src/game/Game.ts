@@ -33,7 +33,6 @@ import { devEvents } from './DevEvents';
 import { DeskLights } from './DeskLights';
 import type { Desk } from './Office';
 import { RoomLight } from './RoomLight';
-import { CoatRacks } from './CoatRacks';
 import { Easter } from './Easter';
 import { Dog } from './Dog';
 import { Christmas } from './Christmas';
@@ -124,7 +123,6 @@ export class Game {
   private sky!: SkyRig;
   private deskLights!: DeskLights;
   private meetingLight!: RoomLight;
-  private coatRacks!: CoatRacks;
   private easter!: Easter;
   private timeControl!: TimeControl;
   private feeds = new Feeds();
@@ -228,6 +226,8 @@ export class Game {
       homes: location.hash.includes('homes'),
       // the editor puts the furniture where the saved layout wants it, before anything is derived from its position
       portrait: petPortrait,
+      // the interior doors open for the player's eye in the walk view too
+      doorsSee: () => (this.views?.mode === 'walk' ? [this.views.eye] : []),
       // disco: everybody who is up stops and dances on the spot; an angry person stands and fumes
       stands: (w) => (this.easter.disco > 0.3 && w instanceof Person && w.inOffice && w.sit < 0.05 && !w.held && !w.controlled) || this.easter.angry?.who === w,
       prepare: (m) => (this.editor = new RoomEditor(this.scene, m.items, WORLD, () => this.sim.relayout())),
@@ -324,8 +324,6 @@ export class Game {
       onPreviews: (items) => (this.previews = items),
       onToggle: (open) => open && this.settings.setOpen(false),
     });
-    this.coatRacks = new CoatRacks(model.coatRacks, this.people);
-    this.coatRacks.update();
     Walker.animate = true; // from now on arrivals and departures get a show
     this.bind();
     this.resize();
@@ -651,7 +649,7 @@ export class Game {
     this.deskLights.update(dt);
     this.updateAlterEgos(dt);
     this.meetingLight.update(dt);
-    this.coatRacks.update();
+    this.sim.coatRacks.update(); // also while time stands still: a presence change made then (clock jump, dev panel) shows at once
     this.office.updateScreens(dt);
     this.updateHomes(dt);
     this.updateDoor(dt);
@@ -2245,7 +2243,7 @@ export class Game {
     this.feeds.sync(entries);
   }
 
-  /** Each wing of the front door swings open on its own while somebody is on the way through its lane. */
+  /** Each wing of the front door swings open on its own while somebody is on the way through its lane (the interior doors: `Sim.step`). */
   private updateDoor(dt: number): void {
     for (const lane of DOOR_LANES) {
       const near = this.walkers.some((w) => !w.away && Math.abs(w.pos.x - lane.gate.x) < 0.6 && Math.abs(w.pos.z - lane.gate.z) < 1.4);
@@ -2253,10 +2251,6 @@ export class Game {
       this.doorOpen[k] += ((near ? 1 : 0) - this.doorOpen[k]) * Math.min(1, dt * 6);
       this.entrance[k].rotation.y = (k === 'left' ? -1 : 1) * this.doorOpen[k] * 1.7;
     }
-    this.doors.update(
-      dt,
-      [...this.walkers.filter((w) => !w.away).map((w) => w.pos), ...(this.views.mode === 'walk' ? [this.views.eye] : [])],
-    );
   }
 
   /** Draws the home office scenes into the main canvas, behind the (transparent) feed tiles. */

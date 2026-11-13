@@ -220,28 +220,6 @@ test('actions.camera + actions.handback: Drucken flies to Orbit and follows the 
   await until(page, (g) => !g.views.flying && Math.abs(g.views.orbitShot.dist - g.views.overviewShot().dist) < 0.5, undefined, 60_000);
 });
 
-test('place.meeting: people called out of their chair stand up and walk to the room, nobody glides sitting', async ({ page }) => {
-  await openGame(page);
-  // watch: somebody on the way to the room (approach) and moving must not have the legs folded
-  await page.evaluate(() => {
-    const w = window as unknown as { __game: any; __gliding: string[]; __walked: number };
-    w.__gliding = [];
-    w.__walked = 0;
-    // every simulation step
-    w.__game.tickers.add(() => {
-      for (const p of w.__game.people) {
-        if (p.meetPhase !== 'approach' || p.moving <= 0.5) continue;
-        w.__walked++;
-        if (p.sit > 0.3) w.__gliding.push(`${p.id} sit=${p.sit.toFixed(2)}`);
-      }
-    });
-  });
-  await read(page, (g) => g.startAction('meeting'));
-  // enough samples of people walking to the room
-  await until(page, () => (window as unknown as { __walked: number }).__walked > 100, undefined, 60_000);
-  expect(await page.evaluate(() => (window as unknown as { __gliding: string[] }).__gliding)).toEqual([]);
-});
-
 test('actions.fail: an action that cannot run says so and leaves the camera alone', async ({ page }) => {
   // the pod is already taken
   await openGame(page, 'iso', undefined, 'event=pod');

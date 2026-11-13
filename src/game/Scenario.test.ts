@@ -25,8 +25,7 @@ function advance(sim: Sim, steps: number, stop: () => boolean = () => false): vo
 const at = (v: { x: number; z: number }): string => `${v.x.toFixed(3)},${v.z.toFixed(3)}`;
 const places = (people: readonly Person[]) => new Map(people.map((p) => [p.id, `${p.presence}@${at(p.pos)}`]));
 
-// Minutes of game time for 43 people: seconds of wall time on a CI runner, more than Vitest's default 5 s
-describe('dev.scene', { timeout: 60_000 }, () => {
+describe('dev.scene', () => {
   it('dev.scene: somebody put at a desk and pinned still sits and works there after 5 minutes, released they move on', () => {
     const sim = office();
     const a = sim.people.find((p) => p.inOffice && !p.working)!;

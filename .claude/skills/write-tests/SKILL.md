@@ -57,6 +57,8 @@ Rules:
 
 Its waits assumed the game runs by itself. Change the import to `./game`; replace `expect.poll` / `toPass` / `setInterval` on game state with `until` (or `g.tickers`); drop hand-written `page.goto('/?test…')` in favour of `openGame`; remove waits that were only there "because CI is slow".
 
+Since #116 the simulation is tested in Vitest. A test in a rebased spec that only watches the simulation (no key, click, hash, panel, DOM or URL) moves to a `*.test.ts` on `Sim`, its scene set with `sim.scenario` (pattern: `src/game/places.test.ts`). A modify/delete conflict on a test that moved there is resolved by porting the change to the Vitest version, never by bringing the Playwright test back.
+
 ## When a test fails
 
 - "not reached within N game seconds": the state never came. Read the predicate in the message; the game ran N seconds of simulation, a slow machine is not the reason. Usually the scene was not set (somebody at the printer, the person not in the office).

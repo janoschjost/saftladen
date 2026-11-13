@@ -5,6 +5,7 @@ import { buildCharacter } from '../render/characterBuilder';
 import { addKurt } from '../render/kurtBuilder';
 import { buildDog, type DogRig } from '../render/dogBuilder';
 import { HOME_COUNT } from '../render/homeOffice';
+import { CoatRacks } from './CoatRacks';
 import { buildOffice, CORRIDOR_POINT, type OfficeModel } from '../render/officeModel';
 import { NAV_CELL, WORLD } from '../render/World';
 import { Kitchen } from './Coffee';
@@ -44,6 +45,8 @@ export interface SimOptions {
   portrait?: (key: string, build: () => DogRig) => string | null;
   /** somebody who stands still this step instead of acting (the view's disco and angry easter eggs) */
   stands?: (w: Walker) => boolean;
+  /** where else somebody stands whom the interior doors open for (the player's eye in the walk view) */
+  doorsSee?: () => Array<{ x: number; z: number }>;
   /** called with the built office before anything is derived from where its furniture stands (the room editor moves it) */
   prepare?: (model: OfficeModel) => void;
 }
@@ -79,10 +82,14 @@ export class Sim {
   /** states a scene instead of waiting for one: for tests and dev tools */
   readonly scenario = new Scenario(this);
   private stands: (w: Walker) => boolean;
+  private doorsSee: () => Array<{ x: number; z: number }>;
+  /** coats on the stands follow who is in the office */
+  readonly coatRacks: CoatRacks;
 
-  constructor({ scene = new THREE.Scene(), cycle, seats = {}, homes = false, portrait = () => null, stands = () => false, prepare }: SimOptions = {}) {
+  constructor({ scene = new THREE.Scene(), cycle, seats = {}, homes = false, portrait = () => null, stands = () => false, doorsSee = () => [], prepare }: SimOptions = {}) {
     this.scene = scene;
     this.stands = stands;
+    this.doorsSee = doorsSee;
     resetDoorLanes();
     if (cycle !== undefined) {
       this.tod.setCycle(cycle);
@@ -104,9 +111,11 @@ export class Sim {
     this.toilets.onOccupied = (cabin, occupied) => model.toilets.cabins[this.toilets.cabins.indexOf(cabin)]?.sign.color.setHex(occupied ? 0xe0342c : 0x3fbf5a);
     this.spawn(seats, portrait);
     this.pets = this.walkers.filter((w): w is Dog => w instanceof Dog);
+    this.coatRacks = new CoatRacks(model.coatRacks, this.people);
     this.presence = new Presence(this.people, this.tod, this.weather);
     this.presence.seed(homes);
     for (const pet of this.pets) if (pet.owner.presence === 'out') pet.sendAway(); // pets of people who start away
+    this.coatRacks.update();
   }
 
   /** Walls and furniture as they stand now become what nobody can walk through. */
@@ -249,6 +258,8 @@ export class Sim {
     this.kitchen.update(dt, this.people, this.nav);
     this.phoneBooth.update(dt, this.people, this.nav);
     this.toilets.update(dt, this.people, this.nav);
+    this.doors.update(dt, [...this.walkers.filter((w) => !w.away).map((w) => w.pos), ...this.doorsSee()]);
+    this.coatRacks.update();
     this.separate();
     this.separate();
     this.separate();
