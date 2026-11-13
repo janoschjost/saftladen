@@ -5,7 +5,7 @@ This is the list of what must still be in the game. Each line is one behavior a 
 Rules:
 - Every PR that adds or changes a feature updates this file in the same PR, ending the line with its issue `(#N)`.
 - Never delete a line unless an issue asks for that feature to go. In that case move it to **Removed on purpose** and name the issue.
-- The `id` in front of each line is stable. Tests reference it (e.g. `it('presence.lunch-rush', …)`). Once a test guards a line, add the test file after the path (`test:` for Vitest, `e2e:` for Playwright).
+- The `id` in front of each line is stable. A test's title starts with the exact id of the line it guards (e.g. `it('presence.lunch: …', …)`, several ids joined with ` + `), so `grep` finds it. Name the test file after the path (`test:` for Vitest, `e2e:` for Playwright).
 - `url:` is where a dev sees the line in the running app: a path for the dev server, without host and port (`/?seed=1&time=11&event=coffee`). Use `?seed=1&time=…` for a repeatable start and `?event=<dev event id>` (`dev.list()` in the console) for a state the sim only reaches by chance; register a dev event if none fits. Add one to every line you add or change where a URL can show it. `e2e/feature-urls.spec.ts` opens each of them.
 
 ## Views and camera
@@ -70,7 +70,7 @@ Rules:
 - `presence.strings` All presence wording (leave vs return labels, roster status, action buttons) comes from one table; going out and coming back have separate labels — `src/i18n/strings.ts` (#8)
 - `presence.manual` Sending someone out/home by hand keeps them away until called back (max 10 min); hand-moved people are left alone by the night shift — `src/game/Presence.ts`
 - `presence.homes-hash` `#homes` fills all 8 home offices at start — `src/game/Presence.ts`, e2e: `e2e/office.spec.ts`, url: `/#homes` (#34, #38)
-- `presence.roster` Away roster (in the Leute dock): out / on the way / "zurück in …" countdown / Homeoffice; clicking a home-office person opens their feed — `src/ui/Roster.ts`, url: `/?seed=1&time=11&event=home#homes` (#38, #98)
+- `presence.roster` Away roster (in the Leute dock): out / on the way / "zurück in …" countdown / Homeoffice; clicking a home-office person opens their feed — `src/ui/Roster.ts`, url: `/?seed=1&time=11#homes` (#38, #98, #107)
 
 ## Desks and work
 - `desk.ownership` Every model desk is a numbered workplace with one owner; the owner asks a squatter to leave; others take a free desk nearby, preferring unowned ones — `src/game/Office.ts`, test: `src/game/Office.test.ts`
@@ -131,7 +131,7 @@ Rules:
 - `pet.player` The player's person can pet a pet — `src/game/Person.ts`
 - `pet.pose-reset` Petting leaves no distortion: rig resets to neutral each frame, bends at the hips, pose ends when picked up or pulled into a chat — `src/game/Person.ts`, `src/game/Game.ts` (#1)
 - `pet.crouch` Petting is a real crouch: knees bend and hips sink (deeper for a cat than a dog), only a slight spine lean, head down at the animal, one hand strokes; eases in and out over ~0.4 s — `src/game/petPose.ts`, `src/game/Game.ts`, test: `src/game/petPose.test.ts`, e2e: `e2e/events.spec.ts`, url: `/?seed=1&time=11&event=pet-dog` (#2)
-- `pet.crouch-cat` Same crouch for a cat, deeper than for a dog — `src/game/petPose.ts`, e2e: `e2e/events.spec.ts`, url: `/?seed=2&time=11&event=pet-cat` (#2)
+- `pet.crouch-cat` Same crouch for a cat, deeper than for a dog — `src/game/petPose.ts`, e2e: `e2e/events.spec.ts`, url: `/?seed=3&time=11&event=pet-cat` (#2, #107)
 - `pet.portrait` Pets get rendered low-poly head portraits — `src/render/petPortrait.ts`
 
 ## Time, weather, lights
@@ -208,7 +208,7 @@ Rules:
 ## Dev tools
 - `dev.events` Dev events registry + panel (settings → Dev-Events, or backtick; meetings 2/4/6, errand, home office, vape, printer, rain …) with status / "nicht möglich"; console `dev.list()`, `dev.trigger(id)` — `src/game/DevEvents.ts`, `src/ui/DevPanel.ts`, e2e: `e2e/hud.spec.ts`, url: `/?seed=1&time=11` (#98)
 - `dev.force` Dev panel "Leute": pick a person and send them to their desk, on an errand, to the home office, into a meeting, on a coffee break or to a free WC cabin, once; the sim takes over afterwards. Not possible (person away or busy, already at the desk, meeting room or kitchen taken, no free desk, both WC cabins taken) → "nicht möglich", nothing changes. Console / `?test` hook: `dev.forceState(personId, state)` with `desk`, `errand`, `home`, `meeting`, `break`, `wc`. Dev build only (not in the production bundle); open the panel with `` ` `` — `src/game/forceState.ts`, `src/game/DevForce.ts`, `src/ui/DevPeople.ts`, test: `src/game/forceState.test.ts`, `e2e/force-state.spec.ts`, url: `/?seed=1&time=11` (#88, #94)
-- `dev.params` Dev-only query params: `?day[=id]`, `?snack[=id]`, `&time=14`, `&follow`, `?seed=<n>`, `?event=<id>` (runs a dev event at start, retried until it can run; unknown id warns), `?action=<id>` (starts an Aktionen card or any dev event like the sheet does, camera included; retried), `?test`; any of them exposes `window.__game` (the read-only hook of the Playwright tests; not in the production bundle) — `src/game/debugParams.ts`, e2e: `e2e/game.ts`, `e2e/events.spec.ts`, url: `/?seed=1&time=11&event=meeting-room` (#34, #38, #98)
+- `dev.params` Dev-only query params: `?day[=id]`, `?snack[=id]`, `&time=14`, `&follow`, `?seed=<n>`, `?event=<id>` (runs a dev event at start, retried until it can run; unknown id warns), `?action=<id>` (starts an Aktionen card or any dev event like the sheet does, camera included; retried), `?test` (for the Playwright tests: time stands still until `advance(seconds)` and the office is not drawn; `?test&draw` draws it); any of them exposes `window.__game` (the hook of the Playwright tests: read the state, fast-forward with `advance(seconds)`; not in the production bundle). The retries of `?event`, `?action` and `?snack` follow game time — `src/game/debugParams.ts`, e2e: `e2e/game.ts`, `e2e/events.spec.ts`, url: `/?seed=1&time=11&event=meeting-room` (#34, #38, #98, #107)
 - `dev.seed` One seedable random source for the simulation: same `?seed` → same start (plans, speeds, who is out); the console logs each page's seed. Per-frame visuals use their own stream — `src/game/rng.ts`, test: `src/game/rng.test.ts`, `src/game/Presence.test.ts`, url: `/?seed=1&time=11` (#29, #38)
 - `ui.panels` Side panels (seats, dev, editor) close each other; the settings popover makes room when one of its links opens a panel; dock panels (feeds, roster) behave as an accordion, honour reduced motion — `src/ui/exclusive.ts`, `src/ui/collapsible.ts`, `src/ui/Settings.ts`, e2e: `e2e/hud.spec.ts`, url: `/?seed=1&time=11` (#98)
 

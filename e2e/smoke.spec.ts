@@ -1,14 +1,29 @@
-import { expect, test } from '@playwright/test';
-import { openGame, read, until } from './game';
+import { expect, openGame, read, test, until } from './game';
 
 test('load', async ({ page }) => {
   const errors = await openGame(page);
   await expect(page.locator('#stage canvas')).toBeVisible();
   await expect(page.locator('body')).not.toHaveClass(/is-loading/);
   expect(await read(page, (g) => g.people.length)).toBeGreaterThan(10);
-  // the loop runs: the simulation advances
-  const t0 = await read(page, (g) => g.last);
-  await until(page, (g, t) => g.last > t, t0);
+  // frames come, but under ?test time stands still between them
+  const t0 = await read(page, (g) => ({ last: g.last, clock: g.clock }));
+  await expect.poll(() => read(page, (g) => g.last)).toBeGreaterThan(t0.last + 100);
+  expect(await read(page, (g) => g.clock)).toBe(t0.clock);
+  // unfrozen, as in the real game, the loop itself moves the game on with the clock on the wall
+  await read(page, (g) => void (g.frozen = false));
+  await expect.poll(() => read(page, (g) => g.clock)).toBeGreaterThan(t0.clock + 0.2);
+  expect(errors).toEqual([]);
+});
+
+// The only test that draws (`&draw`), the way players see it, shadows and home office feeds included. Slow in
+// software WebGL, so on a small canvas and for a few frames. A shader that no longer compiles fails here.
+test('load: the office is drawn without errors', async ({ page }) => {
+  await page.setViewportSize({ width: 480, height: 270 });
+  const errors = await openGame(page, 'homes', undefined, 'draw');
+  const r = await read(page, (g) => ({ shadows: g.renderer.shadowMap.enabled, programs: g.renderer.info.programs.length, frame: g.renderer.info.render.frame }));
+  expect(r.shadows).toBe(true);
+  expect(r.programs).toBeGreaterThan(5);
+  await expect.poll(() => read(page, (g) => g.renderer.info.render.frame), { timeout: 60_000 }).toBeGreaterThan(r.frame + 2);
   expect(errors).toEqual([]);
 });
 

@@ -33,13 +33,14 @@ jobs:
       - run: npm run build
       - run: npm test --if-present
 
-  # Playwright costs ~5 Actions minutes per run: only on PRs labeled `e2e` (runs again on each push while the label
-  # is on) or when started by hand. Locally `npm run test:e2e` is mandatory before every PR (AGENTS.md).
+  # Playwright costs Actions minutes: on PRs labeled `e2e` (runs again on each push while the label is on; every PR
+  # gets the label before its merge, AGENTS.md), when started by hand, and on pushes to main as a safety net: the
+  # merge gate is a rule, not a GitHub setting (no branch protection on this plan). Locally `npm run test:e2e` is mandatory before every PR (AGENTS.md).
   e2e:
     name: E2E (Playwright)
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'e2e')
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'e2e')
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -50,17 +51,23 @@ jobs:
       - id: pw
         run: echo "version=$(npx playwright --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
       - id: cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-chromium-${{ steps.pw.outputs.version }}
       - if: steps.cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
+      # saved right away: a failed test run must not cost the next one the download
+      - if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ steps.pw.outputs.version }}
       - if: steps.cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
       - run: npm run test:e2e
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-traces
           path: test-results/

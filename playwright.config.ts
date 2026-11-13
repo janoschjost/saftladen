@@ -7,13 +7,20 @@ export default defineConfig({
   testDir: 'e2e',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: 0,
+  // CI: no trace on the first run (recording every test doubles the run on a 2-core runner). A failed test runs
+  // once more with a trace and fails the run either way. A test that fails the same way twice has its trace; one that
+  // passes the second time is flaky: its error context is uploaded, and locally every failure has a trace.
+  retries: process.env.CI ? 1 : 0,
+  failOnFlakyTests: !!process.env.CI,
+  // CI: stop and report before the job's own limit (ci.yml) cancels it and with it the upload of the traces
+  // (the run takes 4 to 6 minutes there: the same commit was measured at 3.7 and at 5.9)
+  globalTimeout: process.env.CI ? 12 * 60_000 : undefined,
   workers: process.env.CI ? 2 : undefined,
   reporter: process.env.CI ? [['github'], ['list']] : 'list',
-  timeout: 120_000,
+  timeout: 60_000,
   use: {
     baseURL: `http://localhost:${port}`,
-    trace: 'retain-on-failure',
+    trace: process.env.CI ? 'on-first-retry' : 'retain-on-failure',
   },
   projects: [
     {
@@ -22,8 +29,10 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], launchOptions: { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] } },
     },
   ],
+  // a bundle, not the dev server: that one sends 130 modules per page, most of a test's time on a CI runner.
+  // Mode e2e keeps the dev params and the test hook in (src/main.ts).
   webServer: {
-    command: `npx vite --port ${port} --strictPort`,
+    command: `npx vite build --mode e2e --outDir dist-e2e --logLevel warn && npx vite preview --outDir dist-e2e --port ${port} --strictPort`,
     url: `http://localhost:${port}`,
     reuseExistingServer: false,
     timeout: 60_000,

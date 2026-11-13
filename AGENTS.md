@@ -19,11 +19,8 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
    `npm run dev` in a worktree picks the next free port from 5174 (the main checkout keeps 5173).
 4. **Implement.** Read the issue and all of its comments. Follow `README.md` and the existing code. Keep the change scoped to the issue.
 5. **Done means:**
-   - `npm run build` passes. CI (`.github/workflows/ci.yml`) runs build and Vitest on every PR; a red check is not done. The e2e tests run on CI only with the `e2e` label (~5 Actions minutes per run), so run them locally and note the result in the PR body. Add the label (`gh pr edit --add-label e2e`) only when the PR changes the e2e setup itself: `e2e/`, `playwright.config.ts`, the `?test` hook or the CI workflow. Otherwise leave it to the reviewer.
-   - `npm test` and `npm run test:e2e` pass, and new or changed behavior has a test named after the `FEATURES.md` id:
-     - logic → Vitest, `*.test.ts` next to the code. Logic a test needs is pulled apart from rendering; randomness comes from `src/game/rng.ts` (`setSeed` in tests), never `Math.random()`.
-     - interactions and UI (keys, hashes, panels, parts working together) → Playwright, `e2e/*.spec.ts`, reading the game through the `?test` hook (see README).
-     - purely visual changes → checked in the browser.
+   - `npm run build` passes. CI (`.github/workflows/ci.yml`) runs build and Vitest on every PR; a red check is not done. The e2e tests run on CI only with the `e2e` label (Actions minutes are limited), so run them locally and note the result in the PR body. A failing local run is not done, whatever the load on the machine: the waits count game time, not seconds. A test that also fails on `main` → say so in the PR body and link its issue (open one if there is none). Add the label (`gh pr edit --add-label e2e`) whenever the PR adds or changes a file under `e2e/`, `playwright.config.ts`, the `?test` hook or the CI workflow: a spec must have run on CI before it reaches `main`. Other PRs get it from the reviewer (`/review-pr`).
+   - `npm test` and `npm run test:e2e` pass, and new or changed behavior has a test. Which kind: **Writing tests** below; how: the `write-tests` skill.
    - Every criterion has been checked in the running app.
    - `FEATURES.md` is updated: add or change the lines for this issue, ending with `(#N)`. Every line you touched still works. Each line you add or change gets a `url:` where a URL can show it (see the rules at the top of `FEATURES.md`).
    - The diff has been through one pass of `/simplify` and one of `/code-review` (medium), in that order, both limited to this branch's diff:
@@ -34,6 +31,7 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
 
      Docs-only changes skip this.
 6. **PR.** Rebase first. On conflicts keep both sides' behavior, never just yours, then re-check the affected `FEATURES.md` lines.
+   A rebase also brings in the rules as they are on `main` now. After every rebase read what changed in them (`git diff ORIG_HEAD HEAD --stat -- AGENTS.md README.md .claude/skills e2e/game.ts playwright.config.ts`) and bring the branch's own work in line: a test written the old way is rewritten, a new check (`npm run …`) is run. The branch follows the rules of the `main` it lands on, not of the day it was started.
    ```sh
    git fetch origin && git rebase origin/main && npm run build && npm test && npm run test:e2e
    git push -u origin HEAD
@@ -48,6 +46,21 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
    ```
    Red → read the log (`gh run view --log-failed`), fix in the worktree, push, watch again. Keep the worktree until the checks pass. "no checks reported" right after the push: wait a few seconds and retry. A PR that only changes `*.md` files gets no checks at all (`paths-ignore` in `ci.yml`), so remove its worktree right away.
 
+## Writing tests
+
+**Before writing or changing a test, load the `write-tests` skill** (`.claude/skills/write-tests/SKILL.md`). The rules that always hold:
+
+| What changes | Test | Where |
+|---|---|---|
+| Logic, and what the simulation does over time (who walks where, what a meeting, a door or a pet does) | Vitest | `*.test.ts` next to the code |
+| What only a browser can show: keys, clicks, hashes, panels, the DOM, a URL starting the right thing | Playwright | `e2e/*.spec.ts` |
+| Purely visual: no change to state, timing, input handling or URLs | by eye, in the running app | none |
+
+- A test's title starts with the exact `FEATURES.md` id it guards (a smoke test that guards no single line: `load`).
+- Playwright tests open the game with `?test`: time stands still until the test fast-forwards it, the office is not drawn, seed, hour and date are pinned. So never wait in wall time for the game (`waitForTimeout`, `expect.poll` or `toPass` on game state): use `until()`.
+- Import `test`, `expect` and the helpers from `e2e/game.ts`, never `test` from `@playwright/test`.
+- A failing test is not done, whatever the load on the machine.
+
 ## Review
 
 Devs review a PR in the running app with `/review-pr N`. It claims the PR (`in review`), so only one dev reviews it at a time. Findings go on the PR as review comments plus the label `changes requested`, which `/tackle-issues` fixes before new issues; findings outside the PR's issue become new issues.
@@ -59,7 +72,7 @@ Devs review a PR in the running app with `/review-pr N`. It claims the PR (`in r
 - Short, precise imperative subject in the style of `git log`. Add a body only when the subject alone isn't enough.
 - No `Co-Authored-By` line and no other attribution line in commit messages.
 - Commit, push and open PRs only on a branch, never on `main`.
-- Merge only when a dev explicitly tells you to, for that PR: checks green (or deliberately skipped), then `gh pr merge N --squash --delete-branch`. Never merge on your own initiative.
+- Merge only when a dev explicitly tells you to, for that PR, and only what was tested on top of `main`: the branch is up to date with `main` (rebase first if not) and `Build and test` and `E2E (Playwright)` are green on that last commit (label `e2e` makes the second one run). Then `gh pr merge N --squash --delete-branch`. Never merge on your own initiative, and not from the GitHub page without those checks: nothing there stops a red merge.
 
 ## FEATURES.md
 

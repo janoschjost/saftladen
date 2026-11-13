@@ -1,7 +1,6 @@
-import { expect, test } from '@playwright/test';
-import { freeStations, openGame, read, until } from './game';
+import { expect, freeStations, openGame, read, test, until } from './game';
 
-// Few page loads on purpose: CI renders in software and every openGame costs seconds.
+// Few page loads on purpose: every openGame costs seconds on a CI runner.
 
 test('hud.minimal + hud.modes: only title, gear, Aktionen and the key line; Rundgang has its own way back', async ({ page }) => {
   const errors = await openGame(page);
@@ -228,17 +227,18 @@ test('place.meeting: people called out of their chair stand up and walk to the r
     const w = window as unknown as { __game: any; __gliding: string[]; __walked: number };
     w.__gliding = [];
     w.__walked = 0;
-    setInterval(() => {
+    // every simulation step
+    w.__game.tickers.add(() => {
       for (const p of w.__game.people) {
         if (p.meetPhase !== 'approach' || p.moving <= 0.5) continue;
         w.__walked++;
         if (p.sit > 0.3) w.__gliding.push(`${p.id} sit=${p.sit.toFixed(2)}`);
       }
-    }, 50);
+    });
   });
   await read(page, (g) => g.startAction('meeting'));
-  // enough samples of people walking to the room (not the whole meeting: the sim is slow on CI)
-  await expect.poll(() => page.evaluate(() => (window as unknown as { __walked: number }).__walked), { timeout: 60_000 }).toBeGreaterThan(10);
+  // enough samples of people walking to the room
+  await until(page, () => (window as unknown as { __walked: number }).__walked > 100, undefined, 60_000);
   expect(await page.evaluate(() => (window as unknown as { __gliding: string[] }).__gliding)).toEqual([]);
 });
 

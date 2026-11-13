@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { openGame, read, until } from './game';
+import { expect, openGame, read, test, until } from './game';
 
 test('egg.konami', async ({ page }) => {
   await openGame(page);
@@ -38,6 +37,7 @@ test('day.menu + day.flow: play a day as Jan', async ({ page }) => {
 test('xmas.mode', async ({ page }) => {
   await openGame(page);
   const start = await read(page, (g) => g.xmas.on);
+  expect(start).toBe(false); // the tests run on a day in June (e2e/game.ts)
   await page.locator('#open-env').click();
   const toggle = page.locator('#setting-xmas');
   await expect(toggle).toBeVisible();
@@ -48,7 +48,7 @@ test('xmas.mode', async ({ page }) => {
   // snow fades in, decorations show
   await until(page, (g) => g.xmas.on && g.xmas.amount > 0.5 && g.xmas.decor.group.visible);
   await toggle.setChecked(false);
-  // snow starts fading out (the full fade takes minutes of real time when CI renders the snow in software)
+  // snow starts fading out
   const full = await read(page, (g) => g.xmas.amount);
   expect(await read(page, (g) => g.xmas.on)).toBe(false);
   await until(page, (g, a) => g.xmas.amount < a * 0.8, full, 60_000);
