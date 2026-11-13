@@ -966,7 +966,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       }
     };
     buildLeafLetters();
-    document.fonts?.load(FONT).then(() => {
+    void document.fonts?.load(FONT).then(() => {
       for (const [t, mask] of [[tex, true], [leafSrc, false]] as const) {
         const c = t.image as HTMLCanvasElement;
         draw(c.getContext('2d')!, c.width, c.height, mask);

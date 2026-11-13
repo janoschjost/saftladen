@@ -48,7 +48,6 @@ export async function openGame(page: Page, hash = '', hour = HOUR, query = '', s
 const inPage = (src: string) => new Function('g', 'a', `return (${src})(g, a)`);
 
 /** Reads from the game. The callback runs in the page: it sees `g`, the game with its private fields, and `arg`, nothing else of the spec. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function read<T, A = undefined>(page: Page, fn: (g: any, arg: A) => T, arg?: A): Promise<T> {
   return page.evaluate(([make, src, a]) => new Function(`return ${make}`)()(src)(window.__game, a), [inPage.toString(), fn.toString(), arg] as const) as Promise<T>;
 }
@@ -59,11 +58,9 @@ export function read<T, A = undefined>(page: Page, fn: (g: any, arg: A) => T, ar
  * between, as poses and overlays are set per frame. `timeout` is game time (ms), so a wait takes the same number of
  * simulation steps on a slow machine as on a fast one.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function until<T, A = undefined>(page: Page, fn: (g: any, arg: A) => T, arg?: A, timeout = 20_000): Promise<NonNullable<T>> {
   const reached = await page.evaluate(
     async ([make, src, a, seconds]) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const g = window.__game as any;
       const test = new Function(`return ${make}`)()(src);
       for (let t = 0; ; t += 0.5) {

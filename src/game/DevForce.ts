@@ -8,7 +8,6 @@ import type { Person } from './Person';
  * state by hand. Adds `dev.forceState(personId, state)` to the console / `?test` hook and the "Leute" section to the dev panel.
  */
 export function installForceState(game: Game): void {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const g = game as any;
   const people: (Person & ForcePerson)[] = g.people;
   const first = (p: Person) => p.member.name.split(' ')[0];

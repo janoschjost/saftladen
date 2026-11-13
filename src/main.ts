@@ -28,5 +28,5 @@ try {
   new DayMenu((id) => game.startDay(id));
 } finally {
   const fontsReady = document.fonts ? document.fonts.ready : Promise.resolve();
-  fontsReady.then(() => requestAnimationFrame(() => requestAnimationFrame(hideLoader)));
+  void fontsReady.then(() => requestAnimationFrame(() => requestAnimationFrame(hideLoader)));
 }

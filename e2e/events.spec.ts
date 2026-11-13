@@ -5,7 +5,6 @@ import { expect, openGame, read, test, until } from './game';
  * Each case opens the same event as that URL and waits until it has started. How it plays out is the simulation's
  * business (Vitest), not this param's.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const cases: [string, string, (g: any) => unknown][] = [
   ['place.meeting', 'meeting-room', (g) => g.meetingRoom.current],
   ['place.coffee-break', 'coffee', (g) => g.kitchen.current],
@@ -62,7 +61,6 @@ test('pet.crouch-cat (?event=pet-cat)', async ({ page }) => {
 // A lettered door (under the wall lettering) that is `open` or shut again; its letters must have moved along / be back
 // in their laid-out place (`moved`: how far they are from it, m + rad).
 type Letter = { x: number; y: number; mesh: { position: { x: number; y: number }; rotation: { z: number } } };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const letteredDoor = (g: any, want: 'any' | 'open' | 'shut'): boolean =>
   g.doors.states
     .filter((s: { rig: { letters?: Letter[] } }) => s.rig.letters?.length)
@@ -80,7 +78,6 @@ test('office.door-lettering (?event=door-lettering): letters move with the door 
   expect(errors).toEqual([]);
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Cabin = { session: { seated: boolean; person: any } | null };
 
 // Sitting down and the handheld pose: covered by Toilets.test.ts

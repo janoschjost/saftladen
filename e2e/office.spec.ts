@@ -15,7 +15,7 @@ test('presence.homes-hash', async ({ page }) => {
     g.people.filter((p: { presence: string; awayKind: string }) => p.presence === 'out' && p.awayKind === 'home').map((p: { homeVariant: number }) => p.homeVariant),
   );
   // all eight regular rooms are taken (own rooms like the beach come on top)
-  expect([...new Set(homes)].filter((v) => v < 8).sort()).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+  expect([...new Set(homes)].filter((v) => v < 8).sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
   await expect(page.locator('#feeds')).toBeVisible();
 });
 
