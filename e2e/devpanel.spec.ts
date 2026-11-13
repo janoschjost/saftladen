@@ -1,9 +1,8 @@
-import { expect, test } from '@playwright/test';
-import { openGame, read, until } from './game';
+import { expect, openGame, read, test, until } from './game';
 
 /** Dev panel "Personen / Tiere entfernen": taking people and pets out of the sim and back (#89). */
 
-test.describe('devpanel.remove', () => {
+test.describe('dev.remove', () => {
   test('a seated person: desk freed, hidden, not coming back by themselves; restore puts them back in the sim', async ({ page }) => {
     const errors = await openGame(page);
     // somebody sitting at a desk right now
@@ -15,15 +14,17 @@ test.describe('devpanel.remove', () => {
         page,
         (g, who) => {
           const p = g.people.find((o: { id: string }) => o.id === who);
-          return { away: p.away, visible: p.root.visible, presence: p.presence, task: !!p.task, deskTaken: g.office.desks.some((d: { occupant: unknown }) => d.occupant === p), removed: g.removedIds.includes(who) };
+          return { away: p.away, visible: p.root.visible, presence: p.presence, task: !!p.task, deskTaken: g.office.desks.some((d: { occupant: unknown }) => d.occupant === p), removed: g.sim.removedIds.includes(who) };
         },
         id,
       );
     await until(page, (g, who) => !g.people.find((o: { id: string }) => o.id === who).root.visible, id);
     expect(await state()).toMatchObject({ away: true, visible: false, presence: 'out', task: false, deskTaken: false, removed: true });
     // the others keep living, and the removed one stays away (also through a call-all-back)
-    await read(page, (g) => g.presence.callAllBack());
-    await page.waitForTimeout(3000);
+    await read(page, (g) => {
+      g.presence.callAllBack();
+      g.advance(3);
+    });
     expect(await state()).toMatchObject({ away: true, presence: 'out', removed: true });
     // restore: back into the plan of the day. In through the door, or (full office) an errand / home office spell like everybody else
     expect(await read(page, (g, who) => g.setRemoved(who, false), id)).toContain('dabei');
@@ -58,9 +59,9 @@ test.describe('devpanel.remove', () => {
     expect(await read(page, (g, id) => g.setRemoved(id, true), pet)).toContain('raus');
     const away = () => read(page, (g, id) => g.pets.find((d: { id: string }) => d.id === id).away, pet);
     await until(page, (g, id) => g.pets.find((d: { id: string }) => d.id === id).away, pet);
-    await page.waitForTimeout(3000);
+    await read(page, (g) => g.advance(3));
     expect(await away()).toBe(true);
-    expect(await read(page, (g) => g.removedIds)).toContain(pet);
+    expect(await read(page, (g) => g.sim.removedIds)).toContain(pet);
     await read(page, (g, id) => g.setRemoved(id, false), pet);
     await until(page, (g, id) => !g.pets.find((d: { id: string }) => d.id === id).away, pet, 30_000);
     expect(errors).toEqual([]);
@@ -76,15 +77,15 @@ test.describe('devpanel.remove', () => {
     await btn.click();
     await expect(btn).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('#dev-status')).toContainText('raus');
-    expect(await read(page, (g) => g.removedIds)).toEqual(['jan-hasler']);
+    expect(await read(page, (g) => g.sim.removedIds)).toEqual(['jan-hasler']);
     await btn.click();
     await expect(btn).toHaveAttribute('aria-pressed', 'false');
-    expect(await read(page, (g) => g.removedIds)).toEqual([]);
+    expect(await read(page, (g) => g.sim.removedIds)).toEqual([]);
     // console: dev.remove / dev.restore / dev.removed
     await page.evaluate(() => (window as unknown as { dev: { remove(id: string): void } }).dev.remove('jan-hasler'));
     expect(await page.evaluate(() => (window as unknown as { dev: { removed(): string[] } }).dev.removed())).toEqual(['jan-hasler']);
     await page.evaluate(() => (window as unknown as { dev: { restore(id: string): void } }).dev.restore('jan-hasler'));
-    expect(await read(page, (g) => g.removedIds)).toEqual([]);
+    expect(await read(page, (g) => g.sim.removedIds)).toEqual([]);
     expect(errors).toEqual([]);
   });
 
@@ -93,6 +94,6 @@ test.describe('devpanel.remove', () => {
     await read(page, (g) => g.setRemoved('jan-hasler', true));
     await page.reload();
     await page.waitForFunction(() => !!window.__game, undefined, { timeout: 30_000 });
-    expect(await read(page, (g) => g.removedIds)).toEqual([]);
+    expect(await read(page, (g) => g.sim.removedIds)).toEqual([]);
   });
 });
