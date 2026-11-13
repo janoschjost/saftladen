@@ -191,10 +191,10 @@ export class Presence {
     return p.preferredHome;
   }
 
-  /** Some people are already gone when the game starts (#homes: all eight home offices occupied, for a look at the rooms). */
-  seed(): void {
+  /** Some people are already gone when the game starts (`homes`: all eight home offices occupied, for a look at the rooms). */
+  seed(homes = false): void {
     const hour = (this.lastHour = this.workHour);
-    if (location.hash.includes('homes')) {
+    if (homes) {
       const fixed = this.people.filter((p) => homeRoomOf(p.id) !== null);
       const taken = new Set(fixed.map((p) => homeRoomOf(p.id)));
       const free = Array.from({ length: HOME_COUNT }, (_, i) => i).filter((i) => !taken.has(i));

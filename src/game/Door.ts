@@ -43,3 +43,5 @@ export const DOOR_LANES: [DoorLane, DoorLane] = [lane('left', -0.5), lane('right
 let nextLane = 0;
 /** Alternates between the lanes so two people leaving or arriving together use a wing each. */
 export const pickDoorLane = (): DoorLane => DOOR_LANES[nextLane++ % 2];
+/** A new office starts with the left wing again (`Sim`): the same seed gives the same run, also for a second office in one process. */
+export const resetDoorLanes = (): void => void (nextLane = 0);

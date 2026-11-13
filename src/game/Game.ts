@@ -1,19 +1,16 @@
 import * as THREE from 'three';
 import { team } from '../data/team';
 import shippedSeats from '../data/seats.json';
-import { buildCharacter } from '../render/characterBuilder';
-import { buildCat } from '../render/catBuilder';
-import { buildDog } from '../render/dogBuilder';
+import { HOME_LABELS, HomeOffice, ROOM_COUNT, heldPoses, type ArmPose } from '../render/homeOffice';
 import { petPortrait } from '../render/petPortrait';
-import { HOME_COUNT, HOME_LABELS, HomeOffice, ROOM_COUNT, heldPoses, type ArmPose } from '../render/homeOffice';
 import { SIT_DROP } from '../render/officeBuilder';
 import { Views, type ViewMode } from '../render/Views';
 import { Bubbles } from '../render/Bubbles';
 import { DayHud } from '../ui/DayHud';
 import { DAY_STORIES } from '../data/dayStories';
 import { formatTime, type DayCtx, type DayTask } from './Day';
-import { buildOffice, CORRIDOR_POINT, type OfficeModel } from '../render/officeModel';
-import { buildWorld, NAV_CELL, WORLD } from '../render/World';
+import { CORRIDOR_POINT } from '../render/officeModel';
+import { buildWorld, WORLD } from '../render/World';
 import { Actions } from '../ui/Actions';
 import { ActionSheet, PREVIEW, type SheetPick } from '../ui/ActionSheet';
 import { NowChip } from '../ui/NowChip';
@@ -32,30 +29,18 @@ import { DeskLights } from './DeskLights';
 import { CoatRacks } from './CoatRacks';
 import { Easter } from './Easter';
 import { Dog } from './Dog';
-import { PetCare } from './PetCare';
-import { Weather } from './Weather';
 import { Christmas } from './Christmas';
 import { RainFx } from '../render/rainFx';
 import { SpawnFx } from '../render/spawnFx';
 import { loadState, saveState } from '../ui/persist';
 import { DOOR_LANES } from './Door';
-import { Doors } from './Doors';
-import { Kitchen } from './Coffee';
-import { MeetingRoom } from './Meeting';
 import { setTvMode } from '../render/screens';
-import { Pod } from './Pod';
-import { PhoneBooth } from './PhoneBooth';
-import { Toilets } from './Toilets';
-import { NavGrid } from './NavGrid';
-import { Office } from './Office';
 import { Person } from './Person';
-import { Presence } from './Presence';
 import { strings } from '../i18n/strings';
 import { RoomEditor } from './RoomEditor';
 import { CROUCH_SECONDS, PET_HEIGHT, petPose, smooth } from './petPose';
-import { Social } from './Social';
-import { TimeOfDay, applySky, type SkyRig } from './TimeOfDay';
-import { Traffic } from './Traffic';
+import { applySky, type SkyRig } from './TimeOfDay';
+import { Sim } from './Sim';
 import { Walker } from './Walker';
 import { random } from './rng';
 
@@ -63,7 +48,6 @@ const STEP = 1 / 60; // fixed simulation step
 const TALK_REACH = 2.6; // metres: how far the player can be from somebody to talk to them
 const ANSWERS = ['Hoi!', 'Na, alles klar?', 'Gerade viel los…', 'Kaffee später?', 'Schönen Tag!', 'Ha, du hier?', 'Moment, bin gleich bei dir.', 'Hast du das Meeting gesehen?', 'Mir fehlt Kaffee.', 'Läuft!'];
 const BUSY_ANSWERS = ['Grad keine Zeit!', 'Später…', 'Bin im Fokus.', 'Psst, Call!', 'Mhm.'];
-const BODY_RADIUS = 0.2; // how close to a wall a walker may get (nav cells are 0.5 m)
 const SEATS_KEY = 'saftladen.seats';
 const STEER_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
 const OVERCAST = new THREE.Color('#8c95a3'); // sky colour in the rain
@@ -78,22 +62,31 @@ const leadState = (p: Person): unknown[] => [p.printJob, p.foosJob, p.meetPhase,
 export class Game {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
+  /** the office and everybody in it; this class is its view and its input */
+  private sim!: Sim;
+  private get nav(): Sim['nav'] { return this.sim.nav; }
+  private get office(): Sim['office'] { return this.sim.office; }
+  private get model(): Sim['model'] { return this.sim.model; }
+  private get walkers(): Sim['walkers'] { return this.sim.walkers; }
+  private get people(): Sim['people'] { return this.sim.people; }
+  private get pets(): Sim['pets'] { return this.sim.pets; }
+  private get social(): Sim['social'] { return this.sim.social; }
+  private get traffic(): Sim['traffic'] { return this.sim.traffic; }
+  private get presence(): Sim['presence'] { return this.sim.presence; }
+  private get tod(): Sim['tod'] { return this.sim.tod; }
+  private get weather(): Sim['weather'] { return this.sim.weather; }
+  private get petCare(): Sim['petCare'] { return this.sim.petCare; }
+  private get doors(): Sim['doors'] { return this.sim.doors; }
+  private get meetingRoom(): Sim['meetingRoom'] { return this.sim.meetingRoom; }
+  private get pod(): Sim['pod'] { return this.sim.pod; }
+  private get kitchen(): Sim['kitchen'] { return this.sim.kitchen; }
+  private get phoneBooth(): Sim['phoneBooth'] { return this.sim.phoneBooth; }
+  private get toilets(): Sim['toilets'] { return this.sim.toilets; }
   private views!: Views;
-  private nav = new NavGrid(Math.ceil(WORLD.width / NAV_CELL), Math.ceil(WORLD.depth / NAV_CELL), NAV_CELL);
   private roof!: THREE.Object3D;
   private roofWanted = false;
-  private office!: Office;
-  private model!: OfficeModel;
   private editor!: RoomEditor;
-  private walkers: Walker[] = [];
-  private people: Person[] = [];
   private overlay: Overlay;
-  private social = new Social();
-  private traffic = new Traffic(this.nav);
-  private presence!: Presence;
-  private tod = new TimeOfDay();
-  private weather = new Weather();
-  private petCare = new PetCare();
   private hip = new THREE.Vector3();
   private rainFx!: RainFx;
   private spawnFx!: SpawnFx;
@@ -113,8 +106,6 @@ export class Game {
   private previewCam = new THREE.PerspectiveCamera(60, PREVIEW.width / PREVIEW.height, 0.1, 400);
   private picker = document.getElementById('picker') as HTMLElement;
   private dayMenu = document.getElementById('day-menu') as HTMLElement;
-  /** pets (dogs and cats), cached */
-  private pets: Dog[] = [];
   private lastPresence = new Map<Person, Person['presence']>();
   private persistTimer = 2;
   private sky!: SkyRig;
@@ -129,12 +120,6 @@ export class Game {
   private homes: Array<HomeOffice | null> = Array.from({ length: ROOM_COUNT }, () => null);
   private entrance!: { left: THREE.Object3D; right: THREE.Object3D };
   private doorOpen = { left: 0, right: 0 };
-  private doors!: Doors;
-  private meetingRoom!: MeetingRoom;
-  private pod!: Pod;
-  private kitchen!: Kitchen;
-  private phoneBooth!: PhoneBooth;
-  private toilets!: Toilets;
   private metaTimer = 0;
   private rosterTimer = 0;
   private raycaster = new THREE.Raycaster();
@@ -214,34 +199,28 @@ export class Game {
     const { sun, hemi } = buildWorld(this.scene);
     this.sky = { scene: this.scene, sun, hemi, dayBackground: new THREE.Color(stageColor) };
     const saved = loadState();
-    if (typeof saved.cycle === 'number' && Number.isFinite(saved.cycle)) {
-      this.tod.setCycle(saved.cycle);
-      this.tod.night = this.tod.day < 0.45;
-    }
-    this.timeControl = new TimeControl(this.tod);
-    applySky(this.tod, this.sky);
     this.rainFx = new RainFx(this.scene);
     this.spawnFx = new SpawnFx(this.scene);
     this.xmas = new Christmas(this.scene);
-    const model = (this.model = buildOffice(this.scene));
-    // the editor puts the furniture where the saved layout wants it, before anything is derived from its position
-    this.editor = new RoomEditor(this.scene, model.items, WORLD, () => this.relayout());
-    this.blockNav();
-    this.office = new Office(model, this.nav);
+    this.restoreSeats();
+    this.sim = new Sim({
+      scene: this.scene,
+      cycle: typeof saved.cycle === 'number' && Number.isFinite(saved.cycle) ? saved.cycle : undefined,
+      seats: this.savedSeats,
+      homes: location.hash.includes('homes'),
+      // the editor puts the furniture where the saved layout wants it, before anything is derived from its position
+      portrait: petPortrait,
+      // disco: everybody who is up stops and dances on the spot; an angry person stands and fumes
+      stands: (w) => (this.easter.disco > 0.3 && w instanceof Person && w.inOffice && w.sit < 0.05 && !w.held && !w.controlled) || this.easter.angry?.who === w,
+      prepare: (m) => (this.editor = new RoomEditor(this.scene, m.items, WORLD, () => this.sim.relayout())),
+    });
+    const model = this.model;
+    this.timeControl = new TimeControl(this.tod);
+    applySky(this.tod, this.sky);
     this.deskLights = new DeskLights(this.scene, this.office, this.tod);
     this.easter = new Easter(this.scene);
     this.roof = model.roof;
     this.entrance = model.entrance;
-    this.doors = new Doors(model.doors);
-    this.meetingRoom = new MeetingRoom(model.meeting, this.nav);
-    this.pod = new Pod(model.pod, this.nav);
-    this.kitchen = new Kitchen(model.kitchen, this.nav);
-    this.phoneBooth = new PhoneBooth(model.phoneBooth, this.nav);
-    this.phoneBooth.onClosed = (closed) => this.doors.setLocked(this.phoneBooth.doorPos, closed);
-    this.meetingRoom.onClosed = (closed) => this.doors.setLocked(this.meetingRoom.doorPos, closed);
-    this.toilets = new Toilets(model.toilets, this.nav);
-    this.toilets.onLocked = (cabin, locked) => this.doors.setLocked(cabin.doorPos, locked);
-    this.toilets.onOccupied = (cabin, occupied) => model.toilets.cabins[this.toilets.cabins.indexOf(cabin)]?.sign.color.setHex(occupied ? 0xe0342c : 0x3fbf5a);
     this.views = new Views(stage, this.renderer.domElement, this.nav, (mode) => {
       this.roof.visible = mode === 'walk' ? true : mode === 'plan' || mode === 'third' ? false : this.roofWanted;
       if (mode !== 'third' && this.day && this.day.state !== 'waiting') this.endDay(false); // the player switched the camera away
@@ -308,8 +287,6 @@ export class Game {
     this.ring.visible = false;
     this.scene.add(this.ring);
 
-    this.restoreSeats();
-    this.spawn();
     new DevPanel();
     this.registerDevEvents();
     this.now = new NowChip(
@@ -321,12 +298,8 @@ export class Game {
       onPreviews: (items) => (this.previews = items),
       onToggle: (open) => open && this.settings.setOpen(false),
     });
-    this.pets = this.walkers.filter((w): w is Dog => w instanceof Dog);
-    this.presence = new Presence(this.people, this.tod, this.weather);
-    this.presence.seed();
     this.coatRacks = new CoatRacks(model.coatRacks, this.people);
     this.coatRacks.update();
-    for (const w of this.walkers) if (w instanceof Dog && w.owner.presence === 'out') w.sendAway(); // pets of people who start away
     Walker.animate = true; // from now on arrivals and departures get a show
     this.bind();
     this.resize();
@@ -342,24 +315,6 @@ export class Game {
     this.seats.setOwners(this.seatOwners());
 
     this.renderer.setAnimationLoop((t) => this.frame(t));
-  }
-
-  private blockNav(): void {
-    this.nav.clear();
-    for (const b of this.model.blockers()) this.nav.blockWorld(b.min.x, b.min.z, b.max.x, b.max.z);
-    this.nav.sealUnreachable(CORRIDOR_POINT);
-    this.traffic.rebuild();
-  }
-
-  /** The room editor moved furniture: new nav grid, then desks, seats and standing spots follow. */
-  private relayout(): void {
-    this.blockNav();
-    this.office.relayout(this.nav);
-    this.meetingRoom.relayout(this.nav);
-    this.pod.relayout(this.nav);
-    this.kitchen.relayout(this.nav);
-    this.phoneBooth.relayout(this.nav);
-    this.toilets.relayout(this.nav);
   }
 
   private restoreSeats(): void {
@@ -400,54 +355,6 @@ export class Game {
     }
     void this.writeSeats(out);
     this.seats.setOwners(this.seatOwners());
-  }
-
-  private spawn(): void {
-    const free = () => {
-      const { cx, cz } = this.nav.randomWalkable();
-      return this.nav.center(cx, cz);
-    };
-    for (const [index, m] of team.entries()) {
-      const person = new Person(m, buildCharacter(m.look), free());
-      person.office = this.office;
-      person.kitchen = this.kitchen;
-      this.office.people.push(person);
-      person.preferredHome = index % HOME_COUNT;
-      const seat = this.savedSeats[m.id];
-      if (seat) this.office.assign(person, seat);
-      if (random() < 0.8) {
-        const desk = this.office.claim(person, false);
-        if (desk) person.sitAt(desk);
-      }
-      this.people.push(person);
-      this.walkers.push(person);
-      this.scene.add(person.root);
-      if (m.dog) {
-        const dog = new Dog(m.dogName ?? `Hund von ${m.name}`, buildDog(m.dog), person, this.petStart(person, 1, 1), {
-          portrait: petPortrait(`dog:${m.dog}`, () => buildDog(m.dog!)),
-        });
-        this.walkers.push(dog);
-        this.scene.add(dog.root);
-      }
-      for (const [i, { kind, name }] of (m.cats ?? []).entries()) {
-        const side = i % 2 ? 1 : -1;
-        const cat = new Dog(name, buildCat(kind), person, this.petStart(person, side, -1), {
-          id: `cat-${person.id}-${i}`,
-          label: 'Bürokatze',
-          portrait: petPortrait(`cat:${kind}`, () => buildCat(kind)),
-          speed: 2.0 + i * 0.2,
-          radius: 0.2,
-          side,
-        });
-        this.walkers.push(cat);
-        this.scene.add(cat.root);
-      }
-    }
-  }
-
-  /** Spawn spot next to the owner, on a free cell (never inside a wall). */
-  private petStart(owner: Person, dx: number, dz: number): { x: number; z: number } {
-    return this.nav.nearestWalkable({ x: owner.pos.x + dx * 0.8, z: owner.pos.z + dz * 0.8 }, 6) ?? { ...owner.pos };
   }
 
   private bind(): void {
@@ -685,7 +592,8 @@ export class Game {
     this.updateFollow(dt);
     this.updateAction(dt);
     while (this.acc >= STEP) {
-      this.simulate(STEP);
+      this.sim.step(STEP);
+      setTvMode(this.meetingRoom.tv);
       this.acc -= STEP;
     }
     this.tod.update(dt);
@@ -713,7 +621,6 @@ export class Game {
   /** Materialise show for everybody who arrives or leaves. */
   private updateSpawnFx(dt: number): void {
     for (const w of this.walkers) {
-      w.stepFx(dt);
       const e = w.takeFx();
       if (e) this.spawnFx.burst(w.pos.x, w.pos.z, e, w.headHeight * w.root.scale.y);
     }
@@ -1549,69 +1456,6 @@ export class Game {
     p.steer.run = k.has('ShiftLeft') || k.has('ShiftRight') || this.shift;
     this.views.setSprint(p.steer.run && this.views.mode === 'third');
     this.views.follow(p.pos.x, p.pos.z, dt);
-  }
-
-  private simulate(dt: number): void {
-    this.presence.update(dt, this.nav);
-    this.traffic.update(dt, this.walkers);
-    for (const w of this.walkers) {
-      w.traffic ??= this.traffic;
-      // disco: everybody who is up stops and dances on the spot; an angry person stands and fumes
-      if ((this.easter.disco > 0.3 && w instanceof Person && w.inOffice && w.sit < 0.05 && !w.held && !w.controlled) || this.easter.angry?.who === w) {
-        w.moving += (0 - w.moving) * 0.25;
-        continue;
-      }
-      w.update(dt, this.nav, this.walkers);
-    }
-    this.social.update(dt, this.people, this.nav, this.traffic);
-    this.petCare.update(dt, this.people, this.pets, this.nav);
-    this.meetingRoom.update(dt, this.people, this.nav, this.tod.hour);
-    setTvMode(this.meetingRoom.tv);
-    this.pod.update(dt, this.people, this.nav);
-    this.kitchen.update(dt, this.people, this.nav);
-    this.phoneBooth.update(dt, this.people, this.nav);
-    this.toilets.update(dt, this.people, this.nav);
-    this.separate();
-    this.separate();
-    this.separate();
-  }
-
-  /** Soft collision: push overlapping walkers apart and keep them on the floor. */
-  private separate(): void {
-    const ws = this.walkers;
-    for (let i = 0; i < ws.length; i++) {
-      for (let j = i + 1; j < ws.length; j++) {
-        const a = ws[i];
-        const b = ws[j];
-        if (a.away || b.away || a.ignores(b) || a.fixed || b.fixed) continue;
-        let dx = b.pos.x - a.pos.x;
-        let dz = b.pos.z - a.pos.z;
-        const min = (a.radius + b.radius) * 1.1;
-        let d2 = dx * dx + dz * dz;
-        if (d2 >= min * min) continue;
-        if (d2 < 1e-8) {
-          // exactly on top of each other (same destination spot): part them in a fixed direction per pair
-          dx = Math.cos(i * 2.4 + j) * 1e-3;
-          dz = Math.sin(i * 2.4 + j) * 1e-3;
-          d2 = dx * dx + dz * dz;
-        }
-        const d = Math.sqrt(d2);
-        const push = ((min - d) / d) * 0.5;
-        const wa = a.held ? 0 : b.held ? 2 : 1;
-        const wb = b.held ? 0 : a.held ? 2 : 1;
-        a.pos.x -= dx * push * wa;
-        a.pos.z -= dz * push * wa;
-        b.pos.x += dx * push * wb;
-        b.pos.z += dz * push * wb;
-      }
-    }
-    for (const w of ws) {
-      if (w.away || w.fixed) continue; // scripted walkers (door, desk) move through walls on purpose
-      w.pos.x = THREE.MathUtils.clamp(w.pos.x, 0.4, WORLD.width - 0.4);
-      w.pos.z = THREE.MathUtils.clamp(w.pos.z, 0.4, WORLD.depth - 0.4);
-      // walls, windows and furniture are solid (seated people are scripted into their chair and skip this)
-      if (!w.held) this.nav.resolve(w.pos, Math.min(w.radius, BODY_RADIUS));
-    }
   }
 
   private render(alpha: number): void {
