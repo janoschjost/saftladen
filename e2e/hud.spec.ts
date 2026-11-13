@@ -173,6 +173,7 @@ test('actions.sheet + actions.search: A toggles the sheet, previews, number keys
   await page.keyboard.press('a');
   await page.locator('#action-search').fill('');
   await page.locator('#action-cards .m-card').first().focus();
+  await freeStations(page); // the game ran on meanwhile: somebody may stand at the coffee machine again
   await page.keyboard.press('3'); // Kaffee, not the plan view
   await expect(sheet).toBeHidden();
   expect(await read(page, (g) => g.views.mode)).toBe('orbit');
@@ -181,9 +182,9 @@ test('actions.sheet + actions.search: A toggles the sheet, previews, number keys
 
 test('actions.camera + actions.handback: Drucken flies to Orbit and follows the lead; a wheel hands back, Esc flies to the overview', async ({ page }) => {
   await openGame(page);
-  await freeStations(page);
   await page.keyboard.press('1'); // from Iso
   await page.keyboard.press('a');
+  await freeStations(page); // right before the card: the game runs on while the sheet opens
   await page.locator('#action-cards .m-card[data-action="printer"]').click();
   expect(await read(page, (g) => g.views.mode)).toBe('orbit');
   const a = await read(page, (g) => g.action && { printing: !!g.action.lead?.printJob, owned: g.action.owned });

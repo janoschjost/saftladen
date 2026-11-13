@@ -4,7 +4,7 @@ import { openGame, read, until } from './game';
 /**
  * `?event=<id>` runs a dev-panel event at start, so a dev can open a feature directly (the `url:` in FEATURES.md).
  * Each case opens the same event as that URL and waits until it has started. How it plays out is the simulation's
- * business (walking there takes long in software WebGL), not this param's.
+ * business (Vitest), not this param's.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const cases: [string, string, (g: any) => unknown][] = [
@@ -26,13 +26,7 @@ for (const [id, event, reached] of cases) {
   });
 }
 
-test('home.laundry (?event=home-laundry#homes)', async ({ page }) => {
-  const errors = await openGame(page, 'homes', undefined, 'event=home-laundry');
-  await until(page, (g) => g.homes.some((h: { laundryHung: number } | null) => h && h.laundryHung >= 1), undefined, 60_000);
-  expect(errors).toEqual([]);
-});
-
-test('dev.event: unknown id only warns, the game starts normally', async ({ page }) => {
+test('dev.params: unknown ?event id only warns, the game starts normally', async ({ page }) => {
   const warnings: string[] = [];
   page.on('console', (m) => m.type() === 'warning' && warnings.push(m.text()));
   const errors = await openGame(page, '', undefined, 'event=nope');
@@ -41,8 +35,19 @@ test('dev.event: unknown id only warns, the game starts normally', async ({ page
   expect(errors).toEqual([]);
 });
 
+test('dev.params: ?test fast-forwards in game time and renders cheap', async ({ page }) => {
+  await openGame(page);
+  const before = await read(page, (g) => g.clock);
+  const state = await read(page, (g) => {
+    g.advance(30);
+    return { clock: g.clock, shadows: g.renderer.shadowMap.enabled, pixelRatio: g.renderer.getPixelRatio() };
+  });
+  expect(state.clock - before).toBeCloseTo(30, 1);
+  expect(state).toMatchObject({ shadows: false, pixelRatio: 1 });
+});
+
 // Donata (cats) is out with seeds 1 and 2, so the cat case uses seed 3
-test('pet.crouch (cat) (?event=pet-cat)', async ({ page }) => {
+test('pet.crouch-cat (?event=pet-cat)', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/?test&seed=3&time=11&event=pet-cat');

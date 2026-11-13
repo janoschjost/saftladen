@@ -3,7 +3,7 @@ import { fxRandom, getSeed, random, seeded, setSeed } from './rng';
 
 const take = (r: () => number, n: number) => Array.from({ length: n }, r);
 
-describe('rng', () => {
+describe('dev.seed', () => {
   it('same seed, same numbers', () => {
     setSeed(42);
     const a = take(random, 20);
