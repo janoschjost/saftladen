@@ -78,22 +78,13 @@ export async function until<T, A = undefined>(page: Page, fn: (g: any, arg: A) =
 }
 
 /**
- * Empties the printer, the coffee machine and the kitchen (a running coffee break ends): somebody may be on a coffee
- * or print errand, and an action that needs the station would say "nicht möglich". Call it right before such an
- * action: after an `until` the game has moved on.
+ * Sets the scene (`Scenario` in `src/game/Scenario.ts`): `fn` gets `g.scenario` and `arg`, and runs in the page.
+ * `put(id, where, hold)` places somebody now and holds them, `release(id)` lets go, `clear(...places)` empties the
+ * printer, the coffee machine, the kitchen, the meeting room or the WC. Time stands still, so the scene is still
+ * there at the next line; after an `until` only what is held is.
  */
-export async function freeStations(page: Page): Promise<void> {
-  await read(page, (g) => {
-    if (g.kitchen.current) {
-      g.kitchen.current.end();
-      g.advance(0.1); // the kitchen lets go of an ended break on its next step
-    }
-    for (const p of g.people) {
-      p.cancelPrint();
-      p.cancelRun();
-      p.cancelCoffee();
-    }
-  });
+export function scene<A = undefined>(page: Page, fn: (s: any, arg: A) => void, arg?: A): Promise<void> {
+  return page.evaluate(([make, src, a]) => void new Function(`return ${make}`)()(src)((window.__game as any).scenario, a), [inPage.toString(), fn.toString(), arg] as const);
 }
 
 declare global {

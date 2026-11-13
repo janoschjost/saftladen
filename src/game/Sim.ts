@@ -13,12 +13,13 @@ import { resetDoorLanes } from './Door';
 import { Doors } from './Doors';
 import { MeetingRoom } from './Meeting';
 import { NavGrid } from './NavGrid';
-import { Office } from './Office';
+import { Office, type Desk } from './Office';
 import { Person } from './Person';
 import { PetCare } from './PetCare';
 import { PhoneBooth } from './PhoneBooth';
 import { Pod } from './Pod';
 import { Presence } from './Presence';
+import { Scenario } from './Scenario';
 import { Social } from './Social';
 import { TimeOfDay } from './TimeOfDay';
 import { Toilets } from './Toilets';
@@ -75,6 +76,8 @@ export class Sim {
   readonly petCare = new PetCare();
   /** the team welcoming a remote worker who came to the office */
   readonly welcome = new Welcome();
+  /** states a scene instead of waiting for one: for tests and dev tools */
+  readonly scenario = new Scenario(this);
   private stands: (w: Walker) => boolean;
 
   constructor({ scene = new THREE.Scene(), cycle, seats = {}, homes = false, portrait = () => null, stands = () => false, prepare }: SimOptions = {}) {
@@ -173,8 +176,57 @@ export class Sim {
     }
   }
 
-  private petStart(owner: Person, dx: number, dz: number): { x: number; z: number } {
+  petStart(owner: Person, dx: number, dz: number): { x: number; z: number } {
     return this.nav.nearestWalkable({ x: owner.pos.x + dx * 0.8, z: owner.pos.z + dz * 0.8 }, 6) ?? { ...owner.pos };
+  }
+
+  /** Pulls a person out of whatever they are doing (talk, desk, printer, meeting), so something else can take over. */
+  drop(p: Person): void {
+    this.social.leave(p);
+    p.interrupt();
+  }
+
+  /**
+   * Out of everything at once, wherever they sit or queue: talk, desk, printer, meeting, phone box, pod, WC. `drop`
+   * lets a seated meeting member walk out; this does not wait for that.
+   */
+  pull(p: Person): void {
+    this.drop(p);
+    p.cancelMeet();
+    p.boothCall = false;
+    p.talk = null;
+    p.speaking = false;
+  }
+
+  /** The desk `seat` takes for `p`: their own, else where they already work, else the first free one. */
+  deskFor(p: Person): Desk | null {
+    const working = p.task?.phase === 'work' ? p.task.desk : null;
+    return p.homeDesk ?? working ?? this.office.desks.find((k) => !k.occupant) ?? null;
+  }
+
+  /**
+   * Sits `p` down at once at `deskFor(p)`. Somebody sitting there is asked to move (a scene's pin on them ends);
+   * somebody only on the way there looks for another one. Returns the desk, null when there is none. Somebody who
+   * cannot sit right now (in a meeting, steered by the player) is not seated.
+   */
+  seat(p: Person): Desk | null {
+    const desk = this.deskFor(p);
+    if (!desk) return null;
+    this.social.leave(p);
+    if (p.task?.desk === desk && p.task.phase === 'work') return desk;
+    p.interrupt();
+    const o = desk.occupant;
+    if (o && o !== p) {
+      if (o.task?.desk === desk && o.task.phase !== 'approach') {
+        o.unpin();
+        o.evictFromDesk(desk);
+      } else if (o.run?.desk === desk) o.run.desk = null; // kept free for after a coffee run
+      else if (o.task?.desk === desk) o.interrupt(); // on the way there
+      this.office.release(desk, o);
+    }
+    if (desk.pending === p) desk.pending = null;
+    p.sitDownAt(desk);
+    return desk;
   }
 
   /** One simulation step: everybody decides and moves, the rooms follow, nobody ends up inside somebody else or a wall. */

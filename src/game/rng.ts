@@ -8,6 +8,8 @@
  * - `seeded(n)` makes a private generator for things that must look the same every time (screens, tattoos, rooms).
  * - `stream(salt)` is a side stream of the game's seed for a rare roll that must not shift `random()` (Kurt's spells):
  *   same seed, same rolls, and the simulation plays out as if it did not exist.
+ * - `apart(fn)` runs `fn` on a stream of its own: whatever it rolls, `random()` goes on afterwards as if nothing
+ *   happened (setting a scene, see `Scenario.ts`).
  */
 export type Rng = () => number;
 
@@ -51,6 +53,19 @@ export function getSeed(): number {
 }
 
 export const random: Rng = () => sim();
+
+const APART = 0x5ce9e;
+
+/** Runs `fn` with `random()` on a side stream of the seed: it may roll dice without shifting the simulation's numbers. */
+export function apart<T>(fn: () => T): T {
+  const keep = sim;
+  sim = stream(APART);
+  try {
+    return fn();
+  } finally {
+    sim = keep;
+  }
+}
 export const fxRandom: Rng = () => fx();
 
 setSeed(Math.random() * 2 ** 32); // the only Math.random in the game: a fresh seed per page load

@@ -446,6 +446,18 @@ export class Person extends Walker {
     this.setAway(true);
   }
 
+  /** In the office at `at` right now, without the walk through the door (a scene puts them there). */
+  arriveNow(at: Vec2): void {
+    this.spin = 0;
+    this.setAlter(false);
+    this.script = null;
+    this.presence = 'in';
+    this.awayKind = null;
+    this.appearNow();
+    this.placeAt(at);
+    this.timer = 0.5;
+  }
+
   private comeBack(): void {
     this.setAlter(false); // always back in as Marco
     this.presence = 'returning';
@@ -948,7 +960,7 @@ export class Person extends Walker {
   }
 
   /** Gives up the coffee run where they stand (the desk is free again). */
-  private cancelRun(): void {
+  cancelRun(): void {
     this.kitchen?.releaseMachine(this);
     const j = this.run;
     if (!j) return;

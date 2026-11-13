@@ -11,10 +11,7 @@ export function installForceState(game: Game): void {
   const g = game as any;
   const people: (Person & ForcePerson)[] = g.people;
   /** Same as the dev events: pulls the people out of whatever they were doing. */
-  const drop = (p: Person) => {
-    g.social.leave(p);
-    p.interrupt();
-  };
+  const drop = (p: Person) => g.sim.drop(p);
   const ctx: ForceCtx<Person & ForcePerson> = {
     people,
     desk: (p) => {

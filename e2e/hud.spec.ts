@@ -1,4 +1,4 @@
-import { expect, freeStations, openGame, read, test, until } from './game';
+import { expect, openGame, read, scene, test, until } from './game';
 
 // Few page loads on purpose: every openGame costs seconds on a CI runner.
 
@@ -122,7 +122,7 @@ test.describe('hud.settings', () => {
 
 test('actions.sheet + actions.search: A toggles the sheet, previews, number keys, search, Esc', async ({ page }) => {
   await openGame(page);
-  await freeStations(page);
+  await scene(page, (s) => s.clear('printer', 'coffee', 'kitchen'));
   const sheet = page.locator('#action-sheet');
   await page.keyboard.press('a');
   await expect(sheet).toBeVisible();
@@ -180,7 +180,7 @@ test('actions.sheet + actions.search: A toggles the sheet, previews, number keys
 
 test('actions.camera + actions.handback: Drucken flies to Orbit and follows the lead; a wheel hands back, Esc flies to the overview', async ({ page }) => {
   await openGame(page);
-  await freeStations(page);
+  await scene(page, (s) => s.clear('printer', 'coffee', 'kitchen'));
   await page.keyboard.press('1'); // from Iso
   await page.keyboard.press('a');
   await page.locator('#action-cards .m-card[data-action="printer"]').click();

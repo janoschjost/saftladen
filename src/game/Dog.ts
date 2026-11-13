@@ -74,11 +74,8 @@ export class Dog extends Walker {
   }
 
   /** Puts the pet down at `p` (dev event): it picks its lying spot afresh from there. */
-  placeAt(p: Vec2): void {
-    this.pos = { ...p };
-    this.prev = { ...p };
-    this.path = [];
-    this.state = 'idle';
+  override placeAt(p: Vec2): void {
+    super.placeAt(p);
     this.bed = null;
     this.lie = 0;
     this.timer = 1;
@@ -133,6 +130,15 @@ export class Dog extends Walker {
     if (this.away) return;
     this.setAway(true);
     this.doorWait = 0.6;
+  }
+
+  /** Beside the owner at `at` right now (a scene put the owner into the office without the walk through the door). */
+  appearAt(at: { x: number; z: number }): void {
+    this.outWait = 0;
+    this.headingOut = false;
+    this.script = null;
+    this.appearNow();
+    this.placeAt(at);
   }
 
   /** Appear on the porch at the same moment as the owner and walk in with them. */
