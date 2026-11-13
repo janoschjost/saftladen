@@ -236,7 +236,7 @@ let wave: HTMLCanvasElement[] | null | undefined;
 export function kurtWave(look: Look): HTMLCanvasElement[] | null {
   if (wave !== undefined) return wave;
   wave = portraitFrames(
-    () => Object.assign(kurtRig(look), { face: { r: 0.62, y: 1.4, z: 0.1 } }),
+    () => Object.assign(kurtRig(look), { face: { r: 0.85, y: 1.35, z: 0.1 } }),
     KURT_WAVE_FRAMES,
     (rig, i) => {
       const a = (i / KURT_WAVE_FRAMES) * Math.PI * 2;
