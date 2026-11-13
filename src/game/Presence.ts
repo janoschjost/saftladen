@@ -48,6 +48,8 @@ const EXIT = { gap: [1, 3], max: 3, patience: 25 };
 const DOOR_CLEAR = { radius: 3.5, wait: 6 };
 /** Arrivals (morning, errand / home office / lunch returns): at most `max` on their way in at once, `gap` seconds apart. */
 const ENTRY = { max: 2, gap: [1.5, 3.5] };
+/** Seconds after somebody called back is in (or turned around on the way out) during which neither a full office nor an errand draw sends them out again. */
+const CALLED_STAY = 60;
 const OFF = 9999; // "off duty": stays away until their next working day starts
 
 const between = ([a, b]: number[]) => a + random() * (b - a);
@@ -102,6 +104,8 @@ export class Presence {
   private kept = new Set<Person>();
   /** people called back who are still outside: a full office does not hold them back (see capOffice), they still queue at the door */
   private calledBack = new Set<Person>();
+  /** when (`clock`) somebody called back got in again (see CALLED_STAY) */
+  private calledAt = new Map<Person, number>();
 
   constructor(
     private people: readonly Person[],
@@ -304,7 +308,12 @@ export class Presence {
 
   /** Free to be sent out by the simulation: not busy, not on the way somewhere, not the remote worker on his visit (he came to see the team; only lunch and the end of the day take him out). */
   private sendable(p: Person): boolean {
-    return this.free(p) && !p.task && !this.isVisitor(p);
+    return this.free(p) && !p.task && !this.isVisitor(p) && !this.justCalled(p);
+  }
+
+  /** Called back and in again a moment ago: stays in, somebody else makes room. */
+  private justCalled(p: Person): boolean {
+    return this.clock - (this.calledAt.get(p) ?? -Infinity) < CALLED_STAY;
   }
 
   /** Office over capacity: sends one person to the home office, holds back those about to return. Returns true if somebody left. */
@@ -446,7 +455,10 @@ export class Presence {
     if (this.kept.has(p)) return;
     if (this.duty(p, this.workHour) !== 'duty') this.overridden.add(p);
     if (p.presence === 'out') this.comeBack(p);
-    else p.cancelLeave();
+    else if (p.presence === 'leaving') {
+      p.cancelLeave();
+      this.calledAt.set(p, this.clock);
+    } else if (p.presence === 'returning') this.calledBack.add(p); // protected once in (see clearDoor)
   }
 
   /** Out and back in now, even when the office is full (see capOffice). */
@@ -496,7 +508,7 @@ export class Presence {
     for (const p of this.people) {
       if (p.presence !== 'out') {
         this.waiting.delete(p);
-        this.calledBack.delete(p);
+        if (p.presence !== 'returning' && this.calledBack.delete(p) && p.presence === 'in') this.calledAt.set(p, this.clock);
         continue;
       }
       if (p.awayLeft >= 1) this.calledBack.delete(p); // sent away again before they got in

@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { installHeadlessDom } from '../test/headlessDom';
 import { setSeed } from './rng';
-import { Sim } from './Sim';
+import { cycleOf } from './TimeOfDay';
+import { Sim, type SimOptions } from './Sim';
 import { Walker } from './Walker';
 
 installHeadlessDom();
 
 /** A fresh office from `seed`, run for `seconds` at 60 steps a second. */
-function run(seed: number, seconds: number): Sim {
+function run(seed: number, seconds: number, options?: SimOptions): Sim {
   setSeed(seed);
-  const sim = new Sim();
+  const sim = new Sim(options);
   Walker.animate = true; // as in the game: from now on arriving and leaving take their time
   for (let i = 0; i < seconds * 60; i++) sim.step(1 / 60);
   return sim;
@@ -40,6 +41,32 @@ describe('dev.seed', () => {
     for (let i = 0; i < 60 * 60 && out.presence !== 'in'; i++) sim.step(1 / 60);
     expect(out.presence).toBe('in');
     expect(out.fx).toBe(1);
+  });
+
+  it('presence.caps: called back into a full office, they come in on the first countdown and the office sends somebody else out', () => {
+    const sim = run(1, 5, { cycle: cycleOf(11) });
+    const present = () => sim.people.filter((p) => p.presence === 'in' || p.presence === 'returning').length;
+    expect(present()).toBe(15);
+    const one = sim.people.find((p) => p.presence === 'out' && p.awayKind !== 'off' && p.awayLeft > 20)!;
+    sim.presence.callBack(one);
+    // the countdown never starts over: in within seconds
+    let last = one.awayLeft;
+    let t = 0;
+    for (; t < 30 && one.presence !== 'in'; t += 1 / 60) {
+      sim.step(1 / 60);
+      if (one.presence === 'out') expect(one.awayLeft).toBeLessThanOrEqual(last);
+      last = one.awayLeft;
+    }
+    expect(one.presence).toBe('in');
+    expect(t).toBeLessThan(10);
+    // over the cap: somebody else leaves, the one called back stays
+    const others = sim.people.filter((p) => p !== one && p.presence === 'in');
+    for (t = 0; t < 40; t += 1 / 60) {
+      sim.step(1 / 60);
+      expect(one.presence, `${t.toFixed(1)} s after coming in`).toBe('in');
+    }
+    expect(others.some((p) => p.presence !== 'in')).toBe(true);
+    expect(present()).toBeLessThanOrEqual(15);
   });
 
   it('move.collision: after a minute nobody stands inside a wall or outside the office', () => {
