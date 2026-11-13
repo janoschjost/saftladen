@@ -47,7 +47,7 @@ class Stub {
   task = null;
   pos = { x: 0, z: 0 };
   /** every walk out of the door: kind and whether an alter ego transforms (#32) */
-  leaves: Array<{ kind: AwayKind; transform: boolean }> = [];
+  leaves: Array<{ kind: AwayKind; transform: boolean; manual: boolean }> = [];
   private walk = 0;
 
   constructor(readonly member: TeamMember) {}
@@ -59,7 +59,7 @@ class Stub {
     return this.presence === 'in';
   }
   leaveOffice(_nav: NavGrid, kind: AwayKind, seconds: number, manual = false): void {
-    this.leaves.push({ kind, transform: transformsOnLeave(this.member, kind, manual) });
+    this.leaves.push({ kind, transform: transformsOnLeave(this.member, kind, manual), manual });
     this.presence = 'leaving';
     this.awayKind = kind;
     this.awayLeft = seconds;
@@ -68,7 +68,8 @@ class Stub {
   leaveAs(kind: AwayKind): void {
     this.awayKind = kind;
     const last = this.leaves.at(-1);
-    if (this.presence === 'leaving' && last) Object.assign(last, { kind, transform: last.transform || transformsOnLeave(this.member, kind) });
+    // Person.leaveAs: re-targeted on the way out, an alter ego going home now still transforms (unless sent by hand)
+    if (this.presence === 'leaving' && last) Object.assign(last, { kind, transform: last.transform || transformsOnLeave(this.member, kind, last.manual) });
   }
   startAway(kind: AwayKind, seconds: number): void {
     this.presence = 'out';

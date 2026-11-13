@@ -218,6 +218,8 @@ export class Person extends Walker {
   alter = false;
   /** this home office spell shows the alter ego in the feed (rolled when the spell starts) */
   homeAlter = false;
+  /** sent out by hand on the current trip: an alter ego stays itself, also if the plan turns it into going home */
+  private leftManually = false;
   /** seconds left of the spin on the spot before walking out as the alter ego */
   spin = 0;
   /** set when the skin swaps (a poof for the game to show at this person), cleared by the game */
@@ -411,6 +413,7 @@ export class Person extends Walker {
   /** Walk to the door and leave; comes back after `seconds`. Going home (not `manual`ly sent), an alter ego spins and walks out as itself. */
   leaveOffice(nav: NavGrid, kind: AwayKind, seconds: number, manual = false): void {
     this.cancelTask();
+    this.leftManually = manual;
     this.lane = pickDoorLane();
     this.presence = 'leaving';
     this.awayKind = kind;
@@ -424,7 +427,7 @@ export class Person extends Walker {
   /** Plans changed while away or on the way out (lunch became the end of the day): going home now, an alter ego still spins first. */
   leaveAs(kind: AwayKind): void {
     this.awayKind = kind;
-    if (this.presence === 'leaving' && !this.script && !this.alter && this.spin === 0 && transformsOnLeave(this.member, kind)) this.spin = KURT.spin;
+    if (this.presence === 'leaving' && !this.script && !this.alter && this.spin === 0 && transformsOnLeave(this.member, kind, this.leftManually)) this.spin = KURT.spin;
   }
 
   /** Start the game already outside. */

@@ -256,7 +256,7 @@ export class Presence {
   }
 
   /** Somebody who is not tied up right now (talk, meeting, printer, ...) and so free to walk out. */
-  private free(p: Person): boolean {
+  free(p: Person): boolean {
     return p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob;
   }
 
@@ -302,12 +302,10 @@ export class Presence {
   }
 
   /** Dev events: straight out of the office (no walk to the door), into the home office or on an errand; back after `seconds`. */
-  awayNow(p: Person, kind: 'home' | 'errand', seconds: number): boolean {
-    if (p.inOffice && !this.free(p)) return false; // tied up (meeting, foosball, ...): not out of the middle of it
+  awayNow(p: Person, kind: 'home' | 'errand', seconds: number): void {
     this.overridden.add(p);
     if (kind === 'home') p.homeVariant = this.freeVariant(p);
     p.startAway(kind, seconds);
-    return true;
   }
 
   /** Bring somebody back to the office. */

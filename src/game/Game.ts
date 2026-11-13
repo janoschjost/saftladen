@@ -1058,15 +1058,16 @@ export class Game {
         this.presence.callBack(p); // the next try (e.g. `?event=` retries) sends him off again
         return null;
       }
-      if (p.presence === 'leaving' || p.presence === 'returning' || p.held || p.controlled) return null;
+      if (p.presence === 'leaving' || p.presence === 'returning') return null;
       if (p.presence === 'in') {
+        if (!this.presence.free(p)) return null; // tied up (meeting, foosball, ...): not out of the middle of it
         this.release(p);
         drop(p);
       }
       if (kind === 'off') {
         if (!this.presence.goHome(p, this.nav, 120)) return null;
       } else {
-        if (!this.presence.awayNow(p, kind, 120)) return null;
+        this.presence.awayNow(p, kind, 120);
         if (kind === 'home') p.homeAlter = true;
       }
       return strings.alterEgo.event[kind];

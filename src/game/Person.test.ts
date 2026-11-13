@@ -69,5 +69,16 @@ describe('kurt.behavior: Person', () => {
     p.leaveAs('off');
     expect(p.spin).toBe(KURT.spin);
     expect(run(p, KURT.spin, () => p.alter)).toBe(true);
+    // sent out by hand: stays Marco, also when it becomes the end of the day
+    const q = marcoAtDoor();
+    q.leaveOffice(nav, 'home', 600, true);
+    q.leaveAs('off');
+    expect(q.spin).toBe(0);
+    // already in the doorway: too late to spin
+    const r = marcoAtDoor();
+    r.leaveOffice(nav, 'errand', 3);
+    expect(run(r, 2, () => (r as unknown as { script: unknown }).script !== null)).toBe(true);
+    r.leaveAs('off');
+    expect(r.spin).toBe(0);
   });
 });
