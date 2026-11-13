@@ -1,4 +1,4 @@
-import { expect, openGame, read, test, until } from './game';
+import { expect, openGame, read, test } from './game';
 
 test('load', async ({ page }) => {
   const errors = await openGame(page);

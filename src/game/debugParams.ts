@@ -30,7 +30,6 @@ export function applySeedParam(): void {
 export function applyDebugParams(game: Game): void {
   const q = new URLSearchParams(location.search);
   if (!['snack', 'time', 'day', 'seed', 'test', 'event', 'action'].some((k) => q.has(k))) return;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const g = game as any;
   (window as unknown as { __game: Game }).__game = game;
 

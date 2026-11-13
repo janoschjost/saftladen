@@ -1,10 +1,8 @@
 import { expect, openGame, test, until } from './game';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const seatedSpeakerBubble = (g: any) => {
   const m = g.meetingRoom.current;
   if (m?.phase !== 'session' || m.speaker.sit < 0.95) return null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const b = g.bubbles.state.find((s: any) => s.id === m.speaker.id && s.opacity > 0.9);
   return b ? { ...b, sit: m.speaker.sit, standingHead: m.speaker.rig.headHeight } : null;
 };

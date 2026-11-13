@@ -59,7 +59,7 @@ export class EditorPanel {
     }
     el('editor-save').addEventListener('click', () => {
       this.status('Speichere …');
-      actions.saveToRepo().then((msg) => this.status(msg));
+      void actions.saveToRepo().then((msg) => this.status(msg));
     });
     el('editor-export').addEventListener('click', () => {
       this.json.value = actions.exportJson();

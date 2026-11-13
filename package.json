@@ -8,6 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "fetch-team": "node scripts/fetch-team.mjs",
+    "lint": "oxlint --type-aware --deny-warnings",
     "test": "vitest run",
     "test:e2e": "playwright test"
   },
@@ -17,6 +18,8 @@
   "devDependencies": {
     "@playwright/test": "^1.65.0",
     "@types/three": "^0.187.0",
+    "oxlint": "^1.93.0",
+    "oxlint-tsgolint": "^7.0.2007",
     "sass": "^1.108.2",
     "sharp": "^0.35.5",
     "typescript": "^7.0.2",

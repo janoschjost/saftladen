@@ -1,0 +1,88 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": [
+    "dist",
+    "dist-e2e",
+    "office-model",
+    "public",
+    "test-results",
+    "playwright-report"
+  ],
+  "rules": {
+    "no-unused-vars": "error",
+    "typescript/no-floating-promises": "error",
+    "no-restricted-properties": [
+      "error",
+      {
+        "object": "Math",
+        "property": "random",
+        "message": "Use the seeded generator from src/game/rng.ts, or a run cannot be repeated."
+      }
+    ],
+    "unicorn/no-useless-spread": "off",
+    "typescript/no-misused-spread": "off"
+  },
+  "overrides": [
+    {
+      "files": [
+        "src/game/rng.ts"
+      ],
+      "rules": {
+        "no-restricted-properties": "off"
+      }
+    },
+    {
+      "files": [
+        "e2e/**"
+      ],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          {
+            "object": "Math",
+            "property": "random",
+            "message": "Tests are pinned: no randomness."
+          },
+          {
+            "property": "waitForTimeout",
+            "message": "Never wait in wall time for the game: use until() from ./game."
+          },
+          {
+            "object": "test",
+            "property": "only",
+            "message": "Remove .only before committing."
+          },
+          {
+            "object": "describe",
+            "property": "only",
+            "message": "Remove .only before committing."
+          }
+        ],
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@playwright/test",
+                "importNames": [
+                  "test",
+                  "expect"
+                ],
+                "message": "Import test and expect from ./game: its fixture pins the date."
+              }
+            ]
+          }
+        ],
+        "typescript/no-implied-eval": "off"
+      }
+    },
+    {
+      "files": [
+        "e2e/game.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ]
+}

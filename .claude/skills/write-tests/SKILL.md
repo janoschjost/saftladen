@@ -32,9 +32,13 @@ Rules:
 - Set the scene, don't hope for it: `?event=<id>` in `query`, `dev.forceState(id, state)`, `freeStations(page)` right before an action that needs the printer or the coffee machine. After an `until` somebody may stand there again.
 - A `url:` in `FEATURES.md` must start every `event=` / `action=` it names; `feature-urls.spec.ts` fails otherwise.
 
+## What the linter checks
+
+`npm run lint` (oxlint, `.oxlintrc.json`) fails on: `test` / `expect` imported from `@playwright/test` in a spec, `waitForTimeout`, `test.only` / `describe.only`, a promise that is neither awaited nor marked `void` (a forgotten `await` before `until(...)` or `read(...)`), unused imports and variables, and `Math.random()` anywhere but `src/game/rng.ts`. It does not see the rest: `expect.poll` / `toPass` on game state, `setInterval` in the page, a title without its `FEATURES.md` id. Those stay yours.
+
 ## Before the PR
 
-`npm run test:e2e`, and for a new or changed spec `npx playwright test <file> --repeat-each 5`. A spec that fails once in five is not done.
+`npm run lint`, `npm run test:e2e`, and for a new or changed spec `npx playwright test <file> --repeat-each 5`. A spec that fails once in five is not done.
 
 ## Rebasing a branch with older specs
 
