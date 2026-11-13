@@ -65,6 +65,11 @@ class Stub {
     this.awayLeft = seconds;
     this.walk = WALK;
   }
+  leaveAs(kind: AwayKind): void {
+    this.awayKind = kind;
+    const last = this.leaves.at(-1);
+    if (this.presence === 'leaving' && last) Object.assign(last, { kind, transform: last.transform || transformsOnLeave(this.member, kind) });
+  }
   startAway(kind: AwayKind, seconds: number): void {
     this.presence = 'out';
     this.awayKind = kind;

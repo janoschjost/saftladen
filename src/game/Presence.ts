@@ -302,10 +302,12 @@ export class Presence {
   }
 
   /** Dev events: straight out of the office (no walk to the door), into the home office or on an errand; back after `seconds`. */
-  awayNow(p: Person, kind: 'home' | 'errand', seconds: number): void {
+  awayNow(p: Person, kind: 'home' | 'errand', seconds: number): boolean {
+    if (p.inOffice && !this.free(p)) return false; // tied up (meeting, foosball, ...): not out of the middle of it
     this.overridden.add(p);
     if (kind === 'home') p.homeVariant = this.freeVariant(p);
     p.startAway(kind, seconds);
+    return true;
   }
 
   /** Bring somebody back to the office. */
@@ -391,7 +393,7 @@ export class Presence {
       case 'out':
         if (p.awayKind === kind && p.awayLeft >= OFF - 1) return;
         if (kind === 'home' && p.awayKind !== 'home') p.homeVariant = this.freeVariant(p);
-        p.awayKind = kind;
+        p.leaveAs(kind);
         p.awayLeft = OFF;
         break;
       default:

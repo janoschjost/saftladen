@@ -28,6 +28,7 @@ import { Settings } from '../ui/Settings';
 import { TimeControl } from '../ui/TimeControl';
 import { devEvents } from './DevEvents';
 import { DeskLights } from './DeskLights';
+import type { Desk } from './Office';
 import { CoatRacks } from './CoatRacks';
 import { Easter } from './Easter';
 import { Dog } from './Dog';
@@ -92,8 +93,8 @@ export class Game {
   private overlay: Overlay;
   private hip = new THREE.Vector3();
   private poofFx = new PoofFx(this.scene);
-  /** desks whose monitor shows Kurt right now (their alter-ego owner is away, see updateKurtScreens) */
-  private kurtScreens = new Set<Person>();
+  /** alter egos whose desk monitor shows Kurt right now, with that desk (see updateAlterEgos) */
+  private kurtScreens = new Map<Person, Desk>();
   private rainFx!: RainFx;
   private spawnFx!: SpawnFx;
   private xmas!: Christmas;
@@ -643,15 +644,18 @@ export class Game {
     }
     this.poofFx.update(dt);
     for (const p of this.people) {
-      const desk = p.member.alterEgo ? p.homeDesk : null;
-      if (!desk) continue;
-      const on = kurtOnScreen({ hour: this.tod.hour, presence: p.presence, awayKind: p.awayKind, deskUsed: !!desk.occupant });
-      if (on && !this.kurtScreens.has(p)) {
-        desk.showKurt(kurtWave(p.member.look));
-        this.kurtScreens.add(p);
-      } else if (!on && this.kurtScreens.has(p)) {
+      if (!p.member.alterEgo) continue;
+      const desk = p.homeDesk;
+      const on = !!desk && kurtOnScreen({ hour: this.tod.hour, presence: p.presence, awayKind: p.awayKind, deskUsed: !!desk.occupant });
+      const shown = this.kurtScreens.get(p);
+      if (shown && (!on || shown !== desk)) {
+        // off, or his desk changed (seat editor): the old monitor goes back to normal
         this.kurtScreens.delete(p);
-        if (!desk.occupant) desk.setScreen(false); // a new sitter has already switched on their own screen
+        if (!shown.occupant) shown.setScreen(false); // a new sitter has already switched on their own screen
+      }
+      if (on && desk && !this.kurtScreens.has(p)) {
+        desk.showKurt(kurtWave(p.member.look));
+        this.kurtScreens.set(p, desk);
       }
     }
   }
@@ -1062,7 +1066,7 @@ export class Game {
       if (kind === 'off') {
         if (!this.presence.goHome(p, this.nav, 120)) return null;
       } else {
-        this.presence.awayNow(p, kind, 120);
+        if (!this.presence.awayNow(p, kind, 120)) return null;
         if (kind === 'home') p.homeAlter = true;
       }
       return strings.alterEgo.event[kind];

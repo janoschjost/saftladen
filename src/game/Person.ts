@@ -421,6 +421,12 @@ export class Person extends Walker {
     this.goTo(nav, this.lane.in);
   }
 
+  /** Plans changed while away or on the way out (lunch became the end of the day): going home now, an alter ego still spins first. */
+  leaveAs(kind: AwayKind): void {
+    this.awayKind = kind;
+    if (this.presence === 'leaving' && !this.script && !this.alter && this.spin === 0 && transformsOnLeave(this.member, kind)) this.spin = KURT.spin;
+  }
+
   /** Start the game already outside. */
   startAway(kind: AwayKind, seconds: number): void {
     this.cancelTask();

@@ -61,4 +61,13 @@ describe('kurt.behavior: Person', () => {
     expect(q.alter).toBe(false);
     expect(q.presence).toBe('in');
   });
+
+  it('kurt.behavior: lunch turns into the end of the day on the way out: he still spins into Kurt', () => {
+    const p = marcoAtDoor();
+    p.leaveOffice(nav, 'errand', 3);
+    expect(p.spin).toBe(0);
+    p.leaveAs('off');
+    expect(p.spin).toBe(KURT.spin);
+    expect(run(p, KURT.spin, () => p.alter)).toBe(true);
+  });
 });
