@@ -110,7 +110,6 @@ test('place.toilet-queue: both cabins taken, the third person waits in front (?e
 
 // the glass room's lamp stays off by day with a meeting inside; the time slider jumping into the night switches it on, back to the day off again
 test('place.meeting-lamp (?event=meeting-room, time slider jumps)', async ({ page }) => {
-  test.setTimeout(240_000); // the group has to walk into the room first, slow in software WebGL
   const errors = await openGame(page, '', undefined, 'event=meeting-room');
   await until(page, (g) => g.meetingRoom.occupants(g.people) >= 2, undefined, 150_000);
   expect(await read(page, (g) => g.meetingLight.level)).toBe(0);
