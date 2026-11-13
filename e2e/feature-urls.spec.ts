@@ -19,7 +19,7 @@ for (const url of urls) {
     const [path, hash = ''] = url.split('#');
     await page.goto(`${path}${path.includes('?') ? '&' : '?'}test${hash ? `#${hash}` : ''}`);
     await page.waitForFunction(() => !!window.__game, undefined, { timeout: 30_000 });
-    await expect(page.locator('#loader')).toHaveCount(0, { timeout: 30_000 });
+    await expect(page.locator('#loader:not(.is-done)')).toHaveCount(0, { timeout: 30_000 });
     const mode = hash.split('@')[0];
     if (['orbit', 'iso', 'plan', 'walk'].includes(mode)) expect(await read(page, (g) => g.views.mode)).toBe(mode);
     if (new URLSearchParams(path.split('?')[1]).has('day')) await expect.poll(() => read(page, (g) => !!g.day), { timeout: 30_000 }).toBe(true);

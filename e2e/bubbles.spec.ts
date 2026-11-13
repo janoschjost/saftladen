@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openGame, read, until } from './game';
+import { openGame, until } from './game';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const seatedSpeakerBubble = (g: any) => {
@@ -12,14 +12,12 @@ const seatedSpeakerBubble = (g: any) => {
 
 test('social.bubbles: a seated speaker in a meeting shows a 3D bubble just above the head', async ({ page }) => {
   const errors = await openGame(page, '', undefined, 'event=meeting-room');
-  await until(page, seatedSpeakerBubble, undefined, 90_000);
-  const b = await read(page, seatedSpeakerBubble);
-  expect(b).not.toBeNull();
+  const b = await until(page, seatedSpeakerBubble, undefined, 90_000);
   // the head is lower than a standing one, and the bubble's tail sits right on top of it (alone: no stacking lift)
-  expect(b!.headY).toBeLessThan(b!.standingHead - 0.2);
-  expect(b!.y - b!.headY).toBeGreaterThan(0);
-  expect(b!.y - b!.headY).toBeLessThan(0.3);
-  expect(b!.text.length).toBeGreaterThan(0);
+  expect(b.headY).toBeLessThan(b.standingHead - 0.2);
+  expect(b.y - b.headY).toBeGreaterThan(0);
+  expect(b.y - b.headY).toBeLessThan(0.3);
+  expect(b.text.length).toBeGreaterThan(0);
   // the old DOM bubbles are gone
   await expect(page.locator('.m-bubble')).toHaveCount(0);
   expect(errors).toEqual([]);

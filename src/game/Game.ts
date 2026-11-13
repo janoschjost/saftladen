@@ -1614,13 +1614,15 @@ export class Game {
 
   private render(alpha: number): void {
     for (const w of this.walkers) if (!w.away || w.fx > 0) this.pose(w, alpha);
+    if (!this.draw) {
+      // what drawing does on the side, and picking, labels and bubbles rely on
+      this.scene.updateMatrixWorld();
+      this.views.camera.updateMatrixWorld();
+    }
     this.updateHover();
     this.updateOverlay();
     if (this.previews.length) this.renderPreviews();
-    if (this.draw) return this.renderer.render(this.scene, this.views.camera);
-    // what drawing does on the side and picking and labels rely on
-    this.scene.updateMatrixWorld();
-    this.views.camera.updateMatrixWorld();
+    if (this.draw) this.renderer.render(this.scene, this.views.camera);
   }
 
   /** Interpolated transform + procedural walk cycle. */

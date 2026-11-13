@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openGame, read, until } from './game';
+import { freeStations, openGame, read, until } from './game';
 
 // the dev module loads after the game: wait for `dev.forceState`
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -49,6 +49,7 @@ test('dev.force: desk, errand and coffee break take effect', async ({ page }) =>
   await until(page, (g, id) => g.people.find((p: { id: string }) => p.id === id).task, ids[0]);
   expect(await force(page, ids[1], 'errand')).toContain('Besorgung');
   await until(page, (g, id) => g.people.find((p: { id: string }) => p.id === id).presence !== 'in', ids[1]);
+  await freeStations(page); // the game ran on meanwhile: somebody may stand at the coffee machine
   expect(await force(page, ids[2], 'break')).toContain('Pause');
   await until(page, (g, id) => g.kitchen.current?.members?.some((p: { id: string }) => p.id === id) ?? !!g.kitchen.current, ids[2]);
   // away person: nothing possible

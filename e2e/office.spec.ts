@@ -69,6 +69,7 @@ test('select.actions + keys.home: select, send home, call back', async ({ page }
 
   // the game refuses while the person is busy (a chat may start in the meantime): press again until they set off
   await expect(async () => {
+    await read(page, (g) => g.advance(0.5)); // a refusal passes with game time, not with seconds on a slow machine
     await page.locator('#actions-home').click();
     const p = await read(page, (g, id) => {
       const o = g.people.find((q: any) => q.id === id);
