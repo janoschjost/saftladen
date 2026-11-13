@@ -81,8 +81,7 @@ test('presence.door-flow: after "all back" people walk in one by one and move on
   await expect(roster).toBeVisible();
   if (await roster.evaluate((el) => el.classList.contains('is-collapsed'))) await roster.locator('.m-away__title').click();
   // watch the arrivals every simulation step: how many come through the door at once, and where each one is 4 s after
-  // stepping in. By day the office is full (presence.caps), so only a few get in: enough to see that they don't stay
-  // in the entrance.
+  // stepping in (everybody called back comes in, even into the full office: presence.caps)
   await read(page, (g) => {
     const r = (g.allBack = { maxIn: 0, dists: [] as number[] });
     const inAt = new Map<unknown, number>();
@@ -102,7 +101,7 @@ test('presence.door-flow: after "all back" people walk in one by one and move on
     });
   });
   await page.locator('#away-all').click();
-  const r = await until(page, (g) => g.allBack.dists.length >= 1 && g.allBack, undefined, 120_000);
+  const r = await until(page, (g) => g.allBack.dists.length >= 3 && g.allBack, undefined, 120_000);
   expect(r.maxIn).toBeLessThanOrEqual(2);
   for (const d of r.dists) expect(d).toBeGreaterThan(2);
   expect(errors).toEqual([]);
