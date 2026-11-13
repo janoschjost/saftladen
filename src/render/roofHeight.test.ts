@@ -28,19 +28,24 @@ describe('office.pendant-cords', () => {
   });
 
   it('roof off: every open-office cord ends at the same height (4.2), roof on: at the roof', () => {
-    const { pendantCords, setRoofVisible } = buildOffice(new THREE.Scene());
+    const scene = new THREE.Scene();
+    const { pendantCords, setRoofVisible } = buildOffice(scene);
     const open = pendantCords.filter((c) => c.noRoof);
     expect(open.length).toBe(6);
-    // top of the cord that is shown: mesh centre + half its height
+    // what is drawn: the cord meshes must hang in the scene (merging items must not bake them in), visible all the way up
+    const drawn = (o: THREE.Object3D) => {
+      for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) return false;
+      return o.parent !== null && scene.getObjectById(o.id) === o;
+    };
     const shownTop = (c: (typeof open)[number]) => {
-      const m = [c.withRoof, c.noRoof!].find((o) => o.visible)!;
-      return m.position.y + (m.geometry as THREE.CylinderGeometry).parameters.height / 2;
+      const shown = [c.withRoof, c.noRoof!].filter(drawn);
+      expect(shown.length, `one cord drawn at ${c.x}, ${c.z}`).toBe(1);
+      scene.updateMatrixWorld(true);
+      return new THREE.Box3().setFromObject(shown[0]).max.y;
     };
     setRoofVisible(false);
     for (const c of open) expect(shownTop(c), `pendant at ${c.x}, ${c.z}`).toBeCloseTo(4.2);
     setRoofVisible(true);
     for (const c of open) expect(shownTop(c), `pendant at ${c.x}, ${c.z}`).toBeCloseTo(roofHeightAt(c.x, c.z));
-    // exactly one cord per pendant is shown
-    for (const c of open) expect([c.withRoof, c.noRoof!].filter((o) => o.visible).length).toBe(1);
   });
 });

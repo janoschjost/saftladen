@@ -776,7 +776,11 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     item('pendant', at('pendant', x, z), 'Hängelampe', () => pendantParts(x, z, type, bottom, ceil, ceilNoRoof));
   }
   function pendantParts(x: number, z: number, type: 'steel' | 'black' | 'cage' = 'steel', bottom = 2.0, ceil = 3.6, ceilNoRoof = ceil): void {
-    const cord = (top: number) => cyl(0.008, 0.008, EXACT ? top - bottom - 0.3 : Math.min(top - bottom - 0.3, 0.8), x, bottom + 0.3, z, mat.black, world, 4);
+    const cord = (top: number) => {
+      const m = cyl(0.008, 0.008, EXACT ? top - bottom - 0.3 : Math.min(top - bottom - 0.3, 0.8), x, bottom + 0.3, z, mat.black, world, 4);
+      if (ceilNoRoof !== ceil) m.userData.keep = true; // toggled with the roof, so mergeStatic leaves it a mesh of its own
+      return m;
+    };
     const entry: PendantCord = { x, z, top: ceil, topNoRoof: ceilNoRoof, withRoof: cord(ceil) };
     if (ceilNoRoof !== ceil) {
       entry.noRoof = cord(ceilNoRoof);
@@ -2575,6 +2579,7 @@ function mergeStatic(root: THREE.Object3D, worldSpace: boolean): THREE.Group {
   const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
   const buckets = new Map<string, { material: Mat; geos: THREE.BufferGeometry[] }>();
   const loose: THREE.Object3D[] = [];
+  const kept: THREE.Mesh[] = [];
   root.traverse((o) => {
     if (o instanceof THREE.Line) {
       if (worldSpace && o.parent) o.applyMatrix4(o.parent.matrixWorld);
@@ -2582,6 +2587,10 @@ function mergeStatic(root: THREE.Object3D, worldSpace: boolean): THREE.Group {
       return;
     }
     if (!(o instanceof THREE.Mesh) || Array.isArray(o.material)) return;
+    if (o.userData.keep) {
+      kept.push(o);
+      return;
+    }
     const m = o.material as Mat & { color?: THREE.Color; map?: THREE.Texture | null };
     const key = [m.type, m.color?.getHex(), m.map?.uuid, m.transparent, m.opacity, m.side].join('|');
     const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
@@ -2607,6 +2616,12 @@ function mergeStatic(root: THREE.Object3D, worldSpace: boolean): THREE.Group {
   for (const l of loose) {
     l.removeFromParent();
     out.add(l);
+  }
+  for (const k of kept) {
+    const rel = worldSpace ? k.matrixWorld.clone() : new THREE.Matrix4().multiplyMatrices(inv, k.matrixWorld);
+    k.removeFromParent();
+    rel.decompose(k.position, k.quaternion, k.scale);
+    out.add(k);
   }
   return out;
 }
