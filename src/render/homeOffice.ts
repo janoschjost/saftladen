@@ -1823,7 +1823,7 @@ export class HomeOffice {
     if (this.sonT >= 0) {
       // turns to the boy while he stands there, nods along
       const near = Math.min(1, this.sonT / SON.walkIn, (SON_TOTAL - this.sonT) / SON.walkOut);
-      if (this.chair && !recl) {
+      if (this.chair && !recl && !stand) {
         // rolls back from the desk and swivels round to him
         chairTurn = SON_TURN * near;
         chairBack = Math.max(chairBack, SON_SPOT.roll * near);

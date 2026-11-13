@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import * as assignments from '../data/homeAssignments';
 import { installHeadlessDom } from '../test/headlessDom';
 import { setSeed } from './rng';
 import { Sim } from './Sim';
@@ -90,6 +91,25 @@ describe('dev.events', () => {
     expect(back[0].awayLeft).toBe(0);
     for (let i = 0; i < 90 * 60 && (p.presence !== 'out' || back[0].presence !== 'in'); i++) sim.step(1 / 60);
     expect([p.presence, p.awayKind, back[0].presence]).toEqual(['out', 'home', 'in']);
+  });
+});
+
+describe('presence.manual', () => {
+  it('presence.manual: sent home with all rooms taken, somebody whose regular room is theirs takes it, its sitter comes back', () => {
+    setSeed(1);
+    const sim = new Sim({ cycle: cycleOf(11), homes: true });
+    Walker.animate = true;
+    for (let i = 0; i < 60; i++) sim.step(1 / 60);
+    const p = sim.people.find((o) => o.presence === 'in' && !o.task && !o.talk && !o.member.homebody)!;
+    const room = 3;
+    const sitter = sim.people.find((o) => o.awayKind === 'home' && o.homeVariant === room)!;
+    expect(sitter).toBeDefined();
+    // p owns that room (team data / character view)
+    vi.spyOn(assignments, 'homeRoomOf').mockImplementation((id) => (id === p.id ? room : null));
+    expect(sim.presence.send(p, 'home', sim.nav)).toBe(true);
+    expect(p.homeVariant).toBe(room);
+    expect(sitter.awayLeft).toBe(0); // on the way back to the office
+    vi.restoreAllMocks();
   });
 });
 

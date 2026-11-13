@@ -333,18 +333,24 @@ export class Presence {
 
   /**
    * Somebody in a shared home office who can give it up: ordinary home-office workers first (the one who would be
-   * back soonest), people sent home by hand, homebodies and night homers only when nobody else is there. Own rooms
-   * free none of the shared ones. Null: nobody sits in a shared room.
+   * back soonest), people sent home by hand (or by `#homes`) only when nobody else is there. Never homebodies or a
+   * night shift at home: their day is at home. Own rooms free none of the shared ones. Null: nobody can.
    */
   private roomToFree(): Person | null {
     let best: Person | null = null;
     let bestKept = true;
     for (const x of this.people) {
-      if (x.presence !== 'out' || x.awayKind !== 'home' || x.homeVariant >= HOME_COUNT) continue;
-      const kept = x.member.homebody || this.nightHomers.has(x) || this.overridden.has(x);
+      if (x.presence !== 'out' || x.awayKind !== 'home' || x.homeVariant >= HOME_COUNT || x.member.homebody || this.nightHomers.has(x)) continue;
+      const kept = this.overridden.has(x);
       if (!best || (kept === bestKept ? x.awayLeft < best.awayLeft : !kept)) [best, bestKept] = [x, kept];
     }
     return best;
+  }
+
+  /** `p` takes home office `room`; whoever works there comes back to the office (one person per room). */
+  private moveInto(p: Person, room: number): void {
+    p.homeVariant = room;
+    for (const o of this.people) if (o !== p && o.awayKind === 'home' && (o.presence === 'out' || o.presence === 'leaving') && o.homeVariant === room) this.callBack(o);
   }
 
   /** A home office for `p` now or soon: a free one, their own, or one that `roomToFree` can clear. */
@@ -378,9 +384,8 @@ export class Presence {
       if (this.homeFull && homeRoomOf(p.id) === null) {
         const o = takeRoom ? this.roomToFree() : null;
         if (!o) return false;
-        p.homeVariant = o.homeVariant;
-        this.callBack(o);
-      } else p.homeVariant = this.freeVariant(p);
+        this.moveInto(p, o.homeVariant);
+      } else this.moveInto(p, this.freeVariant(p));
     }
     if (this.duty(p, this.workHour) !== 'duty') this.overridden.add(p);
     p.leaveOffice(nav, kind, 600, true);
@@ -399,9 +404,7 @@ export class Presence {
   awayNow(p: Person, kind: 'home' | 'errand', seconds: number): void {
     this.overridden.add(p);
     if (kind === 'home') {
-      const room = (p.homeVariant = this.freeVariant(p));
-      // home office full: the room is taken, whoever works there comes back to the office (one person per room)
-      for (const o of this.people) if (o !== p && o.awayKind === 'home' && (o.presence === 'out' || o.presence === 'leaving') && o.homeVariant === room) this.callBack(o);
+      this.moveInto(p, this.freeVariant(p));
     }
     p.startAway(kind, seconds);
   }

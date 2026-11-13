@@ -5,10 +5,9 @@ import type { Social } from './Social';
 
 /**
  * How many greet, how many of them walk over (only from within `reach` metres, getting up from their desk if need
- * be), standing distance (m), seconds the cheer lasts, seconds the visitor waits for the walkers, seconds a walker
- * gets to arrive.
+ * be), standing distance (m), seconds the cheer lasts, seconds a walker gets to arrive (the visitor waits as long).
  */
-const WELCOME = { crowd: 5, walkers: 2, stand: 1.1, reach: 12, hold: 5, wait: 12, timeout: 20 };
+const WELCOME = { crowd: 5, walkers: 2, stand: 1.1, reach: 12, hold: 5, timeout: 20 };
 
 const gesture = () => (random() < 0.6 ? 'cheer' : 'wave');
 
@@ -67,7 +66,7 @@ export class Welcome {
     const first = near[0]?.o;
     if (!first) return;
     // waits at the door for the ones who come over
-    if (v.talkTo(first.pos, walkers ? WELCOME.wait : WELCOME.hold)) v.welcome('wave', 0.6, WELCOME.hold);
+    if (v.talkTo(first.pos, walkers ? WELCOME.timeout : WELCOME.hold)) v.welcome('wave', 0.6, WELCOME.hold);
     this.call = { who: first, text: `${v.member.name.split(' ')[0]}! 🎉`, t: WELCOME.hold };
   }
 }
