@@ -19,13 +19,13 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
    `npm run dev` in a worktree picks the next free port from 5174 (the main checkout keeps 5173).
 4. **Implement.** Read the issue and all of its comments. Follow `README.md` and the existing code. Keep the change scoped to the issue.
 5. **Done means:**
-   - `npm run build` passes. CI (`.github/workflows/ci.yml`) runs build and Vitest on every PR; a red check is not done. The e2e tests run on CI only with the `e2e` label (Actions minutes are limited), so run them locally and note the result in the PR body. A failing local run is not done, whatever the load on the machine: the waits count game time, not seconds. A test that also fails on `main` → say so in the PR body and link its issue (open one if there is none). Add the label (`gh pr edit --add-label e2e`) whenever the PR adds or changes a file under `e2e/`, `playwright.config.ts`, the `?test` hook or the CI workflow: a spec must have run on CI before it reaches `main`. Other PRs get it from the reviewer (`/review-pr`).
+   - `npm run lint` and `npm run build` pass. CI (`.github/workflows/ci.yml`) runs lint, build and Vitest on every PR; a red check is not done. The e2e tests run on CI only with the `e2e` label (Actions minutes are limited), so run them locally and note the result in the PR body. A failing local run is not done, whatever the load on the machine: the waits count game time, not seconds. A test that also fails on `main` → say so in the PR body and link its issue (open one if there is none). Add the label (`gh pr edit --add-label e2e`) whenever the PR adds or changes a file under `e2e/`, `playwright.config.ts`, the `?test` hook or the CI workflow: a spec must have run on CI before it reaches `main`. Other PRs get it from the reviewer (`/review-pr`).
    - `npm test` and `npm run test:e2e` pass, and new or changed behavior has a test. Which kind: **Writing tests** below; how: the `write-tests` skill.
    - Every criterion has been checked in the running app.
    - `FEATURES.md` is updated: add or change the lines for this issue, ending with `(#N)`. Every line you touched still works. Each line you add or change gets a `url:` where a URL can show it (see the rules at the top of `FEATURES.md`).
    - The diff has been through one pass of `/simplify` and one of `/code-review` (medium), in that order, both limited to this branch's diff:
      1. `/simplify`, apply what keeps the change inside the issue's scope.
-     2. `npm run build && npm test && npm run test:e2e`.
+     2. `npm run lint && npm run build && npm test && npm run test:e2e`.
      3. `/code-review`. Fix the confirmed correctness findings only. Everything else (style, taste, things outside the issue) goes under `## Notes` in the PR body or into a new issue.
      4. Step 3 changed code → tests again, then one more `/code-review`. Two rounds at most: after the second, open the PR and list what is still open under `## Notes`. Never loop until a review comes back empty; it won't.
 
@@ -33,7 +33,7 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
 6. **PR.** Rebase first. On conflicts keep both sides' behavior, never just yours, then re-check the affected `FEATURES.md` lines.
    A rebase also brings in the rules as they are on `main` now. After every rebase read what changed in them (`git diff ORIG_HEAD HEAD --stat -- AGENTS.md README.md .claude/skills e2e/game.ts playwright.config.ts`) and bring the branch's own work in line: a test written the old way is rewritten, a new check (`npm run …`) is run. The branch follows the rules of the `main` it lands on, not of the day it was started.
    ```sh
-   git fetch origin && git rebase origin/main && npm run build && npm test && npm run test:e2e
+   git fetch origin && git rebase origin/main && npm run lint && npm run build && npm test && npm run test:e2e
    git push -u origin HEAD
    gh pr create --base main --assignee @me --title "<imperative summary>" --body "<see below>"
    ```
@@ -60,6 +60,7 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
 - Playwright tests open the game with `?test`: time stands still until the test fast-forwards it, the office is not drawn, seed, hour and date are pinned. So never wait in wall time for the game (`waitForTimeout`, `expect.poll` or `toPass` on game state): use `until()`.
 - Import `test`, `expect` and the helpers from `e2e/game.ts`, never `test` from `@playwright/test`.
 - A failing test is not done, whatever the load on the machine.
+- `npm run lint` (oxlint, `.oxlintrc.json`) enforces part of this: the imports, `waitForTimeout`, `test.only`, a forgotten `await`, `Math.random()` outside `src/game/rng.ts`.
 
 ## Review
 

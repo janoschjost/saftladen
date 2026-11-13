@@ -9,6 +9,7 @@ Current state: the real office (reconstructed from walkthrough photos, 41 x 15 m
 nvm use                # Node version from .nvmrc
 npm install
 npm run dev            # http://localhost:5173
+npm run lint           # oxlint (.oxlintrc.json), type-aware
 npm run build
 npm test               # vitest: simulation tests (src/**/*.test.ts), deterministic via a fixed seed
 npm run test:e2e       # playwright: browser smoke tests (e2e/), headless Chromium against its own dev server on :5199
