@@ -2495,8 +2495,9 @@
         margin: 0 -1rem -1rem 0;
         padding: 0 1rem 1rem 0;
         overflow-y: auto;
-        // scrollable, but no visible scrollbar
-        overscroll-behavior: contain;
+        // scrollable, but no visible scrollbar; `none` (not `contain`) also drops the rubber-band bounce, which moves the DOM
+        // overlays but not the scenes drawn into the canvas behind them
+        overscroll-behavior: none;
         scrollbar-width: none;
 
         &::-webkit-scrollbar {
