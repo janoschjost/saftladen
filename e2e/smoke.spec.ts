@@ -87,12 +87,14 @@ test.describe('view.deeplinks', () => {
 
 test.describe('view.walk', () => {
   test('the player fits through every interior doorway (#70)', async ({ page }) => {
-    await openGame(page, 'walk');
+    const errors = await openGame(page, 'walk');
     // for each door: a straight line 0.6 m either side of its centre (wall and body clear), across the wall (one of the two
-    // axes is across); the phone booth is left out, its seat and table fill it (people only sit in it)
-    const stuck = await read(page, (g) =>
-      g.model.doors
-        .filter((d: any) => Math.hypot(d.center.x - g.phoneBooth.doorPos.x, d.center.z - g.phoneBooth.doorPos.z) > 0.5)
+    // axes is across); the phone booth and the WC cabins are left out: seat and table fill the booth, the cabins are
+    // blocked on purpose (people are scripted in, nobody walks there)
+    const stuck = await read(page, (g) => {
+      const closed = [g.phoneBooth.doorPos, ...g.model.toilets.cabins.map((c: any) => c.doorPos)];
+      return g.model.doors
+        .filter((d: any) => closed.every((p: any) => Math.hypot(d.center.x - p.x, d.center.z - p.z) > 0.5))
         .filter((d: any) => {
           const line = (ax: number, az: number) => {
             for (let t = -0.6; t <= 0.6; t += 0.05) if (!g.views.free(d.center.x + ax * t, d.center.z + az * t)) return false;
@@ -100,8 +102,9 @@ test.describe('view.walk', () => {
           };
           return !line(1, 0) && !line(0, 1);
         })
-        .map((d: any) => `${d.center.x.toFixed(2)},${d.center.z.toFixed(2)}`),
-    );
+        .map((d: any) => `${d.center.x.toFixed(2)},${d.center.z.toFixed(2)}`);
+    });
     expect(stuck).toEqual([]);
+    expect(errors).toEqual([]);
   });
 });
