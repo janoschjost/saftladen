@@ -20,10 +20,8 @@ export class Welcome {
   /** the call over the first greeter ("Zlatko! 🎉") while the cheer lasts */
   call: { who: Person; text: string; t: number } | null = null;
   /** greeters walking over to the visitor (held there until their cheer is done) */
-  private walkers: Array<{ p: Person; pin: Person['scripted']; t: number; cheered: boolean }> = [];
+  private walkers: Array<{ p: Person; to: Person; pin: Person['scripted']; t: number; cheered: boolean }> = [];
   private last = new Map<Person, Person['presence']>();
-  /** who is being welcomed right now */
-  private visitor: Person | null = null;
 
   update(dt: number, people: Person[], presence: Presence, social: Social): void {
     for (const p of people) {
@@ -38,7 +36,7 @@ export class Welcome {
         w.cheered = true;
         w.t = WELCOME.hold;
         w.p.welcome(gesture(), random() * 0.5, WELCOME.hold);
-        this.visitor?.welcome('wave', 0.3, WELCOME.hold); // waves back at whoever comes over
+        w.to.welcome('wave', 0.3, WELCOME.hold); // waves back at whoever comes over
       }
       if (s && (w.t -= dt) > 0) return true;
       if (s) w.p.unpin();
@@ -60,7 +58,7 @@ export class Welcome {
         walkers++;
         o.interrupt();
         o.pinTo({ at: { x: v.pos.x - (dx / d) * WELCOME.stand, z: v.pos.z - (dz / d) * WELCOME.stand }, yaw: Math.atan2(dx, dz), walk: true });
-        this.walkers.push({ p: o, pin: o.scripted, t: WELCOME.timeout, cheered: false });
+        this.walkers.push({ p: o, to: v, pin: o.scripted, t: WELCOME.timeout, cheered: false });
       } else {
         o.talkTo(v.pos, WELCOME.hold); // turns to the visitor unless tied to a desk
         o.welcome(gesture(), 0.2 + random() * 0.8, WELCOME.hold);
@@ -68,7 +66,6 @@ export class Welcome {
     }
     const first = near[0]?.o;
     if (!first) return;
-    this.visitor = v;
     // waits at the door for the ones who come over
     if (v.talkTo(first.pos, walkers ? WELCOME.wait : WELCOME.hold)) v.welcome('wave', 0.6, WELCOME.hold);
     this.call = { who: first, text: `${v.member.name.split(' ')[0]}! 🎉`, t: WELCOME.hold };

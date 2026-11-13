@@ -338,12 +338,11 @@ export class Presence {
    */
   private roomToFree(): Person | null {
     let best: Person | null = null;
-    let bestRank = Infinity;
+    let bestKept = true;
     for (const x of this.people) {
       if (x.presence !== 'out' || x.awayKind !== 'home' || x.homeVariant >= HOME_COUNT) continue;
       const kept = x.member.homebody || this.nightHomers.has(x) || this.overridden.has(x);
-      const rank = (kept ? 1e6 : 0) + x.awayLeft;
-      if (rank < bestRank) [best, bestRank] = [x, rank];
+      if (!best || (kept === bestKept ? x.awayLeft < best.awayLeft : !kept)) [best, bestKept] = [x, kept];
     }
     return best;
   }
@@ -367,10 +366,10 @@ export class Presence {
     return this.homeCount >= MAX_HOME;
   }
 
-  /** Send somebody home / out by hand. They stay away until called back (or 10 min). */
   /**
-   * Sends somebody out by hand; false (nothing changed) when they can't go. With `takeRoom` a full home office is no
-   * obstacle: whoever `roomToFree` picks comes back to the office and `p` gets that room (the dev event).
+   * Sends somebody home / out by hand: they stay away until called back (or 10 min). False (nothing changed) when
+   * they can't go. With `takeRoom` a full home office is no obstacle: whoever `roomToFree` picks comes back to the
+   * office and `p` gets that room (the dev event).
    */
   send(p: Person, kind: 'home' | 'errand', nav: NavGrid, takeRoom = false): boolean {
     if (p.presence !== 'in' || p.held || p.controlled || p.talk) return false;
