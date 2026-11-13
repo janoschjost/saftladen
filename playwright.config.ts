@@ -13,7 +13,8 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   failOnFlakyTests: !!process.env.CI,
   // CI: stop and report before the job's own limit (ci.yml) cancels it and with it the upload of the traces
-  globalTimeout: process.env.CI ? 8 * 60_000 : undefined,
+  // (the run takes 4 to 6 minutes there: the same commit was measured at 3.7 and at 5.9)
+  globalTimeout: process.env.CI ? 12 * 60_000 : undefined,
   workers: process.env.CI ? 2 : undefined,
   reporter: process.env.CI ? [['github'], ['list']] : 'list',
   timeout: 60_000,
