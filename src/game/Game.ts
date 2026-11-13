@@ -1039,13 +1039,9 @@ export class Game {
 
     const away = (kind: 'errand' | 'home') => () => {
       const p = pickFree(1)[0];
-      if (!p) return null;
-      if (kind === 'home' && this.presence.homeFull) {
-        this.presence.makeRoom(); // somebody comes back from home: the next try finds a free room
-        return null;
-      }
+      // a full home office: somebody gives up their room for them (and comes back to the office)
+      if (!p || !this.presence.send(p, kind, this.nav, true)) return null;
       this.release(p);
-      this.presence.send(p, kind, this.nav);
       return strings.presence.event.leaves[kind](p.member.name.split(' ')[0]);
     };
     devEvents.register({ id: 'errand', group: strings.presence.event.group, label: strings.presence.event.someoneLeaves.errand, run: away('errand') });
@@ -1057,7 +1053,7 @@ export class Game {
       label: strings.presence.event.remoteVisit,
       run: () => {
         const p = zlatko();
-        if (!p || (this.presence.isVisitor(p) && p.inOffice)) return null;
+        if (!p || p.inOffice) return null; // already here
         this.presence.setVisit(p, true);
         this.presence.callBack(p);
         return strings.presence.event.visits(p.member.name.split(' ')[0]);
@@ -1069,7 +1065,7 @@ export class Game {
       label: strings.presence.event.remoteSon,
       run: () => {
         const p = zlatko();
-        if (!p?.member.son) return null;
+        if (!p?.member.son || !this.presence.roomFor(p)) return null;
         // a remote day again: his plan sends him to the home office (a room is freed if need be), the son comes once he is there
         this.presence.setVisit(p, false);
         this.release(p);

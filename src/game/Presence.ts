@@ -235,7 +235,12 @@ export class Presence {
       const fixed = this.people.filter((p) => homeRoomOf(p.id) !== null);
       const taken = new Set(fixed.map((p) => homeRoomOf(p.id)));
       const free = Array.from({ length: HOME_COUNT }, (_, i) => i).filter((i) => !taken.has(i));
-      const auto = this.people.filter((p) => homeRoomOf(p.id) === null).slice(0, free.length);
+      // a remote worker on a remote day takes one of them: he works from home anyway (nobody gives up a room for him)
+      const remote = (p: Person) => (this.planOf(p).remote ? 0 : 1);
+      const auto = this.people
+        .filter((p) => homeRoomOf(p.id) === null)
+        .sort((a, b) => remote(a) - remote(b))
+        .slice(0, free.length);
       for (const p of fixed) {
         p.homeVariant = homeRoomOf(p.id)!;
         p.startAway('home', 9999);
@@ -327,17 +332,34 @@ export class Presence {
   }
 
   /**
-   * All home offices taken: the one who would be back soonest anyway comes back to the office, so a room frees up in
+   * Somebody in a shared home office who can give it up: ordinary home-office workers first (the one who would be
+   * back soonest), people sent home by hand, homebodies and night homers only when nobody else is there. Own rooms
+   * free none of the shared ones. Null: nobody sits in a shared room.
+   */
+  private roomToFree(): Person | null {
+    let best: Person | null = null;
+    let bestRank = Infinity;
+    for (const x of this.people) {
+      if (x.presence !== 'out' || x.awayKind !== 'home' || x.homeVariant >= HOME_COUNT) continue;
+      const kept = x.member.homebody || this.nightHomers.has(x) || this.overridden.has(x);
+      const rank = (kept ? 1e6 : 0) + x.awayLeft;
+      if (rank < bestRank) [best, bestRank] = [x, rank];
+    }
+    return best;
+  }
+
+  /** A home office for `p` now or soon: a free one, their own, or one that `roomToFree` can clear. */
+  roomFor(p: Person): boolean {
+    return !this.homeFull || homeRoomOf(p.id) !== null || this.roomToFree() !== null;
+  }
+
+  /**
+   * All home offices taken: somebody leaves theirs and comes back to the office (`roomToFree`), so a room frees up in
    * a few seconds. One at a time: nothing happens while somebody is already on the way out of a room.
    */
   makeRoom(): void {
-    let o: Person | null = null;
-    for (const x of this.people) {
-      if (x.awayKind !== 'home') continue;
-      if (x.presence === 'returning' || (x.presence === 'out' && x.awayLeft <= 1)) return;
-      if (x.presence !== 'out' || x.homeVariant >= HOME_COUNT || x.member.homebody || this.nightHomers.has(x) || this.overridden.has(x)) continue; // own rooms free none of the shared ones
-      if (x.awayLeft < OFF / 2 && (!o || x.awayLeft < o.awayLeft)) o = x;
-    }
+    for (const x of this.people) if (x.awayKind === 'home' && (x.presence === 'returning' || (x.presence === 'out' && x.awayLeft <= 1))) return;
+    const o = this.roomToFree();
     if (o) o.awayLeft = 0; // 0: called back, a full office does not hold them back (see capOffice)
   }
 
@@ -346,15 +368,24 @@ export class Presence {
   }
 
   /** Send somebody home / out by hand. They stay away until called back (or 10 min). */
-  send(p: Person, kind: 'home' | 'errand', nav: NavGrid): void {
-    if (p.presence !== 'in' || p.held || p.controlled || p.talk) return;
+  /**
+   * Sends somebody out by hand; false (nothing changed) when they can't go. With `takeRoom` a full home office is no
+   * obstacle: whoever `roomToFree` picks comes back to the office and `p` gets that room (the dev event).
+   */
+  send(p: Person, kind: 'home' | 'errand', nav: NavGrid, takeRoom = false): boolean {
+    if (p.presence !== 'in' || p.held || p.controlled || p.talk) return false;
     if (p.member.homebody) kind = 'home'; // never out on errands
     if (kind === 'home') {
-      if (this.homeFull) return;
-      p.homeVariant = this.freeVariant(p);
+      if (this.homeFull && homeRoomOf(p.id) === null) {
+        const o = takeRoom ? this.roomToFree() : null;
+        if (!o) return false;
+        p.homeVariant = o.homeVariant;
+        this.callBack(o);
+      } else p.homeVariant = this.freeVariant(p);
     }
     if (this.duty(p, this.workHour) !== 'duty') this.overridden.add(p);
     p.leaveOffice(nav, kind, 600, true);
+    return true;
   }
 
   /** Dev event: off home as if their day ended (an alter ego spins and walks out as itself); back after `seconds`. */

@@ -33,6 +33,13 @@ test('home.laundry (?event=home-laundry#homes)', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+// all eight home offices taken by hand: Zlatko still gets one (somebody gives theirs up) and the son comes
+test('home.son (?event=remote-son#homes)', async ({ page }) => {
+  const errors = await openGame(page, 'homes', undefined, 'event=remote-son');
+  await until(page, (g) => g.homes.some((h: { sonHere?: boolean } | null) => h?.sonHere), undefined, 120_000);
+  expect(errors).toEqual([]);
+});
+
 test('dev.params: unknown ?event id only warns, the game starts normally', async ({ page }) => {
   const warnings: string[] = [];
   page.on('console', (m) => m.type() === 'warning' && warnings.push(m.text()));

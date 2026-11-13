@@ -21,6 +21,22 @@ function fullOfficeVisit(seed: number) {
 }
 
 describe('presence.remote-visit', () => {
+  it('presence.remote-visit: on a remote day he gets a home office even when all are taken by hand (#homes)', () => {
+    setSeed(1);
+    const sim = new Sim({ cycle: cycleOf(11), homes: true });
+    Walker.animate = true;
+    const v = sim.people.find((p) => p.member.schedule.visitChance !== undefined)!;
+    sim.presence.setVisit(v, true); // in for a visit first (as the dev event does) ...
+    sim.presence.callBack(v);
+    for (let i = 0; i < 90 * 60 && v.presence !== 'in'; i++) sim.step(1 / 60);
+    expect(v.presence).toBe('in');
+    expect(sim.presence.homeFull).toBe(true);
+    expect(sim.presence.roomFor(v)).toBe(true);
+    sim.presence.setVisit(v, false); // a remote day again
+    for (let i = 0; i < 90 * 60 && !(v.presence === 'out' && v.awayKind === 'home'); i++) sim.step(1 / 60);
+    expect([v.presence, v.awayKind]).toEqual(['out', 'home']);
+  });
+
   it('presence.remote-visit: a visitor who just walked into a full office stays (the office cap sends somebody else)', () => {
     for (const seed of [1, 2, 3, 4, 5, 6]) {
       const { sim, v, greeted } = fullOfficeVisit(seed);
@@ -58,6 +74,25 @@ describe('presence.remote-visit', () => {
   });
 });
 
+describe('dev.events', () => {
+  it('dev.events: with all home offices taken (#homes) the home event still sends somebody, whoever sat in that room comes back', () => {
+    setSeed(1);
+    const sim = new Sim({ cycle: cycleOf(11), homes: true });
+    Walker.animate = true;
+    for (let i = 0; i < 60; i++) sim.step(1 / 60);
+    expect(sim.presence.homeFull).toBe(true);
+    const p = sim.people.find((o) => o.presence === 'in' && !o.task && !o.talk && !o.member.homebody)!;
+    const before = sim.people.filter((o) => o.awayKind === 'home' && o.presence === 'out');
+    expect(sim.presence.send(p, 'home', sim.nav)).toBe(false); // the player's H: a full home office stays full
+    expect(sim.presence.send(p, 'home', sim.nav, true)).toBe(true);
+    const back = before.filter((o) => o.homeVariant === p.homeVariant);
+    expect(back.length).toBe(1);
+    expect(back[0].awayLeft).toBe(0);
+    for (let i = 0; i < 90 * 60 && (p.presence !== 'out' || back[0].presence !== 'in'); i++) sim.step(1 / 60);
+    expect([p.presence, p.awayKind, back[0].presence]).toEqual(['out', 'home', 'in']);
+  });
+});
+
 describe('presence.remote-greet', () => {
   it('presence.remote-greet: the team welcomes the remote worker who walks in, once per visit', () => {
     setSeed(1);
@@ -74,16 +109,19 @@ describe('presence.remote-greet', () => {
     const call = sim.welcome.call!;
     expect(call.text).toBe(`${v.member.name.split(' ')[0]}! 🎉`);
     expect(call.who).not.toBe(v);
-    // greeters cheer or wave, somebody walks over to him
+    // greeters cheer or wave; the two closest walk over, even from their desks (everybody near the door works at 11:00)
     const gesturing = () => sim.people.filter((p) => p !== v && p.reaction && ['cheer', 'wave'].includes(p.reaction.kind)).length;
     const walkers = sim.people.filter((p) => p.scripted && !p.scripted.arrived);
-    expect(gesturing() + walkers.length).toBeGreaterThanOrEqual(2);
+    expect(walkers.length).toBe(2);
     let most = 0;
+    let closest = Infinity;
     for (let j = 0; j < 20 * 60; j++) {
       sim.step(1 / 60);
       most = Math.max(most, gesturing());
+      for (const w of walkers) if (w.scripted) closest = Math.min(closest, Math.hypot(w.pos.x - v.pos.x, w.pos.z - v.pos.z));
     }
     expect(most).toBeGreaterThanOrEqual(2);
+    expect(closest).toBeLessThan(1.6); // came over to him
     // the walkers are let go again, and the call is over
     expect(sim.welcome.call).toBeNull();
     for (const w of walkers) expect(w.scripted).toBeNull();
