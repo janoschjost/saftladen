@@ -55,7 +55,7 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
 | What only a browser can show: keys, clicks, hashes, panels, the DOM, a URL starting the right thing | Playwright | `e2e/*.spec.ts` |
 | Purely visual: no change to state, timing, input handling or URLs | by eye, in the running app | none |
 
-- A test's title starts with the exact `FEATURES.md` id it guards.
+- A test's title starts with the exact `FEATURES.md` id it guards (a smoke test that guards no single line: `load`).
 - Playwright tests open the game with `?test`: time stands still until the test fast-forwards it, the office is not drawn, seed, hour and date are pinned. So never wait in wall time for the game (`waitForTimeout`, `expect.poll` or `toPass` on game state): use `until()`.
 - Import `test`, `expect` and the helpers from `e2e/game.ts`, never `test` from `@playwright/test`.
 - A failing test is not done, whatever the load on the machine.

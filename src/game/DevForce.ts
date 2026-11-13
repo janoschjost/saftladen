@@ -4,7 +4,7 @@ import { forceState, type ForceCtx, type ForcePerson } from './forceState';
 import type { Person } from './Person';
 
 /**
- * Dev only (loaded from main.ts under `import.meta.env.DEV`, so not in the production bundle): sends a person into a
+ * Dev only (loaded from main.ts on the dev server and in the e2e bundle, never in the production bundle): sends a person into a
  * state by hand. Adds `dev.forceState(personId, state)` to the console / `?test` hook and the "Leute" section to the dev panel.
  */
 export function installForceState(game: Game): void {

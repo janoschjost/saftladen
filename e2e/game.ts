@@ -87,7 +87,10 @@ export async function until<T, A = undefined>(page: Page, fn: (g: any, arg: A) =
  */
 export async function freeStations(page: Page): Promise<void> {
   await read(page, (g) => {
-    g.kitchen.current?.end();
+    if (g.kitchen.current) {
+      g.kitchen.current.end();
+      g.advance(0.1); // the kitchen lets go of an ended break on its next step
+    }
     for (const p of g.people) {
       p.cancelPrint();
       p.cancelRun();

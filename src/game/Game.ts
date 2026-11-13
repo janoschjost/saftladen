@@ -707,7 +707,7 @@ export class Game {
     this.updateDoor(dt);
     this.updateAim();
     if (this.reply && (this.reply.t -= dt) <= 0) this.reply = null;
-    for (const tick of this.tickers) tick(dt);
+    if (dt > 0) for (const tick of this.tickers) tick(dt); // not on a frame while time stands still
   }
 
   /** Materialise show for everybody who arrives or leaves. */
@@ -1822,8 +1822,8 @@ export class Game {
   /** Stroking a pet: a crouch (legs, hips, a little spine), head down at the animal, one hand stroking. Eases in and out (~0.4 s) and ends as soon as the petting does or is cut short (picked up, walking off, a talk). */
   private posePet(w: Person, r: Person['rig']): void {
     const on = w.petting && w.moving < 0.2 && !w.held && w.sit < 0.05;
-    const now = this.clock; // game time: the crouch keeps up when the game is fast-forwarded
-    const dt = Math.min(0.1, Math.max(0, now - w.petClock));
+    const now = this.clock;
+    const dt = Math.max(0, now - w.petClock); // game time since the last pose, however many steps that was
     w.petClock = now;
     w.petAmt = Math.min(1, Math.max(0, w.petAmt + (on ? 1 : -1) * (dt / CROUCH_SECONDS)));
     if (w.petAmt <= 0) return;
@@ -2177,7 +2177,7 @@ export class Game {
     const coffee = this.kitchen.current;
     const rep = this.reply;
     const say = (id: string, text: string, who: Walker) => ({ id, text, head: this.headTop(who) });
-    const bubbleDt = Math.min(0.1, this.clock - this.bubbleClock);
+    const bubbleDt = this.clock - this.bubbleClock;
     this.bubbleClock = this.clock;
     this.bubbles.update(
       [
