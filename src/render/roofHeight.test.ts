@@ -1,7 +1,10 @@
 import * as THREE from 'three';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { installHeadlessDom } from '../test/headlessDom';
 import { buildOffice } from './officeModel';
 import { BAND, H_LOW, ROOF_HI, ROOF_LO, TEETH, roofHeightAt } from './roofHeight';
+
+installHeadlessDom();
 
 describe('office.pendant-cords', () => {
   it('roof height follows the slope of each sawtooth tooth', () => {
@@ -19,19 +22,12 @@ describe('office.pendant-cords', () => {
   });
 
   it('no pendant cord reaches above the roof underside', () => {
-    // no browser here: a canvas whose 2D context accepts every drawing call is enough for the textures
-    const ctx: object = new Proxy(function () {}, { get: (_t, k) => (k === Symbol.toPrimitive ? () => 1 : k === 'width' ? 1 : ctx), apply: () => ctx, set: () => true });
-    vi.stubGlobal('document', { createElement: () => ({ width: 0, height: 0, getContext: () => ctx }) });
-    vi.stubGlobal('Image', class {});
     const { pendantCords } = buildOffice(new THREE.Scene());
     expect(pendantCords.length).toBeGreaterThan(10);
     for (const c of pendantCords) expect(c.top, `pendant at ${c.x}, ${c.z}`).toBeLessThanOrEqual(roofHeightAt(c.x, c.z) + 1e-9);
   });
 
   it('roof off: every open-office cord ends at the same height (4.2), roof on: at the roof', () => {
-    const ctx: object = new Proxy(function () {}, { get: (_t, k) => (k === Symbol.toPrimitive ? () => 1 : k === 'width' ? 1 : ctx), apply: () => ctx, set: () => true });
-    vi.stubGlobal('document', { createElement: () => ({ width: 0, height: 0, getContext: () => ctx }) });
-    vi.stubGlobal('Image', class {});
     const { pendantCords, setRoofVisible } = buildOffice(new THREE.Scene());
     const open = pendantCords.filter((c) => c.noRoof);
     expect(open.length).toBe(6);
