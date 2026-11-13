@@ -1,4 +1,5 @@
 import { devEvents } from '../game/DevEvents';
+import { devSections } from './devSections';
 import { exclusivePanel } from './exclusive';
 
 /** Dev panel: one button per registered dev event, grouped. Opened from the settings popover ("Dev-Events") or with the ` key. */
@@ -53,5 +54,6 @@ export class DevPanel {
       }
       this.body.append(h, wrap);
     }
+    if (import.meta.env.DEV || import.meta.env.MODE === 'e2e') for (const section of devSections()) section(this.body, this.status);
   }
 }
