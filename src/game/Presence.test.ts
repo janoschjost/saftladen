@@ -237,4 +237,23 @@ describe('presence', () => {
     expect(marco.leaves.length).toBeGreaterThan(0);
     expect(marco.leaves.every((l) => !l.transform)).toBe(true);
   });
+
+  it('kurt.home: the dev event never puts Marco into a taken room; whoever sits there comes back', () => {
+    const { people, presence } = runDay(1, 5, 11);
+    const marco = people.find((p) => p.id === 'marco-rieser')!;
+    for (const p of people) if (p.awayKind === 'home') p.startAway('errand', 600); // nobody at home yet
+    // home office full: every room taken by somebody else
+    const others = people.filter((p) => p !== marco).slice(0, 8);
+    others.forEach((p, i) => {
+      p.startAway('home', 600);
+      p.homeVariant = i;
+    });
+    presence.awayNow(marco as unknown as Person, 'home', 120);
+    const sharing = others.filter((p) => p.homeVariant === marco.homeVariant);
+    expect(sharing.length).toBeGreaterThan(0);
+    for (const p of sharing) expect(p.awayLeft).toBe(0); // on the way back to the office
+    for (const p of people) p.update(STEP);
+    const home = people.filter((p) => p.awayKind === 'home' && p.presence === 'out').map((p) => p.homeVariant);
+    expect(new Set(home).size).toBe(home.length);
+  });
 });

@@ -304,7 +304,11 @@ export class Presence {
   /** Dev events: straight out of the office (no walk to the door), into the home office or on an errand; back after `seconds`. */
   awayNow(p: Person, kind: 'home' | 'errand', seconds: number): void {
     this.overridden.add(p);
-    if (kind === 'home') p.homeVariant = this.freeVariant(p);
+    if (kind === 'home') {
+      const room = (p.homeVariant = this.freeVariant(p));
+      // home office full: the room is taken, whoever works there comes back to the office (one person per room)
+      for (const o of this.people) if (o !== p && o.awayKind === 'home' && (o.presence === 'out' || o.presence === 'leaving') && o.homeVariant === room) this.callBack(o);
+    }
     p.startAway(kind, seconds);
   }
 
