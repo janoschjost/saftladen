@@ -72,7 +72,7 @@ Devs review a PR in the running app with `/review-pr N`. It claims the PR (`in r
 - Short, precise imperative subject in the style of `git log`. Add a body only when the subject alone isn't enough.
 - No `Co-Authored-By` line and no other attribution line in commit messages.
 - Commit, push and open PRs only on a branch, never on `main`.
-- Merge only when a dev explicitly tells you to, for that PR: checks green (or deliberately skipped), then `gh pr merge N --squash --delete-branch`. Never merge on your own initiative.
+- Merge only when a dev explicitly tells you to, for that PR, and only what was tested on top of `main`: the branch is up to date with `main` (rebase first if not) and `Build and test` and `E2E (Playwright)` are green on that last commit (label `e2e` makes the second one run). Then `gh pr merge N --squash --delete-branch`. Never merge on your own initiative, and not from the GitHub page without those checks: nothing there stops a red merge.
 
 ## FEATURES.md
 

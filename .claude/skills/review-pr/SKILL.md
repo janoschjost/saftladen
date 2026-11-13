@@ -8,7 +8,7 @@ argument-hint: "<PR number>"
 
 Interactive: the dev looks at the app and judges, you prepare, guide and write. Never post, label or merge without the dev having seen it.
 
-Invoking this skill authorizes a worktree for the PR, `npm ci`, a dev server, claiming and releasing the PR, labels, review comments and new issues the dev confirmed. It merges only after the dev answers yes to the merge question. It never pushes code: fixes are `/tackle-issues`' job.
+Invoking this skill authorizes a worktree for the PR, `npm ci`, a dev server, claiming and releasing the PR, labels, review comments and new issues the dev confirmed. It merges only after the dev answers yes to the merge question. It never changes code: fixes are `/tackle-issues`' job. The one push it makes is a rebase onto `main` without conflicts, right before the merge (step 5).
 
 PR: `$ARGUMENTS` (no number → list `gh pr list` and ask which one).
 
@@ -56,8 +56,11 @@ Show the dev every finding as it will be posted and let them edit or drop each.
 ## 5. Finish
 
 1. `scripts/issue.sh release N "reviewed"` (removes `in review`).
-2. The e2e tests must have run green on the PR's last commit: `gh pr checks N` lists `E2E (Playwright)`. Not there → `gh pr edit N --add-label e2e`, then `gh pr checks N --watch`. Red → that is a finding (step 4), no merge. So is new or changed behavior without a test, or a spec that breaks the rules of the `write-tests` skill (waits in wall time, imports `test` from `@playwright/test`).
-3. All OK and checks green, e2e included → ask "Merge PR #N?". Yes → `gh pr merge N --squash --delete-branch`. Never merge without that yes.
+2. **Gate: up to date with `main`, e2e green on that state.** `main` must only ever get what was tested on top of it; GitHub cannot enforce that on this repo (no branch protection on the plan), so this step does.
+   - Behind `main` (`git fetch origin && git rev-list --count origin/<branch>..origin/main` is not 0) → in the review worktree `git checkout <branch> && git rebase origin/main`. No conflicts → `git push --force-with-lease`. Conflicts → `git rebase --abort`; that is a finding (step 4: "rebase onto main"), no merge.
+   - `gh pr edit N --add-label e2e` if the label is missing, then `gh pr checks N --watch`: `Build and test` and `E2E (Playwright)` must both have run green on the PR's last commit. Red → a finding (step 4), no merge.
+   - Also a finding: new or changed behavior without a test, or a spec that breaks the rules of the `write-tests` skill (waits in wall time, imports `test` from `@playwright/test`).
+3. All OK and the gate passed → ask "Merge PR #N?". Yes → `gh pr merge N --squash --delete-branch`. Never merge without that yes. If `main` moved while the checks ran, the gate starts over.
 4. Stop the dev server (`lsof -ti tcp:<port> | xargs kill`) and `cd ../saftladen && git worktree remove ../saftladen-pr-N`, unless the dev wants to keep testing.
 
 The dev wants to stop early → still post what was found so far (with their OK) and release the PR. Never leave it claimed.
