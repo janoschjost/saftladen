@@ -50,7 +50,7 @@ jobs:
       - id: pw
         run: echo "version=$(npx playwright --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
       - id: cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-chromium-${{ steps.pw.outputs.version }}
@@ -58,7 +58,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       # saved right away: a failed test run must not cost the next one the download
       - if: steps.cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-chromium-${{ steps.pw.outputs.version }}
@@ -66,7 +66,7 @@ jobs:
         run: npx playwright install-deps chromium
       - run: npm run test:e2e
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-traces
           path: test-results/

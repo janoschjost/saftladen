@@ -31,6 +31,7 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
 
      Docs-only changes skip this.
 6. **PR.** Rebase first. On conflicts keep both sides' behavior, never just yours, then re-check the affected `FEATURES.md` lines.
+   A rebase also brings in the rules as they are on `main` now. After every rebase read what changed in them (`git diff ORIG_HEAD HEAD --stat -- AGENTS.md README.md .claude/skills e2e/game.ts playwright.config.ts`) and bring the branch's own work in line: a test written the old way is rewritten, a new check (`npm run …`) is run. The branch follows the rules of the `main` it lands on, not of the day it was started.
    ```sh
    git fetch origin && git rebase origin/main && npm run build && npm test && npm run test:e2e
    git push -u origin HEAD
