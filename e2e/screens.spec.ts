@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { openGame, read, until } from './game';
+import { expect, openGame, read, test, until } from './game';
 
 test('desk.screens-live: a working monitor shows moving content', async ({ page }) => {
   const errors = await openGame(page);

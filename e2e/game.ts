@@ -1,23 +1,36 @@
-import { expect, type Page } from '@playwright/test';
+import { test as base, expect, type Page } from '@playwright/test';
+
+export { expect };
+
+/**
+ * `test` for every spec: the calendar is pinned to a day in June. The game looks at the date (Christmas mode switches
+ * itself on in December), and a test must not change with the season.
+ */
+export const test = base.extend({
+  page: async ({ page }, use) => {
+    await page.clock.setFixedTime(new Date('2026-06-15T11:00:00'));
+    await use(page);
+  },
+});
 
 /** Every test starts from the same office: fixed seed, clock frozen at this hour. */
 export const SEED = 1;
 export const HOUR = 11;
 
 /**
- * Opens the game with the test hook (`?test` exposes `window.__game`, dev server only; the office is not drawn unless
- * `query` has `draw`) and waits until it
+ * Opens the game with the test hook (`?test`: exposes `window.__game`, time stands still, the office is not drawn
+ * unless `query` has `draw`; not in the production bundle) and waits until it
  * is up: hook there, loader gone. `query` adds dev params, e.g. `event=coffee`. Returns the console errors and uncaught exceptions seen so far (and later).
  */
-export async function openGame(page: Page, hash = '', hour = HOUR, query = ''): Promise<string[]> {
+export async function openGame(page: Page, hash = '', hour = HOUR, query = '', seed = SEED): Promise<string[]> {
   const errors: string[] = [];
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(`/?test&seed=${SEED}&time=${hour}${query ? `&${query}` : ''}${hash ? `#${hash}` : ''}`);
+  await page.goto(`/?test&seed=${seed}&time=${hour}${query ? `&${query}` : ''}${hash ? `#${hash}` : ''}`);
   // generous: CI renders WebGL in software, building the scene and the first frames take seconds there
-  await page.waitForFunction(() => !!window.__game, undefined, { timeout: 30_000 });
+  await page.waitForFunction(() => !!window.__game, undefined, { timeout: 60_000 });
   // faded or gone: a fading loader lets clicks through, no need to wait for the fade
-  await expect(page.locator('#loader:not(.is-done)')).toHaveCount(0, { timeout: 30_000 });
+  await expect(page.locator('#loader:not(.is-done)')).toHaveCount(0, { timeout: 60_000 });
   // under ?test time stands still: only `advance` (and so `until`) moves the game. One second in, everybody has made a first move.
   await page.evaluate(() => (window.__game as { advance(s: number): void }).advance(1));
   return errors;

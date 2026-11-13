@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { openGame, read, until } from './game';
+import { expect, openGame, read, test, until } from './game';
 
 test('egg.konami', async ({ page }) => {
   await openGame(page);
@@ -38,6 +37,7 @@ test('day.menu + day.flow: play a day as Jan', async ({ page }) => {
 test('xmas.mode', async ({ page }) => {
   await openGame(page);
   const start = await read(page, (g) => g.xmas.on);
+  expect(start).toBe(false); // the tests run on a day in June (e2e/game.ts)
   await page.locator('#open-env').click();
   const toggle = page.locator('#setting-xmas');
   await expect(toggle).toBeVisible();

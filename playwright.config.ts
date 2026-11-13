@@ -17,8 +17,6 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${port}`,
     trace: process.env.CI ? 'on-first-retry' : 'retain-on-failure',
-    // Christmas mode is on by default in December (snow, decorations): the tests start the same all year
-    storageState: { cookies: [], origins: [{ origin: `http://localhost:${port}`, localStorage: [{ name: 'saftladen.settings', value: '{"xmas":false}' }] }] },
   },
   projects: [
     {

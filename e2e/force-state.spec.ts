@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { openGame, read, until } from './game';
+import { expect, openGame, read, test, until } from './game';
 
 // the dev module loads after the game: wait for `dev.forceState`
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

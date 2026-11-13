@@ -13,9 +13,9 @@ import { getSeed, setSeed } from './rng';
  *                     repeat it for several (?event=rain&event=coffee). FEATURES.md links each feature to such a URL.
  *   ?action=<id>      starts an Aktionen card (`src/data/actions.ts`, e.g. ?action=printer) or any dev event like the
  *                     sheet does: the camera flies in Orbit to the person it moves; retried until it can run
- *   ?test             exposes `window.__game` (test hook for the Playwright tests in e2e/: read the state, fast-forward
- *                     with `advance(seconds)`) and does not draw the office: the tests render WebGL in software, and
- *                     compiling the shaders is most of a page's start. ?test&draw draws it, without shadows and antialiasing
+ *   ?test             for the Playwright tests in e2e/: exposes `window.__game` (read the state), time stands still
+ *                     (only `__game.advance(seconds)` moves the game, so nothing changes between two steps of a
+ *                     test) and the office is not drawn (the tests render WebGL in software). ?test&draw draws it.
  * Example: http://localhost:5173/?snack&time=14&follow
  */
 

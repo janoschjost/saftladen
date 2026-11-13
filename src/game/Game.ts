@@ -170,7 +170,7 @@ export class Game {
   private reply: { who: Person; text: string; t: number } | null = null;
   /** speech bubbles in the scene (read by the e2e tests: `__game.bubbles.state`) */
   private bubbles = new Bubbles(this.scene);
-  private bubbleClock = performance.now();
+  private bubbleClock = 0;
   private keys = new Set<string>();
   /** Shift is down (fallback when the Shift keydown went missing, e.g. pressed before the window had focus) */
   private shift = false;
@@ -181,7 +181,7 @@ export class Game {
   private ring: THREE.Mesh;
   private savedSeats: Record<string, number> = {};
   private acc = 0;
-  /** game time in seconds: wall time, but capped per frame and taken along by `advance` */
+  /** game time in seconds: wall time, but capped per frame, taken along by `advance` and standing still while frozen. Poses and bubbles animate on it. */
   private clock = 0;
   private last = performance.now();
 
@@ -193,19 +193,18 @@ export class Game {
   private frozen: boolean;
 
   /**
-   * For the e2e tests, which render WebGL in software. `cheap`: no antialiasing, no shadows, pixel ratio 1.
-   * `draw: false`: the office and the home office feeds are not drawn at all (everything else runs: poses, overlays,
-   * world matrices for clicks and labels), which saves compiling the shaders, most of the time a page needs to start.
+   * For the e2e tests, which render WebGL in software. `draw: false`: the office and the home office feeds are not
+   * drawn at all (everything else runs: poses, overlays, world matrices for clicks and labels). `frozen`: see above.
    */
   constructor(
     private stage: HTMLElement,
-    { cheap = false, draw = true, frozen = false } = {},
+    { draw = true, frozen = false } = {},
   ) {
     this.draw = draw;
     this.frozen = frozen;
-    this.renderer = new THREE.WebGLRenderer({ antialias: !cheap });
-    this.renderer.setPixelRatio(cheap ? 1 : Math.min(window.devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = !cheap;
+    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     stage.appendChild(this.renderer.domElement);
 
@@ -1639,10 +1638,10 @@ export class Game {
     w.root.rotation.y = w.prevYaw + dy * alpha;
 
     const ph = THREE.MathUtils.lerp(w.prevPhase, w.phase, alpha);
-    const dangle = Math.sin(performance.now() / 110) * 0.35 * (w.lift / 0.45);
+    const dangle = Math.sin((this.clock * 1000) / 110) * 0.35 * (w.lift / 0.45);
     const swing = Math.sin(ph) * 0.42 * w.moving + dangle;
     const bob = 0; // hip height now follows the planted foot (see the leg block below)
-    const breathe = Math.sin(performance.now() / 600 + w.phase) * 0.008 * (1 - w.moving);
+    const breathe = Math.sin((this.clock * 1000) / 600 + w.phase) * 0.008 * (1 - w.moving);
 
     if (w instanceof Person) {
       const r = w.rig;
@@ -1676,7 +1675,7 @@ export class Game {
       r.body.position.x = Math.sin(ph) * 0.02 * w.moving * (1 - sit);
       if (w.working) {
         // typing: hands on the keyboard, small quick jitters, now and then a glance at the screen
-        const t = performance.now() / 1000 + w.phase;
+        const t = this.clock + w.phase;
         r.armL.rotation.x = -1.2 + Math.sin(t * 17) * 0.05 + Math.sin(t * 5.3) * 0.04;
         r.armR.rotation.x = -1.2 + Math.sin(t * 14 + 2) * 0.05 + Math.sin(t * 4.1) * 0.04;
         r.body.position.y += Math.sin(t * 1.3) * 0.006;
@@ -1686,7 +1685,7 @@ export class Game {
       }
       if (w.foosAmt > 0) {
         // foosball: both hands on the rods, quick sideways pushes and spins
-        const t = performance.now() / 1000 + w.phase;
+        const t = this.clock + w.phase;
         r.armL.rotation.x = -1.1 + Math.sin(t * 9) * 0.25;
         r.armR.rotation.x = -1.1 + Math.sin(t * 7.3 + 1.5) * 0.25;
         r.armL.rotation.z = Math.sin(t * 5) * 0.12;
@@ -1711,7 +1710,7 @@ export class Game {
       const ta = w.talkAmt;
       const sa = w.speakAmt;
       if (ta > 0.01) {
-        const t = performance.now() / 1000 + w.phase;
+        const t = this.clock + w.phase;
         const lively = w.talk?.kind === 'discussion' ? 1 : 0.65;
         // speaker: phrases of gestures (a slow envelope makes beats), a lean in and a sway towards the audience
         const beat = 0.55 + 0.45 * Math.sin(t * 1.7);
@@ -1753,7 +1752,7 @@ export class Game {
       for (const l of r.legs) l.position.y = base - drop;
       r.body.position.y = (bob * 1.2 + breathe) * (1 - lie) + breathe * lie - drop;
       // happy hops while petted, quick double hop while barking
-      const now = performance.now() / 1000;
+      const now = this.clock;
       const bark = w.barkT > 0 ? Math.max(0, Math.sin(w.barkT * 14)) * Math.min(1, w.barkT) : 0;
       r.body.position.y += Math.abs(Math.sin(now * 9 + w.phase)) * 0.04 * w.happy + bark * 0.11;
       const z = w.sleep;
@@ -1763,7 +1762,7 @@ export class Game {
       const cs = Math.cos(th);
       const h = 0.44; // torso centre height: the body rolls around it
       const bx = h * sn;
-      const by = r.body.position.y + h * (1 - cs) - 0.03 * z + Math.sin(performance.now() / 1100 + w.phase) * 0.012 * z;
+      const by = r.body.position.y + h * (1 - cs) - 0.03 * z + Math.sin((this.clock * 1000) / 1100 + w.phase) * 0.012 * z;
       r.body.rotation.z = th;
       r.body.position.x = bx;
       r.body.position.y = by;
@@ -1774,7 +1773,7 @@ export class Game {
         l.position.set(q.x * cs - 0.32 * sn + bx, q.x * sn + 0.32 * cs + by, q.z);
         if (z > 0) l.rotation.x = THREE.MathUtils.lerp(l.rotation.x, i < 2 ? -0.5 : 0.5, z);
       });
-      r.tail.rotation.y = Math.sin(performance.now() / 90 + w.phase) * (0.35 + 0.4 * w.moving + 0.5 * w.happy) * (1 - 0.7 * lie) * (1 - z);
+      r.tail.rotation.y = Math.sin((this.clock * 1000) / 90 + w.phase) * (0.35 + 0.4 * w.moving + 0.5 * w.happy) * (1 - 0.7 * lie) * (1 - z);
       this.poseZzz(w, z, r.face, -r.face.y * sn + bx, r.face.y * cs + by);
       // easter eggs: backflip after five clicks, hopping to the beat of the disco
       w.root.rotation.order = 'YXZ';
@@ -1809,7 +1808,7 @@ export class Game {
       });
       w.root.userData.zzz = zs;
     }
-    const t = performance.now() / 1000;
+    const t = this.clock;
     zs.forEach((sp, i) => {
       const k = (t / 3 + i / 3) % 1;
       sp.visible = amt > 0.02;
@@ -1855,7 +1854,7 @@ export class Game {
     const idle = w.moving < 0.2 && w.phoneAmt < 0.05 && !w.vapeJob && !w.foosAmt && !((w.talk || w.playerChat) && w.speaking);
     if (tired > 0.35 && idle) {
       // one yawn every ~25 s, each person on their own beat
-      const t = (performance.now() / 1000 + w.phase * 9) % 25;
+      const t = (this.clock + w.phase * 9) % 25;
       if (t < 2.4) {
         const k = Math.sin((t / 2.4) * Math.PI);
         r.armR.rotation.x = THREE.MathUtils.lerp(r.armR.rotation.x, -2.5, k * tired);
@@ -1891,7 +1890,7 @@ export class Game {
     r.gameboy.visible = a > 0.02;
     if (a < 0.02) return;
     const lerp = THREE.MathUtils.lerp;
-    const t = performance.now() / 1000 + w.phase;
+    const t = this.clock + w.phase;
     r.armL.rotation.x = lerp(r.armL.rotation.x, -1.05, a);
     r.armR.rotation.x = lerp(r.armR.rotation.x, -1.05, a);
     r.armL.rotation.z = lerp(r.armL.rotation.z, 0.3, a);
@@ -1938,7 +1937,7 @@ export class Game {
       r.kneeR.rotation.x = lerp(r.kneeR.rotation.x, Math.max(0, Math.sin(b / 2)) * 0.9, a * up);
     }
     if (this.easter.angry?.who === w) {
-      const t = performance.now() / 1000;
+      const t = this.clock;
       r.armL.rotation.x = -0.9 + Math.sin(t * 22) * 0.35;
       r.armR.rotation.x = -0.9 + Math.sin(t * 22 + Math.PI) * 0.35;
       r.elbowL.rotation.x = r.elbowR.rotation.x = -1.2;
@@ -2016,7 +2015,7 @@ export class Game {
     const a = w.emoteAmt;
     if (a <= 0) return;
     const held = heldPoses(r);
-    const t = performance.now() / 1000 + w.phase;
+    const t = this.clock + w.phase;
     const lerp = THREE.MathUtils.lerp;
     // ArmPose: x swing, z out to the side (away from the body), e elbow bend, ez elbow sideways; the left arm is on -x
     const arm = (right: boolean, p: ArmPose) => {
@@ -2178,7 +2177,7 @@ export class Game {
     const coffee = this.kitchen.current;
     const rep = this.reply;
     const say = (id: string, text: string, who: Walker) => ({ id, text, head: this.headTop(who) });
-    const now = performance.now();
+    const now = this.clock * 1000;
     const bubbleDt = Math.min(0.1, (now - this.bubbleClock) / 1000);
     this.bubbleClock = now;
     this.bubbles.update(

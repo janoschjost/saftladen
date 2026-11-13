@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { openGame, read, until } from './game';
+import { expect, openGame, read, test, until } from './game';
 
 /**
  * `?event=<id>` runs a dev-panel event at start, so a dev can open a feature directly (the `url:` in FEATURES.md).
@@ -12,7 +11,7 @@ const cases: [string, string, (g: any) => unknown][] = [
   ['place.coffee-break', 'coffee', (g) => g.kitchen.current],
   ['place.booth', 'phone-booth', (g) => g.phoneBooth.current],
   ['place.pod', 'pod', (g) => g.pod.current],
-  ['pet.crouch (dog)', 'pet-dog', (g) => g.people.some((p: { petAmt: number; rig: { legL: { rotation: { x: number } } } }) => p.petAmt > 0.9 && p.rig.legL.rotation.x < -0.4)],
+  ['pet.crouch', 'pet-dog', (g) => g.people.some((p: { petAmt: number; rig: { legL: { rotation: { x: number } } } }) => p.petAmt > 0.9 && p.rig.legL.rotation.x < -0.4)],
   ['place.printer', 'printer', (g) => g.people.some((p: { printJob?: unknown }) => p.printJob)],
   ['place.foosball', 'foosball', (g) => g.people.filter((p: { foosJob?: unknown }) => p.foosJob).length === 2],
   ['place.toilet', 'toilet', (g) => g.toilets.cabins.some((c: { session?: unknown }) => c.session)],
@@ -41,18 +40,15 @@ test('dev.params: ?test fast-forwards in game time and does not draw the office'
   const state = await read(page, (g) => {
     const before = g.clock;
     g.advance(30);
-    return { ahead: g.clock - before, draw: g.draw, shadows: g.renderer.shadowMap.enabled, pixelRatio: g.renderer.getPixelRatio() };
+    return { ahead: g.clock - before, draw: g.draw };
   });
   expect(state.ahead).toBeCloseTo(30, 3);
-  expect(state).toEqual({ ahead: state.ahead, draw: false, shadows: false, pixelRatio: 1 });
+  expect(state.draw).toBe(false);
 });
 
-// Donata (cats) is out with seeds 1 and 2, so the cat case uses seed 3
+// The cats' owner is out at 11:00 with seeds 1 and 2 (the event needs her in the office), so the cat case uses seed 3
 test('pet.crouch-cat (?event=pet-cat)', async ({ page }) => {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto('/?test&seed=3&time=11&event=pet-cat');
-  await page.waitForFunction(() => !!window.__game, undefined, { timeout: 30_000 });
+  const errors = await openGame(page, '', undefined, 'event=pet-cat', 3);
   await until(page, (g) => g.people.some((p: { petAmt: number; rig: { legL: { rotation: { x: number } } } }) => p.petAmt > 0.9 && p.rig.legL.rotation.x < -0.4), undefined, 40_000);
   expect(errors).toEqual([]);
 });

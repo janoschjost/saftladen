@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { openGame, until } from './game';
+import { expect, openGame, test, until } from './game';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const seatedSpeakerBubble = (g: any) => {

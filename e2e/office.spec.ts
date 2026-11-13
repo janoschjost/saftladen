@@ -1,5 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
-import { openGame, read, until } from './game';
+import type { Page } from '@playwright/test';
+import { expect, openGame, read, test, until } from './game';
 
 /** Coats on the stands = people in the office (or every hook, if there are more people than hooks). */
 const coatsMatch = (page: Page) =>

@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { freeStations, openGame, read, until } from './game';
+import { expect, freeStations, openGame, read, test, until } from './game';
 
 // Few page loads on purpose: CI renders in software and every openGame costs seconds.
 
