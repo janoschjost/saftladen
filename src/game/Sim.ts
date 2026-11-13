@@ -288,8 +288,11 @@ export class Sim {
         }
         const d = Math.sqrt(d2);
         const push = ((min - d) / d) * 0.5;
-        const wa = a.held ? 0 : b.held ? 2 : 1;
-        const wb = b.held ? 0 : a.held ? 2 : 1;
+        // who gives way: the walker the player drags never, then whoever holds their ground (a stroke); equals part evenly
+        const ra = a.held ? 2 : a.steady ? 1 : 0;
+        const rb = b.held ? 2 : b.steady ? 1 : 0;
+        const wa = ra > rb ? 0 : ra < rb ? 2 : 1;
+        const wb = rb > ra ? 0 : rb < ra ? 2 : 1;
         a.pos.x -= dx * push * wa;
         a.pos.z -= dz * push * wa;
         b.pos.x += dx * push * wb;

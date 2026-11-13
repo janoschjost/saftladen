@@ -94,6 +94,11 @@ export abstract class Walker {
     return false;
   }
 
+  /** Holds its ground (stroking a pet, being stroked): bumping walkers get pushed off it, not the other way round. */
+  get steady(): boolean {
+    return false;
+  }
+
   /** Off until the game has set up (the initial cast appears without a show). */
   static animate = false;
   /** 0..1 how far materialised: the arrival / departure show scales the model with this. */

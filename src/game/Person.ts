@@ -343,6 +343,11 @@ export class Person extends Walker {
     return !!this.task && this.task.phase !== 'approach';
   }
 
+  /** Kneeling to stroke a pet: stays where they knelt down. */
+  override get steady(): boolean {
+    return this.petting;
+  }
+
   /** True while on the way to the meeting, or already in it. */
   get inMeeting(): boolean {
     return !!this.meetJob || !!this.pendingMeet;
