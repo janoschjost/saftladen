@@ -3,8 +3,12 @@ import type { Presence } from './Presence';
 import { random } from './rng';
 import type { Social } from './Social';
 
-/** How many greet, how many of them walk over (only from within `reach` metres), standing distance (m), seconds the cheer lasts, seconds a walker gets to arrive. */
-const WELCOME = { crowd: 5, walkers: 2, stand: 1.1, reach: 12, hold: 3.2, timeout: 20 };
+/**
+ * How many greet, how many of them walk over (only from within `reach` metres, getting up from their desk if need
+ * be), standing distance (m), seconds the cheer lasts, seconds the visitor waits for the walkers, seconds a walker
+ * gets to arrive.
+ */
+const WELCOME = { crowd: 5, walkers: 2, stand: 1.1, reach: 12, hold: 5, wait: 12, timeout: 20 };
 
 const gesture = () => (random() < 0.6 ? 'cheer' : 'wave');
 
@@ -18,6 +22,8 @@ export class Welcome {
   /** greeters walking over to the visitor (held there until their cheer is done) */
   private walkers: Array<{ p: Person; pin: Person['scripted']; t: number; cheered: boolean }> = [];
   private last = new Map<Person, Person['presence']>();
+  /** who is being welcomed right now */
+  private visitor: Person | null = null;
 
   update(dt: number, people: Person[], presence: Presence, social: Social): void {
     for (const p of people) {
@@ -31,7 +37,8 @@ export class Welcome {
       if (s?.arrived && !w.cheered && w.p.moving < 0.2) {
         w.cheered = true;
         w.t = WELCOME.hold;
-        w.p.welcome(gesture(), random() * 0.5);
+        w.p.welcome(gesture(), random() * 0.5, WELCOME.hold);
+        this.visitor?.welcome('wave', 0.3, WELCOME.hold); // waves back at whoever comes over
       }
       if (s && (w.t -= dt) > 0) return true;
       if (s) w.p.unpin();
@@ -49,19 +56,21 @@ export class Welcome {
     let walkers = 0;
     for (const { o, dx, dz, d } of near) {
       social.leave(o);
-      if (walkers < WELCOME.walkers && d > WELCOME.stand && d < WELCOME.reach && !o.task) {
+      if (walkers < WELCOME.walkers && d > WELCOME.stand && d < WELCOME.reach) {
         walkers++;
         o.interrupt();
         o.pinTo({ at: { x: v.pos.x - (dx / d) * WELCOME.stand, z: v.pos.z - (dz / d) * WELCOME.stand }, yaw: Math.atan2(dx, dz), walk: true });
         this.walkers.push({ p: o, pin: o.scripted, t: WELCOME.timeout, cheered: false });
       } else {
         o.talkTo(v.pos, WELCOME.hold); // turns to the visitor unless tied to a desk
-        o.welcome(gesture(), 0.2 + random() * 0.8);
+        o.welcome(gesture(), 0.2 + random() * 0.8, WELCOME.hold);
       }
     }
     const first = near[0]?.o;
     if (!first) return;
-    if (v.talkTo(first.pos, WELCOME.hold)) v.welcome('wave', 0.6);
+    this.visitor = v;
+    // waits at the door for the ones who come over
+    if (v.talkTo(first.pos, walkers ? WELCOME.wait : WELCOME.hold)) v.welcome('wave', 0.6, WELCOME.hold);
     this.call = { who: first, text: `${v.member.name.split(' ')[0]}! 🎉`, t: WELCOME.hold };
   }
 }

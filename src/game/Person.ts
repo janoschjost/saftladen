@@ -730,10 +730,10 @@ export class Person extends Walker {
     this.reaction = { kind, t: -delay, dur: REACTION_TIME[kind] };
   }
 
-  /** A welcome gesture (cheer, wave) that needs no conversation: for greeting somebody who just came in. */
-  welcome(kind: Reaction, delay = 0): void {
+  /** A welcome gesture (cheer, wave) that needs no conversation, for `seconds`: for greeting somebody who just came in. */
+  welcome(kind: Reaction, delay = 0, seconds = REACTION_TIME[kind] * 1.6): void {
     if (this.presence !== 'in' || this.held || (this.controlled && !this.scripted)) return;
-    this.reaction = { kind, t: -delay, dur: REACTION_TIME[kind] * 1.6, free: true };
+    this.reaction = { kind, t: -delay, dur: seconds, free: true };
   }
 
   /** Free to do a little gesture: sitting at the desk working, or standing around doing nothing. */
