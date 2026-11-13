@@ -45,7 +45,7 @@ import { setTvMode } from '../render/screens';
 import { Person } from './Person';
 import { strings } from '../i18n/strings';
 import { RoomEditor } from './RoomEditor';
-import { CROUCH_SECONDS, PET_HEIGHT, petPose, smooth } from './petPose';
+import { CROUCH_SECONDS, LEG_ORDER, PET_HEIGHT, petPose, smooth } from './petPose';
 import { applySky, type SkyRig } from './TimeOfDay';
 import { Sim } from './Sim';
 import { Walker } from './Walker';
@@ -1630,6 +1630,8 @@ export class Game {
       r.body.position.set(0, 0, 0);
       r.armL.rotation.set(0, 0, 0);
       r.armR.rotation.set(0, 0, 0);
+      r.legL.rotation.set(0, 0, 0, 'XYZ'); // the kneel turns a leg out (y, order YXZ)
+      r.legR.rotation.set(0, 0, 0, 'XYZ');
       // standing: walk cycle (knees bend while a leg swings forward); sitting: thighs flat, shins down
       r.legL.rotation.x = swing * (1 - sit) - 1.5 * sit;
       r.legR.rotation.x = -swing * (1 - sit) - 1.5 * sit;
@@ -1803,7 +1805,7 @@ export class Game {
     });
   }
 
-  /** Stroking a pet: a crouch (legs, hips, a little spine), head down at the animal, one hand stroking. Eases in and out (~0.4 s) and ends as soon as the petting does or is cut short (picked up, walking off, a talk). */
+  /** Stroking a pet: down on one knee (dog) or both (cat), a little spine, head down at the animal, one hand stroking. Eases in and out (~0.4 s) and ends as soon as the petting does or is cut short (picked up, walking off, a talk). */
   private posePet(w: Person, r: Person['rig']): void {
     const on = w.petting && w.moving < 0.2 && !w.held && w.sit < 0.05;
     const now = this.clock;
@@ -1812,8 +1814,10 @@ export class Game {
     w.petAmt = Math.min(1, Math.max(0, w.petAmt + (on ? 1 : -1) * (dt / CROUCH_SECONDS)));
     if (w.petAmt <= 0) return;
     const p = petPose(smooth(w.petAmt), w.petHeight, now + w.phase, w.root.scale.y);
-    r.legL.rotation.x = r.legR.rotation.x = -p.thigh;
-    r.kneeL.rotation.x = r.kneeR.rotation.x = p.knee;
+    for (const [hip, knee, l] of [[r.legL, r.kneeL, p.legL], [r.legR, r.kneeR, p.legR]] as const) {
+      hip.rotation.set(l.rx, l.ry, 0, LEG_ORDER);
+      knee.rotation.x = l.knee;
+    }
     r.legL.position.y = r.legR.position.y = 0.8 - p.drop;
     r.body.position.y -= p.drop;
     r.body.rotation.x += p.spine;

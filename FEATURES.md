@@ -134,8 +134,8 @@ Rules:
 - `pet.announce` Awake pets bark/meow when someone comes in the front door — `src/game/PetCare.ts`
 - `pet.player` The player's person can pet a pet — `src/game/Person.ts`
 - `pet.pose-reset` Petting leaves no distortion: rig resets to neutral each frame, bends at the hips, pose ends when picked up or pulled into a chat — `src/game/Person.ts`, `src/game/Game.ts` (#1)
-- `pet.crouch` Petting is a real crouch: knees bend and hips sink (deeper for a cat than a dog), only a slight spine lean, head down at the animal, one hand strokes; eases in and out over ~0.4 s — `src/game/petPose.ts`, `src/game/Game.ts`, test: `src/game/petPose.test.ts`, e2e: `e2e/events.spec.ts`, url: `/?seed=1&time=11&event=pet-dog` (#2)
-- `pet.crouch-cat` Same crouch for a cat, deeper than for a dog — `src/game/petPose.ts`, e2e: `e2e/events.spec.ts`, url: `/?seed=3&time=11&event=pet-cat` (#2, #107)
+- `pet.crouch` Petting a dog is kneeling on one knee: the back knee rests on the floor with the shin flat behind, the other foot is planted forward and out to the side (clear of the pet), only a slight spine lean, head down at the animal, one hand strokes; hips sink only as far as the legs reach, eased in and out over ~0.4 s — `src/game/petPose.ts`, `src/game/Game.ts`, test: `src/game/petPose.test.ts`, e2e: `e2e/events.spec.ts`, url: `/?seed=1&time=11&event=pet-dog` (#2, #73)
+- `pet.crouch-cat` For a cat (lower) the person kneels on both knees, sitting back a little, lower than for a dog — `src/game/petPose.ts`, test: `src/game/petPose.test.ts`, e2e: `e2e/events.spec.ts`, url: `/?seed=3&time=11&event=pet-cat` (#2, #73, #107)
 - `pet.portrait` Pets get rendered low-poly head portraits — `src/render/petPortrait.ts`
 
 ## Time, weather, lights
