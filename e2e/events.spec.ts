@@ -1,9 +1,10 @@
-import { expect, openGame, read, test, until } from './game';
+import { expect, openGame, read, scene, test, until } from './game';
 
 /**
  * `?event=<id>` runs a dev-panel event at start, so a dev can open a feature directly (the `url:` in FEATURES.md).
  * This checks that wiring once; what each place does once somebody is sent there is the simulation's business:
- * `src/game/places.test.ts`. The cases below need a home office (`HomeOffice` draws in the view).
+ * `src/game/places.test.ts`. The cases below need what only the view does: a home office feed (`HomeOffice`) or a pose
+ * on the rig.
  */
 test('dev.params: ?event=<id> starts its event at load (?event=meeting-room)', async ({ page }) => {
   const errors = await openGame(page, '', undefined, 'event=meeting-room');
@@ -12,9 +13,24 @@ test('dev.params: ?event=<id> starts its event at load (?event=meeting-room)', a
 });
 
 const cases: [string, string, (g: any) => unknown][] = [
-  ['presence.remote-visit', 'remote-visit', (g) => g.people.some((p: { id: string; presence: string }) => p.id === 'zlatko-pesic' && p.presence !== 'out')],
   ['home.son', 'remote-son', (g) => g.homes.some((h: { sonHere?: boolean } | null) => h?.sonHere)],
 ];
+
+// The kneel itself is drawn by the view (`Game.posePet` puts `petPose` on the rig); who strokes what: places.test.ts
+type Rig = { petAmt: number; rig: { legL: { rotation: { x: number } }; kneeR: { rotation: { x: number } } } };
+const kneels = (g: any) => g.people.some((p: Rig) => p.petAmt > 0.9 && p.rig.legL.rotation.x < -0.4 && p.rig.kneeR.rotation.x > 1.2);
+for (const [id, owner, event] of [
+  ['pet.crouch', 'ramon-lenherr', 'pet-dog'],
+  ['pet.crouch-cat', 'donata-manser', 'pet-cat'],
+] as const) {
+  test(`${id}: the owner kneels down to the pet (event ${event})`, async ({ page }) => {
+    const errors = await openGame(page);
+    await scene(page, (s, who) => s.put(who, 'desk', 'stay'), owner);
+    await until(page, (g, ev) => !String((window as any).dev.trigger(ev)).endsWith('nicht möglich'), event);
+    await until(page, kneels, undefined, 40_000);
+    expect(errors).toEqual([]);
+  });
+}
 
 for (const [id, event, reached] of cases) {
   test(`${id} (?event=${event})`, async ({ page }) => {

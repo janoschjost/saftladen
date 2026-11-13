@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { installHeadlessDom } from '../test/headlessDom';
-import { CoatRacks } from './CoatRacks';
 import { forceRunner, simForceCtx } from './forceCtx';
 import type { Person } from './Person';
 import { PET_HEIGHT } from './petPose';
@@ -75,16 +74,17 @@ describe('places', () => {
   it('place.meeting-tv: black without a meeting, a meeting brings slides', () => {
     const sim = office();
     expect(sim.meetingRoom.tv).toBe('off');
-    const m = sim.meetingRoom.start(crew(sim, ...GROUP), sim.nav, 'slides')!;
-    expect(m.screen).toBe('slides');
+    sim.meetingRoom.start(crew(sim, ...GROUP), sim.nav, 'slides');
     sim.step(STEP);
+    expect(sim.meetingRoom.current?.screen).toBe('slides');
     expect(sim.meetingRoom.tv).toBe('off'); // still gathering: black until everybody sits
   });
 
   it('place.meeting-tv: a lunch round is a kart race', () => {
     const sim = office();
-    const m = sim.meetingRoom.start(crew(sim, ...GROUP.slice(0, 3)), sim.nav, 'kart')!;
-    expect(m.screen).toBe('kart');
+    sim.meetingRoom.start(crew(sim, ...GROUP.slice(0, 3)), sim.nav, 'kart');
+    sim.step(STEP);
+    expect(sim.meetingRoom.current?.screen).toBe('kart');
   });
 
   it('place.coffee-break: three go to the kitchen and chat there', () => {
@@ -184,10 +184,7 @@ describe('office', () => {
 
   it('office.door-lettering: letters move with the door and settle back when it closes', () => {
     const sim = office();
-    const swing = (want: 'open' | 'shut') => {
-      for (let i = 0; i < 45 / STEP && !lettered(sim, want); i++) sim.doors.update(STEP, []);
-      return lettered(sim, want);
-    };
+    const swing = (want: 'open' | 'shut') => run(sim, 45, () => lettered(sim, want));
     expect(sim.doors.toggleLettered()).toBe(true);
     expect(swing('open')).toBe(true);
     expect(sim.doors.toggleLettered()).toBe(false);
@@ -198,14 +195,19 @@ describe('office', () => {
     ['normal start', false],
     ['all eight home offices taken', true],
   ] as const) {
-    it(`office.coat-stands: coats on the stands = people in the office (${name})`, () => {
+    it(`office.coat-stands: coats on the stands = people in the office (${name}), also after people come and go`, () => {
       const sim = office(homes);
-      const racks = new CoatRacks(sim.model.coatRacks, sim.people);
-      racks.update();
       const pegs = sim.model.coatRacks.reduce((n, r) => n + r.pegs.length, 0);
-      const inside = sim.people.filter((p) => p.presence === 'in').length;
-      expect(inside).toBeGreaterThan(0);
-      expect(racks.count).toBe(Math.min(inside, pegs));
+      const check = () => {
+        const inside = sim.people.filter((p) => p.presence === 'in').length;
+        expect(inside).toBeGreaterThan(0);
+        expect(sim.coatRacks.count).toBe(Math.min(inside, pegs));
+      };
+      check();
+      sim.scenario.put('oscar-grob', 'errand');
+      sim.scenario.put('donata-manser', 'desk');
+      sim.step(STEP);
+      check();
     });
   }
 });
@@ -216,8 +218,8 @@ describe('dev.force', () => {
     expect(r).toContain(label);
     expect(r).not.toContain('nicht möglich');
   };
-  const forced = (homes = false) => {
-    const sim = office(homes);
+  const forced = () => {
+    const sim = office();
     return { sim, force: forceRunner(simForceCtx(sim, () => {})) }; // no player steering anybody
   };
 
@@ -225,7 +227,9 @@ describe('dev.force', () => {
     const { sim, force } = forced();
     crew(sim, ...GROUP);
     ok(force('oscar-grob', 'meeting'), 'Meeting');
-    expect(sim.meetingRoom.current?.members.some((p) => p.id === 'oscar-grob')).toBe(true);
+    const oscar = sim.people.find((p) => p.id === 'oscar-grob')!;
+    expect(run(sim, 90, () => oscar.meetSeated)).toBe(true); // the sim takes over: walks there and sits down
+    expect(sim.meetingRoom.current?.members.includes(oscar)).toBe(true);
     const other = sim.people.find((p) => p.inOffice && !sim.meetingRoom.current!.members.includes(p))!;
     expect(force(other.id, 'meeting')).toContain('nicht möglich');
     expect(sim.meetingRoom.current!.members.includes(other)).toBe(false);
