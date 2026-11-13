@@ -26,7 +26,9 @@ Start `npm run dev` in the worktree with the Bash tool's `run_in_background`, an
 
 ## 2. Overview
 
-Read the PR (`gh pr view N --json title,body,files,statusCheckRollup,mergeable`), its diff, the linked issue (`Closes #M`) with all comments, and the `FEATURES.md` lines the PR adds or changes. Tell the dev in a few lines: what the issue asked for, what changed, CI status, conflicts with `main`.
+Read the PR (`gh pr view N --json title,body,files,statusCheckRollup,mergeable,baseRefName`), its diff, the linked issue (`Closes #M`) with all comments, and the `FEATURES.md` lines the PR adds or changes. Tell the dev in a few lines: what the issue asked for, what changed, CI status, conflicts with `main`.
+
+**Stacked PR:** `baseRefName` is not `main` → the PR builds on another open PR (`gh pr list --head <baseRefName>`). Say so first, with the order of the stack (the PR body names it). It can be reviewed now, but its diff is only against that base, and it is merged only after the base PR (step 5).
 
 ## 3. Walk through
 
@@ -57,6 +59,7 @@ Show the dev every finding as it will be posted and let them edit or drop each.
 
 1. `scripts/issue.sh release N "reviewed"` (removes `in review`).
 2. **Gate: up to date with `main`, e2e green on that state.** `main` must only ever get what was tested on top of it; GitHub cannot enforce that on this repo (no branch protection on the plan), so this step does.
+   - Base is not `main` (stacked PR) → stop here: no rebase, no merge. A rebase onto `main` would bring the base PR's commits along. Tell the dev to review and merge the base PR first; merging it with `--delete-branch` retargets this PR to `main`, then run `/review-pr N` again for the gate and the merge (the review itself need not be repeated).
    - Behind `main` (`git fetch origin && git rev-list --count origin/<branch>..origin/main` is not 0) → in the review worktree `git checkout <branch> && git rebase origin/main`. No conflicts → `git push --force-with-lease`. Conflicts → `git rebase --abort`; that is a finding (step 4: "rebase onto main"), no merge.
    - `gh pr edit N --add-label e2e` if the label is missing, then `gh pr checks N --watch`: `Build and test` and `E2E (Playwright)` must both have run green on the PR's last commit. Red → a finding (step 4), no merge. Entries marked skipped come from label events (`in review`, `changes requested`): they start no run and say nothing; what counts is the run of the last push, or of adding `e2e`.
    - Also a finding: new or changed behavior without a test, a spec that breaks the rules of the `write-tests` skill (waits in wall time, imports `test` from `@playwright/test`), or a Playwright test that only watches the simulation (no key, click, hash, panel, DOM or URL): it belongs in a Vitest test on `Sim`.
