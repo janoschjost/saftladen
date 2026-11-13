@@ -26,6 +26,13 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
      - purely visual changes → checked in the browser.
    - Every criterion has been checked in the running app.
    - `FEATURES.md` is updated: add or change the lines for this issue, ending with `(#N)`. Every line you touched still works. Each line you add or change gets a `url:` where a URL can show it (see the rules at the top of `FEATURES.md`).
+   - The diff has been through one pass of `/simplify` and one of `/code-review` (medium), in that order, both limited to this branch's diff:
+     1. `/simplify`, apply what keeps the change inside the issue's scope.
+     2. `npm run build && npm test && npm run test:e2e`.
+     3. `/code-review`. Fix the confirmed correctness findings only. Everything else (style, taste, things outside the issue) goes under `## Notes` in the PR body or into a new issue.
+     4. Step 3 changed code → tests again, then one more `/code-review`. Two rounds at most: after the second, open the PR and list what is still open under `## Notes`. Never loop until a review comes back empty; it won't.
+
+     Docs-only changes skip this.
 6. **PR.** Rebase first. On conflicts keep both sides' behavior, never just yours, then re-check the affected `FEATURES.md` lines.
    ```sh
    git fetch origin && git rebase origin/main && npm run build && npm test && npm run test:e2e
