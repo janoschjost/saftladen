@@ -772,13 +772,14 @@ const SIGNATURE_PICKS = 1;
 const SON = { walkIn: 1.6, talk: 6.2, walkOut: 1.6, gap: [25, 70] as [number, number] };
 const SON_TOTAL = SON.walkIn + SON.talk + SON.walkOut;
 /** which way Papa turns to look at the boy, which way the boy faces (mostly to Papa, a little to the webcam) */
-const SON_TURN = -1.0;
+const SON_TURN = -1.2;
 const SON_FACE = 1.4;
 /**
- * Where the boy stands, per room (the webcams sit at different distances): just in front of Papa's chair, at this
- * share of the frame's half width left of the centre (never closer to Papa than `clear` m), his head at `head` m.
+ * Where the boy stands, per room (the webcams sit at different distances): beside Papa, behind the desk's back edge
+ * (desks reach from z 0.2 towards the webcam), at this share of the frame's half width left of the centre (never
+ * closer to Papa than `clear` m), his head at `head` m. Papa rolls his chair back `roll` m to face him.
  */
-const SON_SPOT = { z: 0.1, frame: 0.6, clear: 0.55, head: 1.05, frameTop: 0.94 };
+const SON_SPOT = { z: -0.25, frame: 0.6, clear: 0.7, head: 1.05, frameTop: 0.94, roll: 0.3 };
 /** Papa's hands while he listens: off the keyboard, resting on the edge of the desk / in the lap */
 const SON_LISTEN: ArmPose = { x: -0.45, z: 0.12, e: -1.0, ez: 0 };
 /** the bubble's canvas (px) and where its tail tip sits on it */
@@ -1822,7 +1823,11 @@ export class HomeOffice {
     if (this.sonT >= 0) {
       // turns to the boy while he stands there, nods along
       const near = Math.min(1, this.sonT / SON.walkIn, (SON_TOTAL - this.sonT) / SON.walkOut);
-      yaw = SON_TURN * near;
+      if (this.chair && !recl) {
+        // rolls back from the desk and swivels round to him
+        chairTurn = SON_TURN * near;
+        chairBack = Math.max(chairBack, SON_SPOT.roll * near);
+      } else yaw = SON_TURN * near;
       // stops typing and listens
       Object.assign(L, mixPose(L, SON_LISTEN, near));
       Object.assign(R, mixPose(R, SON_LISTEN, near));
