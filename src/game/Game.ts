@@ -812,8 +812,15 @@ export class Game {
         group: 'Tiere',
         label: kind === 'dog' ? 'Hund streicheln' : 'Katze streicheln',
         run: () => {
-          const pet = this.pets.find((d) => !d.away && d.isCat === (kind === 'cat') && d.owner.inOffice && !d.owner.held && !d.owner.controlled);
-          if (!pet) return null;
+          const ofKind = this.pets.filter((d) => d.isCat === (kind === 'cat'));
+          const pet = ofKind.find((d) => !d.away && !d.fixed && !d.petted && !d.held && d.owner.inOffice && !d.owner.held && !d.owner.controlled);
+          if (!pet) {
+            if (ofKind.some((d) => d.owner.inOffice)) return null; // an owner is in, their pet just busy: try again in a moment
+            // the owner is out or on the way out: call them back, the event is retried until they and the pet are in
+            const out = ofKind.find((d) => d.owner.presence === 'out' || d.owner.presence === 'leaving')?.owner;
+            if (out) this.presence.callBack(out);
+            return null;
+          }
           const p = pet.owner;
           drop(p);
           if (!p.petDog(pet.pos, 30, PET_HEIGHT[kind])) return null;

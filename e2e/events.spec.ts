@@ -32,6 +32,14 @@ for (const [id, owner, event] of [
   });
 }
 
+// The cats' owner is out at 11:00 with seed 1: the event calls her in first (#125)
+test("pet.crouch-cat (?event=pet-cat) brings the cats' owner in when she is away", async ({ page }) => {
+  const errors = await openGame(page, '', undefined, 'event=pet-cat');
+  expect(await read(page, (g) => g.pets.find((d: { isCat: boolean }) => d.isCat).owner.presence)).not.toBe('in');
+  await until(page, kneels, undefined, 40_000);
+  expect(errors).toEqual([]);
+});
+
 for (const [id, event, reached] of cases) {
   test(`${id} (?event=${event})`, async ({ page }) => {
     const errors = await openGame(page, '', undefined, `event=${event}`);
