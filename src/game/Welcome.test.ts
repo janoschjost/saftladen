@@ -20,19 +20,45 @@ function fullOfficeVisit(seed: number) {
   return { sim, v, greeted: !!sim.welcome.call };
 }
 
-describe('presence.remote-greet', () => {
-  it('presence.remote-greet: a visitor who just walked into a full office stays (the office cap sends somebody else)', () => {
+describe('presence.remote-visit', () => {
+  it('presence.remote-visit: a visitor who just walked into a full office stays (the office cap sends somebody else)', () => {
     for (const seed of [1, 2, 3, 4, 5, 6]) {
       const { sim, v, greeted } = fullOfficeVisit(seed);
       expect(greeted, `seed ${seed}`).toBe(true);
+      // more people come back than the office holds: the cap has to send somebody out again
+      for (const p of sim.people.filter((o) => o.presence === 'out' && o.awayKind !== 'off' && o !== v).slice(0, 4)) sim.presence.callBack(p);
+      let full = false;
       for (let j = 0; j < 30 * 60; j++) {
         sim.step(1 / 60);
+        full ||= sim.people.filter((p) => p.presence === 'in').length >= 15;
         expect(v.presence, `seed ${seed}, ${(j / 60).toFixed(1)} s after the welcome`).toBe('in');
       }
-      expect(v.playerChat).toBeNull();
+      expect(full, `seed ${seed}: the office was full with him`).toBe(true);
     }
   });
 
+  it('presence.remote-visit: with all home offices taken, makeRoom calls one person back even into a full office', () => {
+    setSeed(1);
+    const sim = new Sim({ cycle: cycleOf(11) });
+    Walker.animate = true;
+    for (let i = 0; i < 60 && !sim.presence.homeFull; i++) sim.step(1 / 60);
+    expect(sim.presence.homeFull).toBe(true);
+    expect(sim.people.filter((p) => p.presence === 'in').length).toBeGreaterThanOrEqual(15);
+    sim.presence.makeRoom();
+    const back = sim.people.filter((p) => p.awayKind === 'home' && p.presence === 'out' && p.awayLeft === 0);
+    expect(back.length).toBe(1);
+    sim.presence.makeRoom(); // a second call while the first is on the way calls nobody else
+    expect(sim.people.filter((p) => p.awayKind === 'home' && p.presence === 'out' && p.awayLeft === 0)).toEqual(back);
+    let i = 0;
+    for (; i < 20 * 60 && back[0].presence !== 'in'; i++) {
+      sim.step(1 / 60);
+      sim.presence.makeRoom();
+    }
+    expect(back[0].presence).toBe('in');
+  });
+});
+
+describe('presence.remote-greet', () => {
   it('presence.remote-greet: the team welcomes the remote worker who walks in, once per visit', () => {
     setSeed(1);
     const sim = new Sim({ cycle: cycleOf(11) });

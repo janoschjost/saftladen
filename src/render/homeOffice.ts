@@ -771,14 +771,14 @@ const SIGNATURE_PICKS = 1;
  */
 const SON = { walkIn: 1.6, talk: 6.2, walkOut: 1.6, gap: [25, 70] as [number, number] };
 const SON_TOTAL = SON.walkIn + SON.talk + SON.walkOut;
-/** which way Papa turns to look at the boy, which way the boy faces (half to Papa, half to the webcam) */
+/** which way Papa turns to look at the boy, which way the boy faces (mostly to Papa, a little to the webcam) */
 const SON_TURN = -1.0;
 const SON_FACE = 1.4;
 /**
  * Where the boy stands, per room (the webcams sit at different distances): just in front of Papa's chair, at this
  * share of the frame's half width left of the centre (never closer to Papa than `clear` m), his head at `head` m.
  */
-const SON_SPOT = { z: 0.1, frame: 0.6, clear: 0.55, head: 1.05 };
+const SON_SPOT = { z: 0.1, frame: 0.6, clear: 0.55, head: 1.05, frameTop: 0.94 };
 /** Papa's hands while he listens: off the keyboard, resting on the edge of the desk / in the lap */
 const SON_LISTEN: ArmPose = { x: -0.45, z: 0.12, e: -1.0, ez: 0 };
 /** the bubble's canvas (px) and where its tail tip sits on it */
@@ -1293,8 +1293,8 @@ export class HomeOffice {
   /** where the boy comes in (off the left edge of the frame) and stops, where his bubble sits and how big it is */
   private sonOff = new THREE.Vector3();
   private sonAt = new THREE.Vector3();
-  private sonBubble = new THREE.Vector3();
-  private sonBubbleSize = new THREE.Vector2();
+  private sonView = new THREE.Vector2();
+  private sonTop = new THREE.Vector3();
 
   constructor(readonly variant: number) {
     this.style = STYLES[variant];
@@ -1310,7 +1310,6 @@ export class HomeOffice {
     this.camera.fov = set.webcam.fov;
     this.camera.position.set(...set.webcam.pos);
     this.camera.lookAt(...set.webcam.look);
-    this.placeSon();
     this.scene.add(set.group);
     if (this.style.rack) {
       this.pieces = laundryPieces();
@@ -1413,12 +1412,7 @@ export class HomeOffice {
       this.occupant.headset ??= headset();
       rig.body.add(this.occupant.headset);
     }
-    if (this.occupant.son) {
-      const { rig: sonRig, bubble } = this.occupant.son;
-      bubble.position.copy(this.sonBubble);
-      bubble.scale.set(this.sonBubbleSize.x, this.sonBubbleSize.y, 1);
-      this.scene.add(sonRig.root, bubble);
-    }
+    if (this.occupant.son) this.scene.add(this.occupant.son.rig.root, this.occupant.son.bubble);
     for (const p of pets) {
       p.rig.root.position.copy(p.spot);
       if (p.onDesk) p.rig.root.position.y = this.desk ?? p.spot.y; // on this room's desk top
@@ -1431,22 +1425,26 @@ export class HomeOffice {
     this.setActivity(fxRandom() < GREET_CHANCE ? 'wave' : 'type');
   }
 
-  /** The boy's spot and bubble from this room's webcam (the webcams look along -z from in front of the desk). */
-  private placeSon(): void {
-    const cam = this.camera.position;
-    const view = this.camera.getViewSize(Math.max(0.3, cam.z - SON_SPOT.z), new THREE.Vector2());
-    const halfW = view.x / 2;
-    const halfH = view.y / 2;
-    const x = -Math.max(SON_SPOT.clear, halfW * SON_SPOT.frame);
+  /**
+   * The boy's spot and bubble from this room's webcam as it draws right now (rooms place it at different distances,
+   * feed tiles and the enlarged feed differ in shape): the webcams look along -z from in front of the desk.
+   */
+  private placeSon(bubble: THREE.Sprite): void {
+    const cam = this.camera;
+    cam.updateProjectionMatrix();
+    cam.updateMatrixWorld();
+    const view = cam.getViewSize(Math.max(0.3, cam.position.z - SON_SPOT.z), this.sonView);
+    const x = -Math.max(SON_SPOT.clear, (view.x / 2) * SON_SPOT.frame);
     this.sonAt.set(x, 0, SON_SPOT.z);
-    this.sonOff.set(-halfW - 0.6, 0, SON_SPOT.z);
+    this.sonOff.set(-view.x / 2 - 0.6, 0, SON_SPOT.z);
     const w = view.x * SON_BUBBLE_WIDTH;
     const h = (w * BUBBLE_PX.h) / BUBBLE_PX.w;
-    this.sonBubbleSize.set(w, h);
-    // tail tip just above his head, the whole bubble inside the frame
-    const top = cam.y + halfH - 0.02;
-    const y = Math.min(SON_SPOT.head + 0.04 + (BUBBLE_PX.tipY / BUBBLE_PX.h - 0.5) * h, top - h / 2);
-    this.sonBubble.set(x + (0.5 - BUBBLE_PX.tipX / BUBBLE_PX.w) * w, y, SON_SPOT.z);
+    // tail tip just above his head ...
+    bubble.scale.set(w, h, 1);
+    bubble.position.set(x + (0.5 - BUBBLE_PX.tipX / BUBBLE_PX.w) * w, SON_SPOT.head + 0.04 + (BUBBLE_PX.tipY / BUBBLE_PX.h - 0.5) * h, SON_SPOT.z);
+    // ... unless that pushes the bubble out of the top of the frame (the webcam looks down a little)
+    const top = this.sonTop.set(bubble.position.x, bubble.position.y + h / 2, SON_SPOT.z).project(cam).y;
+    if (top > SON_SPOT.frameTop) bubble.position.y -= ((top - SON_SPOT.frameTop) * view.y) / 2;
   }
 
   /** The son's visits: every so often (while Papa is just typing) he walks in, says something and leaves again. */
@@ -1466,6 +1464,7 @@ export class HomeOffice {
       son.bubble.visible = false;
       return;
     }
+    this.placeSon(son.bubble);
     const r = son.rig;
     const T = this.sonT;
     const t = this.clock;

@@ -338,7 +338,7 @@ export class Presence {
       if (x.presence !== 'out' || x.homeVariant >= HOME_COUNT || x.member.homebody || this.nightHomers.has(x) || this.overridden.has(x)) continue; // own rooms free none of the shared ones
       if (x.awayLeft < OFF / 2 && (!o || x.awayLeft < o.awayLeft)) o = x;
     }
-    if (o) o.awayLeft = 0.5;
+    if (o) o.awayLeft = 0; // 0: called back, a full office does not hold them back (see capOffice)
   }
 
   get homeFull(): boolean {
