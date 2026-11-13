@@ -19,6 +19,14 @@ test('presence.homes-hash', async ({ page }) => {
   await expect(page.locator('#feeds')).toBeVisible();
 });
 
+test('home.feeds: the feed list does not bounce past its ends (the overlays would leave their videos behind)', async ({ page }) => {
+  const errors = await openGame(page, 'homes');
+  const feeds = page.locator('#feeds');
+  await expect(feeds).toBeVisible();
+  expect(await feeds.evaluate((el) => getComputedStyle(el).overscrollBehaviorY)).toBe('none');
+  expect(errors).toEqual([]);
+});
+
 test.describe('office.coat-stands', () => {
   for (const [name, hash] of [['normal start', ''], ['all eight home offices taken', 'homes']]) {
     test(name, async ({ page }) => {
