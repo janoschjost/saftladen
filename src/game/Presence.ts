@@ -102,6 +102,8 @@ export class Presence {
   private kept = new Set<Person>();
   /** dev: people taken out of the sim, hidden and off the schedule until they are restored (`remove` / `restore`) */
   private removed = new Set<Person>();
+  /** people called back who are still outside: a full office does not hold them back (see capOffice), they still queue at the door */
+  private calledBack = new Set<Person>();
 
   constructor(
     private people: readonly Person[],
@@ -316,8 +318,8 @@ export class Presence {
   private capOffice(nav: NavGrid): boolean {
     const present = this.present;
     if (present < MAX_OFFICE) return false;
-    // nobody walks back in while the office is full (0 = called back by the player: they do)
-    for (const p of this.people) if (p.presence === 'out' && p.awayKind !== 'off' && p.awayLeft > 0 && p.awayLeft < 5) p.awayLeft = 5 + random() * 15;
+    // nobody walks back in while the office is full, except who was called back: they do (one after the other, see clearDoor)
+    for (const p of this.people) if (p.presence === 'out' && p.awayKind !== 'off' && p.awayLeft > 0 && p.awayLeft < 5 && !this.calledBack.has(p)) p.awayLeft = 5 + random() * 15;
     if (present === MAX_OFFICE) return false;
     if (this.people.some((p) => p.presence === 'leaving')) return false;
     const candidates = this.people.filter((p) => this.sendable(p));
@@ -374,7 +376,7 @@ export class Presence {
   makeRoom(): void {
     for (const x of this.people) if (x.awayKind === 'home' && (x.presence === 'returning' || (x.presence === 'out' && x.awayLeft <= 1))) return;
     const o = this.roomToFree();
-    if (o) o.awayLeft = 0; // 0: called back, a full office does not hold them back (see capOffice)
+    if (o) this.comeBack(o);
   }
 
   get homeFull(): boolean {
@@ -456,6 +458,7 @@ export class Presence {
     this.admitted.delete(p);
     this.waiting.delete(p);
     this.exits.delete(p);
+    this.calledBack.delete(p);
     if (p.presence === 'out') {
       p.awayKind = 'off';
       p.awayLeft = OFF;
@@ -477,8 +480,14 @@ export class Presence {
   callBack(p: Person): void {
     if (this.kept.has(p) || this.removed.has(p)) return;
     if (this.duty(p, this.workHour) !== 'duty') this.overridden.add(p);
-    if (p.presence === 'out') p.awayLeft = 0;
+    if (p.presence === 'out') this.comeBack(p);
     else p.cancelLeave();
+  }
+
+  /** Out and back in now, even when the office is full (see capOffice). */
+  private comeBack(p: Person): void {
+    p.awayLeft = 0;
+    this.calledBack.add(p);
   }
 
   callAllBack(): void {
@@ -522,8 +531,10 @@ export class Presence {
     for (const p of this.people) {
       if (p.presence !== 'out') {
         this.waiting.delete(p);
+        this.calledBack.delete(p);
         continue;
       }
+      if (p.awayLeft >= 1) this.calledBack.delete(p); // sent away again before they got in
       if (p.awayLeft >= 0.5 || this.admitted.has(p)) continue;
       if (busy) {
         const since = this.waiting.get(p) ?? this.clock;
