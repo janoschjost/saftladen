@@ -413,6 +413,7 @@ export class Person extends Walker {
   /** Walk to the door and leave; comes back after `seconds`. Going home (not `manual`ly sent), an alter ego spins and walks out as itself. */
   leaveOffice(nav: NavGrid, kind: AwayKind, seconds: number, manual = false): void {
     this.cancelTask();
+    this.playerChat = null; // a chat ends at the door
     this.leftManually = manual;
     this.lane = pickDoorLane();
     this.presence = 'leaving';

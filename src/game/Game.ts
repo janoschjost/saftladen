@@ -1039,7 +1039,11 @@ export class Game {
 
     const away = (kind: 'errand' | 'home') => () => {
       const p = pickFree(1)[0];
-      if (!p || (kind === 'home' && this.presence.homeFull)) return null;
+      if (!p) return null;
+      if (kind === 'home' && this.presence.homeFull) {
+        this.presence.makeRoom(); // somebody comes back from home: the next try finds a free room
+        return null;
+      }
       this.release(p);
       this.presence.send(p, kind, this.nav);
       return strings.presence.event.leaves[kind](p.member.name.split(' ')[0]);

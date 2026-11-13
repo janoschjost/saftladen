@@ -290,7 +290,7 @@ export class Presence {
 
   /** Somebody who is not tied up right now (talk, meeting, printer, ...) and so free to walk out. */
   free(p: Person): boolean {
-    return p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob;
+    return p.inOffice && !p.held && !p.controlled && !p.talk && !p.playerChat && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob;
   }
 
   /** Office over capacity: sends one person to the home office, holds back those about to return. Returns true if somebody left. */
@@ -301,7 +301,8 @@ export class Presence {
     for (const p of this.people) if (p.presence === 'out' && p.awayKind !== 'off' && p.awayLeft > 0 && p.awayLeft < 5) p.awayLeft = 5 + random() * 15;
     if (present === MAX_OFFICE) return false;
     if (this.people.some((p) => p.presence === 'leaving')) return false;
-    const candidates = this.people.filter((p) => this.free(p) && !p.task);
+    // never the remote worker on his visit: he came to see the team (no errands for him either, only lunch)
+    const candidates = this.people.filter((p) => this.free(p) && !p.task && !this.isVisitor(p));
     if (!candidates.length) return false;
     const p = candidates[Math.floor(random() * candidates.length)];
     const home = this.roomFree || p.member.homebody;
@@ -319,6 +320,21 @@ export class Presence {
       if (plan.remote && hour >= plan.arrive && hour < plan.end && p.awayKind !== 'home' && !this.overridden.has(p)) waiting++;
     }
     return this.homeCount < MAX_HOME - waiting;
+  }
+
+  /**
+   * All home offices taken: the one who would be back soonest anyway comes back to the office, so a room frees up in
+   * a few seconds. One at a time: nothing happens while somebody is already on the way out of a room.
+   */
+  makeRoom(): void {
+    let o: Person | null = null;
+    for (const x of this.people) {
+      if (x.awayKind !== 'home') continue;
+      if (x.presence === 'returning' || (x.presence === 'out' && x.awayLeft <= 1)) return;
+      if (x.presence !== 'out' || x.homeVariant >= HOME_COUNT || x.member.homebody || this.nightHomers.has(x) || this.overridden.has(x)) continue; // own rooms free none of the shared ones
+      if (x.awayLeft < OFF / 2 && (!o || x.awayLeft < o.awayLeft)) o = x;
+    }
+    if (o) o.awayLeft = 0.5;
   }
 
   get homeFull(): boolean {
@@ -430,15 +446,7 @@ export class Presence {
   private sendOff(p: Person, kind: 'off' | 'home', nav: NavGrid): void {
     // a regular remote day needs a room: somebody makes room, he comes in as soon as it is free
     if (kind === 'home' && p.awayKind !== 'home' && this.homeCount >= MAX_HOME && this.planOf(p).remote) {
-      // the one who would be back soonest anyway comes back to the office to make room (one at a time)
-      let o: Person | null = null;
-      for (const x of this.people) {
-        if (x.awayKind !== 'home') continue;
-        if (x.presence === 'returning' || (x.presence === 'out' && x.awayLeft <= 1)) return; // somebody already leaves a room
-        if (x.presence !== 'out' || x.homeVariant >= HOME_COUNT || x.member.homebody || this.nightHomers.has(x) || this.overridden.has(x)) continue; // own rooms free none of the shared ones
-        if (x.awayLeft < OFF / 2 && (!o || x.awayLeft < o.awayLeft)) o = x;
-      }
-      if (o) o.awayLeft = 0.5;
+      this.makeRoom();
       return;
     }
     switch (p.presence) {
@@ -575,7 +583,7 @@ export class Presence {
     // enough people out already; a full office still lets somebody go, so that those waiting outside get their turn
     if ((this.away.length >= this.target && this.present < MAX_OFFICE) || leaving >= 2) return;
     const candidates = this.people.filter((p) => {
-      if (!this.free(p) || p.task || this.overridden.has(p)) return false;
+      if (!this.free(p) || p.task || this.overridden.has(p) || this.isVisitor(p)) return false;
       const plan = this.planOf(p);
       // not right before lunch or going home
       return this.duty(p, hour) === 'duty' && hour < plan.leave - ERRANDS.beforeLeave && (plan.lunched || hour < plan.lunch - 0.5);
