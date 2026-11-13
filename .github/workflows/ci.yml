@@ -13,8 +13,9 @@ permissions:
   contents: read
 
 concurrency:
-  # label events in their own group: adding any label must not cancel a running build
-  group: ci-${{ github.ref }}-${{ github.event.action == 'labeled' && 'label' || 'run' }}
+  # label events in their own groups: adding a label must not cancel a running build, and a label other than `e2e`
+  # (it starts nothing, see the e2e job) must not cancel the run that adding `e2e` started
+  group: ci-${{ github.ref }}-${{ github.event.action != 'labeled' && 'run' || github.event.label.name == 'e2e' && 'e2e-label' || 'other-label' }}
   cancel-in-progress: true
 
 jobs:
