@@ -80,6 +80,12 @@ export interface Schedule {
   visitChance?: number;
 }
 
+/** When a pet comes to the office: on these weekdays (0 = Monday .. 6 = Sunday, default every day) with this chance (default 1). */
+export interface PetVisits {
+  days?: readonly number[];
+  chance?: number;
+}
+
 export interface TeamMember {
   id: string;
   name: string;
@@ -101,7 +107,9 @@ export interface TeamMember {
   swimLook?: Partial<Look>;
   dog?: 'shiba' | 'puppy' | 'doodle' | 'terrier';
   dogName?: string;
-  cats?: Array<{ kind: 'tabby' | 'tortie'; name: string }>; // cats following this person
+  /** which days the dog comes along (default: every day) */
+  dogVisits?: PetVisits;
+  cats?: Array<{ kind: 'tabby' | 'tortie'; name: string; visits?: PetVisits }>; // cats following this person
   adhd?: boolean; // restless: short idle/work spells, fidgets
   son?: Look; // little boy who now and then walks into the home office scene
   homebody?: boolean; // works from home a lot and is never out on errands

@@ -1,5 +1,6 @@
 import { strings } from '../i18n/strings';
 import { CORRIDOR_POINT } from '../render/officeModel';
+import type { Dog } from './Dog';
 import type { Person } from './Person';
 import { PET_HEIGHT } from './petPose';
 import { random } from './rng';
@@ -76,21 +77,29 @@ export function registerSimEvents(sim: Sim): void {
       return 'Besprechung beendet';
     },
   });
+  /** Calls back the owner of the first of these pets who is out or on the way out; the event is retried until they and the pet are in. */
+  const callBackOwner = (ofThese: readonly Dog[]) => {
+    const out = ofThese.find((d) => d.owner.presence === 'out' || d.owner.presence === 'leaving')?.owner;
+    if (out) presence.callBack(out);
+  };
+  /** The pets that come to the office today (`pet.schedule`). */
+  const comingToday = () => pets.filter((d) => d.comesToday && !d.removed);
   for (const kind of ['dog', 'cat'] as const) {
     events.register({
       id: `pet-${kind}`,
       group: 'Tiere',
       label: kind === 'dog' ? 'Hund streicheln' : 'Katze streicheln',
       run: () => {
-        const ofKind = pets.filter((d) => d.isCat === (kind === 'cat'));
+        const ofKind = pets.filter((d) => d.isCat === (kind === 'cat') && !d.removed);
+        // every pet of this kind stays home today: one comes in after all
+        if (!ofKind.some((d) => d.comesToday) && ofKind.length) ofKind[0].comesToday = true;
+        const coming = ofKind.filter((d) => d.comesToday);
         // a pet that is not busy itself, and not an owner in a meeting, the phone box or at the WC: they would be
         // called out and still could not stroke
-        const pet = ofKind.find((d) => !d.away && !d.fixed && !d.petted && !d.held && isFree(d.owner) && !tiedUp(d.owner));
+        const pet = coming.find((d) => !d.away && !d.fixed && !d.petted && !d.held && isFree(d.owner) && !tiedUp(d.owner));
         if (!pet) {
-          if (ofKind.some((d) => d.owner.inOffice)) return null; // an owner is in, just busy (or their pet is): try again in a moment
-          // the owner is out or on the way out: call them back, the event is retried until they and the pet are in
-          const out = ofKind.find((d) => d.owner.presence === 'out' || d.owner.presence === 'leaving')?.owner;
-          if (out) presence.callBack(out);
+          if (coming.some((d) => d.owner.inOffice)) return null; // an owner is in, just busy (or their pet is): try again in a moment
+          callBackOwner(coming);
           return null;
         }
         const p = pet.owner;
@@ -102,13 +111,31 @@ export function registerSimEvents(sim: Sim): void {
     });
   }
   events.register({
+    id: 'pet-owner',
+    group: 'Tiere',
+    label: 'Wer hat heute ein Tier dabei?',
+    run: () => {
+      const owner = people.find((p) => p.inOffice && p.pets.some((d) => d.comesToday && !d.away));
+      if (!owner) {
+        callBackOwner(comingToday());
+        return null;
+      }
+      sim.point(owner);
+      const today = presence.petsToday.map((t) => `${t.pet} (${t.owner.split(' ')[0]})`);
+      return `Heute einmal im Büro: ${today.join(', ') || 'keine Tiere'}`;
+    },
+  });
+  events.register({
     id: 'pet-passage',
     group: 'Tiere',
     label: 'Tier in einen Durchgang setzen',
     run: () => {
       // a pet of a seated owner is put into the nearest passage: it gets up and lies down beside the owner again, out of the way
       const pet = pets.find((d) => !d.away && !d.held && d.owner.inOffice && d.owner.sit > 0.5);
-      if (!pet) return null;
+      if (!pet) {
+        callBackOwner(comingToday()); // nobody with a pet in: they come back, the event is retried
+        return null;
+      }
       const o = nav.toCell(pet.owner.pos);
       let best: { x: number; z: number } | null = null;
       let bestD = Infinity;

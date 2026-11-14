@@ -1,0 +1,64 @@
+import * as THREE from 'three';
+import { describe, expect, it } from 'vitest';
+import type { DogRig } from '../render/dogBuilder';
+import { Dog } from './Dog';
+import type { Person } from './Person';
+import { petComesToday } from './petSchedule';
+import { setSeed } from './rng';
+import { Sim } from './Sim';
+import { Walker } from './Walker';
+import { installHeadlessDom } from '../test/headlessDom';
+
+installHeadlessDom();
+
+describe('pet.schedule', () => {
+  it('pet.schedule: only on its weekdays, then with its chance', () => {
+    setSeed(1);
+    expect(petComesToday({ days: [1, 3] }, 1)).toBe(true);
+    expect(petComesToday({ days: [1, 3] }, 2)).toBe(false);
+    expect(petComesToday(undefined, 6)).toBe(true);
+    expect(petComesToday({ chance: 0 }, 2)).toBe(false);
+    const hits = Array.from({ length: 1000 }, () => petComesToday({ chance: 0.35 }, 0)).filter(Boolean).length;
+    expect(hits).toBeGreaterThan(280);
+    expect(hits).toBeLessThan(420);
+    expect(petComesToday({ days: [4], chance: 1 }, 4, () => 0.99)).toBe(true);
+  });
+});
+
+describe('pet.owner', () => {
+  const lane = { in: { x: 0, z: 1 }, out: { x: 0, z: 3 } };
+  const owner = () => ({ id: 'o', pets: [] as Dog[], lane, presence: 'out' }) as unknown as Person;
+  const rig = () => ({ root: new THREE.Object3D(), headHeight: 0.4 }) as unknown as DogRig;
+
+  it('pet.owner: a pet that comes today appears together with its owner', () => {
+    const o = owner();
+    const dog = new Dog('Ellie', rig(), o, { x: 0, z: 0 });
+    dog.sendAway();
+    dog.arriveWith(o);
+    expect(dog.away).toBe(false);
+  });
+
+  it('pet.schedule: a pet that stays home today does not come in with its owner', () => {
+    const o = owner();
+    const dog = new Dog('Ellie', rig(), o, { x: 0, z: 0 }, { visits: { days: [1, 3] } });
+    dog.sendAway();
+    dog.comesToday = false;
+    dog.arriveWith(o);
+    expect(dog.away).toBe(true);
+  });
+});
+
+describe('pet.today-hint', () => {
+  it('pet.today-hint: in the whole office a pet that stays home today is away all day, one that comes is listed in `petsToday`', () => {
+    setSeed(1);
+    const sim = new Sim();
+    Walker.animate = true;
+    for (let i = 0; i < 60 * 60; i++) {
+      sim.step(1 / 60);
+      expect(sim.pets.filter((d) => !d.comesToday && !d.away)).toEqual([]);
+    }
+    const coming = sim.pets.filter((d) => d.comesToday).map((d) => d.name);
+    expect(sim.presence.petsToday.map((t) => t.pet).sort()).toEqual(coming.sort());
+    expect(coming.length).toBeLessThan(sim.pets.length);
+  });
+});

@@ -131,7 +131,7 @@ export class Sim {
     this.coatRacks = new CoatRacks(model.coatRacks, this.people);
     this.presence = new Presence(this.people, this.tod, this.weather);
     this.presence.seed(homes);
-    for (const pet of this.pets) if (pet.owner.presence === 'out') pet.sendAway(); // pets of people who start away
+    for (const pet of this.pets) if (pet.owner.presence === 'out' || !pet.comesToday) pet.sendAway(); // pets of people who start away, and pets that stay home today
     this.coatRacks.update();
     registerSimEvents(this);
   }
@@ -217,10 +217,11 @@ export class Sim {
         add(
           new Dog(m.dogName ?? `Hund von ${m.name}`, buildDog(m.dog), person, this.petStart(person, 1, 1), {
             portrait: portrait(`dog:${m.dog}`, () => buildDog(m.dog!)),
+            visits: m.dogVisits,
           }),
         );
       }
-      for (const [i, { kind, name }] of (m.cats ?? []).entries()) {
+      for (const [i, { kind, name, visits }] of (m.cats ?? []).entries()) {
         const side = i % 2 ? 1 : -1;
         add(
           new Dog(name, buildCat(kind), person, this.petStart(person, side, -1), {
@@ -230,6 +231,7 @@ export class Sim {
             speed: 2.0 + i * 0.2,
             radius: 0.2,
             side,
+            visits,
           }),
         );
       }

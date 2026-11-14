@@ -1896,7 +1896,10 @@ export class Game {
       !!this.selected && this.selected === this.followed,
     );
     if (active instanceof Person) {
-      this.overlay.showTooltip(active.displayName, active.asAlter ? strings.alterEgo.role : active.member.role, this.portraitOf(active), this.project(active));
+      const pets = active.pets.filter((d) => d.comesToday).map((d) => d.name);
+      const base = active.asAlter ? strings.alterEgo.role : active.member.role;
+      const role = pets.length ? `${base} · ${strings.presence.pets.with(pets)}` : base;
+      this.overlay.showTooltip(active.displayName, role, this.portraitOf(active), this.project(active));
     } else if (active instanceof Dog) {
       this.overlay.showTooltip(active.name, '',active.portrait, this.project(active));
     } else {

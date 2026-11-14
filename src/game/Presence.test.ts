@@ -65,6 +65,7 @@ class Stub {
   private outFor = 0;
   /** the current spell began at the door (not the start-of-day `startAway`) */
   private viaDoor = false;
+  pets: Array<{ name: string; visits?: TeamMember['dogVisits']; comesToday: boolean; away: boolean; sendAway(): void }> = [];
   private walk = 0;
 
   constructor(readonly member: TeamMember) {}
@@ -576,5 +577,42 @@ describe('time jumps', () => {
     run(120);
     expect(presence.isRemoved(victim as unknown as Person)).toBe(false);
     expect(victim.awayKind !== 'off' || victim.presence === 'in').toBe(true);
+  });
+});
+
+describe('pets', () => {
+  it('pet.schedule: every morning each pet is rolled in or out by its weekdays; no pet comes every day', () => {
+    setSeed(7);
+    const clock = { hour: 5, weekday: 0, jumps: 0, picks: 0 };
+    const people = team.map((m) => new Stub(m));
+    for (const p of people) {
+      p.startAway('off', 9999);
+      if (p.member.dog) p.pets.push({ name: p.member.dogName!, visits: p.member.dogVisits, comesToday: true, away: true, sendAway() {} });
+      for (const c of p.member.cats ?? []) p.pets.push({ name: c.name, visits: c.visits, comesToday: true, away: true, sendAway() {} });
+    }
+    const presence = new Presence(people as unknown as Person[], clock as unknown as TimeOfDay, { raining: false } as Weather);
+    const pets = people.flatMap((p) => p.pets);
+    expect(pets.length).toBe(6);
+    const seen = new Map<string, number[]>(pets.map((d) => [d.name, []]));
+    const DAYS = 28;
+    for (let day = 0; day < DAYS; day++) {
+      expect(presence.weekday).toBe(day % 7);
+      for (const d of pets) if (d.comesToday) seen.get(d.name)!.push(presence.weekday);
+      expect(presence.petsToday.map((t) => t.pet).sort()).toEqual(pets.filter((d) => d.comesToday).map((d) => d.name).sort());
+      // through the day and past 04:00: the next working day is rolled
+      for (const h of [12, 20, 27, 28.5]) {
+        clock.hour = h % 24;
+        if (h === 27) clock.weekday = (day + 1) % 7; // the clock moves on at midnight
+        presence.update(STEP, {} as NavGrid);
+      }
+    }
+    for (const [name, days] of seen) {
+      expect(days.length, `${name} comes on some days`).toBeGreaterThan(0);
+      expect(days.length, `${name} stays home on some days`).toBeLessThan(DAYS);
+    }
+    // fixed weekdays: Ellie only on Tuesday and Thursday, every week
+    expect(seen.get('Ellie')).toEqual(Array.from({ length: DAYS / 7 }, () => [1, 3]).flat());
+    // the cats come on a whim, on any weekday
+    expect(new Set([...seen.get('Angus')!, ...seen.get('Binx')!]).size).toBeGreaterThan(3);
   });
 });

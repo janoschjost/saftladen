@@ -98,10 +98,13 @@ export class Scenario {
     for (const pet of p.pets) pet.sendAway();
   }
 
-  /** Somebody who is not in the office is, at `at`; a pet comes along. */
+  /** Somebody who is not in the office is, at `at`. Their pets are there too, also those that stay home today (`pet.schedule`): a scene does not hope for the dice. */
   private enter(p: Person, at: { x: number; z: number }): void {
-    if (p.presence === 'in') return;
-    p.arriveNow(at);
-    for (const [i, pet] of p.pets.entries()) pet.appearAt(this.sim.petStart(p, i % 2 ? -1 : 1, i < 2 ? 1 : -1));
+    if (p.presence !== 'in') p.arriveNow(at);
+    for (const [i, pet] of p.pets.entries()) {
+      if (pet.removed) continue;
+      pet.comesToday = true;
+      if (pet.away) pet.appearAt(this.sim.petStart(p, i % 2 ? -1 : 1, i < 2 ? 1 : -1));
+    }
   }
 }
