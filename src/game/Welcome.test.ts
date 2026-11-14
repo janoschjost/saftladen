@@ -135,7 +135,8 @@ describe('presence.remote-greet', () => {
     expect(walkers.length).toBe(2);
     let most = 0;
     let closest = Infinity;
-    for (let j = 0; j < 20 * 60; j++) {
+    // a walker is let go at the latest WELCOME.timeout (20 s) after the call, or WELCOME.hold (5 s) after a late cheer
+    for (let j = 0; j < 25 * 60; j++) {
       sim.step(1 / 60);
       most = Math.max(most, gesturing());
       for (const w of walkers) if (w.scripted) closest = Math.min(closest, Math.hypot(w.pos.x - v.pos.x, w.pos.z - v.pos.z));
