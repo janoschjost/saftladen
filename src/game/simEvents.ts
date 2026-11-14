@@ -4,6 +4,7 @@ import { BOSS, DJ, free as freeForBoombox } from './Boombox';
 import { bringIn } from './makePossible';
 import { isCourier } from './Mail';
 import type { Dog } from './Dog';
+import type { Vec2 } from './NavGrid';
 import type { Person } from './Person';
 import { PET_HEIGHT } from './petPose';
 import { random } from './rng';
@@ -162,6 +163,62 @@ export function registerSimEvents(sim: Sim): void {
       pet.placeAt(best);
       sim.point(pet);
       return `${pet.name} liegt im Durchgang`;
+    },
+  });
+  /**
+   * Where two people start in front of either end of a straight narrow passage (a doorway, a corridor, a gap between
+   * desks), 1.5 m out, and where each heads for, 4 m out on the other side: the passage nearest the main corridor, or
+   * null if the floor has none.
+   */
+  const passageEnds = (): { from: [Vec2, Vec2]; to: [Vec2, Vec2] } | null => {
+    const RUN = 8; // cells: longest passage taken, and how much open floor it needs on both sides
+    const passages = sim.traffic.passages;
+    const idAt = (cx: number, cz: number) => (nav.walkable(cx, cz) ? passages.atIndex(cz * nav.cols + cx) : -2);
+    let best: { cx: number; cz: number; dx: number; dz: number; len: number } | null = null;
+    let bestD = Infinity;
+    for (let cz = 0; cz < nav.rows; cz++) {
+      for (let cx = 0; cx < nav.cols; cx++) {
+        const id = idAt(cx, cz);
+        if (id < 0) continue;
+        for (const [dx, dz] of [[1, 0], [0, 1]]) {
+          if (idAt(cx - dx, cz - dz) === id) continue; // only from the first cell of the run along this axis
+          let len = 0;
+          while (len < RUN && idAt(cx + dx * len, cz + dz * len) === id) len++;
+          let free = len < RUN;
+          for (let k = 1; k <= RUN && free; k++) free = idAt(cx - dx * k, cz - dz * k) === -1 && idAt(cx + dx * (len - 1 + k), cz + dz * (len - 1 + k)) === -1;
+          if (!free) continue;
+          const mid = nav.center(cx + (dx * (len - 1)) / 2, cz + (dz * (len - 1)) / 2);
+          const d = Math.hypot(mid.x - CORRIDOR_POINT.x, mid.z - CORRIDOR_POINT.z);
+          if (d >= bestD) continue;
+          bestD = d;
+          best = { cx, cz, dx, dz, len };
+        }
+      }
+    }
+    if (!best) return null;
+    const { cx, cz, dx, dz, len } = best;
+    const out = (k: number): [Vec2, Vec2] => [nav.center(cx - dx * k, cz - dz * k), nav.center(cx + dx * (len - 1 + k), cz + dz * (len - 1 + k))];
+    const [a, b] = out(RUN);
+    return { from: out(3), to: [b, a] };
+  };
+  events.register({
+    id: 'passage-meeting',
+    group: 'Aktionen',
+    label: 'Zwei begegnen sich im Durchgang',
+    run: () => {
+      // two people walk at a narrow passage from both ends at once: one waits beside the entrance, the other comes through
+      const pair = pickFree(2, (p) => !tiedUp(p));
+      if (pair.length < 2) return null;
+      const ends = passageEnds();
+      if (!ends) return null;
+      pair.forEach((p, i) => {
+        sim.pull(p);
+        p.placeAt(ends.from[i]);
+        p.sit = 0;
+        p.walkTo(nav, ends.to[i]);
+      });
+      sim.point(pair[0]);
+      return `${firsts(pair, ' und ')} begegnen sich im Durchgang`;
     },
   });
   gather(
