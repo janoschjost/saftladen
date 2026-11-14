@@ -18,6 +18,7 @@ import { NavGrid } from './NavGrid';
 import { Office, type Desk } from './Office';
 import { Person } from './Person';
 import { PetCare } from './PetCare';
+import { Nerf } from './Nerf';
 import { PhoneBooth } from './PhoneBooth';
 import { Pod } from './Pod';
 import { Presence } from './Presence';
@@ -92,6 +93,8 @@ export class Sim {
   readonly events = new DevEvents();
   /** an event points at somebody; without a view nobody looks */
   readonly point: (w: Walker) => void;
+  /** Nerf skirmishes: devs shoot foam darts at people on a break */
+  readonly nerf: Nerf;
   private stands: (w: Walker) => boolean;
   private doorsSee: () => Array<{ x: number; z: number }>;
   /** coats on the stands follow who is in the office */
@@ -100,6 +103,7 @@ export class Sim {
   constructor({ scene = new THREE.Scene(), cycle, seats = {}, homes = false, portrait = () => null, stands = () => false, doorsSee = () => [], point = () => {}, prepare }: SimOptions = {}) {
     this.scene = scene;
     this.point = point;
+    this.nerf = new Nerf(scene);
     this.stands = stands;
     this.doorsSee = doorsSee;
     resetDoorLanes();
@@ -307,6 +311,7 @@ export class Sim {
     this.social.update(dt, this.people, this.nav, this.traffic);
     this.welcome.update(dt, this.people, this.presence, this.social);
     this.petCare.update(dt, this.people, this.pets, this.nav);
+    this.nerf.update(dt, this.people, this.nav);
     this.meetingRoom.update(dt, this.people, this.nav, this.tod.hour);
     this.pod.update(dt, this.people, this.nav);
     this.kitchen.update(dt, this.people, this.nav);

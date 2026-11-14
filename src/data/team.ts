@@ -177,12 +177,15 @@ const schedules: Record<string, Partial<Schedule>> = {
 /** Alter egos (#32): Marco turns into Kompensiertier Kurt when he goes home, see src/game/AlterEgo.ts. */
 const alterEgos: Record<string, TeamMember['alterEgo']> = { 'marco-rieser': 'kurt' };
 
+/** the devs own Nerf guns (see Nerf.ts) */
+const devs = new Set(raw.filter((p) => /Webdevelopment|AI Engineer/.test(p.role)).map((p) => p.id));
+
 export const team: TeamMember[] = raw.map((p) => ({
   id: p.id,
   name: p.name,
   role: p.role,
   portrait: p.portrait,
-  look: looks[p.id] ?? fallback,
+  look: devs.has(p.id) ? { ...(looks[p.id] ?? fallback), nerf: true } : (looks[p.id] ?? fallback),
   homeLook: homeLooks[p.id],
   signature: signatures[p.id],
   homeRoom: homeRooms[p.id],

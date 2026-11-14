@@ -25,6 +25,8 @@ export interface CharacterRig {
   vape?: { elbow: THREE.Object3D; device: THREE.Object3D; led: THREE.MeshBasicMaterial; puffs: THREE.Mesh[] };
   /** only on `phone` looks: the bendable forearm of the right arm and the phone in its hand (shown during calls) */
   phone?: { elbow: THREE.Object3D; device: THREE.Object3D };
+  /** only on `nerf` looks: the foam dart gun in the right fist (shown while aiming; held forward it points along the forearm) */
+  gun?: THREE.Object3D;
   /** everybody's phone, in the right fist (hidden until they take a call); `phone` looks use the same one */
   handset: THREE.Object3D;
   /** coffee cup in the left hand (hidden until a coffee break), kept upright by the game while the arm moves */
@@ -452,6 +454,19 @@ export function buildCharacter(look: Look): CharacterRig {
   handset.visible = false;
   elbowR.add(handset);
   if (look.phone) phone = { elbow: elbowR, device: handset };
+  // devs own a Nerf gun: grip in the fist, body and barrel along the forearm (which points forward while aiming)
+  let gun: THREE.Object3D | undefined;
+  if (look.nerf) {
+    gun = mesh([
+      box(0.09, 0.28, 0.1, -0.03, -0.4, 0.0, '#ff7a1a'), // chunky body
+      box(0.06, 0.22, 0.06, -0.03, -0.66, 0.02, '#ffd81f'), // barrel
+      box(0.07, 0.04, 0.07, -0.03, -0.79, 0.02, '#e8302d'), // muzzle
+      box(0.065, 0.12, 0.05, -0.03, -0.42, 0.09, '#1f7fe0'), // magazine
+      box(0.05, 0.09, 0.07, -0.03, -0.33, -0.08, '#2a2c33'), // grip
+    ]);
+    gun.visible = false;
+    elbowR.add(gun);
+  }
   // a chip between the fingers on the way to the mouth
   const chip = mesh([box(0.05, 0.015, 0.05, -0.03, -0.34, 0.01, '#f0c64a')]);
   chip.visible = false;
@@ -517,5 +532,5 @@ export function buildCharacter(look: Look): CharacterRig {
   const h = look.heightM ? look.heightM / REF_HEIGHT_M : look.height ?? 1;
   root.scale.setScalar(h);
 
-  return { root, body, legL, legR, kneeL, kneeR, armL, armR, elbowL, elbowR, handset, headHeight: 1.95 * h, setTired, setMood, vape, phone, cup, chips, chip, gameboy, gameboyScreen, skin: skinGroups };
+  return { root, body, legL, legR, kneeL, kneeR, armL, armR, elbowL, elbowR, handset, gun, headHeight: 1.95 * h, setTired, setMood, vape, phone, cup, chips, chip, gameboy, gameboyScreen, skin: skinGroups };
 }

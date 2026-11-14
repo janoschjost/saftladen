@@ -44,7 +44,7 @@ import { setTvMode } from '../render/screens';
 import { Person } from './Person';
 import { strings } from '../i18n/strings';
 import { RoomEditor } from './RoomEditor';
-import { HIP_HEIGHT, poseFrame } from './petPose';
+import { HIP_HEIGHT, LEG_ORDER, petPose, poseFrame, smooth } from './petPose';
 import { applySky, type SkyRig } from './TimeOfDay';
 import { MAX_FRAME, type Drawer, type FrameTime } from './seams';
 import { Sim } from './Sim';
@@ -1408,7 +1408,7 @@ export class Game {
         this.poseTired(w, r);
         if (r.vape) this.poseVape(w, r.vape, ph);
         if (r.phone) this.posePhone(w, r.phone);
-        const talking = !!(w.talk || (w.playerChat && !w.petting)) && w.moving < 0.2 && !(w.sit > 0.5 && !w.speaking);
+        const talking = !!(w.talk || (w.playerChat && !w.petting && !w.nerfOn)) && w.moving < 0.2 && !(w.sit > 0.5 && !w.speaking);
         w.talkAmt += ((talking ? 1 : 0) - w.talkAmt) * 0.12;
         w.speakAmt += ((talking && w.speaking ? 1 : 0) - w.speakAmt) * 0.15;
         const ta = w.talkAmt;
@@ -1436,6 +1436,7 @@ export class Game {
         }
         this.poseReaction(w, r);
       }, () => {
+        this.poseNerf(w, r);
         this.poseCup(w, r);
         this.poseSnack(w, r);
         this.poseEmote(w, r);
@@ -1547,6 +1548,51 @@ export class Game {
       }
     }
     r.setTired(lids);
+  }
+
+  /** Nerf skirmish: aiming (right arm straight out with the gun, left hand supporting, a kick on every shot) or ducking (crouch, arms over the head). Eases in and out like the pet crouch. */
+  private poseNerf(w: Person, r: Person['rig']): void {
+    const on = w.nerfOn && w.moving < 0.2 && !w.held && w.sit < 0.05;
+    const now = this.clock;
+    const dt = Math.max(0, now - w.nerfClock); // game time since the last pose, however many steps that was
+    w.nerfClock = now;
+    w.nerfAmt = Math.min(1, Math.max(0, w.nerfAmt + (on ? 1 : -1) * (dt / 0.25)));
+    w.nerfKick = Math.max(0, w.nerfKick - dt * 5);
+    if (r.gun) r.gun.visible = w.nerfAmt > 0.02 && w.nerfKind === 'aim';
+    if (w.nerfAmt <= 0) return;
+    const a = smooth(w.nerfAmt);
+    const lerp = THREE.MathUtils.lerp;
+    if (w.nerfKind === 'aim') {
+      const kick = w.nerfKick;
+      r.armR.rotation.x = lerp(r.armR.rotation.x, -1.5 - 0.25 * kick, a);
+      r.armR.rotation.z = lerp(r.armR.rotation.z, 0.04, a);
+      r.elbowR.rotation.x = lerp(r.elbowR.rotation.x, -0.08, a);
+      r.armL.rotation.x = lerp(r.armL.rotation.x, -1.2, a);
+      r.armL.rotation.z = lerp(r.armL.rotation.z, 0.25, a);
+      r.elbowL.rotation.x = lerp(r.elbowL.rotation.x, -0.9, a);
+      r.body.rotation.x += (-0.04 - 0.1 * kick) * a;
+    } else if (w.nerfKind === 'shrug') {
+      for (const [arm, elbow, side] of [[r.armL, r.elbowL, -1], [r.armR, r.elbowR, 1]] as const) {
+        arm.rotation.x = lerp(arm.rotation.x, -0.5, a);
+        arm.rotation.z = lerp(arm.rotation.z, side * 0.5, a);
+        elbow.rotation.x = lerp(elbow.rotation.x, -1.3, a);
+      }
+      r.body.rotation.x += -0.03 * a;
+    } else if (w.nerfKind === 'duck') {
+      const p = petPose(a, 0.3, now + w.phase, w.root.scale.y);
+      for (const [hip, knee, l] of [[r.legL, r.kneeL, p.legL], [r.legR, r.kneeR, p.legR]] as const) {
+        hip.rotation.set(l.rx, l.ry, 0, LEG_ORDER);
+        knee.rotation.x = l.knee;
+      }
+      r.legL.position.y = r.legR.position.y = HIP_HEIGHT - p.drop;
+      r.body.position.y -= p.drop;
+      r.body.rotation.x += 0.3 * a;
+      for (const [arm, elbow, side] of [[r.armL, r.elbowL, -1], [r.armR, r.elbowR, 1]] as const) {
+        arm.rotation.x = lerp(arm.rotation.x, -2.3, a);
+        arm.rotation.z = lerp(arm.rotation.z, side * 0.3, a);
+        elbow.rotation.x = lerp(elbow.rotation.x, -1.0, a);
+      }
+    }
   }
 
   /** Coffee cup in the left hand: held in front of the chest, now and then raised to the mouth. The cup stays upright. */

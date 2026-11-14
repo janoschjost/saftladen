@@ -285,6 +285,32 @@ export function registerSimEvents(sim: Sim): void {
     },
   });
   events.register({
+    id: 'nerf',
+    group: 'Aktionen',
+    label: 'Nerf-Gefecht',
+    run: () => {
+      if (sim.nerf.active) return null;
+      const shooter = free()
+        .filter((o) => o.member.look.nerf)
+        .sort(() => random() - 0.5)[0];
+      if (!shooter) {
+        // only the devs carry guns: call one back, the next try (e.g. `?event=nerf` retries) starts the fight
+        const away = people.find((o) => o.member.look.nerf && o.presence === 'out');
+        if (away) presence.callBack(away);
+        return null;
+      }
+      const target = free()
+        .filter((o) => o !== shooter)
+        .sort((x, y) => Math.hypot(x.pos.x - shooter.pos.x, x.pos.z - shooter.pos.z) - Math.hypot(y.pos.x - shooter.pos.x, y.pos.z - shooter.pos.z))[0];
+      if (!target) return null;
+      drop(shooter);
+      drop(target);
+      if (!sim.nerf.start(shooter, target)) return null;
+      sim.point(shooter);
+      return `${first(shooter)} schiesst auf ${first(target)}`;
+    },
+  });
+  events.register({
     id: 'door-lettering',
     group: 'Aktionen',
     label: 'Beschriftete Türen auf / zu',
