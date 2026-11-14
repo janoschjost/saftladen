@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { Goer, separate } from '../test/goer';
+import { Goer } from '../test/goer';
+import { STEP } from '../test/office';
 import { NavGrid, type Vec2 } from './NavGrid';
-import { setSeed } from './rng';
 import type { Passages } from './Passages';
+import { setSeed } from './rng';
+import { separate } from './separate';
 import { Traffic } from './Traffic';
 import type { Walker } from './Walker';
 
 const CELL = 0.5; // like the office
-const STEP = 1 / 60;
 
 /** A floor from a plan: `#` is wall or furniture, anything else floor; one character per 0.5 m cell, rows run along z. */
 function floor(plan: string[]): NavGrid {
@@ -23,7 +24,7 @@ function run(nav: NavGrid, traffic: Traffic, walkers: Walker[], seconds: number,
   for (; t < seconds && !done(); t += STEP) {
     traffic.update(STEP, walkers);
     for (const w of walkers) w.update(STEP, nav, walkers);
-    for (let k = 0; k < 3; k++) separate(nav, walkers);
+    for (let k = 0; k < 3; k++) separate(walkers, nav);
     each(t);
   }
   return t;
@@ -34,11 +35,31 @@ const at = (x: number, z: number): Vec2 => ({ x, z });
 /** A walker on its way to `goal`; within half a metre counts as there (the other one may keep it off the exact spot). */
 const goer = (id: string, start: Vec2, goal: Vec2): Goer => new Goer(id, start, goal, 0.5);
 
-/** Stands where it was put for good (somebody parked in a doorway): it plugs the passage for both sides. */
+/** Stands where it was put for good (a chat in a doorway, somebody who does not budge): it plugs the passage for both sides. */
 class Stander extends Goer {
   protected control(): boolean {
     return true;
   }
+}
+
+/** Sits at a desk for `sitFor` seconds (pinned, so it plugs nothing), then gets up and heads for its goal. */
+class Sitter extends Goer {
+  constructor(id: string, start: Vec2, goal: Vec2, private sitFor: number) {
+    super(id, start, goal, 0.5);
+  }
+  get fixed(): boolean {
+    return this.sitFor > 0;
+  }
+  protected control(dt: number): boolean {
+    if (this.sitFor <= 0) return false;
+    this.sitFor -= dt;
+    return true;
+  }
+}
+
+/** Stands about and has nowhere to go of its own. */
+class Idler extends Goer {
+  protected decide(): void {}
 }
 
 // two rooms, a 1 m wide doorway (x 4.5-5.5, z 2-3) in the 1 m thick wall between them
@@ -55,18 +76,30 @@ const DOORWAY = [
   '####################',
 ];
 
-// a row of desks across the room, 1.5 m deep, with a 1 m gap (x 4-5.5, z 2-3) between two of them
-const DESK_GAP = [
-  '####################',
-  '#.......###........#',
-  '#.......###........#',
-  '#.......###........#',
-  '#..................#',
-  '#..................#',
-  '#.......###........#',
-  '#.......###........#',
-  '#.......###........#',
-  '####################',
+// open office, two free-standing desk blocks (1.5 x 3 m) with a 1 m gap between them (x 5-6.5, z 5-6), 1.5 m of floor around them
+const DESKS = [
+  '########################',
+  '#......................#',
+  '#......................#',
+  '#......................#',
+  '#.........###..........#',
+  '#.........###..........#',
+  '#.........###..........#',
+  '#.........###..........#',
+  '#.........###..........#',
+  '#.........###..........#',
+  '#......................#',
+  '#......................#',
+  '#.........###..........#',
+  '#.........###..........#',
+  '#.........###..........#',
+  '#.........###..........#',
+  '#.........###..........#',
+  '#.........###..........#',
+  '#......................#',
+  '#......................#',
+  '#......................#',
+  '########################',
 ];
 
 // two rooms joined by a 3 m corridor, 1 m wide (x 4.5-7.5, z 2-3)
@@ -99,23 +132,23 @@ const RING = [
   '####################',
 ];
 
-// two rooms joined by a corridor with a bend: two passages, one along x and one along z, and no other way
+// two rooms joined by a corridor with a bend: the bend itself is open floor, so the legs are two passages, and there is no other way
 const ELL = [
-  '##############',
-  '#....#########',
-  '#....#########',
-  '#.............',
-  '#.............',
-  '#....#######..',
-  '#....#######..',
-  '############..',
-  '############..',
-  '############..',
-  '############..',
-  '##########....',
-  '##########....',
-  '##########....',
-  '##############',
+  '###############',
+  '#....##########',
+  '#....##########',
+  '#.............#',
+  '#.............#',
+  '#....#######..#',
+  '#....#######..#',
+  '############..#',
+  '############..#',
+  '############..#',
+  '############..#',
+  '##########....#',
+  '##########....#',
+  '##########....#',
+  '###############',
 ];
 
 const SEEDS = Array.from({ length: 40 }, (_, i) => i + 1);
@@ -136,28 +169,29 @@ function everySeed(plan: string[], scene: (nav: NavGrid, traffic: Traffic, p: Pa
 }
 
 describe('move.passages', () => {
-  for (const [name, plan, a0] of [
-    ['doorway', DOORWAY, at(4, 2.25)],
-    ['desk gap', DESK_GAP, at(3.5, 2.25)],
+  for (const [name, plan, mid, a0, b0] of [
+    ['doorway', DOORWAY, at(5, 2.5), [at(4, 2.25), at(8.75, 1.25)], [at(6.25, 2.5), at(1.25, 4.25)]],
+    ['gap between desks', DESKS, at(5.75, 5.5), [at(4.5, 5.25), at(11.25, 4.25)], [at(7.25, 5.5), at(1.25, 6.75)]],
   ] as const) {
-    it(`move.passages: two walkers meeting at a ${name}: one waits beside the entrance, the other passes, then the waiting one goes`, () => {
-      const lane = 2.5; // middle of the doorway / gap
+    it(`move.passages: two walkers meeting at a ${name}: one waits beside the entrance, the other passes, then the waiting one goes (or, after waiting a while, takes another way where there is one)`, () => {
       everySeed(plan, (nav, traffic, p) => {
         // a is nearer the entrance, b stands right in front of the other end of it
-        const a = goer('a', a0, at(8.75, 1.25));
-        const b = goer('b', at(6.25, lane), at(1.25, 4.25));
+        const a = goer('a', ...a0);
+        const b = goer('b', ...b0);
+        const passage = p.at(mid);
+        const lane = mid.z;
         let aIn = -1;
         let aOut = -1;
         let bIn = -1;
         let aside = 0; // how far b stepped off the middle of the lane while it waited for a
         run(nav, traffic, [a, b], 30, () => a.arrived && b.arrived, (t) => {
-          if (aIn < 0 && p.at(a.pos) >= 0) aIn = t;
-          if (aIn >= 0 && aOut < 0 && p.at(a.pos) < 0) aOut = t;
-          if (bIn < 0 && p.at(b.pos) >= 0) bIn = t;
+          if (aIn < 0 && p.at(a.pos) === passage) aIn = t;
+          if (aIn >= 0 && aOut < 0 && p.at(a.pos) !== passage) aOut = t;
+          if (bIn < 0 && p.at(b.pos) === passage) bIn = t;
           if (b.yielding && aIn >= 0 && aOut < 0) aside = Math.max(aside, Math.abs(b.pos.z - lane));
         });
-        const ok = a.arrived && b.arrived && aIn >= 0 && aOut > aIn && bIn > aOut && aside > 0.4;
-        return ok ? null : `arrived ${a.arrived}/${b.arrived}, a in ${aIn.toFixed(2)} out ${aOut.toFixed(2)}, b in ${bIn.toFixed(2)}, aside ${aside.toFixed(2)}`;
+        const ok = passage >= 0 && a.arrived && b.arrived && aIn >= 0 && aOut > aIn && (bIn > aOut || bIn < 0) && aside > 0.4;
+        return ok ? null : `passage ${passage}, arrived ${a.arrived}/${b.arrived}, a in ${aIn.toFixed(2)} out ${aOut.toFixed(2)}, b in ${bIn.toFixed(2)}, aside ${aside.toFixed(2)}`;
       });
     });
   }
@@ -183,24 +217,27 @@ describe('move.passages', () => {
     });
   });
 
-  it('move.passages: head-on inside a passage: the one who came in later backs out, both reach their goals', () => {
+  it('move.passages: head-on inside a passage: the one who got in later (up from a desk in there) backs out, both reach their goals', () => {
     everySeed(CORRIDOR, (nav, traffic, p) => {
-      // a walks through the corridor; b gets going inside it a moment later, 2 m ahead of a, the other way
-      const a = goer('a', at(5, 2.5), at(10.75, 1.25));
-      const b = goer('b', at(7, 2.5), at(1.25, 3.75));
-      b.timer = 0.5;
+      // a walks into the corridor from the left room; b sits at a desk in the corridor and gets up once a is in, 2 m ahead of it
+      const a = goer('a', at(3.75, 2.5), at(10.75, 1.25));
+      const b = new Sitter('b', at(7, 2.5), at(1.25, 3.75), 1.2);
+      let aIn = -1;
+      let bUp = -1;
+      let aOut = -1;
       let aBack = false;
       let bBack = -1;
-      let aOut = -1;
       run(nav, traffic, [a, b], 30, () => a.arrived && b.arrived, (t) => {
-        if (p.at(a.pos) < 0 && aOut < 0) {
+        if (aIn < 0 && p.at(a.pos) >= 0) aIn = t;
+        if (bUp < 0 && !b.fixed) bUp = t;
+        if (aIn >= 0 && aOut < 0 && p.at(a.pos) < 0) {
           aOut = t;
           aBack = a.pos.x < 6;
         }
-        if (p.at(b.pos) < 0 && bBack < 0 && b.pos.x > 6) bBack = t;
+        if (bUp >= 0 && bBack < 0 && p.at(b.pos) < 0 && b.pos.x > 6) bBack = t;
       });
-      const ok = a.arrived && b.arrived && !aBack && bBack >= 0 && bBack < aOut;
-      return ok ? null : `arrived ${a.arrived}/${b.arrived}, a out ${aOut.toFixed(2)} back ${aBack}, b back ${bBack.toFixed(2)}`;
+      const ok = a.arrived && b.arrived && aIn >= 0 && aIn < bUp && !aBack && bBack >= 0 && bBack < aOut;
+      return ok ? null : `arrived ${a.arrived}/${b.arrived}, a in ${aIn.toFixed(2)}, b up ${bUp.toFixed(2)}, a out ${aOut.toFixed(2)} back ${aBack}, b back ${bBack.toFixed(2)}`;
     });
   });
 
@@ -220,16 +257,47 @@ describe('move.passages', () => {
     });
   });
 
-  it('move.passages: deadlock at a bend (each waits inside for the other): giving way, then pushing through, both reach their goals', () => {
+  it('move.passages: a plugged passage and no other way: the walker waits, gives way, tries again and then pushes through', () => {
+    everySeed(DOORWAY, (nav, traffic) => {
+      const w = goer('w', at(2.25, 2.5), at(8.75, 2.5));
+      const s = new Stander('s', at(5.35, 2.85), at(5.35, 2.85));
+      let gaveWay = -1;
+      let forced = -1;
+      const t = run(nav, traffic, [w, s], 90, () => w.arrived, (tt) => {
+        if (gaveWay < 0 && w.gaveWay) gaveWay = tt;
+        if (forced < 0 && w.forcing) forced = tt;
+      });
+      const ok = w.arrived && gaveWay >= 0 && forced > gaveWay;
+      return ok ? null : `arrived ${w.arrived} after ${t.toFixed(2)}, gave way ${gaveWay.toFixed(2)}, forced ${forced.toFixed(2)}`;
+    });
+  });
+
+  it('move.passages: nobody loiters inside: somebody standing about in a passage moves out of it', () => {
+    everySeed(CORRIDOR, (nav, traffic, p) => {
+      const w = new Idler('w', at(6, 2.5), at(6, 2.5));
+      w.timer = 60; // nothing of its own to do for a minute
+      let out = -1;
+      run(nav, traffic, [w], 10, () => false, (t) => {
+        if (out < 0 && p.at(w.pos) < 0) out = t;
+      });
+      // it starts off after a second, and is out of the corridor a few steps later; it does not come back to stand there
+      const ok = out >= 0 && out < 4 && p.at(w.pos) < 0;
+      return ok ? null : `out of the corridor after ${out.toFixed(2)} s, in a passage at the end: ${p.at(w.pos) >= 0}`;
+    });
+  });
+
+  it('move.passages: deadlock at a bend (each waits inside its leg for the other): they give way, whoever stands about in a leg clears out, both reach their goals', () => {
     everySeed(ELL, (nav, traffic) => {
       const a = goer('a', at(1.25, 1.75), at(5.75, 6.25));
       const b = goer('b', at(5.75, 6.25), at(1.25, 1.75));
       let locked = 0; // seconds both stood waiting for each other
+      let gaveWay = false;
       const t = run(nav, traffic, [a, b], DEADLOCK_BOUND, () => a.arrived && b.arrived, () => {
         if (a.yielding && b.yielding) locked += STEP;
+        if (a.gaveWay || b.gaveWay) gaveWay = true;
       });
-      const ok = a.arrived && b.arrived && locked > 1;
-      return ok ? null : `arrived ${a.arrived}/${b.arrived} after ${t.toFixed(2)}, locked ${locked.toFixed(2)}`;
+      const ok = a.arrived && b.arrived && locked > 1 && gaveWay;
+      return ok ? null : `arrived ${a.arrived}/${b.arrived} after ${t.toFixed(2)}, locked ${locked.toFixed(2)}, gave way ${gaveWay}`;
     });
   });
 });
