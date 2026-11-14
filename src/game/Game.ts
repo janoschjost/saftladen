@@ -24,6 +24,7 @@ import { Roster } from '../ui/Roster';
 import { Seats } from '../ui/Seats';
 import { DevPanel } from '../ui/DevPanel';
 import { registerDevSection } from '../ui/devSections';
+import { castSection } from '../ui/devCast';
 import { overlaySection } from '../ui/devOverlays';
 import { DebugOverlays, type OverlayKind } from './DebugOverlays';
 import { Settings } from '../ui/Settings';
