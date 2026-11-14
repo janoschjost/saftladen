@@ -7,7 +7,9 @@
 #                                   exit 0 = ours, exit 2 = taken by someone else
 #   scripts/issue.sh release N "<reason>"   hand a claimed issue or PR back
 #   scripts/issue.sh ask N "<questions>"     park N until a dev answers: comment + `question` label (releases a claim)
-#   scripts/issue.sh block N "<reason>"      park N until a dependency (e.g. a PR) is merged: comment + `blocked` label
+#   scripts/issue.sh block N "<reason>" [M]  park N until M (issue or PR) is done; M an issue: native "blocked by #M"
+#                                   link + comment, else comment + `blocked` label (releases a claim either way)
+#   scripts/issue.sh sub P C...       make C... sub-issues of P (a split: P stays open as the parent)
 #   scripts/issue.sh refined N "<summary>"   N is ready for agents: comment, drop `question`/`blocked` (releases a claim)
 #
 # Label + assignee make a claim visible. The lock is the claim comment: GitHub orders comments by creation
@@ -37,6 +39,11 @@ park() {
   gh issue comment "$1" --body "$3" >/dev/null
   gh issue edit "$1" --add-label "$2" >/dev/null
   unclaim "$1" "parked as $2"
+}
+
+# GitHub's internal id of issue $1 (the dependency and sub-issue APIs take it, not the number)
+issue_id() {
+  gh api "repos/{owner}/{repo}/issues/$1" -q .id
 }
 
 # release a claim held on issue $1 (if any), with reason $2
@@ -118,9 +125,24 @@ $q"
     echo "#$n waits on a dev answer"
     ;;
   block)
-    n=${2:?issue number}; reason=${3:?reason}
-    park "$n" blocked "⏸ Blocked: $reason"
+    n=${2:?issue number}; reason=${3:?reason}; m=${4:-}; m=${m#\#}
+    if [ -n "$m" ] && [ "$(kind "$m")" = issue ]; then
+      # native link: /tackle-issues reads it, GitHub clears it when #m closes, so no label to clean up
+      gh api -X POST "repos/{owner}/{repo}/issues/$n/dependencies/blocked_by" -F issue_id="$(issue_id "$m")" >/dev/null
+      gh issue comment "$n" --body "⏸ Blocked by #$m: $reason" >/dev/null
+      unclaim "$n" "blocked by #$m"
+    else
+      park "$n" blocked "⏸ Blocked: $reason"
+    fi
     echo "#$n is blocked"
+    ;;
+  sub)
+    p=${2:?parent issue number}; shift 2
+    [ $# -gt 0 ] || { echo "sub-issue numbers missing" >&2; exit 1; }
+    for c in "$@"; do
+      gh api -X POST "repos/{owner}/{repo}/issues/$p/sub_issues" -F sub_issue_id="$(issue_id "${c#\#}")" >/dev/null
+    done
+    echo "#$p has sub-issues $*"
     ;;
   refined)
     n=${2:?issue number}; summary=${3:?summary}
@@ -136,7 +158,7 @@ $summary" >/dev/null
     echo "#$n is ready"
     ;;
   *)
-    sed -n '2,14p' "$0" >&2
+    sed -n '2,16p' "$0" >&2
     exit 1
     ;;
 esac
