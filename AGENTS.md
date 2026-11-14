@@ -59,6 +59,7 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
 - A test's title starts with the exact `FEATURES.md` id it guards (a smoke test that guards no single line: `load`).
 - Playwright tests open the game with `?test`: time stands still until the test fast-forwards it, the office is not drawn, seed, hour and date are pinned. So never wait in wall time for the game (`waitForTimeout`, `expect.poll` or `toPass` on game state): use `until()`.
 - Import `test`, `expect` and the helpers from `e2e/game.ts`, never `test` from `@playwright/test`.
+- A spec reads the game through the typed hook (`g` in `read` / `until`, `TestHook` in `src/game/Game.ts`) and changes it only like a player or with `scene(…)`. The specs are type-checked (`npm run build`): no `any` for the game.
 - A failing test is not done, whatever the load on the machine.
 - `npm run lint` (oxlint, `.oxlintrc.json`) enforces part of this: the imports, `waitForTimeout`, `test.only`, a forgotten `await`, `Math.random()` outside `src/game/rng.ts`.
 

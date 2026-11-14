@@ -87,6 +87,15 @@ describe('dev.scene', () => {
     expect(c.presence).toBe('in');
   });
 
+  it('dev.scene: a blocked cell of the floor is no longer walkable', () => {
+    const sim = office();
+    let [cx, cz] = [0, 0];
+    find: for (cz = 5; cz < sim.nav.rows; cz++) for (cx = 5; cx < sim.nav.cols; cx++) if (sim.nav.walkable(cx, cz)) break find;
+    expect(sim.nav.walkable(cx, cz)).toBe(true);
+    sim.scenario.block(cx, cz);
+    expect(sim.nav.walkable(cx, cz)).toBe(false);
+  });
+
   it('dev.scene: the printer and the kitchen are free at once', () => {
     const sim = office();
     const free = sim.people.filter((p) => sim.presence.free(p));

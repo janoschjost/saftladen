@@ -19,7 +19,7 @@ Never pick "whoever happens to be free" or a seed where somebody happens to be i
 
 - `put(id, where, hold)`: `where` is `'desk'`, a point `{ x, z }`, `'errand'` or `'home'`. It happens at once: no walk, somebody who is out is in (pets too), somebody in is gone.
 - `hold` says how firmly: `'pin'` (default) exactly as put, nothing moves them; `'stay'` in the office (or out) for good, but inside they live on, so use it when they must still do something (pet, chat, walk to a meeting); `'free'` put once, the simulation takes over.
-- `release(id)` lets go. `clear('printer', 'coffee', 'kitchen', 'meeting', 'wc')` empties places at once.
+- `release(id)` lets go. `clear('printer', 'coffee', 'kitchen', 'meeting', 'wc')` empties places at once. `block(cx, cz)` puts something on a cell of the floor.
 - An unknown id throws. Ids are the ones of `src/data/team.ts` (`donata-manser`).
 
 A scene rolls no dice of the simulation, so it does not reshuffle everybody else at that moment. From then on the people you placed act differently, and so does whoever meets them: hold everybody the test looks at, not just one.
@@ -40,8 +40,9 @@ Rules:
 - Start with `openGame(page, hash, hour, query, seed)`. It returns the console errors: end the test with `expect(errors).toEqual([])`.
 - Let time pass with `until(page, (g, arg) => state, arg, gameMs)`. It fast-forwards until the state is there and **returns it**. The timeout is game time. For a fixed stretch: `read(page, (g) => g.advance(seconds))`.
 - Use what `until` returns. A second `read` afterwards is fine (time stands still), but after the next `until` the world has moved on.
-- Never wait in wall time for the game: no `waitForTimeout`, no `expect.poll` or `toPass` on game state, no `setInterval` in the page. They hang, because the game does not move by itself. To watch every simulation step: `g.tickers.add(() => …)`. (`expect.poll` on the DOM, which follows the browser, is fine.)
+- Never wait in wall time for the game: no `waitForTimeout`, no `expect.poll` or `toPass` on game state, no `setInterval` in the page. They hang, because the game does not move by itself. Watching every simulation step is a Vitest test on `Sim` (`run(sim, seconds, done, each)` in `src/test/office.ts`). (`expect.poll` on the DOM, which follows the browser, is fine. The one exception is in `e2e/smoke.spec.ts`: that frames come at all, and that with `&live` the wall clock moves the game, can only be seen in wall time. Do not copy it.)
 - The function given to `read` / `until` runs in the page: it sees `g` and `arg`, nothing from the spec file.
+- `g` is the test hook, typed (`TestHook`, declared by `Game.hook()` in `src/game/Game.ts`): `g.sim` is the office (`g.sim.people`, `g.sim.tod`, `g.sim.meetingRoom`, …), `g.sim.person(id)` one person (an unknown id throws), next to it what the view holds (`g.views`, `g.selected`, `g.action`, `g.day`, `g.clock`, …). The specs are type-checked with the game (`npm run build`, their own project `e2e/tsconfig.json`; `npm run lint`): no `any` for the game and no casts to reach into it. Something a test must read is not on the hook → add it there (a getter), or make the field it reads `readonly` instead of `private`. A spec never assigns to the game and calls nothing on it that changes it: it changes the game through the page like a player, with `scene(…)` (`put`, `release`, `clear`, `block`), or through `g.advance` / `g.frame`. What `read` and `until` get is for reading.
 - Set the scene, don't hope for it (see above): `await scene(page, (s) => s.put('donata-manser', 'desk', 'stay'))`, `scene(page, (s) => s.clear('printer', 'coffee', 'kitchen'))` right before an action that needs the place, `?event=<id>` in `query` to start an event. After an `until` only what is held is still as you put it.
 - A `url:` in `FEATURES.md` must start every `event=` / `action=` it names; `feature-urls.spec.ts` fails otherwise.
 
@@ -55,7 +56,7 @@ Rules:
 
 ## Rebasing a branch with older specs
 
-Its waits assumed the game runs by itself. Change the import to `./game`; replace `expect.poll` / `toPass` / `setInterval` on game state with `until` (or `g.tickers`); drop hand-written `page.goto('/?test…')` in favour of `openGame`; remove waits that were only there "because CI is slow".
+Its waits assumed the game runs by itself. Change the import to `./game`; replace `expect.poll` / `toPass` / `setInterval` on game state with `until`; drop hand-written `page.goto('/?test…')` in favour of `openGame`; remove waits that were only there "because CI is slow".
 
 Since #116 the simulation is tested in Vitest. A test in a rebased spec that only watches the simulation (no key, click, hash, panel, DOM or URL) moves to a `*.test.ts` on `Sim`, its scene set with `sim.scenario` (pattern: `src/game/places.test.ts`). A modify/delete conflict on a test that moved there is resolved by porting the change to the Vitest version, never by bringing the Playwright test back.
 

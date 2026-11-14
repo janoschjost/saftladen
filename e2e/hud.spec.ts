@@ -78,16 +78,16 @@ test.describe('hud.settings', () => {
     const e = (await env.boundingBox())!;
     expect(e.y).toBeGreaterThan(s.y + s.height - 1);
     await env.locator('label:has(input[value="rain"])').click();
-    expect(await read(page, (g) => g.weather.mode)).toBe('rain');
+    expect(await read(page, (g) => g.sim.weather.mode)).toBe('rain');
     const slider = env.locator('#time-slider');
     await slider.evaluate((el: HTMLInputElement) => {
       el.value = '500';
       el.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    expect(await read(page, (g) => Math.round(g.tod.cycle * 1000))).toBe(500);
+    expect(await read(page, (g) => Math.round(g.sim.tod.cycle * 1000))).toBe(500);
     await expect(env.locator('#time-ticks li')).toHaveText(['0', '6', '12', '18', '24']);
     // the clock output follows in the next frame (slow on CI)
-    await expect(env.locator('#time-clock')).toHaveText(await read(page, (g) => g.tod.clock), { timeout: 30_000 });
+    await expect(env.locator('#time-clock')).toHaveText(await read(page, (g) => g.sim.tod.clock), { timeout: 30_000 });
     await expect(env.locator('#time-clock')).not.toHaveText('11:00');
     await page.keyboard.press('Escape');
     await expect(env).toBeHidden();
@@ -100,7 +100,7 @@ test.describe('hud.settings', () => {
     await gear.click();
     // names, follow; remembered in saftladen.settings
     await page.locator('#setting-names').setChecked(true);
-    expect(await read(page, (g) => g.overlay.namesVisible)).toBe(true);
+    expect(await read(page, (g) => g.namesVisible)).toBe(true);
     await page.locator('#setting-follow').setChecked(false);
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('saftladen.settings') ?? '{}'));
     expect(saved).toMatchObject({ weather: 'rain', follow: false });
@@ -162,10 +162,10 @@ test('actions.sheet + actions.search: A toggles the sheet, previews, number keys
   await expect(page.locator('#action-cards .m-card:visible')).toHaveCount(0);
   const entry = page.locator('#action-more [data-event="rain"]');
   await expect(entry).toBeVisible();
-  const before = await read(page, (g) => g.weather.raining);
+  const before = await read(page, (g) => g.sim.weather.raining);
   await entry.click();
   await expect(sheet).toBeHidden();
-  expect(await read(page, (g) => g.weather.raining)).toBe(!before);
+  expect(await read(page, (g) => g.sim.weather.raining)).toBe(!before);
   await expect(page.locator('#now')).toBeVisible();
 
   // number keys start cards instead of switching the view
@@ -175,7 +175,7 @@ test('actions.sheet + actions.search: A toggles the sheet, previews, number keys
   await page.keyboard.press('3'); // Kaffee, not the plan view
   await expect(sheet).toBeHidden();
   expect(await read(page, (g) => g.views.mode)).toBe('orbit');
-  await until(page, (g) => g.kitchen.current);
+  await until(page, (g) => g.sim.kitchen.current);
 });
 
 test('actions.camera + actions.handback: Drucken flies to Orbit and follows the lead; a wheel hands back, Esc flies to the overview', async ({ page }) => {
@@ -196,7 +196,7 @@ test('actions.camera + actions.handback: Drucken flies to Orbit and follows the 
     page,
     (g) => {
       const s = g.views.orbitShot;
-      const p = g.action?.lead.root.position;
+      const p = g.action?.lead?.root.position;
       return p && Math.hypot(s.x - p.x, s.z - p.z) < 3 && s.dist < g.views.overviewShot().dist * 0.6;
     },
     undefined,
@@ -211,7 +211,7 @@ test('actions.camera + actions.handback: Drucken flies to Orbit and follows the 
   expect(await read(page, (g) => g.views.flying)).toBe(false);
   // Folgen takes it again
   await page.locator('#now-follow').click();
-  expect(await read(page, (g) => g.action.owned)).toBe(true);
+  expect(await read(page, (g) => g.action?.owned)).toBe(true);
 
   // Esc: follow off, back to the overview
   await page.keyboard.press('Escape');
@@ -237,12 +237,13 @@ test('place.meeting: the Meeting card starts a meeting with the people at their 
   const errors = await openGame(page);
   const crew = ['oscar-grob', 'andrew-jelley', 'linda-peter', 'milica-rakic', 'alyosha-krajnc'];
   // only these five are in the office, so the card can pick nobody else
-  await read(page, (g, ids) => g.people.forEach((p: { id: string }) => (ids.includes(p.id) ? g.scenario.put(p.id, 'desk', 'stay') : g.scenario.put(p.id, 'errand'))), crew);
-  await until(page, (g, ids) => g.people.filter((p: { id: string; sit: number }) => ids.includes(p.id) && p.sit > 0.9).length === ids.length, crew);
+  const everybody = await read(page, (g) => g.sim.people.map((p) => p.id));
+  await scene(page, (s, [all, ids]) => all.forEach((id) => (ids.includes(id) ? s.put(id, 'desk', 'stay') : s.put(id, 'errand'))), [everybody, crew] as const);
+  await until(page, (g, ids) => g.sim.people.filter((p) => ids.includes(p.id) && p.sit > 0.9).length === ids.length, crew);
   await page.keyboard.press('a');
   await page.locator('#action-cards .m-card[data-action="meeting"]').click();
   await expect(page.locator('#now-caption')).toContainText('Besprechung');
-  const members = await read(page, (g) => g.sim.meetingRoom.current?.members.map((p: { id: string; task: { phase: string } | null }) => [p.id, p.task?.phase !== 'work']).sort());
+  const members = await read(page, (g) => g.sim.meetingRoom.current?.members.map((p) => [p.id, p.task?.phase !== 'work']).sort());
   expect(members).toEqual([...crew].sort().map((id) => [id, true]));
   expect(errors).toEqual([]);
 });

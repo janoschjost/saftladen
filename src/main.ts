@@ -1,5 +1,6 @@
 import './scss/main.scss';
 import { Game } from './game/Game';
+import { blindDrawer, screenDrawer, stillTime, wallTime } from './game/seams';
 import { applySeedParam } from './game/debugParams';
 import { CharacterPicker } from './ui/CharacterPicker';
 import { DayMenu } from './ui/DayMenu';
@@ -19,10 +20,13 @@ const dev = import.meta.env.DEV || import.meta.env.MODE === 'e2e';
 
 try {
   if (dev) applySeedParam();
-  // ?test (e2e): time stands still and the office is not drawn (&draw draws it)
+  // ?test (e2e): time stands still (&live: it follows the wall clock) and the office is not drawn (&draw draws it)
   const query = new URLSearchParams(location.search);
   const test = dev && query.has('test');
-  const game = new Game(document.getElementById('stage') as HTMLElement, { draw: !test || query.has('draw'), frozen: test });
+  const game = new Game(document.getElementById('stage') as HTMLElement, {
+    time: test && !query.has('live') ? stillTime : wallTime(),
+    drawer: test && !query.has('draw') ? blindDrawer() : screenDrawer(),
+  });
   if (dev) void import('./game/debugParams').then((m) => m.applyDebugParams(game));
   if (dev) void import('./game/DevForce').then((m) => m.installForceState(game));
   new CharacterPicker();

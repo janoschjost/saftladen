@@ -1,0 +1,9 @@
+{
+  // The specs and the Playwright config: type-checked with the game they read (`TestHook`), but with Node's types,
+  // which the game itself must not see (it runs in a browser).
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["vite/client", "node"]
+  },
+  "include": [".", "../playwright.config.ts"]
+}

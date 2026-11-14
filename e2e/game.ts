@@ -1,4 +1,6 @@
 import { test as base, expect, type Page } from '@playwright/test';
+import type { TestHook } from '../src/game/Game';
+import type { Scenario } from '../src/game/Scenario';
 
 export { expect };
 
@@ -47,8 +49,8 @@ export async function openGame(page: Page, hash = '', hour = HOUR, query = '', s
 /** In the page: turns the source of a spec's callback back into a function of the game and its argument. */
 const inPage = (src: string) => new Function('g', 'a', `return (${src})(g, a)`);
 
-/** Reads from the game. The callback runs in the page: it sees `g`, the game with its private fields, and `arg`, nothing else of the spec. */
-export function read<T, A = undefined>(page: Page, fn: (g: any, arg: A) => T, arg?: A): Promise<T> {
+/** Reads from the game. The callback runs in the page: it sees `g`, the typed test hook (`Game.hook()`), and `arg`, nothing else of the spec. */
+export function read<T, A = undefined>(page: Page, fn: (g: TestHook, arg: A) => T, arg?: A): Promise<T> {
   return page.evaluate(([make, src, a]) => new Function(`return ${make}`)()(src)(window.__game, a), [inPage.toString(), fn.toString(), arg] as const) as Promise<T>;
 }
 
@@ -58,10 +60,10 @@ export function read<T, A = undefined>(page: Page, fn: (g: any, arg: A) => T, ar
  * between, as poses and overlays are set per frame. `timeout` is game time (ms), so a wait takes the same number of
  * simulation steps on a slow machine as on a fast one.
  */
-export async function until<T, A = undefined>(page: Page, fn: (g: any, arg: A) => T, arg?: A, timeout = 20_000): Promise<NonNullable<T>> {
+export async function until<T, A = undefined>(page: Page, fn: (g: TestHook, arg: A) => T, arg?: A, timeout = 20_000): Promise<NonNullable<T>> {
   const reached = await page.evaluate(
     async ([make, src, a, seconds]) => {
-      const g = window.__game as any;
+      const g = window.__game!;
       const test = new Function(`return ${make}`)()(src);
       for (let t = 0; ; t += 0.5) {
         await new Promise((r) => requestAnimationFrame(r));
@@ -78,17 +80,11 @@ export async function until<T, A = undefined>(page: Page, fn: (g: any, arg: A) =
 }
 
 /**
- * Sets the scene (`Scenario` in `src/game/Scenario.ts`): `fn` gets `g.scenario` and `arg`, and runs in the page.
+ * Sets the scene (`Scenario` in `src/game/Scenario.ts`): `fn` gets `g.sim.scenario` and `arg`, and runs in the page.
  * `put(id, where, hold)` places somebody now and holds them, `release(id)` lets go, `clear(...places)` empties the
  * printer, the coffee machine, the kitchen, the meeting room or the WC. Time stands still, so the scene is still
  * there at the next line; after an `until` only what is held is.
  */
-export function scene<A = undefined>(page: Page, fn: (s: any, arg: A) => void, arg?: A): Promise<void> {
-  return page.evaluate(([make, src, a]) => void new Function(`return ${make}`)()(src)((window.__game as any).scenario, a), [inPage.toString(), fn.toString(), arg] as const);
-}
-
-declare global {
-  interface Window {
-    __game?: unknown;
-  }
+export function scene<A = undefined>(page: Page, fn: (s: Scenario, arg: A) => void, arg?: A): Promise<void> {
+  return page.evaluate(([make, src, a]) => void new Function(`return ${make}`)()(src)(window.__game!.sim.scenario, a), [inPage.toString(), fn.toString(), arg] as const);
 }

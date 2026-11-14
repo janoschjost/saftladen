@@ -3,7 +3,7 @@ import { expect, openGame, read, test, until } from './game';
 test('presence.homes-hash', async ({ page }) => {
   await openGame(page, 'homes');
   const homes = await read(page, (g) =>
-    g.people.filter((p: { presence: string; awayKind: string }) => p.presence === 'out' && p.awayKind === 'home').map((p: { homeVariant: number }) => p.homeVariant),
+    g.sim.people.filter((p) => p.presence === 'out' && p.awayKind === 'home').map((p) => p.homeVariant),
   );
   // all eight regular rooms are taken (own rooms like the beach come on top)
   expect([...new Set(homes)].filter((v) => v < 8).sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
@@ -26,14 +26,14 @@ test('select.actions + keys.home: select, send home, call back', async ({ page }
     const cam = g.views.camera;
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const free = g.people.filter((p: any) => p.presence === 'in' && !p.talk && !p.held && !p.meetJob && p.sit > 0.9 && !p.member.homebody);
-    const spots = free.map((p: any) => {
+    const free = g.sim.people.filter((p) => p.presence === 'in' && !p.talk && !p.held && !p.meetJob && p.sit > 0.9 && !p.member.homebody);
+    const spots = free.map((p) => {
       const v = p.root.position.clone();
       v.y += 1.0;
       v.project(cam);
       return { id: p.id, x: ((v.x + 1) / 2) * w, y: ((1 - v.y) / 2) * h };
     });
-    return spots.filter((s: any) => s.x > w * 0.25 && s.x < w * 0.75 && s.y > h * 0.25 && s.y < h * 0.75);
+    return spots.filter((s) => s.x > w * 0.25 && s.x < w * 0.75 && s.y > h * 0.25 && s.y < h * 0.75);
   });
   expect(target.length).toBeGreaterThan(0);
 
@@ -41,7 +41,7 @@ test('select.actions + keys.home: select, send home, call back', async ({ page }
   for (const t of target) {
     await page.mouse.click(t.x, t.y);
     // the click may hit somebody else (a pet lying next to its owner, a passer-by): only the aimed-at person counts
-    const hit = await read(page, (g, id) => g.selected?.id === id && g.selected.presence === 'in', t.id);
+    const hit = await read(page, (g, id) => g.selected?.id === id && g.sim.person(id).presence === 'in', t.id);
     if (hit) {
       picked = t.id;
       break;
@@ -52,17 +52,17 @@ test('select.actions + keys.home: select, send home, call back', async ({ page }
   await expect(page.locator('#actions')).toBeVisible();
 
   // a home office is free: the button is enabled
-  expect(await read(page, (g) => g.presence.homeFull)).toBe(false);
+  expect(await read(page, (g) => g.sim.presence.homeFull)).toBe(false);
   await expect(page.locator('#actions-home')).toBeEnabled();
 
   // the game refuses while the person is busy (in a chat): press again, half a game second later, until they set off
-  let state = { presence: '', kind: '' };
+  let state: { presence: string; kind: string | null } = { presence: '', kind: '' };
   for (let tries = 0; tries < 40 && state.presence !== 'leaving'; tries++) {
     await page.locator('#actions-home').click();
     state = await read(page, (g, id) => {
-      const o = g.people.find((q: any) => q.id === id);
+      const o = g.sim.person(id);
       return { presence: o.presence, kind: o.awayKind };
-    }, picked);
+    }, picked!);
     if (state.presence !== 'leaving') await read(page, (g) => g.advance(0.5));
   }
   expect(state).toEqual({ presence: 'leaving', kind: 'home' });
@@ -70,39 +70,20 @@ test('select.actions + keys.home: select, send home, call back', async ({ page }
   // H calls the selected person back (still selected: they are on the way to the door)
   expect(await read(page, (g) => g.selected?.id)).toBe(picked);
   await page.keyboard.press('h');
-  await until(page, (g, id) => g.people.find((o: any) => o.id === id).presence === 'in', picked);
+  await until(page, (g, id) => g.sim.person(id).presence === 'in', picked!);
 });
 
-test('presence.door-flow: after "all back" people walk in one by one and move on from the entrance', async ({ page }) => {
+// The button's way to the simulation. How the crowd then comes in (one by one, moving on from the entrance):
+// src/game/Sim.test.ts and src/game/Presence.test.ts
+test('presence.door-flow: "Alle zurück" in the roster calls everybody who is away back', async ({ page }) => {
   const errors = await openGame(page);
-  expect(await read(page, (g) => g.presence.away.length)).toBeGreaterThanOrEqual(3);
+  const away = await read(page, (g) => g.sim.presence.away.length);
+  expect(away).toBeGreaterThanOrEqual(3);
   // the roster shares the dock with other panels and may start collapsed
   const roster = page.locator('#away');
   await expect(roster).toBeVisible();
   if (await roster.evaluate((el) => el.classList.contains('is-collapsed'))) await roster.locator('.m-away__title').click();
-  // watch the arrivals every simulation step: how many come through the door at once, and where each one is 4 s after
-  // stepping in (everybody called back comes in, even into the full office: presence.caps)
-  await read(page, (g) => {
-    const r = (g.allBack = { maxIn: 0, dists: [] as number[] });
-    const inAt = new Map<unknown, number>();
-    const last = new Map<unknown, string>();
-    g.tickers.add(() => {
-      const now = g.presence.clock;
-      r.maxIn = Math.max(r.maxIn, g.people.filter((p: { presence: string }) => p.presence === 'returning').length);
-      for (const p of g.people) {
-        if (last.get(p) === 'returning' && p.presence === 'in') inAt.set(p, now);
-        last.set(p, p.presence);
-        const t = inAt.get(p);
-        if (t !== undefined && now - t >= 4) {
-          inAt.delete(p);
-          r.dists.push(Math.hypot(p.pos.x - p.lane.in.x, p.pos.z - p.lane.in.z));
-        }
-      }
-    });
-  });
   await page.locator('#away-all').click();
-  const r = await until(page, (g) => g.allBack.dists.length >= 3 && g.allBack, undefined, 120_000);
-  expect(r.maxIn).toBeLessThanOrEqual(2);
-  for (const d of r.dists) expect(d).toBeGreaterThan(2);
+  await until(page, (g, n) => g.sim.presence.away.length <= n - 3, away, 120_000);
   expect(errors).toEqual([]);
 });

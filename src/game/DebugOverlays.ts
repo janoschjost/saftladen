@@ -21,11 +21,16 @@ export class DebugOverlays {
   readonly on: Record<OverlayKind, boolean> = { grid: false, states: false, paths: false };
 
   private group = new THREE.Group();
-  private gridMesh: THREE.Mesh;
-  private gridTexture: THREE.DataTexture | null = null;
+  /** (also read by the e2e tests) */
+  readonly gridMesh: THREE.Mesh;
+  private texture: THREE.DataTexture | null = null;
+  /** the grid as a picture, one pixel per cell (also read by the e2e tests) */
+  get gridTexture(): THREE.DataTexture | null {
+    return this.texture;
+  }
   private gridKey = '';
   private gridAt = 0;
-  private lines: THREE.LineSegments;
+  readonly lines: THREE.LineSegments;
   private positions = new Float32Array(MAX_SEGMENTS * 6);
   private labels = new Map<string, HTMLElement>();
   private layer = document.getElementById('labels') as HTMLElement;
@@ -81,17 +86,17 @@ export class DebugOverlays {
     const full = `${nav.cols}x${nav.rows}:${key}`;
     if (full === this.gridKey) return;
     this.gridKey = full;
-    if (!this.gridTexture || this.gridTexture.image.width !== nav.cols || this.gridTexture.image.height !== nav.rows) {
-      this.gridTexture?.dispose();
-      this.gridTexture = new THREE.DataTexture(new Uint8Array(px.length), nav.cols, nav.rows, THREE.RGBAFormat);
-      this.gridTexture.magFilter = THREE.NearestFilter;
-      this.gridTexture.minFilter = THREE.NearestFilter;
-      this.gridTexture.flipY = true; // row 0 (z = 0) lies at the north edge of the plane
-      (this.gridMesh.material as THREE.MeshBasicMaterial).map = this.gridTexture;
+    if (!this.texture || this.texture.image.width !== nav.cols || this.texture.image.height !== nav.rows) {
+      this.texture?.dispose();
+      this.texture = new THREE.DataTexture(new Uint8Array(px.length), nav.cols, nav.rows, THREE.RGBAFormat);
+      this.texture.magFilter = THREE.NearestFilter;
+      this.texture.minFilter = THREE.NearestFilter;
+      this.texture.flipY = true; // row 0 (z = 0) lies at the north edge of the plane
+      (this.gridMesh.material as THREE.MeshBasicMaterial).map = this.texture;
       (this.gridMesh.material as THREE.MeshBasicMaterial).needsUpdate = true;
     }
-    (this.gridTexture.image.data as Uint8Array).set(px);
-    this.gridTexture.needsUpdate = true;
+    (this.texture.image.data as Uint8Array).set(px);
+    this.texture.needsUpdate = true;
   }
 
   private updatePaths(walkers: readonly Walker[]): void {

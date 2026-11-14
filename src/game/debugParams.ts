@@ -17,7 +17,8 @@ import { cycleOf } from './TimeOfDay';
  *   ?overlay=<kind>   switches a debug overlay on at start: grid | states | paths (repeat for several)
  *   ?test             for the Playwright tests in e2e/: exposes `window.__game` (read the state), time stands still
  *                     (only `__game.advance(seconds)` moves the game, so nothing changes between two steps of a
- *                     test) and the office is not drawn (the tests render WebGL in software). ?test&draw draws it.
+ *                     test) and the office is not drawn (the tests render WebGL in software). ?test&draw draws it,
+ *                     ?test&live lets time follow the wall clock as in the real game.
  *                     It also keeps the welcome card away; ?test&welcome=1 shows it as on a first visit.
  * Example: http://localhost:5173/?snack&time=14&follow
  */
@@ -34,39 +35,39 @@ export function applyDebugParams(game: Game): void {
   const q = new URLSearchParams(location.search);
   if (!['snack', 'time', 'day', 'seed', 'test', 'event', 'action', 'overlay'].some((k) => q.has(k))) return;
   const g = game as any;
-  (window as unknown as { __game: Game }).__game = game;
+  window.__game = game.hook();
 
   const time = Number(q.get('time'));
   if (q.has('time') && Number.isFinite(time)) {
-    g.tod.pinned = true;
-    g.tod.setCycle(cycleOf(time));
+    game.sim.tod.pinned = true;
+    game.sim.tod.setCycle(cycleOf(time));
   }
   if (q.has('day')) game.startDay(q.get('day') || 'jan-hasler');
   for (const id of q.getAll('event')) runEvent(game, id);
   for (const id of q.getAll('action')) runAction(game, id);
   for (const kind of q.getAll('overlay')) {
-    if (OVERLAY_KINDS.includes(kind as OverlayKind)) g.debug?.set(kind as OverlayKind, true);
+    if (OVERLAY_KINDS.includes(kind as OverlayKind)) game.debug?.set(kind as OverlayKind, true);
     else console.warn(`[debug] no overlay "${kind}", use ${OVERLAY_KINDS.join(' | ')}`);
   }
   if (!q.has('snack')) return;
 
   const id = q.get('snack') || 'jan-hasler';
-  const person = g.people.find((p: { id: string }) => p.id === id);
+  const person = g.sim.people.find((p: { id: string }) => p.id === id); // untyped: starts a run through private parts of the person
   if (!person) return console.warn(`[debug] no person "${id}"`);
   person.member.snacker = true;
   const follow = q.has('follow');
 
   // retry until the person is free and the machine spot is not taken, then stop
   let started = false;
-  game.tickers.add(() => {
-    g.presence.overridden.add(person); // no more errands / lunch for this person
+  game.onStep(() => {
+    g.sim.presence.overridden.add(person); // no more errands / lunch for this person
     if (person.presence === 'out' && person.awayKind !== 'off') person.awayLeft = 0; // back to the office right away
     if (!started && person.presence === 'in' && !person.meetJob && !person.talk) {
       if (person.task?.phase === 'work' && !person.task.errand) {
-        person.startRun(person.task, g.nav, true);
+        person.startRun(person.task, game.sim.nav, true);
         started = !!person.task?.errand;
       } else if (!person.task && !person.run && person.sit < 0.05) {
-        started = person.startWanderRun(g.nav, true);
+        started = person.startWanderRun(game.sim.nav, true);
       }
       if (started) console.log(`[debug] ${id} goes for chips`);
     }
@@ -89,9 +90,9 @@ function retry(game: Game, attempt: () => boolean, giveUp: () => void): void {
     next = t + 0.5;
     const done = attempt();
     if (!done && t > 60) giveUp();
-    if (done || t > 60) game.tickers.delete(tick);
+    if (done || t > 60) stop();
   };
-  game.tickers.add(tick);
+  const stop = game.onStep(tick);
 }
 
 /**
@@ -99,7 +100,7 @@ function retry(game: Game, attempt: () => boolean, giveUp: () => void): void {
  * (nobody free, table busy, the person still on the way in) is retried for up to a minute.
  */
 function runEvent(game: Game, id: string): void {
-  const ev = game.events.get(id);
+  const ev = game.sim.events.get(id);
   if (!ev) return console.warn(`[debug] no event "${id}", see dev.list()`);
   retry(
     game,

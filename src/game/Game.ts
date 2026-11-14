@@ -26,7 +26,7 @@ import { DevPanel } from '../ui/DevPanel';
 import { registerDevSection } from '../ui/devSections';
 import { castSection } from '../ui/devCast';
 import { overlaySection } from '../ui/devOverlays';
-import { DebugOverlays, type OverlayKind } from './DebugOverlays';
+import { DebugOverlays } from './DebugOverlays';
 import { Settings } from '../ui/Settings';
 import { TimeControl } from '../ui/TimeControl';
 import { exposeDevConsole } from './DevEvents';
@@ -46,6 +46,7 @@ import { strings } from '../i18n/strings';
 import { RoomEditor } from './RoomEditor';
 import { CROUCH_SECONDS, LEG_ORDER, petPose, smooth } from './petPose';
 import { applySky, type SkyRig } from './TimeOfDay';
+import { MAX_FRAME, type Drawer, type FrameTime } from './seams';
 import { Sim } from './Sim';
 import { first } from './simEvents';
 import { Walker } from './Walker';
@@ -59,7 +60,6 @@ const BUSY_ANSWERS = ['Grad keine Zeit!', 'Später…', 'Bin im Fokus.', 'Psst, 
 const SEATS_KEY = 'saftladen.seats';
 const STEER_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
 const OVERCAST = new THREE.Color('#8c95a3'); // sky colour in the rain
-const MAX_FRAME = 0.25; // avoid spiral of death after tab switches
 const HIP_HEIGHT = 0.8; // hip pivots of the character rig: the upper body bends here
 const ACTION_MAX = 240; // seconds: an action's chip and camera give up after this long at the latest
 const ACTION_NO_LEAD = 6; // seconds the chip stays for an action that moves nobody (e.g. rain)
@@ -68,30 +68,9 @@ const ACTION_NO_LEAD = 6; // seconds the chip stays for an action that moves nob
 const leadState = (p: Person): unknown[] => [p.printJob, p.foosJob, p.meetPhase, p.coffeeJob, p.vapeJob, p.phoneJob, p.talk, p.presence === 'in' ? null : p.presence];
 
 export class Game {
-  private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
   /** the office and everybody in it; this class is its view and its input */
-  private sim!: Sim;
-  private get nav(): Sim['nav'] { return this.sim.nav; }
-  private get office(): Sim['office'] { return this.sim.office; }
-  private get model(): Sim['model'] { return this.sim.model; }
-  private get walkers(): Sim['walkers'] { return this.sim.walkers; }
-  private get people(): Sim['people'] { return this.sim.people; }
-  private get pets(): Sim['pets'] { return this.sim.pets; }
-  private get social(): Sim['social'] { return this.sim.social; }
-  private get presence(): Sim['presence'] { return this.sim.presence; }
-  /** everything a developer can set off by hand: the simulation's events plus the view's */
-  get events(): Sim['events'] { return this.sim.events; }
-  /** states a scene (tests, the console): `__game.scenario.put('marco', 'desk')` */
-  get scenario(): Sim['scenario'] { return this.sim.scenario; }
-  private get tod(): Sim['tod'] { return this.sim.tod; }
-  private get weather(): Sim['weather'] { return this.sim.weather; }
-  private get petCare(): Sim['petCare'] { return this.sim.petCare; }
-  private get doors(): Sim['doors'] { return this.sim.doors; }
-  private get meetingRoom(): Sim['meetingRoom'] { return this.sim.meetingRoom; }
-  private get kitchen(): Sim['kitchen'] { return this.sim.kitchen; }
-  private get phoneBooth(): Sim['phoneBooth'] { return this.sim.phoneBooth; }
-  private get toilets(): Sim['toilets'] { return this.sim.toilets; }
+  readonly sim!: Sim;
   private views!: Views;
   private roof!: THREE.Object3D;
   private roofWanted = false;
@@ -183,32 +162,26 @@ export class Game {
   private ring: THREE.Mesh;
   private savedSeats: Record<string, number> = {};
   private acc = 0;
-  /** game time in seconds: wall time times the clock speed, capped per frame, taken along by `advance` and standing still while paused or frozen. Poses and bubbles animate on it. */
+  /** game time in seconds: what the frames' time source gave, times the clock speed, plus what `advance` ran; stands still while paused. Poses and bubbles animate on it. */
   private clock = 0;
-  private last = performance.now();
-
-  /** Dev and test hooks called every step: they follow game time instead of wall time, so `advance` takes them along. */
-  readonly tickers = new Set<(dt: number) => void>();
-
-  private draw: boolean;
-  /** e2e tests: time stands still between frames (like pause), only `advance` moves the game on. Nothing changes between two steps of a test. */
-  private frozen: boolean;
+  /** frames run so far */
+  private frames = 0;
+  /** called with every stretch of game time that passes (dev params, tests): they follow game time, so `advance` takes them along */
+  private steppers = new Set<(dt: number) => void>();
+  private time: FrameTime;
+  private drawer: Drawer;
 
   /**
-   * For the e2e tests, which render WebGL in software. `draw: false`: the office and the home office feeds are not
-   * drawn at all (everything else runs: poses, overlays, world matrices for clicks and labels). `frozen`: see above.
+   * `time` says how much time a frame adds, `drawer` puts it on the screen (`seams.ts`): the wall clock and WebGL for
+   * players; the e2e tests take time that stands still and a drawer that draws nothing.
    */
   constructor(
     private stage: HTMLElement,
-    { draw = true, frozen = false } = {},
+    { time, drawer }: { time: FrameTime; drawer: Drawer },
   ) {
-    this.draw = draw;
-    this.frozen = frozen;
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
-    stage.appendChild(this.renderer.domElement);
+    this.time = time;
+    this.drawer = drawer;
+    stage.appendChild(this.drawer.renderer.domElement);
 
     const stageColor = getComputedStyle(document.documentElement).getPropertyValue('--color-scene').trim();
     this.scene.background = new THREE.Color(stageColor);
@@ -235,16 +208,16 @@ export class Game {
       point: (w) => (this.selected = w),
       prepare: (m) => (this.editor = new RoomEditor(this.scene, m.items, WORLD, () => this.sim.relayout())),
     });
-    const model = this.model;
-    if (Number.isInteger(saved.weekday) && saved.weekday! >= 0 && saved.weekday! < 7) this.tod.weekday = saved.weekday!;
-    this.timeControl = new TimeControl(this.tod);
-    applySky(this.tod, this.sky);
-    this.deskLights = new DeskLights(this.scene, this.office, this.tod);
+    const model = this.sim.model;
+    if (Number.isInteger(saved.weekday) && saved.weekday! >= 0 && saved.weekday! < 7) this.sim.tod.weekday = saved.weekday!;
+    this.timeControl = new TimeControl(this.sim.tod);
+    applySky(this.sim.tod, this.sky);
+    this.deskLights = new DeskLights(this.scene, this.sim.office, this.sim.tod);
     this.easter = new Easter(this.scene);
     this.roof = model.roof;
     this.entrance = model.entrance;
-    this.meetingLight = new RoomLight(this.scene, model.meeting.lamp, this.tod, () => this.meetingRoom.occupants(this.people));
-    this.views = new Views(stage, this.renderer.domElement, this.sim.walkColliders, (mode) => {
+    this.meetingLight = new RoomLight(this.scene, model.meeting.lamp, this.sim.tod, () => this.sim.meetingRoom.occupants(this.sim.people));
+    this.views = new Views(stage, this.drawer.renderer.domElement, this.sim.walkColliders, (mode) => {
       this.roof.visible = mode === 'walk' ? true : mode === 'plan' || mode === 'third' ? false : this.roofWanted;
       if (mode !== 'third' && this.day && this.day.state !== 'waiting') this.endDay(false); // the player switched the camera away
       if (mode !== 'orbit') this.handBack(); // the camera is the player's again
@@ -261,28 +234,28 @@ export class Game {
     this.roster = new Roster(
       (id) => this.feeds.focus(id),
       (id) => {
-        const p = this.people.find((o) => o.id === id);
-        if (p) this.presence.callBack(p);
+        const p = this.sim.people.find((o) => o.id === id);
+        if (p) this.sim.presence.callBack(p);
       },
-      () => this.presence.callAllBack(),
+      () => this.sim.presence.callAllBack(),
     );
     this.actions = new Actions(
       () => {
         if (!(this.selected instanceof Person)) return;
         this.release(this.selected);
-        this.presence.send(this.selected, 'home', this.nav);
+        this.sim.presence.send(this.selected, 'home', this.sim.nav);
       },
       () => {
         if (!(this.selected instanceof Person)) return;
         this.release(this.selected);
-        this.presence.send(this.selected, 'errand', this.nav);
+        this.sim.presence.send(this.selected, 'errand', this.sim.nav);
       },
       () => this.selected instanceof Person && this.toggleSteer(this.selected),
       () => this.toggleFollow(),
     );
 
     this.seats = new Seats(
-      this.office.desks.length,
+      this.sim.office.desks.length,
       team.map((m) => ({ id: m.id, name: m.name })),
       (id, number) => this.assignSeat(id, number),
     );
@@ -292,7 +265,7 @@ export class Game {
         model.rowLabels.visible = state.tables;
         model.roomLabels.visible = state.rooms;
         this.seats.setLabelsVisible(state.seats);
-        this.weather.mode = state.xmas ? 'sun' : state.weather; // it snows instead of raining
+        this.sim.weather.mode = state.xmas ? 'sun' : state.weather; // it snows instead of raining
         this.xmas.set(state.xmas);
       },
       onView: (mode) => this.views.setMode(mode),
@@ -309,33 +282,31 @@ export class Game {
     this.ring.visible = false;
     this.scene.add(this.ring);
 
-    exposeDevConsole(this.events);
+    exposeDevConsole(this.sim.events);
     if (import.meta.env.DEV || import.meta.env.MODE === 'e2e') {
       this.debug = new DebugOverlays(this.scene);
       registerDevSection(overlaySection(this.debug));
       // console: dev.overlay('grid' | 'states' | 'paths', true)
-      Object.assign((window as unknown as { dev: object }).dev, { overlay: (kind: OverlayKind, on = true) => this.debug?.set(kind, on) });
+      window.dev.overlay = (kind, on = true) => this.debug?.set(kind, on);
       registerDevSection(
         castSection({
-          list: () => [...this.people.map((p) => ({ id: p.id, name: p.member.name.split(' ')[0], kind: 'person' as const })), ...this.pets.map((d) => ({ id: d.id, name: d.name, kind: 'pet' as const }))],
+          list: () => [...this.sim.people.map((p) => ({ id: p.id, name: first(p), kind: 'person' as const })), ...this.sim.pets.map((d) => ({ id: d.id, name: d.name, kind: 'pet' as const }))],
           removed: () => this.sim.removedIds,
           set: (id, removed) => this.setRemoved(id, removed),
         }),
       );
       // console: dev.remove('jan-hasler'), dev.restore('jan-hasler'), dev.removed()
-      Object.assign((window as unknown as { dev: object }).dev, {
-        remove: (id: string) => this.setRemoved(id, true),
-        restore: (id: string) => this.setRemoved(id, false),
-        removed: () => this.sim.removedIds,
-      });
+      window.dev.remove = (id) => this.setRemoved(id, true);
+      window.dev.restore = (id) => this.setRemoved(id, false);
+      window.dev.removed = () => this.sim.removedIds;
     }
     this.registerViewEvents();
-    new DevPanel(this.events);
+    new DevPanel(this.sim.events);
     this.now = new NowChip(
       () => this.toggleActionFollow(),
       () => this.endAction(true),
     );
-    this.sheet = new ActionSheet(this.events, {
+    this.sheet = new ActionSheet(this.sim.events, {
       onPick: (pick) => this.runAction(pick),
       onPreviews: (items) => (this.previews = items),
       onToggle: (open) => open && this.settings.setOpen(false),
@@ -346,15 +317,15 @@ export class Game {
     // back to where the last visit ended (a deep link in the URL wins over the saved camera)
     if (!location.hash && saved.view) this.views.restore(saved.view, true);
     if (saved.selected) {
-      const p = this.people.find((o) => o.id === saved.selected);
+      const p = this.sim.people.find((o) => o.id === saved.selected);
       if (p && p.inOffice) this.selected = this.followed = p;
     }
     window.addEventListener('pagehide', () => this.saveSession());
-    this.overlay.setMeta(`${this.people.length} Personen, ${this.walkers.length - this.people.length} Tiere`);
-    this.overlay.initLabels(this.people.map((p) => ({ id: p.id, name: p.member.name })));
+    this.overlay.setMeta(`${this.sim.people.length} Personen, ${this.sim.walkers.length - this.sim.people.length} Tiere`);
+    this.overlay.initLabels(this.sim.people.map((p) => ({ id: p.id, name: p.member.name })));
     this.seats.setOwners(this.seatOwners());
 
-    this.renderer.setAnimationLoop((t) => this.frame(t));
+    this.drawer.renderer.setAnimationLoop((t) => this.frame(t));
   }
 
   private restoreSeats(): void {
@@ -383,11 +354,11 @@ export class Game {
 
   /** Called by the seat panel: persists the assignment and applies it to the person (they move over when they next sit down). */
   private assignSeat(id: string, number: number | null): void {
-    const p = this.people.find((o) => o.id === id);
+    const p = this.sim.people.find((o) => o.id === id);
     if (!p) return;
-    this.office.assign(p, number);
+    this.sim.office.assign(p, number);
     const out: Record<string, number> = {};
-    for (const q of this.people) if (q.homeDesk) out[q.id] = q.homeDesk.number;
+    for (const q of this.sim.people) if (q.homeDesk) out[q.id] = q.homeDesk.number;
     try {
       localStorage.setItem(SEATS_KEY, JSON.stringify(out));
     } catch {
@@ -441,7 +412,7 @@ export class Game {
       w.pos.z = THREE.MathUtils.clamp(g.z + this.dragOffset.y, 0.4, WORLD.depth - 0.4);
       // near a free chair: snap onto it (the person sits while carried)
       if (w instanceof Person) {
-        w.snapDesk = this.office.desks.find((k) => w.canSit(k, true) && Math.min(Math.hypot(k.seat.x - w.pos.x, k.seat.z - w.pos.z), Math.hypot(k.approach.x - w.pos.x, k.approach.z - w.pos.z)) < 1) ?? null;
+        w.snapDesk = this.sim.office.desks.find((k) => w.canSit(k, true) && Math.min(Math.hypot(k.seat.x - w.pos.x, k.seat.z - w.pos.z), Math.hypot(k.approach.x - w.pos.x, k.approach.z - w.pos.z)) < 1) ?? null;
         if (w.snapDesk) {
           w.pos.x = w.snapDesk.seat.x;
           w.pos.z = w.snapDesk.seat.z;
@@ -449,8 +420,8 @@ export class Game {
         w.snapMeetSeat = null;
         if (!w.snapDesk) {
           let best = 1;
-          for (const k of [...this.meetingRoom.seats, ...(this.phoneBooth.seat && !this.phoneBooth.current ? [this.phoneBooth.seat] : [])]) {
-            if (!w.canSitMeet(k, k !== this.phoneBooth.seat)) continue;
+          for (const k of [...this.sim.meetingRoom.seats, ...(this.sim.phoneBooth.seat && !this.sim.phoneBooth.current ? [this.sim.phoneBooth.seat] : [])]) {
+            if (!w.canSitMeet(k, k !== this.sim.phoneBooth.seat)) continue;
             const dist = Math.min(Math.hypot(k.seat.x - w.pos.x, k.seat.z - w.pos.z), Math.hypot(k.approach.x - w.pos.x, k.approach.z - w.pos.z));
             if (dist < best) {
               best = dist;
@@ -486,17 +457,17 @@ export class Game {
         }
         const chair = d.snapMeetSeat;
         d.snapMeetSeat = null;
-        if (chair?.occupant && chair.occupant !== d && chair !== this.phoneBooth.seat) chair.occupant.evictFromMeeting(chair);
-        if (chair && (chair === this.phoneBooth.seat ? this.phoneBooth.sitIn(d) : d.sitDownAtMeeting(chair))) {
+        if (chair?.occupant && chair.occupant !== d && chair !== this.sim.phoneBooth.seat) chair.occupant.evictFromMeeting(chair);
+        if (chair && (chair === this.sim.phoneBooth.seat ? this.sim.phoneBooth.sitIn(d) : d.sitDownAtMeeting(chair))) {
           this.dragged = null;
           if (this.stage.hasPointerCapture(e.pointerId)) this.stage.releasePointerCapture(e.pointerId);
           return;
         }
       }
       // let go inside a wall / desk: settle on the nearest free floor
-      const c = this.nav.toCell(d.pos);
-      if (!this.nav.walkable(c.cx, c.cz)) {
-        const free = this.nav.nearestWalkable(d.pos, 10);
+      const c = this.sim.nav.toCell(d.pos);
+      if (!this.sim.nav.walkable(c.cx, c.cz)) {
+        const free = this.sim.nav.nearestWalkable(d.pos, 10);
         if (free) {
           d.pos.x = free.x;
           d.pos.z = free.z;
@@ -509,11 +480,11 @@ export class Game {
       this.dragged = null;
       if (this.stage.hasPointerCapture(e.pointerId)) this.stage.releasePointerCapture(e.pointerId);
       // let go in the meeting room next to somebody else: they start chatting
-      if (landed instanceof Person && this.meetingRoom.contains(landed.pos)) {
-        const group = this.people.filter((p) => (p === landed || this.meetingRoom.contains(p.pos)) && p.inOffice && !p.held && !p.controlled && !p.talk && !p.inMeeting && !p.playerChat && !p.printJob && !p.foosJob).slice(0, 6);
+      if (landed instanceof Person && this.sim.meetingRoom.contains(landed.pos)) {
+        const group = this.sim.people.filter((p) => (p === landed || this.sim.meetingRoom.contains(p.pos)) && p.inOffice && !p.held && !p.controlled && !p.talk && !p.inMeeting && !p.playerChat && !p.printJob && !p.foosJob).slice(0, 6);
         if (group.includes(landed) && group.length >= 2) {
           group.forEach((p) => p.interrupt());
-          this.social.start(group, { x: landed.pos.x, z: landed.pos.z }, this.nav);
+          this.sim.social.start(group, { x: landed.pos.x, z: landed.pos.z }, this.sim.nav);
         }
       }
     };
@@ -578,7 +549,7 @@ export class Game {
       if (e.key.toLowerCase() === 'f') this.toggleFollow();
       if (e.key.toLowerCase() === 'n') this.overlay.toggleNames();
       if (e.key.toLowerCase() === 'r' && (this.views.mode === 'iso' || this.views.mode === 'orbit')) this.roof.visible = this.roofWanted = !this.roofWanted;
-      if (e.key.toLowerCase() === 'h' && this.selected instanceof Person) this.presence.toggleHome(this.selected, this.nav);
+      if (e.key.toLowerCase() === 'h' && this.selected instanceof Person) this.sim.presence.toggleHome(this.selected, this.sim.nav);
       if (e.key === 'Escape') {
         if (this.day) this.endDay();
         this.selected = null;
@@ -603,7 +574,7 @@ export class Game {
   private resize(): void {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    this.renderer.setSize(w, h);
+    this.drawer.renderer.setSize(w, h);
     this.views.resize(w, h);
   }
 
@@ -611,17 +582,16 @@ export class Game {
   paused = false;
 
   private frame(now: number): void {
-    const dt = Math.min(MAX_FRAME, (now - this.last) / 1000);
-    this.last = now;
-    // pause stops the whole game (and so does `frozen`, for the tests); 10x / 25x run the whole office faster
-    this.step(this.frozen ? 0 : dt, this.timeScale());
+    this.frames++;
+    // pause stops the whole game; 10x / 25x run the whole office faster
+    this.step(this.time.since(now), this.timeScale());
     this.render(this.acc / STEP);
     this.renderFeeds();
   }
 
   /** Game seconds per real second the player picked: 0 while paused (or while the welcome card holds the game), else 1x / 10x / 25x. */
   private timeScale(): number {
-    return this.paused ? 0 : this.tod.scale;
+    return this.paused ? 0 : this.sim.tod.scale;
   }
 
   /**
@@ -630,6 +600,105 @@ export class Game {
    */
   advance(seconds: number): void {
     for (let i = Math.round(seconds / STEP); i > 0; i--) this.step(STEP); // ignores pause and speed: a test waits in game seconds
+  }
+
+  /** Calls `fn` with every stretch of game time that passes, until the returned function is called. */
+  onStep(fn: (dt: number) => void): () => void {
+    this.steppers.add(fn);
+    return () => this.steppers.delete(fn);
+  }
+
+  /**
+   * What the e2e tests may read and call: `window.__game` under `?test` (`TestHook`). Everything a spec looks at goes
+   * through here, so renaming a field of the game fails the type check of the spec that reads it. A spec changes the
+   * game only through the methods (and through the page, like a player).
+   */
+  hook() {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias -- the getters below have their own `this`
+    const g = this;
+    return {
+      /** Runs the game `seconds` ahead in fixed steps: how a test lets time pass. */
+      advance: (seconds: number) => g.advance(seconds),
+      /** One frame of `dt` real seconds as the loop takes it, at the speed the clock in the HUD is set to. */
+      frame: (dt: number) => g.step(dt, g.timeScale()),
+      /** the office and everybody in it: people, pets, places, presence, time of day, scenario, dev events */
+      get sim() {
+        return g.sim;
+      },
+      get views() {
+        return g.views;
+      },
+      get scene() {
+        return g.scene;
+      },
+      get renderer() {
+        return g.drawer.renderer;
+      },
+      get xmas() {
+        return g.xmas;
+      },
+      get easter() {
+        return g.easter;
+      },
+      get bubbles() {
+        return g.bubbles;
+      },
+      get meetingLight() {
+        return g.meetingLight;
+      },
+      /** the drawn home office rooms, by room number (null: not built yet) */
+      get homes() {
+        return g.homes;
+      },
+      /** desks whose monitor shows Kurt */
+      get kurtScreens() {
+        return g.kurtScreens;
+      },
+      /** game seconds so far */
+      get clock() {
+        return g.clock;
+      },
+      /** frames run so far */
+      get frames() {
+        return g.frames;
+      },
+      /** whether the office reaches the screen (not under `?test` without `&draw`) */
+      get draws() {
+        return g.drawer.draws;
+      },
+      get paused() {
+        return g.paused;
+      },
+      /** game seconds per real second right now: 0 paused, else 1, 10 or 25 */
+      get timeScale() {
+        return g.timeScale();
+      },
+      get selected() {
+        return g.selected;
+      },
+      /** the running Aktionen card, if any */
+      get action() {
+        return g.action;
+      },
+      /** the running day (the playable story), if any */
+      get day() {
+        return g.day;
+      },
+      get roofVisible() {
+        return g.roof.visible;
+      },
+      /** what the R key last asked for (the plan view hides the roof whatever it says) */
+      get roofWanted() {
+        return g.roofWanted;
+      },
+      get namesVisible() {
+        return g.overlay.namesVisible;
+      },
+      /** the debug overlays (dev and e2e builds) */
+      get debug() {
+        return g.debug!; // there in every build that has this hook
+      },
+    };
   }
 
   /**
@@ -653,11 +722,11 @@ export class Game {
     this.sim.presence.applyJump(); // a jump made while paused: nothing steps then
     while (this.acc >= STEP) {
       this.sim.step(STEP);
-      setTvMode(this.meetingRoom.tv);
+      setTvMode(this.sim.meetingRoom.tv);
       this.acc -= STEP;
     }
-    this.tod.update(dt);
-    applySky(this.tod, this.sky);
+    this.sim.tod.update(dt);
+    applySky(this.sim.tod, this.sky);
     this.updateEaster(dt);
     this.updateSpawnFx(dt);
     this.updateWeather(dt);
@@ -666,10 +735,10 @@ export class Game {
     this.updateAlterEgos(dt);
     this.meetingLight.update(dt);
     this.sim.coatRacks.update(); // also while time stands still: a presence change made then (clock jump, dev panel) shows at once
-    this.office.updateScreens(dt);
+    this.sim.office.updateScreens(dt);
     this.updateHomes(dt);
     this.updateDoor(dt);
-    if (dt > 0) for (const tick of this.tickers) tick(dt); // not on a frame while time stands still
+    if (dt > 0) for (const tick of this.steppers) tick(dt); // not on a frame while time stands still
   }
 
   /** The part of a step that follows real time: camera, panels, the persist timer. Works while paused. */
@@ -687,7 +756,7 @@ export class Game {
 
   /** Materialise show for everybody who arrives or leaves. */
   private updateSpawnFx(dt: number): void {
-    for (const w of this.walkers) {
+    for (const w of this.sim.walkers) {
       const e = w.takeFx();
       if (e) this.spawnFx.burst(w.pos.x, w.pos.z, e, w.headHeight * w.root.scale.y);
     }
@@ -696,16 +765,16 @@ export class Game {
 
   /** Kurt (#32): the poof when Marco turns into him or back, and Kurt on the monitor of Marco's empty desk. */
   private updateAlterEgos(dt: number): void {
-    for (const p of this.people) {
+    for (const p of this.sim.people) {
       if (!p.poof) continue;
       p.poof = false;
       if (!p.away) this.poofFx.burst(p.pos.x, 0.9, p.pos.z);
     }
     this.poofFx.update(dt);
-    for (const p of this.people) {
+    for (const p of this.sim.people) {
       if (!p.member.alterEgo) continue;
       const desk = p.homeDesk;
-      const on = !!desk && kurtOnScreen({ hour: this.tod.hour, presence: p.presence, awayKind: p.awayKind, deskUsed: !!desk.occupant });
+      const on = !!desk && kurtOnScreen({ hour: this.sim.tod.hour, presence: p.presence, awayKind: p.awayKind, deskUsed: !!desk.occupant });
       const shown = this.kurtScreens.get(p);
       if (shown && (!on || shown !== desk)) {
         // off, or his desk changed (seat editor): the old monitor goes back to normal
@@ -730,32 +799,32 @@ export class Game {
     this.easter.dim(this.sky);
     if (gone) {
       this.release(gone);
-      this.presence.send(gone, 'errand', this.nav);
+      this.sim.presence.send(gone, 'errand', this.sim.nav);
     }
   }
 
   /** Remembers time of day, weekday, camera and selection for the next visit. */
   private saveSession(): void {
-    saveState({ cycle: this.tod.cycle, weekday: this.tod.weekday, view: this.views.snapshot(), selected: this.selected instanceof Person ? this.selected.id : undefined });
+    saveState({ cycle: this.sim.tod.cycle, weekday: this.sim.tod.weekday, view: this.views.snapshot(), selected: this.selected instanceof Person ? this.selected.id : undefined });
   }
 
   /** Showers: rain streaks and a greyer, darker light. */
   private updateWeather(dt: number): void {
-    this.weather.update(dt);
-    const r = this.weather.rain;
-    this.rainFx.update(dt, r, 1 - this.tod.day);
-    this.xmas.update(dt, this.tod.day, this.scene.background as THREE.Color, this.sky.sun);
+    this.sim.weather.update(dt);
+    const r = this.sim.weather.rain;
+    this.rainFx.update(dt, r, 1 - this.sim.tod.day);
+    this.xmas.update(dt, this.sim.tod.day, this.scene.background as THREE.Color, this.sky.sun);
     if (r > 0) {
       this.sky.sun.intensity *= 1 - 0.45 * r;
       this.sky.hemi.intensity *= 1 - 0.1 * r;
-      (this.scene.background as THREE.Color).lerp(OVERCAST, 0.45 * r * this.tod.day);
+      (this.scene.background as THREE.Color).lerp(OVERCAST, 0.45 * r * this.sim.tod.day);
     }
   }
 
   /** Somebody coming through the front door makes the pets announce it. */
   private updateArrivals(): void {
-    for (const p of this.people) {
-      if (p.presence === 'returning' && this.lastPresence.get(p) !== 'returning') this.petCare.greet(this.pets);
+    for (const p of this.sim.people) {
+      if (p.presence === 'returning' && this.lastPresence.get(p) !== 'returning') this.sim.petCare.greet(this.sim.pets);
       this.lastPresence.set(p, p.presence);
     }
   }
@@ -763,38 +832,38 @@ export class Game {
   /** The dev events that need the view; the ones that only touch the simulation live with it (`simEvents.ts`). */
   private registerViewEvents(): void {
     const group = strings.presence.event.group;
-    this.events.register({
+    this.sim.events.register({
       id: 'remote-son',
       group,
       label: strings.presence.event.remoteSon,
       run: () => {
-        const p = this.presence.remoteWorker;
-        if (!p?.member.son || !this.presence.roomFor(p)) return null;
+        const p = this.sim.presence.remoteWorker;
+        if (!p?.member.son || !this.sim.presence.roomFor(p)) return null;
         // a remote day again: his plan sends him to the home office (a room is freed if need be), the son comes once he is there
-        this.presence.setVisit(p, false);
+        this.sim.presence.setVisit(p, false);
         this.release(p);
         this.sonCalls++;
         return strings.presence.event.sonComes(first(p));
       },
     });
-    this.events.register({
+    this.sim.events.register({
       id: 'home-laundry',
       group,
       label: 'Jemand im Homeoffice hängt Wäsche auf',
       run: () => {
         const home = this.homes.find((h) => h?.occupied && h.startLaundry());
-        const who = this.people.find((p) => p.id === home?.occupantId);
+        const who = this.sim.people.find((p) => p.id === home?.occupantId);
         return who ? `${first(who)} hängt Wäsche auf` : null;
       },
     });
-    this.events.register({
+    this.sim.events.register({
       id: 'rain',
       group: 'Wetter',
       label: 'Regen an / aus',
       run: () => {
-        this.weather.set(!this.weather.raining);
-        this.settings.setWeather(this.weather.mode);
-        return this.weather.raining ? 'Es regnet' : 'Der Regen hört auf';
+        this.sim.weather.set(!this.sim.weather.raining);
+        this.settings.setWeather(this.sim.weather.mode);
+        return this.sim.weather.raining ? 'Es regnet' : 'Der Regen hört auf';
       },
     });
   }
@@ -804,7 +873,7 @@ export class Game {
    * Returns a status text, or null for an unknown id. Not saved: a reload brings everybody back.
    */
   setRemoved(id: string, removed: boolean): string | null {
-    const who = this.walkers.find((w) => w.id === id);
+    const who = this.sim.walkers.find((w) => w.id === id);
     if (removed && who) {
       // what the player holds on to lets go first
       if (this.selected === who) this.selected = null;
@@ -838,7 +907,7 @@ export class Game {
     this.aim = null;
     this.raycaster.setFromCamera(this.centre, this.views.camera);
     const hits = this.raycaster.intersectObjects(
-      this.people.filter((p) => !p.away && p.inOffice).map((p) => p.root),
+      this.sim.people.filter((p) => !p.away && p.inOffice).map((p) => p.root),
       true,
     );
     if (hits.length && hits[0].distance < TALK_REACH) {
@@ -848,7 +917,7 @@ export class Game {
       if (p instanceof Person) this.aim = { text: `E · mit ${p.member.name.split(' ')[0]} reden`, act: () => this.talkTo(p, eye) };
     }
     if (!this.aim) {
-      const door = this.doors.facing(eye.x, eye.z, eye.dx, eye.dz);
+      const door = this.sim.doors.facing(eye.x, eye.z, eye.dx, eye.dz);
       if (door) this.aim = door.locked ? { text: 'Tür verschlossen (Meeting läuft)', act: () => {} } : { text: door.open ? 'E · Tür schliessen' : 'E · Tür öffnen', act: door.toggle };
     }
     this.overlay.setReticle(this.aim?.text ?? '');
@@ -862,7 +931,7 @@ export class Game {
 
   /** Starts a day as this person: they come to the office if they are away, then the camera moves behind them. */
   startDay(id: string): void {
-    const person = this.people.find((p) => p.id === id);
+    const person = this.sim.people.find((p) => p.id === id);
     if (!person) return;
     this.endDay();
     this.editor.setActive(false);
@@ -872,7 +941,7 @@ export class Game {
     document.body.classList.add('is-day'); // gear and Aktionen make way for the day HUD
     this.selected = this.followed = null;
     const tasks = (DAY_STORIES[id] ?? []).map((make) => make());
-    const needs = [...new Set(tasks.flatMap((t) => t.needs ?? []))].flatMap((nid) => this.people.find((p) => p.id === nid) ?? []);
+    const needs = [...new Set(tasks.flatMap((t) => t.needs ?? []))].flatMap((nid) => this.sim.people.find((p) => p.id === nid) ?? []);
     this.day = { person, state: 'waiting', needs, walking: true, time: 0, prevMode: this.views.mode === 'third' ? 'orbit' : this.views.mode, tasks, current: 0, splits: [] };
     (document.activeElement as HTMLElement | null)?.blur?.(); // space must not press a button
     this.dayHud.show(person.member.name);
@@ -882,7 +951,7 @@ export class Game {
     const absent = [person, ...needs].filter((p) => !p.inOffice);
     if (absent.length) {
       this.dayHud.setStatus(strings.presence.event.arriving(absent.map((p) => p.member.name.split(' ')[0])));
-      absent.forEach((p) => this.presence.callBack(p));
+      absent.forEach((p) => this.sim.presence.callBack(p));
     }
   }
 
@@ -959,11 +1028,11 @@ export class Game {
   private dayCtx(person: Person): DayCtx {
     return {
       scene: this.scene,
-      nav: this.nav,
+      nav: this.sim.nav,
       person,
       say: (text, who = person) => (this.reply = { who, text, t: 1.8 }),
       keys: this.keys,
-      other: (id) => this.people.find((p) => p.id === id) ?? null,
+      other: (id) => this.sim.people.find((p) => p.id === id) ?? null,
       seat: (p) => this.daySeat(p),
       pin: (p, spot) => {
         this.sim.drop(p);
@@ -1041,16 +1110,16 @@ export class Game {
    */
   startAction(id: string, quiet = false): 'started' | 'failed' | 'unknown' {
     const def = OFFICE_ACTIONS.find((a) => a.id === id) ?? null;
-    const ev = this.events.get(def?.eventId ?? id);
+    const ev = this.sim.events.get(def?.eventId ?? id);
     if (!ev) return 'unknown';
     return this.runAction({ eventId: ev.id, label: def?.label ?? ev.label, action: def }, quiet);
   }
 
   /** Runs the event; when it ran, the camera flies in Orbit to the first person it moved (or to the place). */
   private runAction(pick: SheetPick, quiet = false): 'started' | 'failed' | 'unknown' {
-    const ev = this.events.get(pick.eventId);
+    const ev = this.sim.events.get(pick.eventId);
     if (!ev) return 'unknown';
-    const before = new Map(this.people.map((p) => [p, leadState(p)]));
+    const before = new Map(this.sim.people.map((p) => [p, leadState(p)]));
     const result = this.day ? null : ev.run();
     if (result === null) {
       // the camera stays where it is; a running action gets its chip back afterwards
@@ -1059,7 +1128,7 @@ export class Game {
     }
     let lead: Person | null = null;
     let keys: number[] = [];
-    for (const p of this.people) {
+    for (const p of this.sim.people) {
       const was = before.get(p)!;
       const changed = leadState(p).flatMap((v, i) => (v !== was[i] && v !== null ? [i] : []));
       if (!changed.length) continue;
@@ -1156,7 +1225,7 @@ export class Game {
 
   /** One small offscreen picture per action card: drawn into the corner of the canvas, copied out, then painted over. */
   private renderPreviews(): void {
-    const r = this.renderer;
+    const r = this.drawer.renderer;
     const pr = r.getPixelRatio();
     const src = r.domElement;
     const w = Math.min(PREVIEW.width, src.width);
@@ -1249,17 +1318,13 @@ export class Game {
   }
 
   private render(alpha: number): void {
-    for (const w of this.walkers) if (!w.away || w.fx > 0) this.pose(w, alpha);
-    if (!this.draw) {
-      // what drawing does on the side, and picking, labels and bubbles rely on
-      this.scene.updateMatrixWorld();
-      this.views.camera.updateMatrixWorld();
-    }
-    this.updateHover();
-    this.updateOverlay();
-    if (import.meta.env.DEV || import.meta.env.MODE === 'e2e') this.debug?.update(this.clock, this.walkers, this.nav, this.views.camera);
-    if (this.previews.length) this.renderPreviews();
-    if (this.draw) this.renderer.render(this.scene, this.views.camera);
+    for (const w of this.sim.walkers) if (!w.away || w.fx > 0) this.pose(w, alpha);
+    this.drawer.frame(this.scene, this.views.camera, () => {
+      this.updateHover();
+      this.updateOverlay();
+      if (import.meta.env.DEV || import.meta.env.MODE === 'e2e') this.debug?.update(this.clock, this.sim.walkers, this.sim.nav, this.views.camera);
+      if (this.previews.length) this.renderPreviews();
+    });
   }
 
   /** Interpolated transform + procedural walk cycle. */
@@ -1491,7 +1556,7 @@ export class Game {
 
   /** Tired people: heavy eyelids, dark eye bags, a slouch and a yawn now and then (hand over the mouth). */
   private poseTired(w: Person, r: Person['rig']): void {
-    const tired = this.tod.tired;
+    const tired = this.sim.tod.tired;
     let lids = tired;
     r.body.rotation.x = tired * 0.07 * (1 - w.sit * 0.5);
     r.body.position.y -= tired * 0.012 * (1 - w.sit);
@@ -1676,7 +1741,7 @@ export class Game {
         // hand over the mouth, head back, eyes screwed shut
         arm(true, held.vape);
         r.body.rotation.x -= 0.12 * a;
-        r.setTired(Math.min(1, this.tod.tired + Math.sin(w.emoteP * Math.PI) * 0.8 * a));
+        r.setTired(Math.min(1, this.sim.tod.tired + Math.sin(w.emoteP * Math.PI) * 0.8 * a));
         break;
       }
       case 'stretch': {
@@ -1743,7 +1808,7 @@ export class Game {
     if (this.editor.active) return null; // the room editor owns the pointer
     this.raycaster.setFromCamera(ndc, this.views.camera);
     const hits = this.raycaster.intersectObjects(
-      this.walkers.filter((w) => !w.away).map((w) => w.root),
+      this.sim.walkers.filter((w) => !w.away).map((w) => w.root),
       true,
     );
     if (!hits.length) return null;
@@ -1775,7 +1840,7 @@ export class Game {
   }
 
   private seatOwners(): Map<number, string> {
-    return new Map(this.office.desks.filter((d) => d.owner).map((d) => [d.number, d.owner!.id]));
+    return new Map(this.sim.office.desks.filter((d) => d.owner).map((d) => [d.number, d.owner!.id]));
   }
 
   /** World point on top of the walker's head, following the posed body (sitting, leaning, hopping). */
@@ -1806,7 +1871,7 @@ export class Game {
     if (this.selected?.away) this.selected = null;
     this.actions.show(
       this.selected instanceof Person && this.selected.inOffice ? this.selected.displayName : null,
-      this.presence.homeFull,
+      this.sim.presence.homeFull,
       !!this.selected && this.selected === this.steered,
       !!this.selected && this.selected === this.followed,
     );
@@ -1817,8 +1882,8 @@ export class Game {
     } else {
       this.overlay.hideTooltip();
     }
-    const meet = this.meetingRoom.current;
-    const coffee = this.kitchen.current;
+    const meet = this.sim.meetingRoom.current;
+    const coffee = this.sim.kitchen.current;
     const rep = this.reply;
     const call = this.sim.welcome.call;
     const say = (id: string, text: string, who: Walker) => ({ id, text, head: this.headTop(who) });
@@ -1829,14 +1894,14 @@ export class Game {
         ...(this.easter.angry && !this.easter.angry.who.away ? [say(`angry-${this.easter.angry.who.id}`, this.easter.angry.text, this.easter.angry.who)] : []),
         ...(call && !call.who.away ? [say(`welcome-${call.who.id}`, call.text, call.who)] : []),
         ...(rep && !rep.who.away ? [say(`reply-${rep.who.id}`, rep.text, rep.who)] : []),
-        ...this.social.active.filter((c) => c.phase !== 'gather' && c.text).map((c) => say(c.speaker.id, c.text, c.speaker)),
+        ...this.sim.social.active.filter((c) => c.phase !== 'gather' && c.text).map((c) => say(c.speaker.id, c.text, c.speaker)),
         ...(coffee?.phase === 'chat' ? [say(coffee.speaker.id, coffee.text, coffee.speaker)] : []),
-        ...(this.meetingRoom.casual ? [say(this.meetingRoom.casual.speaker.id, this.meetingRoom.casual.text, this.meetingRoom.casual.speaker)] : []),
-        ...this.pets
+        ...(this.sim.meetingRoom.casual ? [say(this.sim.meetingRoom.casual.speaker.id, this.sim.meetingRoom.casual.text, this.sim.meetingRoom.casual.speaker)] : []),
+        ...this.sim.pets
           .filter((d) => !d.away && (d.barkT > 0 || (d.petted && d.happy > 0.5)))
           .map((d) => say(`pet-${d.id}`, d.barkT > 0 ? (d.isCat ? 'Miau!' : 'Wuff!') : '♥', d)),
         ...(meet?.phase === 'session' ? [say(meet.speaker.id, meet.text, meet.speaker)] : []),
-        ...this.toilets.cabins.flatMap((c) => (c.session?.text && !c.session.person.away ? [say(`wc-${c.session.person.id}`, c.session.text, c.session.person)] : [])),
+        ...this.sim.toilets.cabins.flatMap((c) => (c.session?.text && !c.session.person.away ? [say(`wc-${c.session.person.id}`, c.session.text, c.session.person)] : [])),
       ],
       this.views.camera,
       window.innerWidth,
@@ -1846,16 +1911,16 @@ export class Game {
     this.metaTimer -= 1 / 60;
     if (this.metaTimer <= 0) {
       this.metaTimer = 0.5;
-      const talking = this.social.chattingCount;
-      const inMeeting = this.meetingRoom.count;
-      const working = this.people.filter((p) => p.working).length;
-      const absent = this.presence.away;
+      const talking = this.sim.social.chattingCount;
+      const inMeeting = this.sim.meetingRoom.count;
+      const working = this.sim.people.filter((p) => p.working).length;
+      const absent = this.sim.presence.away;
       const home = absent.filter((p) => p.awayKind === 'home').length;
-      const inside = this.people.filter((p) => p.presence === 'in').length;
-      const pets = this.walkers.filter((w) => w instanceof Dog && !w.away).length;
+      const inside = this.sim.people.filter((p) => p.presence === 'in').length;
+      const pets = this.sim.walkers.filter((w) => w instanceof Dog && !w.away).length;
       const meta = [strings.presence.count.inOffice(inside)];
-      if (this.weather.rain > 0.3) meta.push('Regen');
-      if (this.presence.lunch) meta.push('Mittagspause');
+      if (this.sim.weather.rain > 0.3) meta.push('Regen');
+      if (this.sim.presence.lunch) meta.push('Mittagspause');
       if (absent.length) {
         if (absent.length - home > 0) meta.push(strings.presence.count.errand(absent.length - home));
         if (home > 0) meta.push(strings.presence.count.home(home));
@@ -1871,7 +1936,7 @@ export class Game {
       this.rosterTimer = 0.25;
       this.peoplePanel.sync();
       this.roster.update(
-        this.presence.away
+        this.sim.presence.away
           .map((p) => ({
             id: p.id,
             name: p.displayName,
@@ -1884,16 +1949,16 @@ export class Game {
       );
     }
     this.seats.placeLabels(
-      this.office.desks.map((d) => ({ number: d.number, hidden: false, ...this.projectPoint(d.seat.x, 1.3, d.seat.z) })),
+      this.sim.office.desks.map((d) => ({ number: d.number, hidden: false, ...this.projectPoint(d.seat.x, 1.3, d.seat.z) })),
     );
     if (this.overlay.namesVisible) {
-      this.overlay.placeLabels(this.people.map((p) => ({ id: p.id, name: p.displayName, hidden: p.away, ...this.project(p, 0.1) })));
+      this.overlay.placeLabels(this.sim.people.map((p) => ({ id: p.id, name: p.displayName, hidden: p.away, ...this.project(p, 0.1) })));
     }
   }
 
   /** Keeps the home office rooms and the feed tiles in line with who works from home right now. */
   private updateHomes(dt: number): void {
-    const atHome = this.people.filter((p) => p.presence === 'out' && p.awayKind === 'home');
+    const atHome = this.sim.people.filter((p) => p.presence === 'out' && p.awayKind === 'home');
     for (let v = 0; v < ROOM_COUNT; v++) {
       const who = atHome.find((p) => p.homeVariant === v) ?? null;
       const room = this.homes[v];
@@ -1914,7 +1979,7 @@ export class Game {
   /** Each wing of the front door swings open on its own while somebody is on the way through its lane (the interior doors: `Sim.step`). */
   private updateDoor(dt: number): void {
     for (const lane of DOOR_LANES) {
-      const near = this.walkers.some((w) => !w.away && Math.abs(w.pos.x - lane.gate.x) < 0.6 && Math.abs(w.pos.z - lane.gate.z) < 1.4);
+      const near = this.sim.walkers.some((w) => !w.away && Math.abs(w.pos.x - lane.gate.x) < 0.6 && Math.abs(w.pos.z - lane.gate.z) < 1.4);
       const k = lane.wing;
       this.doorOpen[k] += ((near ? 1 : 0) - this.doorOpen[k]) * Math.min(1, dt * 6);
       this.entrance[k].rotation.y = (k === 'left' ? -1 : 1) * this.doorOpen[k] * 1.7;
@@ -1925,16 +1990,27 @@ export class Game {
   private renderFeeds(): void {
     const tiles = this.feeds.tiles();
     this.overlay.maskOut(tiles.map((t) => t.clip));
-    if (!tiles.length || !this.draw) return;
-    const r = this.renderer;
-    const h = window.innerHeight;
-    r.setScissorTest(true);
-    for (const t of tiles) {
-      const home = this.homes[t.variant];
-      if (!home?.occupied) continue;
-      home.render(r, t.rect.left, h - t.rect.bottom, t.rect.width, t.rect.height, [t.clip.left, h - t.clip.bottom, t.clip.width, t.clip.height]);
-    }
-    r.setScissorTest(false);
-    r.setViewport(0, 0, window.innerWidth, window.innerHeight);
+    if (!tiles.length) return;
+    this.drawer.feeds((r) => {
+      const h = window.innerHeight;
+      r.setScissorTest(true);
+      for (const t of tiles) {
+        const home = this.homes[t.variant];
+        if (!home?.occupied) continue;
+        home.render(r, t.rect.left, h - t.rect.bottom, t.rect.width, t.rect.height, [t.clip.left, h - t.clip.bottom, t.clip.width, t.clip.height]);
+      }
+      r.setScissorTest(false);
+      r.setViewport(0, 0, window.innerWidth, window.innerHeight);
+    });
+  }
+}
+
+/** What a spec gets as `g` in `read` / `until` (`e2e/game.ts`). */
+export type TestHook = ReturnType<Game['hook']>;
+
+declare global {
+  interface Window {
+    /** the test hook, set when a dev param is in the URL (`debugParams.ts`) */
+    __game?: TestHook;
   }
 }

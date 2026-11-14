@@ -4,14 +4,19 @@ test('load', async ({ page }) => {
   const errors = await openGame(page);
   await expect(page.locator('#stage canvas')).toBeVisible();
   await expect(page.locator('body')).not.toHaveClass(/is-loading/);
-  expect(await read(page, (g) => g.people.length)).toBeGreaterThan(10);
+  expect(await read(page, (g) => g.sim.people.length)).toBeGreaterThan(10);
   // frames come, but under ?test time stands still between them
-  const t0 = await read(page, (g) => ({ last: g.last, clock: g.clock }));
-  await expect.poll(() => read(page, (g) => g.last)).toBeGreaterThan(t0.last + 100);
+  const t0 = await read(page, (g) => ({ frames: g.frames, clock: g.clock }));
+  await expect.poll(() => read(page, (g) => g.frames)).toBeGreaterThan(t0.frames + 5);
   expect(await read(page, (g) => g.clock)).toBe(t0.clock);
-  // unfrozen, as in the real game, the loop itself moves the game on with the clock on the wall
-  await read(page, (g) => void (g.frozen = false));
-  await expect.poll(() => read(page, (g) => g.clock)).toBeGreaterThan(t0.clock + 0.2);
+  expect(errors).toEqual([]);
+});
+
+// The one test that waits in wall time on purpose: `&live` gives the game the time source players get
+test('load: with the clock on the wall the loop itself moves the game on', async ({ page }) => {
+  const errors = await openGame(page, '', undefined, 'live');
+  const t0 = await read(page, (g) => g.clock);
+  await expect.poll(() => read(page, (g) => g.clock)).toBeGreaterThan(t0 + 0.2);
   expect(errors).toEqual([]);
 });
 
@@ -20,7 +25,7 @@ test('load', async ({ page }) => {
 test('load: the office is drawn without errors', async ({ page }) => {
   await page.setViewportSize({ width: 480, height: 270 });
   const errors = await openGame(page, 'homes', undefined, 'draw');
-  const r = await read(page, (g) => ({ shadows: g.renderer.shadowMap.enabled, programs: g.renderer.info.programs.length, frame: g.renderer.info.render.frame }));
+  const r = await read(page, (g) => ({ shadows: g.renderer.shadowMap.enabled, programs: g.renderer.info.programs!.length, frame: g.renderer.info.render.frame }));
   expect(r.shadows).toBe(true);
   expect(r.programs).toBeGreaterThan(5);
   await expect.poll(() => read(page, (g) => g.renderer.info.render.frame), { timeout: 60_000 }).toBeGreaterThan(r.frame + 2);
@@ -31,27 +36,27 @@ test.describe('keys', () => {
   test('keys.roof', async ({ page }) => {
     await openGame(page);
     expect(await read(page, (g) => g.views.mode)).toBe('orbit');
-    const before = await read(page, (g) => g.roof.visible);
+    const before = await read(page, (g) => g.roofVisible);
     await page.keyboard.press('r');
-    expect(await read(page, (g) => g.roof.visible)).toBe(!before);
+    expect(await read(page, (g) => g.roofVisible)).toBe(!before);
     await page.keyboard.press('r');
-    expect(await read(page, (g) => g.roof.visible)).toBe(before);
+    expect(await read(page, (g) => g.roofVisible)).toBe(before);
     // plan view never shows the roof, and R does nothing there
     await page.keyboard.press('3');
     await page.keyboard.press('r');
-    expect(await read(page, (g) => [g.roof.visible, g.roofWanted])).toEqual([false, before]);
+    expect(await read(page, (g) => [g.roofVisible, g.roofWanted])).toEqual([false, before]);
   });
 
   test('keys.names', async ({ page }) => {
     await openGame(page);
     const label = page.locator('#labels .m-label').first();
-    expect(await read(page, (g) => g.overlay.namesVisible)).toBe(false);
+    expect(await read(page, (g) => g.namesVisible)).toBe(false);
     await expect(label).toBeHidden();
     await page.keyboard.press('n');
-    expect(await read(page, (g) => g.overlay.namesVisible)).toBe(true);
+    expect(await read(page, (g) => g.namesVisible)).toBe(true);
     await expect(page.locator('#setting-names')).toBeChecked(); // the settings switch mirrors the key
     await page.keyboard.press('n');
-    expect(await read(page, (g) => g.overlay.namesVisible)).toBe(false);
+    expect(await read(page, (g) => g.namesVisible)).toBe(false);
   });
 
   test('view.iso + view.orbit + view.plan + view.walk: keys 1-4', async ({ page }) => {

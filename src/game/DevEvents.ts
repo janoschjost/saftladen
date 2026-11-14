@@ -1,3 +1,4 @@
+import type { OverlayKind } from './DebugOverlays';
 /**
  * Registry of things a developer can trigger by hand (meeting, vaping, printer run, ...). Every `Sim` owns one
  * (`sim.events`) with the events that only touch the simulation (`simEvents.ts`); the game adds the ones that need
@@ -45,10 +46,32 @@ export class DevEvents {
   }
 }
 
+/** `window.dev`: what a developer can call from the console. The game and the dev tools hang their parts on it. */
+export interface DevConsole {
+  /** every event: id, group and label */
+  list(): string[];
+  /** runs an event by id; returns its status text */
+  trigger(id: string): string;
+  /** sends a person into a state (`DevForce.ts`, loaded after the game) */
+  forceState?: (id: string, state: string) => string;
+  /** switches a debug overlay (`DebugOverlays.ts`) */
+  overlay?: (kind: OverlayKind, on?: boolean) => void;
+  /** takes a person or a pet out of the simulation, brings them back, lists who is out (dev and e2e builds) */
+  remove?: (id: string) => string | null;
+  restore?: (id: string) => string | null;
+  removed?: () => string[];
+}
+
+declare global {
+  interface Window {
+    dev: DevConsole;
+  }
+}
+
 /** Console access: `dev.list()`, `dev.trigger('vape-fabian-bucher')`. */
 export function exposeDevConsole(events: DevEvents): void {
   // added to what is there: the overlays and `forceState` hang their own calls on `dev`, in whatever order
-  const w = window as unknown as { dev?: object };
+  const w = window as { dev?: Partial<DevConsole> };
   w.dev = Object.assign(w.dev ?? {}, {
     list: () => events.list().map((e) => `${e.id}  (${e.group}: ${e.label})`),
     trigger: (id: string) => events.trigger(id),

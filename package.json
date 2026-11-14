@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && tsc --noEmit -p e2e && vite build",
     "preview": "vite preview",
     "fetch-team": "node scripts/fetch-team.mjs",
     "lint": "oxlint --type-aware --deny-warnings",
@@ -17,6 +17,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",
+    "@types/node": "^26.6.6",
     "@types/three": "^0.187.0",
     "oxlint": "^1.93.0",
     "oxlint-tsgolint": "^7.0.2007",
