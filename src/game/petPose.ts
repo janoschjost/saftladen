@@ -90,25 +90,19 @@ export function petPose(amt: number, petHeight: number, t: number, scale = 1): P
   };
 }
 
-/** The parts of a person's rig the pose touches. */
-interface PoseRig {
-  body: THREE.Object3D;
-  armL: THREE.Object3D;
-  armR: THREE.Object3D;
-  legL: THREE.Object3D;
-  legR: THREE.Object3D;
-  kneeL: THREE.Object3D;
-  kneeR: THREE.Object3D;
-}
+type PoseRig = Pick<Person['rig'], 'body' | 'armL' | 'armR' | 'legL' | 'legR' | 'kneeL' | 'kneeR'>;
 
-/** Every frame starts from the neutral rig: additive poses (`+=`) must never carry over from the last frame. */
-export function resetRig(r: Pick<PoseRig, 'body' | 'armL' | 'armR' | 'legL' | 'legR'>): void {
+/** Every frame starts from the neutral rig: additive poses (`+=`) must never carry over from the last frame. Resets everything `applyPetPose` writes. */
+export function resetRig(r: PoseRig): void {
   r.body.rotation.set(0, 0, 0);
   r.body.position.set(0, 0, 0);
   r.armL.rotation.set(0, 0, 0);
   r.armR.rotation.set(0, 0, 0);
   r.legL.rotation.set(0, 0, 0, 'XYZ'); // the kneel turns a leg out (y, order YXZ)
   r.legR.rotation.set(0, 0, 0, 'XYZ');
+  r.kneeL.rotation.set(0, 0, 0);
+  r.kneeR.rotation.set(0, 0, 0);
+  r.legL.position.y = r.legR.position.y = 0.8; // hip height, standing
 }
 
 /** Stroking a pet: down on one knee (dog) or both (cat), a little spine, head down at the animal, one hand stroking. Eases in and out (~0.4 s) and ends as soon as the petting does or is cut short (picked up, walking off, a talk). `now` is game time (s). */

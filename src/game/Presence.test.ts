@@ -14,6 +14,8 @@ const STEP = 1 / 60;
 const WALK = 4;
 /** Real seconds per 24 h cycle, as in TimeOfDay. */
 const CYCLE_SECONDS = 600;
+/** Seconds a returning person may wait outside for the door (spacing between arrivals) on top of their time away. */
+const QUEUE = 10;
 
 /** Cycle position of a clock hour (inverse of `hourOf`, which rises monotonically over the day). */
 function cycleAt(hour: number): number {
@@ -34,7 +36,14 @@ function cycleAt(hour: number): number {
 class Stub {
   presence: 'in' | 'leaving' | 'out' | 'returning' = 'in';
   awayKind: AwayKind | null = null;
-  awayLeft = 0;
+  private left = 0;
+  get awayLeft(): number {
+    return this.left;
+  }
+  set awayLeft(v: number) {
+    if (v === 0 && this.presence === 'out') this.cut = true;
+    this.left = v;
+  }
   homeVariant = 0;
   preferredHome = 0;
   held = false;
@@ -48,6 +57,13 @@ class Stub {
   pos = { x: 0, z: 0 };
   /** every walk out of the door: kind and whether an alter ego transforms (#32) */
   leaves: Array<{ kind: AwayKind; transform: boolean; manual: boolean; seconds: number }> = [];
+  /** every spell spent out of sight (from the door to walking back in): kind and how long it really lasted */
+  spells: Array<{ kind: AwayKind; seconds: number; cut: boolean }> = [];
+  /** Presence ended the current spell by hand (it set `awayLeft` to 0 while out) */
+  private cut = false;
+  private outFor = 0;
+  /** the current spell began at the door (not the start-of-day `startAway`) */
+  private viaDoor = false;
   private walk = 0;
 
   constructor(readonly member: TeamMember) {}
@@ -61,6 +77,7 @@ class Stub {
   leaveOffice(_nav: NavGrid, kind: AwayKind, seconds: number, manual = false): void {
     this.leaves.push({ kind, transform: transformsOnLeave(this.member, kind, manual), manual, seconds });
     this.presence = 'leaving';
+    this.viaDoor = true;
     this.awayKind = kind;
     this.awayLeft = seconds;
     this.walk = WALK;
@@ -79,11 +96,17 @@ class Stub {
   cancelLeave(): void {
     if (this.presence !== 'leaving') return;
     this.presence = 'in';
+    this.viaDoor = false;
     this.awayKind = null;
   }
   update(dt: number): void {
+    if (this.presence === 'out') this.outFor += dt;
     if (this.presence === 'leaving' && (this.walk -= dt) <= 0) this.presence = 'out';
-    else if (this.presence === 'out' && (this.awayLeft -= dt) <= 0) {
+    else if (this.presence === 'out' && (this.left -= dt) <= 0) {
+      if (this.viaDoor) this.spells.push({ kind: this.awayKind!, seconds: this.outFor, cut: this.cut });
+      this.viaDoor = false;
+      this.cut = false;
+      this.outFor = 0;
       this.presence = 'returning';
       this.walk = WALK;
     } else if (this.presence === 'returning' && (this.walk -= dt) <= 0) {
@@ -200,24 +223,22 @@ describe('presence', () => {
     }
   });
 
-  it('presence.errand: errands last 25-70 s, home office 90-220 s', () => {
+  it('presence.errand: errands really last 25-70 s out of sight, home office 90-220 s', () => {
+    let spells = 0;
     for (const seed of [1, 2, 3, 4, 5, 6]) {
       // before the first lunch, so every errand is a plain one (lunch ones are shorter: 22-45 s)
       const { people, plans } = runDay(seed, 5, 10.5);
       expect(Math.min(...[...plans.values()].map((p) => p.lunch))).toBeGreaterThan(10.5);
-      const leaves = people.filter((p) => !p.member.homebody).flatMap((p) => p.leaves);
-      const errands = leaves.filter((l) => l.kind === 'errand');
-      const homes = leaves.filter((l) => l.kind === 'home');
-      expect(errands.length + homes.length, `seed ${seed}`).toBeGreaterThan(0);
-      for (const l of errands) {
-        expect(l.seconds).toBeGreaterThanOrEqual(25);
-        expect(l.seconds).toBeLessThanOrEqual(70);
-      }
-      for (const l of homes) {
-        expect(l.seconds).toBeGreaterThanOrEqual(90);
-        expect(l.seconds).toBeLessThanOrEqual(220);
+      for (const { kind, seconds, cut } of people.filter((p) => !p.member.homebody).flatMap((p) => p.spells)) {
+        if (cut) continue; // called back early (a room freed for somebody else, a roster call): a shorter spell by design
+        spells++;
+        const [min, max] = kind === 'errand' ? [25, 70] : [90, 220];
+        expect(['errand', 'home']).toContain(kind);
+        expect(seconds).toBeGreaterThanOrEqual(min - 2 * STEP);
+        expect(seconds).toBeLessThanOrEqual(max + QUEUE); // back in line at the door: waits for a free slot (presence.door-flow)
       }
     }
+    expect(spells).toBeGreaterThan(10);
   });
 
   it('presence.rain: with rain fewer leave, errands take longer, more of the time away is home office', () => {
@@ -230,11 +251,11 @@ describe('presence', () => {
       for (let seed = 1; seed <= 20; seed++) {
         // up to the first lunch: only the draws the weather acts on (lunch errands are fixed)
         const { people, samples } = runDay(seed, 5, 10.5, raining);
-        for (const l of people.flatMap((p) => p.leaves)) {
-          leaves++;
-          if (l.kind !== 'errand') continue;
+        leaves += people.reduce((n, p) => n + p.leaves.length, 0);
+        for (const sp of people.flatMap((p) => p.spells)) {
+          if (sp.kind !== 'errand') continue;
           errands++;
-          errandSeconds += l.seconds;
+          errandSeconds += sp.seconds;
         }
         // person-seconds out on an errand or in the home office, from the once-a-second samples
         for (const s of samples.filter((s) => s.hour >= 8)) {

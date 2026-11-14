@@ -89,48 +89,50 @@ describe('fx.materialise: on state', () => {
     const sim = office();
     sim.scenario.clear('printer', 'coffee', 'kitchen', 'meeting', 'wc');
     const [p] = atDesks(sim, ['oscar-grob']);
+    // would a wing open for somebody standing where `p` stands (as if they were not away)?
+    const wingOpens = () => DOOR_LANES.some((l) => laneBusy(l, [{ away: false, pos: p.pos }]));
     expect(p.takeFx()).toBeNull();
     expect(sim.presence.send(p, 'errand', sim.nav)).toBe(true);
-    // leaving: the 'out' effect fires at the moment they step out onto the porch, not before
-    let out: 'in' | 'out' | null = null;
-    let at = { x: 0, z: 0 };
-    let busy = true;
+
+    // leaving: the 'out' effect fires when they step out onto the porch, not before; they dissolve there, clear of both lanes
+    let fx: 'in' | 'out' | null = null;
     expect(
-      run(sim, 120, () => out === 'out', () => {
-        const e = p.takeFx();
-        if (e && !out) {
-          out = e;
-          at = { ...p.pos };
-          busy = DOOR_LANES.some((l) => laneBusy(l, [p]));
-        } else expect(e).toBeNull();
+      run(sim, 120, () => fx === 'out', () => {
+        fx ??= p.takeFx();
+        if (!fx) expect(p.fx).toBe(1); // still solid until the effect starts
       }),
     ).toBe(true);
     expect(p.presence).toBe('out');
-    expect(at.z).toBeGreaterThan(DOOR.z);
-    expect(at.x).toBeCloseTo(p.lane.out.x, 1);
-    expect(busy).toBe(false); // gone from the lane: the wing stays shut
-    sim.presence.callBack(p);
-    // arriving: the 'in' effect fires on the porch, and the wing does not open while they materialise
-    let inFx: 'in' | 'out' | null = null;
-    let porch = { x: 0, z: 0 };
-    let opened = false;
+    expect(p.pos.z).toBeGreaterThan(DOOR.z);
+    expect(p.pos.x).toBeCloseTo(p.lane.out.x, 1);
+    let faded = false;
     expect(
-      run(sim, 200, () => inFx === 'in', () => {
-        const e = p.takeFx();
-        if (e) {
-          inFx = e;
-          porch = { ...p.pos };
-        }
+      run(sim, 5, () => p.fx === 0, () => {
+        faded ||= p.fx < 1;
+        expect(wingOpens()).toBe(false);
       }),
     ).toBe(true);
+    expect(faded).toBe(true);
+
+    // arriving: the 'in' effect fires on the porch, they materialise there (fx rises 0 -> 1) and no wing opens meanwhile
+    sim.presence.callBack(p);
+    fx = null;
+    expect(run(sim, 200, () => fx === 'in', () => void (fx ??= p.takeFx()))).toBe(true);
     expect(p.presence).toBe('returning');
-    expect(porch.z).toBeGreaterThan(DOOR.z);
-    expect(porch.x).toBeCloseTo(p.lane.out.x, 1);
-    // materialising: they stand on the porch (fx < 1) and are outside the reach of the wing
-    run(sim, 3, () => p.fx >= 1, () => {
-      if (p.fx < 1) opened ||= DOOR_LANES.some((l) => laneBusy(l, [p]));
-    });
-    expect(p.fx).toBeLessThan(1.0001);
-    expect(opened).toBe(false);
+    expect(p.pos.z).toBeGreaterThan(DOOR.z);
+    expect(p.pos.x).toBeCloseTo(p.lane.out.x, 1);
+    expect(p.fx).toBeLessThan(1);
+    let materialising = 0;
+    expect(
+      run(sim, 5, () => p.fx >= 1, () => {
+        materialising++;
+        expect(wingOpens()).toBe(false);
+      }),
+    ).toBe(true);
+    expect(materialising).toBeGreaterThan(10);
+    // and once they walk in, the wing of their lane does open for them
+    let opened = false;
+    expect(run(sim, 30, () => p.presence === 'in', () => void (opened ||= wingOpens()))).toBe(true);
+    expect(opened).toBe(true);
   });
 });
