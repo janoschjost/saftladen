@@ -122,10 +122,10 @@ Rules:
 - `move.unstuck` Standing up from a desk, people step out where a way into the office leads on (the cell behind the chair, or the closest one next to it when that is walled in); somebody who stood up to go somewhere and has not got away within 2 s steps straight to the nearest free cell with a way on and walks on — `src/game/Person.ts`, `src/game/Office.ts`, `src/game/NavGrid.ts`, test: `src/game/unstuck.test.ts`, `src/game/NavGrid.test.ts`, url: `/?seed=1&time=11` (#133)
 
 ## Doors
-- `door.auto` Interior doors swing open within 1.25 m and stay open 0.9 s after — `src/game/Doors.ts`
-- `door.rest` At rest closed / ajar / propped, rerolled every 30–120 s — `src/game/Doors.ts`
-- `door.player` Walk-mode player can toggle the door they face; the choice holds a while — `src/game/Doors.ts`
-- `door.lock` Doors locked during a meeting, booth call or while somebody sits on the toilet — `src/game/Doors.ts`, url: `/?seed=1&time=11&event=meeting-room` (#38, #17)
+- `door.auto` Interior doors swing open within 1.25 m and stay open 0.9 s after — `src/game/Doors.ts`, test: `src/game/Doors.test.ts`, url: `/?seed=1&time=11` (#152)
+- `door.rest` At rest closed / ajar / propped, rerolled every 30–120 s — `src/game/Doors.ts`, test: `src/game/Doors.test.ts`, url: `/?seed=1&time=11` (#152)
+- `door.player` Walk-mode player can toggle the door they face; the choice holds a while — `src/game/Doors.ts`, test: `src/game/Doors.test.ts`, url: `/?seed=1&time=11#walk` (#152)
+- `door.lock` Doors locked during a meeting, booth call or while somebody sits on the toilet — `src/game/Doors.ts`, test: `src/game/Doors.test.ts`, url: `/?seed=1&time=11&event=meeting-room` (#38, #17, #152)
 
 ## Pets
 - `pet.roster` Dogs Tala (Ramon), Ellie (Janosch), Harry (Nina), Mira (terrier, Fabian); cats Angus and Binx (Donata) — `src/data/team.ts`

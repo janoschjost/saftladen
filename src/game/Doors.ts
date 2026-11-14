@@ -7,7 +7,8 @@ const TRIGGER = 1.25;
 /** door stays open this long after the last person passed (seconds) */
 const HOLD = 0.9;
 
-interface State {
+/** One door's state; `Doors.states` is readable so tests can look at it. */
+export interface DoorState {
   rig: DoorRig;
   open: number;
   /** where the door rests when nobody is around: closed, ajar or propped wide open */
@@ -28,7 +29,7 @@ const nextReroll = (): number => 30 + random() * 90;
 
 /** Interior doors: swing open when somebody walks through, otherwise rest closed, ajar or propped open. */
 export class Doors {
-  private states: State[];
+  readonly states: DoorState[];
   private letteredOpen = false;
 
   constructor(rigs: DoorRig[]) {
@@ -62,7 +63,7 @@ export class Doors {
 
   /** The door the player is facing within `reach` metres, if any. */
   facing(x: number, z: number, dx: number, dz: number, reach = 2.2): { open: boolean; locked: boolean; toggle: () => void } | null {
-    let best: State | null = null;
+    let best: DoorState | null = null;
     let bestD = reach;
     for (const s of this.states) {
       const vx = s.rig.center.x - x;
@@ -89,7 +90,7 @@ export class Doors {
 
   /** Keeps the door nearest to `at` shut (or releases it). */
   setLocked(at: { x: number; z: number }, locked: boolean): void {
-    let best: State | null = null;
+    let best: DoorState | null = null;
     let bestD = 1;
     for (const s of this.states) {
       const d = Math.hypot(s.rig.center.x - at.x, s.rig.center.z - at.z);
@@ -113,7 +114,7 @@ export class Doors {
     return open;
   }
 
-  private apply(s: State, dt: number): void {
+  private apply(s: DoorState, dt: number): void {
     s.rig.pivot.rotation.y = s.rig.base + s.rig.swing * s.open * DOOR_SWING;
     const letters = s.rig.letters;
     if (!letters?.length) return;
