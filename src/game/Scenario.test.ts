@@ -98,6 +98,7 @@ describe('dev.scene', () => {
 
   it('dev.scene: the printer and the kitchen are free at once', () => {
     const sim = office();
+    sim.scenario.clear('printer', 'kitchen'); // somebody may be printing already after the first seconds: start from empty places
     const free = sim.people.filter((p) => sim.presence.free(p));
     const [printing, ...rest] = free;
     sim.drop(printing);

@@ -5,6 +5,11 @@ import { Dog } from './Dog';
 import type { Person } from './Person';
 import { petComesToday } from './petSchedule';
 import { setSeed } from './rng';
+import { Sim } from './Sim';
+import { Walker } from './Walker';
+import { installHeadlessDom } from '../test/headlessDom';
+
+installHeadlessDom();
 
 describe('pet.schedule', () => {
   it('pet.schedule: only on its weekdays, then with its chance', () => {
@@ -40,5 +45,20 @@ describe('pet.owner', () => {
     dog.comesToday = false;
     dog.arriveWith(o);
     expect(dog.away).toBe(true);
+  });
+});
+
+describe('pet.today-hint', () => {
+  it('pet.today-hint: in the whole office a pet that stays home today is away all day, one that comes is listed in `petsToday`', () => {
+    setSeed(1);
+    const sim = new Sim();
+    Walker.animate = true;
+    for (let i = 0; i < 60 * 60; i++) {
+      sim.step(1 / 60);
+      expect(sim.pets.filter((d) => !d.comesToday && !d.away)).toEqual([]);
+    }
+    const coming = sim.pets.filter((d) => d.comesToday).map((d) => d.name);
+    expect(sim.presence.petsToday.map((t) => t.pet).sort()).toEqual(coming.sort());
+    expect(coming.length).toBeLessThan(sim.pets.length);
   });
 });

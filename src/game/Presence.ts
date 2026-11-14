@@ -186,11 +186,14 @@ export class Presence {
   /** Which pets come along today. A pet that is away while its owner is still in (night shift) stays away until the owner's next arrival. */
   private rollPets(): void {
     for (const p of this.people) {
-      for (const d of p.pets) d.comesToday = petComesToday(d.visits, this.weekday) && !(d.away && p.presence !== 'out');
+      for (const d of p.pets) {
+        d.comesToday = petComesToday(d.visits, this.weekday) && !(d.away && p.presence !== 'out');
+        if (!d.comesToday) d.sendAway(); // a time jump rolls the day again: a pet that now stays home leaves
+      }
     }
   }
 
-  /** Pets that come to the office today, with their owner (UI hint, and `__game.presence.petsToday` in the console). */
+  /** Pets that come to the office today, with their owner (UI hint, and `__game.sim.presence.petsToday` in the console). */
   get petsToday(): Array<{ pet: string; owner: string }> {
     return this.people.flatMap((p) => p.pets.filter((d) => d.comesToday).map((d) => ({ pet: d.name, owner: p.member.name })));
   }

@@ -65,7 +65,7 @@ class Stub {
   private outFor = 0;
   /** the current spell began at the door (not the start-of-day `startAway`) */
   private viaDoor = false;
-  pets: Array<{ name: string; visits?: TeamMember['dogVisits']; comesToday: boolean; away: boolean }> = [];
+  pets: Array<{ name: string; visits?: TeamMember['dogVisits']; comesToday: boolean; away: boolean; sendAway(): void }> = [];
   private walk = 0;
 
   constructor(readonly member: TeamMember) {}
@@ -587,8 +587,8 @@ describe('pets', () => {
     const people = team.map((m) => new Stub(m));
     for (const p of people) {
       p.startAway('off', 9999);
-      if (p.member.dog) p.pets.push({ name: p.member.dogName!, visits: p.member.dogVisits, comesToday: true, away: true });
-      for (const c of p.member.cats ?? []) p.pets.push({ name: c.name, visits: c.visits, comesToday: true, away: true });
+      if (p.member.dog) p.pets.push({ name: p.member.dogName!, visits: p.member.dogVisits, comesToday: true, away: true, sendAway() {} });
+      for (const c of p.member.cats ?? []) p.pets.push({ name: c.name, visits: c.visits, comesToday: true, away: true, sendAway() {} });
     }
     const presence = new Presence(people as unknown as Person[], clock as unknown as TimeOfDay, { raining: false } as Weather);
     const pets = people.flatMap((p) => p.pets);
