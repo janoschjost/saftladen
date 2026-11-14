@@ -22,7 +22,7 @@ export const castSection = (cast: DevCast) => (root: HTMLElement, status: HTMLEl
       b.textContent = c.name;
       b.setAttribute('aria-pressed', String(out.has(c.id)));
       b.addEventListener('click', () => {
-        const removed = b.getAttribute('aria-pressed') !== 'true';
+        const removed = !cast.removed().includes(c.id); // the console can have changed it since the panel was built
         const msg = cast.set(c.id, removed);
         if (msg === null) return;
         b.setAttribute('aria-pressed', String(removed));

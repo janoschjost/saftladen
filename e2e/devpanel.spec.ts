@@ -22,6 +22,10 @@ test.describe('dev.remove', () => {
     expect(await page.evaluate(() => (window as unknown as { dev: { removed(): string[] } }).dev.removed())).toEqual(['jan-hasler']);
     await page.evaluate(() => (window as unknown as { dev: { restore(id: string): void } }).dev.restore('jan-hasler'));
     expect(await read(page, (g) => g.sim.removedIds)).toEqual([]);
+    // removed from the console while the panel is open: the next click on the button restores
+    await page.evaluate(() => (window as unknown as { dev: { remove(id: string): void } }).dev.remove('jan-hasler'));
+    await btn.click();
+    expect(await read(page, (g) => g.sim.removedIds)).toEqual([]);
     expect(errors).toEqual([]);
   });
 
