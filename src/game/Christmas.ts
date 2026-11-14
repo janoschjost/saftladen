@@ -22,7 +22,7 @@ export class Christmas {
     if (on === this.on) return;
     this.on = on;
     setChristmasWear(on);
-    if (on) this.decor.setVisible(true);
+    this.decor.setVisible(on); // decorations switch at once, only the snow and sky fade
   }
 
   update(dt: number, day: number, sky: THREE.Color, sun: THREE.DirectionalLight): void {
@@ -30,7 +30,6 @@ export class Christmas {
     if (this.amount < 0.002) this.amount = 0;
     this.snow.update(dt, this.amount, 1 - day);
     this.decor.update(dt, this.on);
-    if (!this.on && this.amount === 0) this.decor.setVisible(false); // after the snow has faded out
     if (this.amount > 0) {
       sky.lerp(FROST, 0.35 * this.amount * day);
       sun.intensity *= 1 - 0.12 * this.amount;
