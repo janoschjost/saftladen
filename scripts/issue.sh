@@ -128,11 +128,8 @@ case "$cmd" in
     k=$(kind "$n")
     own=""; [ "$k" = pr ] || own=$(claim_assigned "$n")
     gh "$k" comment "$n" --body "$RELEASE — $reason" >/dev/null
-    for l in "$LABEL" "$REVIEW"; do
-      if gh "$k" view "$n" --json labels -q '.labels[].name' | grep -qx "$l"; then
-        gh "$k" edit "$n" --remove-label "$l" >/dev/null
-      fi
-    done
+    # removed unread: right after a claim the label may not show yet, and removing an absent label is a no-op
+    gh "$k" edit "$n" --remove-label "$LABEL" --remove-label "$REVIEW" >/dev/null
     [ -z "$own" ] || gh issue edit "$n" --remove-assignee @me >/dev/null
     echo "released #$n"
     ;;
@@ -168,11 +165,7 @@ $q"
     gh issue comment "$n" --body "✅ Refined, ready for agents:
 
 $summary" >/dev/null
-    for l in question blocked; do
-      if gh issue view "$n" --json labels -q '.labels[].name' | grep -qx "$l"; then
-        gh issue edit "$n" --remove-label "$l" >/dev/null
-      fi
-    done
+    gh issue edit "$n" --remove-label question --remove-label blocked >/dev/null
     unclaim "$n" "refined"
     echo "#$n is ready"
     ;;
