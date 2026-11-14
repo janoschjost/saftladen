@@ -169,9 +169,7 @@ export class Sim {
     }
     if (person) {
       person.held = false;
-      this.social.leave(person);
-      person.interrupt();
-      person.boothCall = false;
+      this.pull(person);
       this.presence.remove(person);
     } else {
       pet!.held = false;
