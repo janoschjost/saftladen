@@ -8,7 +8,7 @@ import type { Vec2 } from './NavGrid';
 import type { Person } from './Person';
 import { setSeed } from './rng';
 import type { Sim } from './Sim';
-import { Affinity, Conversation } from './Social';
+import { Affinity, CROWD_LIMIT, CROWD_RADIUS, Conversation } from './Social';
 
 installHeadlessDom();
 
@@ -294,7 +294,7 @@ describe('talks and groups', () => {
           crowd.forEach((p, i) => {
             const spot = ring[i][1];
             // a walk the crowd rule sent them on: 6–12 s out of talks, to a spot further off
-            if (p.socialCooldown > 5.9 && p.path.length && dist(p.path.at(-1)!, SPOT) > 2.2) sentOff[i]++;
+            if (p.socialCooldown > 5.9 && p.path.length && dist(p.path.at(-1)!, SPOT) > CROWD_RADIUS) sentOff[i]++;
             if (dist(p.pos, spot) > 0.2 || p.path.length || p.task) sim.scenario.put(p.id, spot, 'stay');
           }),
       );
@@ -305,7 +305,7 @@ describe('talks and groups', () => {
 
     // one more than the five bodies a talk tolerates around it, for longer than anybody sits out talks
     const { sim, started, sentOff } = gather([...GROUP, 'celine-buhler']);
-    expect(sim.traffic.bodiesNear(SPOT, 2.2)).toBe(6);
+    expect(sim.traffic.bodiesNear(SPOT, CROWD_RADIUS)).toBe(CROWD_LIMIT + 1);
     expect(started).toBe(false);
     // each of them was sent off again once their cooldown was over
     expect(Math.min(...sentOff)).toBeGreaterThanOrEqual(2);

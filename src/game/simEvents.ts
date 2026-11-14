@@ -8,7 +8,7 @@ import type { Vec2 } from './NavGrid';
 import type { Person } from './Person';
 import { PET_HEIGHT } from './petPose';
 import { random } from './rng';
-import { MAX_GROUP } from './Social';
+import { CROWD_LIMIT, CROWD_RADIUS, MAX_GROUP } from './Social';
 import type { Sim } from './Sim';
 
 export const first = (p: Person): string => p.member.name.split(' ')[0];
@@ -276,8 +276,8 @@ export function registerSimEvents(sim: Sim): void {
     group: 'Meetings',
     label: 'Jemand stösst dazu',
     run: () => {
-      // somebody free walks over to a running talk with room and joins it, greeting first
-      const talk = sim.social.active.find((c) => c.members.length < MAX_GROUP);
+      // somebody free walks over to a running talk with room (not winding up, not in a crowd) and joins it, greeting first
+      const talk = sim.social.active.find((c) => c.phase !== 'bye' && c.members.length < MAX_GROUP && sim.traffic.bodiesNear(c.center, CROWD_RADIUS) <= CROWD_LIMIT);
       if (!talk) return null;
       const [p] = pickFree(1, (o) => !o.talk && !tiedUp(o));
       if (!p) return null;
@@ -292,8 +292,10 @@ export function registerSimEvents(sim: Sim): void {
     label: 'Gedränge (6)',
     run: () => {
       // six stand packed on one spot of the corridor at once: too many for a talk, they clear out
-      const n = 6; // one more than a talk tolerates around it
-      const group = pickFree(n, (o) => !tiedUp(o));
+      // not before the social checks run, else nobody notices the crowd; nobody from a talk (leaving it sets them a cooldown)
+      if (!sim.social.checking) return null;
+      const n = CROWD_LIMIT + 1;
+      const group = pickFree(n, (o) => !o.talk && !tiedUp(o));
       if (group.length < n) return null;
       group.forEach((p, i) => {
         const a = (i * Math.PI * 2) / n;

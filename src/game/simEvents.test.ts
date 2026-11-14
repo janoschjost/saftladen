@@ -7,6 +7,7 @@ import { SIGNALS } from './Chatter';
 import type { Person } from './Person';
 import { PET_HEIGHT } from './petPose';
 import type { Sim } from './Sim';
+import { CROWD_LIMIT, CROWD_RADIUS } from './Social';
 import { first } from './simEvents';
 import type { Walker } from './Walker';
 
@@ -274,12 +275,13 @@ describe('dev events on the Sim', () => {
 
   it('social.join (talk-join): somebody free joins the running talk and greets first; refused without a talk', () => {
     const sim = office();
-    const [a, b, c] = only(sim, GROUP.slice(0, 3));
+    const crew = only(sim, GROUP.slice(0, 3));
     refused(sim, 'talk-join');
-    sim.social.start([a, b], { ...CORRIDOR_POINT }, sim.nav);
-    expect(sim.events.trigger('talk-join')).toBe(`${first(c)} stösst dazu`);
+    sim.events.trigger('meeting-chat');
     const conv = sim.social.active[0];
-    expect(conv.members).toEqual([a, b, c]);
+    const [c] = crew.filter((p) => !conv.members.includes(p));
+    expect(sim.events.trigger('talk-join')).toBe(`${first(c)} stösst dazu`);
+    expect(ids(conv.members)).toEqual(ids(crew));
     expect(c.task?.phase).not.toBe('work');
     expect(run(sim, 30, () => conv.speaker === c && !!conv.text)).toBe(true);
     expect(conv.text).toBe(SIGNALS.join.symbol);
@@ -288,9 +290,10 @@ describe('dev events on the Sim', () => {
   it('social.crowd (crowd): six stand packed in the corridor at once, start no talk and are sent off; refused with five in the office', () => {
     const sim = office();
     const crowd = only(sim, [...GROUP, PHONE]);
-    run(sim, 4); // past the quiet start, in which nobody talks
+    refused(sim, 'crowd'); // in the quiet start nobody would notice the crowd
+    run(sim, 4);
     expect(sim.events.trigger('crowd')).toMatch(/^Gedränge: /);
-    expect(sim.traffic.bodiesNear(CORRIDOR_POINT, 2.2)).toBe(6);
+    expect(sim.traffic.bodiesNear(CORRIDOR_POINT, CROWD_RADIUS)).toBe(CROWD_LIMIT + 1);
     expect(run(sim, 1, () => sim.social.active.length > 0)).toBe(false);
     expect(crowd.every((p) => p.socialCooldown > 0)).toBe(true);
 
