@@ -319,7 +319,7 @@ export class Sim {
     this.kitchen.update(dt, this.people, this.nav);
     this.phoneBooth.update(dt, this.people, this.nav);
     this.toilets.update(dt, this.people, this.nav);
-    this.doors.update(dt, [...this.walkers.filter((w) => !w.away).map((w) => w.pos), ...this.doorsSee()]);
+    this.doors.update(dt, [...this.walkers.filter((w) => !w.away).map((w) => ({ x: w.pos.x, z: w.pos.z, path: w.doorPath ?? undefined })), ...this.doorsSee()]);
     this.coatRacks.update();
     this.separate();
     this.separate();

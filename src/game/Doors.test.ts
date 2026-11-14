@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { DOOR_SWING, type DoorRig } from '../render/officeModel';
 import { installHeadlessDom } from '../test/headlessDom';
 import { GROUP, office, run, STEP } from '../test/office';
-import { Doors, type DoorState } from './Doors';
+import { Doors, type DoorState, type Sight } from './Doors';
 import { setSeed } from './rng';
 import type { Person } from './Person';
 import type { Sim } from './Sim';
@@ -35,7 +35,7 @@ function oneDoor(hinge?: Hinge): {
   doors: Doors;
   door: DoorState;
   rig: DoorRig;
-  step: (secs: number, at?: Array<{ x: number; z: number }>) => void;
+  step: (secs: number, at?: Sight[]) => void;
 } {
   setSeed(1);
   const r = rig(0, 0, hinge);
@@ -44,7 +44,7 @@ function oneDoor(hinge?: Hinge): {
   door.rest = 0;
   door.open = 0;
   door.reroll = 1e9;
-  const step = (secs: number, at: Array<{ x: number; z: number }> = []) => {
+  const step = (secs: number, at: Sight[] = []) => {
     for (let t = 0; t < secs - 1e-9; t += STEP) doors.update(STEP, at);
   };
   return { doors, door, rig: r, step };
@@ -77,6 +77,88 @@ describe('doors', () => {
       expect(swung(rig)).toBeLessThan(0.01);
     });
   }
+
+  describe('door.auto: only for somebody whose route goes through the doorway', () => {
+    // the door at the origin sits in a wall along x (base 0): the doorway is z = 0, |x| <= 0.45
+    it('door.auto: a route across the doorway opens the door, entering and leaving alike', () => {
+      for (const [from, to] of [
+        [
+          { x: 0, z: -1 },
+          { x: 0, z: 2 },
+        ],
+        [
+          { x: 0, z: 1 },
+          { x: 0, z: -2 },
+        ],
+      ]) {
+        const { rig, step } = oneDoor();
+        step(2, [{ ...from, path: [to] }]);
+        expect(swung(rig)).toBeGreaterThan(0.95);
+      }
+    });
+
+    it('door.auto: the same distance along the corridor does not open it', () => {
+      const { rig, step } = oneDoor();
+      step(3, [{ x: -1, z: -0.6, path: [{ x: 1, z: -0.6 }] }]); // passes 0.6 m from the door centre, on one side of the wall
+      expect(swung(rig)).toBeLessThan(0.01);
+      step(3, [{ x: 0.3, z: -0.6, path: [] }]); // standing near it without going anywhere
+      expect(swung(rig)).toBeLessThan(0.01);
+      step(3, [
+        {
+          x: -1,
+          z: -0.6,
+          path: [
+            { x: 0, z: -0.6 },
+            { x: 2, z: 0.8 },
+          ],
+        },
+      ]); // it crosses the wall line at x = 0.86 m, outside the doorway
+      expect(swung(rig)).toBeLessThan(0.01);
+    });
+
+    it('door.auto: a long sparse route that crosses the doorway opens it once within 1.25 m', () => {
+      const { rig, step } = oneDoor();
+      step(2, [{ x: 0.1, z: -1.2, path: [{ x: 0, z: 6 }] }]);
+      expect(swung(rig)).toBeGreaterThan(0.95);
+      const far = oneDoor();
+      far.step(2, [{ x: 0.1, z: -1.4, path: [{ x: 0, z: 6 }] }]); // the route goes through, but it is still 1.4 m away
+      expect(swung(far.rig)).toBeLessThan(0.01);
+    });
+
+    it('door.auto: a door in a wall along z is crossed along x', () => {
+      setSeed(1);
+      const r = rig(0, 0, { swing: 1, base: -Math.PI / 2 });
+      const doors = new Doors([r]);
+      const d = statesOf(doors)[0];
+      d.rest = d.open = 0;
+      d.reroll = 1e9;
+      for (let t = 0; t < 2; t += STEP) doors.update(STEP, [{ x: -0.6, z: 0, path: [{ x: -0.6, z: 3 }] }]);
+      expect(swung(r)).toBeLessThan(0.01);
+      for (let t = 0; t < 2; t += STEP) doors.update(STEP, [{ x: -1, z: 0, path: [{ x: 1, z: 0 }] }]);
+      expect(swung(r)).toBeGreaterThan(0.95);
+    });
+
+    it('door.auto: somebody without a route (the walk-view eye, a steered person) still opens it by proximity', () => {
+      const { rig, step } = oneDoor();
+      step(2, [{ x: 0, z: -0.8 }]);
+      expect(swung(rig)).toBeGreaterThan(0.95);
+    });
+
+    it('door.rest: a passer-by leaves a door at its rest position', () => {
+      const { door, rig, step } = oneDoor();
+      door.rest = 0.3;
+      step(3);
+      step(3, [{ x: -1, z: -0.6, path: [{ x: 1, z: -0.6 }] }]);
+      expect(swung(rig)).toBeCloseTo(0.3, 1);
+    });
+
+    it('door.lock: a locked door stays shut for somebody going through it', () => {
+      const { doors, rig, step } = oneDoor();
+      doors.setLocked({ x: 0, z: 0 }, true);
+      step(3, [{ x: 0, z: -0.8, path: [{ x: 0, z: 2 }] }]);
+      expect(swung(rig)).toBeLessThan(0.01);
+    });
+  });
 
   it('door.auto: whoever keeps standing there keeps the door open', () => {
     const { rig, step } = oneDoor();
@@ -192,6 +274,92 @@ function crew(sim: Sim, ...ids: string[]): Person[] {
   people.forEach((p) => sim.drop(p));
   return people;
 }
+
+describe('door.auto in the office', () => {
+  it('door.auto: somebody walking past the phone booth door in the corridor leaves it shut', () => {
+    const sim = office();
+    const door = doorAt(sim, sim.phoneBooth.doorPos);
+    door.rest = 0;
+    door.open = 0;
+    door.reroll = 1e9;
+    const c = door.rig.center;
+    const p = sim.people.find((q) => q.id === 'oscar-grob')!;
+    sim.scenario.put(p.id, { x: c.x + 3, z: c.z + 0.9 }, 'free');
+    sim.scenario.clear('printer', 'coffee', 'kitchen', 'meeting', 'wc');
+    p.walkTo(sim.nav, { x: c.x - 3, z: c.z + 0.9 }); // along the wall, 0.9 m from the door centre, never through it
+    expect(p.state).toBe('walk');
+    let closest = Infinity;
+    let widest = 0;
+    run(
+      sim,
+      12,
+      () => p.state !== 'walk',
+      () => {
+        closest = Math.min(closest, Math.hypot(p.pos.x - c.x, p.pos.z - c.z));
+        widest = Math.max(widest, door.open);
+      },
+    );
+    expect(closest).toBeLessThan(1.25); // went right past it ...
+    expect(widest).toBeLessThan(0.01); // ... and it stayed shut
+  });
+
+  /** Steps until `done`; counts the steps in which `p` stood in the doorway while the leaf was still shut. */
+  function shutAtDoorway(sim: Sim, door: DoorState, p: Person, done: () => unknown): number {
+    let shut = 0;
+    expect(
+      run(sim, 120, done, () => {
+        if (Math.hypot(p.pos.x - door.rig.center.x, p.pos.z - door.rig.center.z) < 0.3 && door.open < 0.5 && !door.locked) shut++;
+      }),
+    ).toBe(true);
+    return shut;
+  }
+
+  function closed(door: DoorState): void {
+    door.rest = 0;
+    door.open = 0;
+    door.reroll = 1e9;
+  }
+
+  it('door.auto: somebody sent to the phone booth has the door open for them without waiting', () => {
+    const sim = office();
+    const door = doorAt(sim, sim.phoneBooth.doorPos);
+    closed(door);
+    const [p] = crew(sim, 'oscar-grob');
+    expect(sim.phoneBooth.start(p, sim.nav)).toBeTruthy();
+    expect(shutAtDoorway(sim, door, p, () => sim.phoneBooth.current?.calling)).toBe(0); // the leaf was open when they reached it
+  });
+
+  it('door.auto: somebody sent to a toilet cabin has the door open for them without waiting', () => {
+    const sim = office();
+    sim.scenario.clear('wc');
+    const [p] = crew(sim, 'oscar-grob');
+    expect(sim.toilets.go(p, sim.nav)).toBe('cabin');
+    const cabin = sim.toilets.cabins.find((c) => c.session?.person === p)!;
+    const door = doorAt(sim, cabin.doorPos);
+    closed(door);
+    expect(shutAtDoorway(sim, door, p, () => cabin.session?.seated)).toBe(0);
+  });
+
+  it('door.auto: people called to the meeting room have the door open for them without waiting', () => {
+    const sim = office();
+    const door = doorAt(sim, sim.meetingRoom.doorPos);
+    closed(door);
+    const group = crew(sim, ...GROUP.slice(0, 3));
+    sim.meetingRoom.start(group, sim.nav, 'slides');
+    let shut = 0;
+    const seated = run(
+      sim,
+      120,
+      () => sim.meetingRoom.occupants(sim.people) === group.length,
+      () => {
+        for (const p of group)
+          if (Math.hypot(p.pos.x - door.rig.center.x, p.pos.z - door.rig.center.z) < 0.3 && door.open < 0.5 && !door.locked) shut++;
+      },
+    );
+    expect(seated).toBe(true);
+    expect(shut).toBe(0);
+  });
+});
 
 describe('door.lock in the office', () => {
   it('door.lock: the meeting room door is locked while a meeting is on and open to people again afterwards', () => {

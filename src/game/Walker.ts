@@ -89,6 +89,11 @@ export abstract class Walker {
     return false;
   }
 
+  /** The rest of this walker's planned route (for the interior doors: they open for whoever goes through them); null = no plan, the doors open by proximity. */
+  get doorPath(): Vec2[] | null {
+    return this.script ? [this.script.to] : this.path;
+  }
+
   /** Pinned in place: other walkers neither push this one nor get pushed by it. */
   get fixed(): boolean {
     return false;
