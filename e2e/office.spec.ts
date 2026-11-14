@@ -72,3 +72,37 @@ test('select.actions + keys.home: select, send home, call back', async ({ page }
   await page.keyboard.press('h');
   await until(page, (g, id) => g.people.find((o: any) => o.id === id).presence === 'in', picked);
 });
+
+test('presence.door-flow: after "all back" people walk in one by one and move on from the entrance', async ({ page }) => {
+  const errors = await openGame(page);
+  expect(await read(page, (g) => g.presence.away.length)).toBeGreaterThanOrEqual(3);
+  // the roster shares the dock with other panels and may start collapsed
+  const roster = page.locator('#away');
+  await expect(roster).toBeVisible();
+  if (await roster.evaluate((el) => el.classList.contains('is-collapsed'))) await roster.locator('.m-away__title').click();
+  // watch the arrivals every simulation step: how many come through the door at once, and where each one is 4 s after
+  // stepping in (everybody called back comes in, even into the full office: presence.caps)
+  await read(page, (g) => {
+    const r = (g.allBack = { maxIn: 0, dists: [] as number[] });
+    const inAt = new Map<unknown, number>();
+    const last = new Map<unknown, string>();
+    g.tickers.add(() => {
+      const now = g.presence.clock;
+      r.maxIn = Math.max(r.maxIn, g.people.filter((p: { presence: string }) => p.presence === 'returning').length);
+      for (const p of g.people) {
+        if (last.get(p) === 'returning' && p.presence === 'in') inAt.set(p, now);
+        last.set(p, p.presence);
+        const t = inAt.get(p);
+        if (t !== undefined && now - t >= 4) {
+          inAt.delete(p);
+          r.dists.push(Math.hypot(p.pos.x - p.lane.in.x, p.pos.z - p.lane.in.z));
+        }
+      }
+    });
+  });
+  await page.locator('#away-all').click();
+  const r = await until(page, (g) => g.allBack.dists.length >= 3 && g.allBack, undefined, 120_000);
+  expect(r.maxIn).toBeLessThanOrEqual(2);
+  for (const d of r.dists) expect(d).toBeGreaterThan(2);
+  expect(errors).toEqual([]);
+});

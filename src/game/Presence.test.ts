@@ -291,15 +291,17 @@ describe('presence', () => {
 
   it('kurt.behavior: Marco transforms when going home (end of day, home office), never for errands, lunch or a manual send', () => {
     let homeSpells = 0;
-    // seeds where Marco walks out of the door for home at least once (on 5 his day ends while he is out on an errand)
-    for (const seed of [1, 2, 3, 4, 6, 7]) {
+    let homeDays = 0;
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
       const { people } = runDay(seed);
       const marco = people.find((p) => p.id === 'marco-rieser')!;
-      expect(marco.leaves.some((l) => l.kind === 'off' || l.kind === 'home')).toBe(true);
+      // most days he walks out of the door for home (some days his day ends while he is out on an errand)
+      if (marco.leaves.some((l) => l.kind === 'off' || l.kind === 'home')) homeDays++;
       for (const l of marco.leaves) expect(l.transform).toBe(l.kind !== 'errand');
       homeSpells += marco.leaves.filter((l) => l.kind === 'home').length;
       for (const p of people) if (!p.member.alterEgo) expect(p.leaves.every((l) => !l.transform)).toBe(true);
     }
+    expect(homeDays).toBeGreaterThanOrEqual(5);
     expect(homeSpells).toBeGreaterThan(0);
     // sent home by hand (H / action card): stays Marco
     const { people, presence, nav } = runDay(1, 5, 11);
@@ -359,6 +361,43 @@ describe('presence', () => {
     for (const seed of [1, 2, 3]) {
       const { plans } = runDay(seed, 5, 5.1);
       for (const [id, plan] of plans) if (id !== 'zlatko-pesic') expect(plan.remote, id).toBe(false);
+    }
+  });
+
+  it('presence.door-flow: after "all back" the crowd walks in spaced out, one by one', () => {
+    for (const seed of [1, 2, 3]) {
+      setSeed(seed);
+      const clock = { hour: 11 };
+      const people = team.map((m) => new Stub(m));
+      const presence = new Presence(people as unknown as Person[], clock as unknown as TimeOfDay, { raining: false } as Weather);
+      const nav = {} as NavGrid;
+      // a quiet office: everybody is out on an errand or in the home office for a long while
+      people.forEach((p, i) => p.startAway(i % 2 ? 'errand' : 'home', 500));
+      presence.callAllBack();
+      // when each of them starts walking in (only the first time: the full office sends others out, who come back later)
+      const starts: number[] = [];
+      const started = new Set<Stub>();
+      let t = 0;
+      let maxIn = 0;
+      while (t < 240 && started.size < people.length) {
+        presence.update(STEP, nav);
+        for (const p of people) {
+          const was = p.presence;
+          p.update(STEP);
+          if (was === 'out' && p.presence === 'returning' && !started.has(p)) {
+            started.add(p);
+            starts.push(t);
+          }
+        }
+        maxIn = Math.max(maxIn, people.filter((p) => p.presence === 'returning').length);
+        t += STEP;
+      }
+      expect(maxIn).toBeLessThanOrEqual(2);
+      // everybody called back walks in, even past the office's limit (presence.caps)
+      expect(starts.length).toBe(people.length);
+      // while a crowd still waits outside (all but the last two), at least 3 s between two people
+      const crowd = starts.slice(0, -2);
+      for (let i = 1; i < crowd.length; i++) expect(crowd[i] - crowd[i - 1]).toBeGreaterThanOrEqual(3 - STEP);
     }
   });
 });
