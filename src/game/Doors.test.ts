@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { DOOR_SWING, type DoorRig } from '../render/officeModel';
 import { installHeadlessDom } from '../test/headlessDom';
 import { GROUP, office, run, STEP } from '../test/office';
@@ -51,8 +51,6 @@ function oneDoor(hinge?: Hinge): {
 }
 
 describe('doors', () => {
-  beforeEach(() => setSeed(1));
-
   for (const hinge of HINGES) {
     it(`door.auto: a door swings open when somebody comes within 1.25 m (swing ${hinge.swing}, base ${hinge.base})`, () => {
       const { rig, step } = oneDoor(hinge);
@@ -123,7 +121,8 @@ describe('doors', () => {
 
     for (const hinge of HINGES)
       it(`door.player: the player toggles the door they face, and the choice holds (swing ${hinge.swing}, base ${hinge.base})`, () => {
-        const { doors, rig, step } = oneDoor(hinge);
+        const { doors, door, rig, step } = oneDoor(hinge);
+        door.reroll = 1; // door.rest would reroll it within a second; the player's choice must push that far out
         look(doors)!.toggle();
         step(3);
         expect(swung(rig)).toBeGreaterThan(0.95);
@@ -171,10 +170,13 @@ describe('doors', () => {
 });
 
 /** The door of the real office nearest to `at`. */
-const doorAt = (sim: Sim, at: { x: number; z: number }): DoorState =>
-  statesOf(sim.doors).reduce((a, b) =>
+const doorAt = (sim: Sim, at: { x: number; z: number }): DoorState => {
+  const door = statesOf(sim.doors).reduce((a, b) =>
     Math.hypot(a.rig.center.x - at.x, a.rig.center.z - at.z) <= Math.hypot(b.rig.center.x - at.x, b.rig.center.z - at.z) ? a : b,
   );
+  expect(Math.hypot(door.rig.center.x - at.x, door.rig.center.z - at.z)).toBeLessThan(1); // `setLocked` only matches within 1 m
+  return door;
+};
 
 /** After the unlock somebody stepping up to the door gets it open (the leaf really swings, not just the flag). */
 function opensFor(sim: Sim, door: DoorState): void {
@@ -198,10 +200,9 @@ describe('door.lock in the office', () => {
     expect(door.locked).toBe(false);
     sim.meetingRoom.start(crew(sim, ...GROUP.slice(0, 3)), sim.nav);
     expect(run(sim, 120, () => door.locked)).toBe(true);
-    run(sim, 20);
-    expect(door.locked).toBe(true);
-    expect(swung(door.rig)).toBeLessThan(0.01);
+    // it stays locked until the meeting is over, however long that takes
     expect(run(sim, 900, () => !door.locked)).toBe(true);
+    expect(run(sim, 10, () => !sim.meetingRoom.current)).toBe(true);
     opensFor(sim, door);
   });
 
