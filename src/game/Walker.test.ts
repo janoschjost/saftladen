@@ -1,19 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { Goer, separate } from '../test/goer';
+import { Goer } from '../test/goer';
+import { STEP } from '../test/office';
 import { NavGrid } from './NavGrid';
 import { setSeed } from './rng';
+import { separate } from './separate';
 import { Traffic } from './Traffic';
 
 /** Steps two walkers like the game does: traffic (passages), update, then keep the bodies apart and out of the walls. */
 function run(nav: NavGrid, [a, b]: [Goer, Goer], seconds: number): void {
-  const dt = 1 / 60;
   const traffic = new Traffic(nav);
   a.traffic = b.traffic = traffic;
-  for (let t = 0; t < seconds && !(a.arrived && b.arrived); t += dt) {
-    traffic.update(dt, [a, b]);
-    a.update(dt, nav, [a, b]);
-    b.update(dt, nav, [a, b]);
-    separate(nav, [a, b]);
+  for (let t = 0; t < seconds && !(a.arrived && b.arrived); t += STEP) {
+    traffic.update(STEP, [a, b]);
+    a.update(STEP, nav, [a, b]);
+    b.update(STEP, nav, [a, b]);
+    separate([a, b], nav);
   }
 }
 

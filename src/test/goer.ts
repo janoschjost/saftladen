@@ -25,24 +25,3 @@ export class Goer extends Walker {
     return Math.hypot(this.pos.x - this.goal.x, this.pos.z - this.goal.z) < this.reach;
   }
 }
-
-/** Keeps the bodies apart and out of the walls, like `Sim.separate` after each step (without its held / steady / fixed cases). */
-export function separate(nav: NavGrid, ws: readonly Walker[]): void {
-  for (let i = 0; i < ws.length; i++) {
-    for (let j = i + 1; j < ws.length; j++) {
-      const a = ws[i];
-      const b = ws[j];
-      const dx = b.pos.x - a.pos.x;
-      const dz = b.pos.z - a.pos.z;
-      const d = Math.hypot(dx, dz);
-      const min = (a.radius + b.radius) * 1.1;
-      if (d >= min || d < 1e-6) continue;
-      const push = ((min - d) / d) * 0.5;
-      a.pos.x -= dx * push;
-      a.pos.z -= dz * push;
-      b.pos.x += dx * push;
-      b.pos.z += dz * push;
-    }
-  }
-  for (const w of ws) nav.resolve(w.pos, 0.2);
-}
