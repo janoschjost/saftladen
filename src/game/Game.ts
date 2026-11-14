@@ -244,7 +244,7 @@ export class Game {
     this.roof = model.roof;
     this.entrance = model.entrance;
     this.meetingLight = new RoomLight(this.scene, model.meeting.lamp, this.tod, () => this.meetingRoom.occupants(this.people));
-    this.views = new Views(stage, this.renderer.domElement, this.nav, (mode) => {
+    this.views = new Views(stage, this.renderer.domElement, this.sim.walkColliders, (mode) => {
       this.roof.visible = mode === 'walk' ? true : mode === 'plan' || mode === 'third' ? false : this.roofWanted;
       if (mode !== 'third' && this.day && this.day.state !== 'waiting') this.endDay(false); // the player switched the camera away
       if (mode !== 'orbit') this.handBack(); // the camera is the player's again
@@ -256,7 +256,6 @@ export class Game {
     });
     this.views.onUserCamera = () => this.handBack();
     this.dayHud = new DayHud(() => this.endDay());
-    this.views.setDoorways(model.doors.map((d) => ({ x: d.center.x, z: d.center.z, r: d.width / 2 })));
     this.overlay = new Overlay();
     this.overlay.onNames = (on) => this.settings?.setNames(on);
     this.roster = new Roster(

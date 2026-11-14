@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import type { NavGrid } from '../game/NavGrid';
+import { walkFree, type WalkColliders } from '../game/walkCollision';
 import { makeCollapsible } from '../ui/collapsible';
 import { blendShot, easeInOut, FLY_TIME, shotFrom, shotPosition, TRAIL, type Shot } from './cameraFly';
 import { IsoCamera } from './IsoCamera';
@@ -147,8 +147,6 @@ export class Views {
   private center = new THREE.Vector3(WORLD.width / 2, 0, WORLD.depth / 2);
   private aspect = 1;
   private keys = new Set<string>();
-  /** doorway centres: the nav grid is coarser than a door, so these openings are always passable for the player */
-  private doorSpots: Array<{ x: number; z: number; r: number }> = [];
   private yaw = -Math.PI / 2; // looking along +x (down the corridor)
   private pitch = -0.05;
   /** smoothed view angles that the camera really uses; yaw / pitch are the targets the mouse sets */
@@ -182,7 +180,7 @@ export class Views {
   constructor(
     private stage: HTMLElement,
     canvas: HTMLElement,
-    private nav: NavGrid,
+    private colliders: WalkColliders,
     private onChange: (mode: ViewMode) => void,
   ) {
     this.iso = new IsoCamera(stage);
@@ -265,10 +263,6 @@ export class Views {
       this.planCtl.update();
     }
     if (withMode && s.mode && s.mode !== this.mode && ['iso', 'orbit', 'plan', 'walk'].includes(s.mode)) this.setMode(s.mode, true);
-  }
-
-  setDoorways(spots: Array<{ x: number; z: number; r: number }>): void {
-    this.doorSpots = spots;
   }
 
   /** Where the walk-mode eye is (floor metres) and which way it looks (unit vector on the floor). */
@@ -502,15 +496,9 @@ export class Views {
     this.persp.rotation.set(this.viewPitch + Math.sin(this.bob * 2 + 1) * 0.004 * this.bobAmp, this.viewYaw, this.roll + Math.sin(this.bob) * 0.004 * this.bobAmp);
   }
 
-  /** Walkable at p, with a little clearance (checks the four sides of the body). */
+  /** The player's body fits at (x, z): clear of walls and furniture, on the office floor. */
   private free(x: number, z: number): boolean {
-    if (this.doorSpots.some((d) => Math.hypot(x - d.x, z - d.z) < d.r)) return true;
-    const r = WALK_RADIUS;
-    for (const [ox, oz] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) {
-      const c = this.nav.toCell({ x: x + ox, z: z + oz });
-      if (!this.nav.walkable(c.cx, c.cz)) return false;
-    }
-    return true;
+    return walkFree(x, z, WALK_RADIUS, this.colliders);
   }
 
   private bind(): void {
