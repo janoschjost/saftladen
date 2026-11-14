@@ -1,4 +1,4 @@
-import { random } from './rng';
+import { fxRandom as random } from './rng'; // presentation, runs per frame: never shifts the simulation's dice
 import { screenKindOf } from '../data/screens';
 import type { ScreenKind } from '../render/screens';
 
