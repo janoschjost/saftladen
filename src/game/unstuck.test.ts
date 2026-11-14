@@ -38,4 +38,15 @@ describe('move.unstuck', () => {
     expect(run(sim, 60, () => inCabin(sim, a))).toBe(true);
   });
 
+  it('move.unstuck: somebody who stood up and is walled in where they stand steps to the nearest free cell and walks on', () => {
+    const { sim, a, force } = atDesk();
+    expect(force(ANDREA, 'wc')).toBe('Andrea: WC');
+    // after standing up, everything around her fills up: no route from her cell any more
+    const { cx, cz } = sim.nav.toCell(a.pos);
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (dx || dz) sim.scenario.block(cx + dx, cz + dz);
+    const stood = { ...a.pos };
+    expect(sim.nav.findPath(stood, sim.toilets.cabins[0].seat.approach)).toEqual([]);
+    expect(run(sim, 5, () => away(a, stood) > 1.5)).toBe(true);
+    expect(run(sim, 60, () => inCabin(sim, a))).toBe(true);
+  });
 });

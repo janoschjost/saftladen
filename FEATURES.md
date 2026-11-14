@@ -119,6 +119,7 @@ Rules:
 - `move.passages` Narrow passages (doorways, corridors, gaps between desks, found from the nav grid) carry one direction at a time: oncoming walkers wait beside the entrance, sides take turns, head-on inside → one backs out; deadlock fallback detour → give way → push through; nobody loiters inside — `src/game/Passages.ts` (#3)
 - `move.passing` Keep right head-on, slow when close, back off nose to nose (only one of two walkers coming at each other backs off, the other edges past), re-plan or give up when stuck; idle people shuffle aside — `src/game/Walker.ts`, test: `src/game/Walker.test.ts`, url: `/?seed=1&time=11&event=foosball` (#39)
 - `move.collision` Overlapping walkers are pushed apart; walls and furniture are solid — `src/game/Sim.ts`, `src/game/NavGrid.ts`, test: `src/game/Sim.test.ts`, url: `/?seed=1&time=11` (#110)
+- `move.unstuck` Standing up from a desk, people step out where a way into the office leads on (the cell behind the chair, or the closest one next to it when that is walled in); somebody who stood up to go somewhere and has not got away within 2 s steps straight to the nearest free cell with a way on and walks on — `src/game/Person.ts`, `src/game/Office.ts`, `src/game/NavGrid.ts`, test: `src/game/unstuck.test.ts`, `src/game/NavGrid.test.ts`, url: `/?seed=1&time=11` (#133)
 
 ## Doors
 - `door.auto` Interior doors swing open within 1.25 m and stay open 0.9 s after — `src/game/Doors.ts`
