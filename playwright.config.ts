@@ -1,21 +1,50 @@
-import { createHash } from 'node:crypto';
-import { statSync } from 'node:fs';
+import { readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
 
+const alive = (pid: number): boolean => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === 'EPERM';
+  }
+};
+
 /**
  * Own port, so the e2e run never talks to a dev server (5173 main, 5174+ worktrees) or to the e2e run of another
- * checkout: the main checkout (and CI) 5199, a worktree a fixed port in 5200–5299 taken from its path. Fixed, not "the
- * next free one": two runs started together would both find the same port free, and the runner and its workers each
- * load this file. `E2E_PORT` wins.
+ * checkout running at the same time: the first port from 5199 that no other run holds. A run holds its port with a lock
+ * file in the temp folder, created only if absent (two runs starting together cannot both get it), and removed when the
+ * run ends; a lock whose run is gone is taken over. The runner picks the port once and hands it to its workers (they
+ * load this file again) through `E2E_PORT`, which also overrides the pick. A second run in the same checkout stops: it
+ * would rebuild `dist-e2e` under the first one.
  */
 function e2ePort(): number {
-  const dir = fileURLToPath(new URL('.', import.meta.url));
-  const inWorktree = statSync(`${dir}.git`, { throwIfNoEntry: false })?.isFile() ?? false; // a file in a worktree, a directory in the main checkout
-  return inWorktree ? 5200 + (createHash('sha1').update(dir).digest().readUInt32BE(0) % 100) : 5199;
+  const dir = realpathSync(fileURLToPath(new URL('.', import.meta.url)));
+  for (let port = 5199; port < 5299; port++) {
+    const lock = join(tmpdir(), `saftladen-e2e-${port}.lock`);
+    try {
+      writeFileSync(lock, `${process.pid}\n${dir}`, { flag: 'wx' });
+    } catch {
+      const [pid, owner] = readFileSync(lock, 'utf8').split('\n');
+      if (!alive(Number(pid))) {
+        rmSync(lock, { force: true });
+        port--; // try this port again
+        continue;
+      }
+      if (owner === dir) throw new Error(`another e2e run in this checkout (pid ${pid}) is still running on :${port}`);
+      continue;
+    }
+    process.on('exit', () => rmSync(lock, { force: true }));
+    process.env.E2E_PORT = String(port);
+    return port;
+  }
+  throw new Error('no free e2e port in 5199–5298');
 }
 
-const port = Number(process.env.E2E_PORT ?? e2ePort());
+const port = Number(process.env.E2E_PORT || e2ePort());
 
 export default defineConfig({
   testDir: 'e2e',
