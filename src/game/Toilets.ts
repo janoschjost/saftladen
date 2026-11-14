@@ -163,15 +163,19 @@ export class Toilets {
     return !!cabin.session || !!cabin.seat.occupant;
   }
 
+  /** A cabin is free, or there is still a place to wait in front. */
+  get hasRoom(): boolean {
+    return this.cabins.some((c) => !this.isOccupied(c)) || (this.queue.length < QUEUE_MAX && this.waitSpots.length > 0);
+  }
+
   /** Sends `person` (already dropped from desk / conversation) to the toilet: into a free cabin, else into the queue. Null when the queue is full too. */
   go(person: Person, nav: NavGrid): ToiletVisit {
-    if (this.queue.some((w) => w.person === person) || this.cabins.some((c) => c.session?.person === person)) return null;
+    if (!this.hasRoom || this.queue.some((w) => w.person === person) || this.cabins.some((c) => c.session?.person === person)) return null;
     const cabin = this.cabins.find((c) => !this.isOccupied(c));
     if (cabin) {
       this.enter(cabin, person, nav);
       return 'cabin';
     }
-    if (this.queue.length >= QUEUE_MAX || !this.waitSpots.length) return null;
     const spot = this.waitSpots.find((s) => !this.queue.some((w) => w.spot === s)) ?? this.waitSpots[0];
     const center = this.cabins.length ? { x: this.cabins.reduce((s, c) => s + c.doorPos.x, 0) / this.cabins.length, z: this.cabins[0].doorPos.z } : spot;
     const talk: Talk = { kind: 'chat', center, members: [person] };

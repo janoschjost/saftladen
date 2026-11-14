@@ -245,9 +245,19 @@ export class MeetingRoom {
     this.onClosed(closed);
   }
 
+  /** Chairs a new meeting could take: none while one is on. */
+  get emptySeats(): number {
+    return this.current ? 0 : this.seats.filter((s) => !s.occupant).length;
+  }
+
+  /** No meeting on and at least two chairs empty: one can start. */
+  get free(): boolean {
+    return this.emptySeats >= 2;
+  }
+
   /** Calls `people` to the room (first free seats, north to south). Returns the meeting, or null if there is no room for a meeting. */
   start(people: Person[], nav: NavGrid, screen?: TvMode): Meeting | null {
-    if (this.current) return null;
+    if (!this.free) return null;
     // side chairs first (north to south), the two head chairs only when the group is big
     const isHead = (s: MeetSeat) => Math.abs(Math.cos(s.yaw)) > 0.5; // heads face north / south
     const seats = this.seats.filter((s) => !s.occupant).sort((a, b) => Number(isHead(a)) - Number(isHead(b)) || a.seat.z - b.seat.z || a.seat.x - b.seat.x);

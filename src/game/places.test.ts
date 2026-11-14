@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { installHeadlessDom } from '../test/headlessDom';
+import { GROUP, office, run, STEP } from '../test/office';
 import { forceRunner, simForceCtx } from './forceCtx';
 import type { Person } from './Person';
 import { PET_HEIGHT } from './petPose';
-import { setSeed } from './rng';
 import { Sim } from './Sim';
-import { cycleOf } from './TimeOfDay';
-import { Walker } from './Walker';
 
 installHeadlessDom();
 
@@ -15,25 +13,6 @@ installHeadlessDom();
  * headless office with the scene set by `sim.scenario`. That `?event=` starts them is one wiring test in
  * `e2e/events.spec.ts`.
  */
-
-const STEP = 1 / 60;
-
-function office(homes = false): Sim {
-  setSeed(1);
-  const sim = new Sim({ cycle: cycleOf(11), homes });
-  Walker.animate = true;
-  return sim;
-}
-
-/** Steps until `done` (true) or `seconds` of game time have passed (false). */
-function run(sim: Sim, seconds: number, done: () => unknown = () => false, each: () => void = () => {}): boolean {
-  for (let i = 0; i < seconds / STEP; i++) {
-    if (done()) return true;
-    sim.step(STEP);
-    each();
-  }
-  return !!done();
-}
 
 /** These people at their desks, kept in the office for the test, pulled out of the chair for what comes next. */
 function crew(sim: Sim, ...ids: string[]): Person[] {
@@ -44,8 +23,6 @@ function crew(sim: Sim, ...ids: string[]): Person[] {
   people.forEach((p) => sim.drop(p));
   return people;
 }
-
-const GROUP = ['oscar-grob', 'andrew-jelley', 'linda-peter', 'milica-rakic', 'alyosha-krajnc'];
 
 describe('places', () => {
   it('place.meeting: people called out of their chair stand up and walk to the room, nobody glides sitting', () => {
@@ -198,7 +175,7 @@ describe('office', () => {
     ['all eight home offices taken', true],
   ] as const) {
     it(`office.coat-stands: coats on the stands = people in the office (${name}), also after people come and go`, () => {
-      const sim = office(homes);
+      const sim = office({ homes });
       const pegs = sim.model.coatRacks.reduce((n, r) => n + r.pegs.length, 0);
       const check = () => {
         const inside = sim.people.filter((p) => p.presence === 'in').length;

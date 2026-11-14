@@ -97,9 +97,14 @@ export class PhoneBooth {
     }
   }
 
+  /** Nobody in the box. */
+  get free(): boolean {
+    return !this.current && !!this.seat && !this.seat.occupant;
+  }
+
   /** Sends one person (already dropped from desk / conversation) into the box. Null if it is taken. */
   start(person: Person, nav: NavGrid): PhoneBoothSession | null {
-    if (this.current || !this.seat || this.seat.occupant) return null;
+    if (!this.free || !this.seat) return null;
     const session = new PhoneBoothSession(person, this.seat.seat);
     person.callToMeeting(nav, this.seat, session);
     this.current = session;
@@ -108,7 +113,7 @@ export class PhoneBooth {
 
   /** The player dropped `person` on the stool: they sit down right away and take a call. False if the box is taken. */
   sitIn(person: Person): boolean {
-    if (this.current || !this.seat || this.seat.occupant) return false;
+    if (!this.free || !this.seat) return false;
     const session = new PhoneBoothSession(person, this.seat.seat);
     if (!person.sitDownAtMeeting(this.seat, session)) return false;
     this.current = session;

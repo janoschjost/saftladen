@@ -213,9 +213,14 @@ export class Kitchen {
     this.users = this.users.map((u) => (u === p ? null : u));
   }
 
+  /** No break running and nobody at the machine: a break can start. */
+  get free(): boolean {
+    return !this.current && !this.users.some(Boolean);
+  }
+
   /** Calls `people` to the kitchen (they must be free). Returns the break, or null when one is already on or there is no room. */
   start(people: Person[], nav: NavGrid): CoffeeBreak | null {
-    if (this.current || people.length < 2 || this.users.some(Boolean)) return null; // somebody still stands at the machine: kitchen is full
+    if (!this.free || people.length < 2) return null; // somebody still stands at the machine: kitchen is full
     const c = this.model.center;
     const group = people.slice(0, GROUP.max);
     // spread the circle around the centre starting where the first person comes from: walks cross less

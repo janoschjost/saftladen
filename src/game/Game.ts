@@ -11,7 +11,6 @@ import { Bubbles } from '../render/Bubbles';
 import { DayHud } from '../ui/DayHud';
 import { DAY_STORIES } from '../data/dayStories';
 import { formatTime, type DayCtx, type DayTask } from './Day';
-import { CORRIDOR_POINT } from '../render/officeModel';
 import { buildWorld, WORLD } from '../render/World';
 import { Actions } from '../ui/Actions';
 import { ActionSheet, PREVIEW, type SheetPick } from '../ui/ActionSheet';
@@ -29,7 +28,7 @@ import { overlaySection } from '../ui/devOverlays';
 import { DebugOverlays, type OverlayKind } from './DebugOverlays';
 import { Settings } from '../ui/Settings';
 import { TimeControl } from '../ui/TimeControl';
-import { devEvents } from './DevEvents';
+import { exposeDevConsole } from './DevEvents';
 import { DeskLights } from './DeskLights';
 import type { Desk } from './Office';
 import { RoomLight } from './RoomLight';
@@ -44,9 +43,10 @@ import { setTvMode } from '../render/screens';
 import { Person } from './Person';
 import { strings } from '../i18n/strings';
 import { RoomEditor } from './RoomEditor';
-import { CROUCH_SECONDS, LEG_ORDER, PET_HEIGHT, petPose, smooth } from './petPose';
+import { CROUCH_SECONDS, LEG_ORDER, petPose, smooth } from './petPose';
 import { applySky, type SkyRig } from './TimeOfDay';
 import { Sim } from './Sim';
+import { first } from './simEvents';
 import { Walker } from './Walker';
 import { kurtOnScreen } from './AlterEgo';
 import { random } from './rng';
@@ -78,8 +78,9 @@ export class Game {
   private get people(): Sim['people'] { return this.sim.people; }
   private get pets(): Sim['pets'] { return this.sim.pets; }
   private get social(): Sim['social'] { return this.sim.social; }
-  private get traffic(): Sim['traffic'] { return this.sim.traffic; }
   private get presence(): Sim['presence'] { return this.sim.presence; }
+  /** everything a developer can set off by hand: the simulation's events plus the view's */
+  get events(): Sim['events'] { return this.sim.events; }
   /** states a scene (tests, the console): `__game.scenario.put('marco', 'desk')` */
   get scenario(): Sim['scenario'] { return this.sim.scenario; }
   private get tod(): Sim['tod'] { return this.sim.tod; }
@@ -87,7 +88,6 @@ export class Game {
   private get petCare(): Sim['petCare'] { return this.sim.petCare; }
   private get doors(): Sim['doors'] { return this.sim.doors; }
   private get meetingRoom(): Sim['meetingRoom'] { return this.sim.meetingRoom; }
-  private get pod(): Sim['pod'] { return this.sim.pod; }
   private get kitchen(): Sim['kitchen'] { return this.sim.kitchen; }
   private get phoneBooth(): Sim['phoneBooth'] { return this.sim.phoneBooth; }
   private get toilets(): Sim['toilets'] { return this.sim.toilets; }
@@ -230,6 +230,8 @@ export class Game {
       doorsSee: () => (this.views?.mode === 'walk' ? [this.views.eye] : []),
       // disco: everybody who is up stops and dances on the spot; an angry person stands and fumes
       stands: (w) => (this.easter.disco > 0.3 && w instanceof Person && w.inOffice && w.sit < 0.05 && !w.held && !w.controlled) || this.easter.angry?.who === w,
+      // a dev event points at somebody: selected
+      point: (w) => (this.selected = w),
       prepare: (m) => (this.editor = new RoomEditor(this.scene, m.items, WORLD, () => this.sim.relayout())),
     });
     const model = this.model;
@@ -307,19 +309,20 @@ export class Game {
     this.ring.visible = false;
     this.scene.add(this.ring);
 
+    exposeDevConsole(this.events);
     if (import.meta.env.DEV || import.meta.env.MODE === 'e2e') {
       this.debug = new DebugOverlays(this.scene);
       registerDevSection(overlaySection(this.debug));
       // console: dev.overlay('grid' | 'states' | 'paths', true)
       Object.assign((window as unknown as { dev: object }).dev, { overlay: (kind: OverlayKind, on = true) => this.debug?.set(kind, on) });
     }
-    new DevPanel();
-    this.registerDevEvents();
+    this.registerViewEvents();
+    new DevPanel(this.events);
     this.now = new NowChip(
       () => this.toggleActionFollow(),
       () => this.endAction(true),
     );
-    this.sheet = new ActionSheet({
+    this.sheet = new ActionSheet(this.events, {
       onPick: (pick) => this.runAction(pick),
       onPreviews: (items) => (this.previews = items),
       onToggle: (open) => open && this.settings.setOpen(false),
@@ -744,367 +747,34 @@ export class Game {
     }
   }
 
-  /** Everything the dev panel can trigger. New behaviour: register another event here (or anywhere via `devEvents.register`). */
-  private registerDevEvents(): void {
-    const free = () => this.people.filter((p) => p.inOffice && !p.held && !p.controlled);
-    /** Pulls a person out of their conversation / desk / printer run so a dev event can take over. */
-    const drop = (p: Person) => this.sim.drop(p);
-    const pickFree = (n: number): Person[] => {
-      const pool = free().sort(() => random() - 0.5);
-      return pool.slice(0, n);
-    };
-    const meeting = (n: number) => () => {
-      const group = pickFree(n);
-      if (group.length < 2) return null;
-      group.forEach(drop);
-      this.social.start(group, { ...CORRIDOR_POINT }, this.nav);
-      return `Meeting mit ${group.length}: ${group.map((p) => p.member.name.split(' ')[0]).join(', ')}`;
-    };
-    devEvents.register({
-      id: 'meeting-room',
-      group: 'Meetings',
-      label: 'Besprechungsraum (5)',
-      run: () => {
-        if (this.meetingRoom.current) return null;
-        const group = pickFree(5);
-        if (group.length < 2) return null;
-        group.forEach(drop);
-        const m = this.meetingRoom.start(group, this.nav, 'slides');
-        return m ? `Besprechung mit ${group.length}: ${group.map((p) => p.member.name.split(' ')[0]).join(', ')}` : null;
-      },
-    });
-    devEvents.register({
-      id: 'meeting-kart',
-      group: 'Meetings',
-      label: 'Mittags-Mariokart (3)',
-      run: () => {
-        if (this.meetingRoom.current) return null;
-        const group = pickFree(3);
-        if (group.length < 2) return null;
-        group.forEach(drop);
-        const m = this.meetingRoom.start(group, this.nav, 'kart');
-        return m ? `Kart-Runde mit ${group.length}: ${group.map((p) => p.member.name.split(' ')[0]).join(', ')}` : null;
-      },
-    });
-    devEvents.register({
-      id: 'meeting-room-status',
-      group: 'Meetings',
-      label: 'Besprechung: Status',
-      run: () => {
-        const m = this.meetingRoom.current;
-        return m ? `${m.phase} ${m.members.map((p) => `${p.member.name.split(' ')[0]}:${p.meetPhase}/${p.state}/${p.path.length}@${p.pos.x.toFixed(1)},${p.pos.z.toFixed(1)}`).join(' ')}` : 'keine Besprechung';
-      },
-    });
-    devEvents.register({
-      id: 'meeting-room-end',
-      group: 'Meetings',
-      label: 'Besprechung beenden',
-      run: () => {
-        const m = this.meetingRoom.current;
-        if (!m) return null;
-        m.members.forEach((p) => p.dismissMeeting());
-        return 'Besprechung beendet';
-      },
-    });
-    for (const kind of ['dog', 'cat'] as const) {
-      devEvents.register({
-        id: `pet-${kind}`,
-        group: 'Tiere',
-        label: kind === 'dog' ? 'Hund streicheln' : 'Katze streicheln',
-        run: () => {
-          const ofKind = this.pets.filter((d) => d.isCat === (kind === 'cat'));
-          const pet = ofKind.find((d) => !d.away && !d.fixed && !d.petted && !d.held && d.owner.inOffice && !d.owner.held && !d.owner.controlled);
-          if (!pet) {
-            if (ofKind.some((d) => d.owner.inOffice)) return null; // an owner is in, their pet just busy: try again in a moment
-            // the owner is out or on the way out: call them back, the event is retried until they and the pet are in
-            const out = ofKind.find((d) => d.owner.presence === 'out' || d.owner.presence === 'leaving')?.owner;
-            if (out) this.presence.callBack(out);
-            return null;
-          }
-          const p = pet.owner;
-          drop(p);
-          if (!p.petDog(pet.pos, 30, PET_HEIGHT[kind])) return null;
-          pet.petBy(p, 30, this.nav);
-          return `${p.member.name.split(' ')[0]} streichelt ${pet.name}`;
-        },
-      });
-    }
-    devEvents.register({
-      id: 'pet-passage',
-      group: 'Tiere',
-      label: 'Tier in einen Durchgang setzen',
-      run: () => {
-        // a pet of a seated owner is put into the nearest passage: it gets up and lies down beside the owner again, out of the way
-        const pet = this.pets.find((d) => !d.away && !d.held && d.owner.inOffice && d.owner.sit > 0.5);
-        if (!pet) return null;
-        const { nav } = this;
-        const o = nav.toCell(pet.owner.pos);
-        let best: { x: number; z: number } | null = null;
-        let bestD = Infinity;
-        for (let dz = -8; dz <= 8; dz++) {
-          for (let dx = -8; dx <= 8; dx++) {
-            const cx = o.cx + dx;
-            const cz = o.cz + dz;
-            if (!nav.walkable(cx, cz) || this.traffic.passages.atIndex(cz * nav.cols + cx) < 0) continue;
-            const d = Math.hypot(dx, dz);
-            if (d >= 2 && d < bestD) {
-              bestD = d;
-              best = nav.center(cx, cz);
-            }
-          }
-        }
-        if (!best) return null;
-        pet.placeAt(best);
-        this.selected = pet;
-        return `${pet.name} liegt im Durchgang`;
-      },
-    });
-    devEvents.register({
-      id: 'pod',
-      group: 'Meetings',
-      label: 'Zwei ins Holzhaus',
-      run: () => {
-        if (this.pod.current) return null;
-        const group = pickFree(2);
-        if (group.length < 2) return null;
-        group.forEach(drop);
-        return this.pod.start(group, this.nav) ? `${group.map((p) => p.member.name.split(' ')[0]).join(' + ')} setzen sich ins Holzhaus` : null;
-      },
-    });
-    devEvents.register({
-      id: 'pod-end',
-      group: 'Meetings',
-      label: 'Holzhaus leeren',
-      run: () => {
-        const s = this.pod.current;
-        if (!s) return null;
-        s.abort();
-        return 'Holzhaus wird verlassen';
-      },
-    });
-    devEvents.register({
-      id: 'coffee',
-      group: 'Meetings',
-      label: 'Kaffeepause (3)',
-      run: () => {
-        if (this.kitchen.current) return null;
-        const group = pickFree(3);
-        if (group.length < 2) return null;
-        group.forEach(drop);
-        return this.kitchen.start(group, this.nav) ? `Kaffeepause: ${group.map((p) => p.member.name.split(' ')[0]).join(', ')}` : null;
-      },
-    });
-    devEvents.register({
-      id: 'coffee-end',
-      group: 'Meetings',
-      label: 'Kaffeepause beenden',
-      run: () => {
-        const b = this.kitchen.current;
-        if (!b) return null;
-        b.end();
-        return 'Kaffeepause beendet';
-      },
-    });
-    devEvents.register({ id: 'meeting-chat', group: 'Meetings', label: 'Gespräch (2)', run: meeting(2) });
-    devEvents.register({ id: 'meeting-small', group: 'Meetings', label: 'Meeting (4)', run: meeting(4) });
-    devEvents.register({ id: 'meeting-big', group: 'Meetings', label: 'Meeting (6)', run: meeting(6) });
-    devEvents.register({
-      id: 'break-talks',
-      group: 'Meetings',
-      label: 'Gespräche beenden',
-      run: () => {
-        const n = this.social.active.length;
-        this.social.active.slice().forEach((c) => c.members.slice().forEach((m) => this.social.leave(m)));
-        return `${n} Gespräche beendet`;
-      },
-    });
-
-    for (const p of this.people.filter((o) => o.member.look.vape)) {
-      const first = p.member.name.split(' ')[0];
-      devEvents.register({
-        id: `vape-${p.id}`,
-        group: 'Aktionen',
-        label: `${first} dampft`,
-        run: () => {
-          if (!p.inOffice) {
-            this.presence.callBack(p);
-            return strings.presence.event.calledBack(first);
-          }
-          if (p.held) return null;
-          drop(p);
-          p.startVape(2);
-          if (this.selected !== p) this.selected = p;
-          return `${first} dampft`;
-        },
-      });
-    }
-    for (const p of this.people.filter((o) => o.member.look.phone)) {
-      const first = p.member.name.split(' ')[0];
-      devEvents.register({
-        id: `phone-${p.id}`,
-        group: 'Aktionen',
-        label: `${first} telefoniert`,
-        run: () => {
-          if (!p.inOffice) {
-            this.presence.callBack(p);
-            return strings.presence.event.calledBack(first);
-          }
-          if (p.held) return null;
-          drop(p);
-          p.startPhone(this.nav);
-          if (this.selected !== p) this.selected = p;
-          return `${first} telefoniert`;
-        },
-      });
-    }
-    devEvents.register({
-      id: 'phone-booth',
-      group: 'Aktionen',
-      label: 'Jemand telefoniert in der Kabine',
-      run: () => {
-        if (this.phoneBooth.current) return null;
-        const p = pickFree(1).find((o) => o.member.look.phone) ?? this.people.find((o) => o.member.look.phone && o.inOffice && !o.held && !o.talk && !o.meetJob);
-        if (!p) {
-          // only phone people use the booth: call one back, the next try (e.g. `?event=phone-booth` retries) sends them in
-          const away = this.people.find((o) => o.member.look.phone && o.presence === 'out');
-          if (away) this.presence.callBack(away);
-          return null;
-        }
-        drop(p);
-        return this.phoneBooth.start(p, this.nav) ? `${p.member.name.split(' ')[0]} geht telefonieren in die Kabine` : null;
-      },
-    });
-    devEvents.register({
-      id: 'phone-booth-end',
-      group: 'Aktionen',
-      label: 'Telefonkabine leeren',
-      run: () => {
-        const s = this.phoneBooth.current;
-        if (!s) return null;
-        s.abort();
-        return 'Kabine wird verlassen';
-      },
-    });
-    devEvents.register({
-      id: 'toilet',
-      group: 'Aktionen',
-      label: 'Jemand geht aufs WC (Gameboy)',
-      run: () => {
-        const p = pickFree(1).find((o) => !o.talk && !o.inMeeting);
-        if (!p) return null;
-        drop(p);
-        const first = p.member.name.split(' ')[0];
-        const r = this.toilets.go(p, this.nav);
-        return r === 'cabin' ? `${first} geht aufs WC` : r === 'queue' ? `${first} wartet vor dem WC` : null;
-      },
-    });
-    devEvents.register({
-      id: 'toilet-end',
-      group: 'Aktionen',
-      label: 'WCs leeren',
-      run: () => {
-        if (!this.toilets.cabins.some((c) => c.session) && !this.toilets.queue.length) return null;
-        this.toilets.abort();
-        return 'WCs werden verlassen';
-      },
-    });
-    devEvents.register({
-      id: 'printer',
-      group: 'Aktionen',
-      label: 'Jemand druckt',
-      run: () => {
-        const p = pickFree(1)[0];
-        if (!p) return null;
-        drop(p);
-        return p.startPrint(this.nav) ? `${p.member.name.split(' ')[0]} druckt` : null;
-      },
-    });
-
-    devEvents.register({
-      id: 'foosball',
-      group: 'Aktionen',
-      label: 'Zwei spielen Kicker',
-      run: () => {
-        const f = this.office.foosball;
-        const [a, b] = pickFree(2);
-        if (!f?.free || !b) return null;
-        drop(a);
-        drop(b);
-        return f.start(a, b, this.nav) ? `${a.member.name.split(' ')[0]} und ${b.member.name.split(' ')[0]} spielen Kicker` : null;
-      },
-    });
-
-    devEvents.register({
-      id: 'door-lettering',
-      group: 'Aktionen',
-      label: 'Beschriftete Türen auf / zu',
-      run: () => (this.doors.toggleLettered() ? 'Beschriftete Türen gehen auf' : 'Beschriftete Türen gehen zu'),
-    });
-
-    const away = (kind: 'errand' | 'home') => () => {
-      const p = pickFree(1)[0];
-      // a full home office: somebody gives up their room for them (and comes back to the office)
-      if (!p || !this.presence.send(p, kind, this.nav, true)) return null;
-      this.release(p);
-      return strings.presence.event.leaves[kind](p.member.name.split(' ')[0]);
-    };
-    devEvents.register({ id: 'errand', group: strings.presence.event.group, label: strings.presence.event.someoneLeaves.errand, run: away('errand') });
-    devEvents.register({ id: 'home', group: strings.presence.event.group, label: strings.presence.event.someoneLeaves.home, run: away('home') });
-    const zlatko = () => this.people.find((p) => p.member.schedule.visitChance !== undefined);
-    devEvents.register({
-      id: 'remote-visit',
-      group: strings.presence.event.group,
-      label: strings.presence.event.remoteVisit,
-      run: () => {
-        const p = zlatko();
-        if (!p || p.inOffice) return null; // already here
-        this.presence.setVisit(p, true);
-        this.presence.callBack(p);
-        return strings.presence.event.visits(p.member.name.split(' ')[0]);
-      },
-    });
-    devEvents.register({
+  /** The dev events that need the view; the ones that only touch the simulation live with it (`simEvents.ts`). */
+  private registerViewEvents(): void {
+    const group = strings.presence.event.group;
+    this.events.register({
       id: 'remote-son',
-      group: strings.presence.event.group,
+      group,
       label: strings.presence.event.remoteSon,
       run: () => {
-        const p = zlatko();
+        const p = this.presence.remoteWorker;
         if (!p?.member.son || !this.presence.roomFor(p)) return null;
         // a remote day again: his plan sends him to the home office (a room is freed if need be), the son comes once he is there
         this.presence.setVisit(p, false);
         this.release(p);
         this.sonCalls++;
-        return strings.presence.event.sonComes(p.member.name.split(' ')[0]);
+        return strings.presence.event.sonComes(first(p));
       },
     });
-    devEvents.register({
-      id: 'pet-errand',
-      group: strings.presence.event.group,
-      label: 'Jemand mit Haustier geht raus',
-      run: () => {
-        const p = free().find((o) => o.pets.length);
-        if (!p) {
-          // nobody with a pet in: call one back, the event is retried until they are here
-          const out = this.people.find((o) => o.pets.length && o.presence === 'out');
-          if (out) this.presence.callBack(out);
-          return null;
-        }
-        this.release(p);
-        this.presence.send(p, 'errand', this.nav);
-        return strings.presence.event.leaves.errand(p.member.name.split(' ')[0]);
-      },
-    });
-    devEvents.register({
+    this.events.register({
       id: 'home-laundry',
-      group: strings.presence.event.group,
+      group,
       label: 'Jemand im Homeoffice hängt Wäsche auf',
       run: () => {
         const home = this.homes.find((h) => h?.occupied && h.startLaundry());
         const who = this.people.find((p) => p.id === home?.occupantId);
-        return who ? `${who.member.name.split(' ')[0]} hängt Wäsche auf` : null;
+        return who ? `${first(who)} hängt Wäsche auf` : null;
       },
     });
-    devEvents.register({
+    this.events.register({
       id: 'rain',
       group: 'Wetter',
       label: 'Regen an / aus',
@@ -1112,50 +782,6 @@ export class Game {
         this.weather.set(!this.weather.raining);
         this.settings.setWeather(this.weather.mode);
         return this.weather.raining ? 'Es regnet' : 'Der Regen hört auf';
-      },
-    });
-    devEvents.register({
-      id: 'door-greet',
-      group: 'Tiere',
-      label: 'Tiere begrüssen (Tür)',
-      run: () => {
-        this.petCare.greet(this.pets);
-        return 'Die Tiere melden sich';
-      },
-    });
-    // Kurt (#32): Marco goes home as Kurt (spin, poof, out of the door); or right away in the home office as Kurt, or out on
-    // an errand (his empty desk shows Kurt from 08:30 to 17:00); back after two minutes
-    const kurt = (kind: 'off' | 'home' | 'errand') => () => {
-      const p = this.people.find((o) => o.member.alterEgo);
-      if (!p) return null;
-      if (kind === 'off' && p.presence === 'out') {
-        this.presence.callBack(p); // the next try (e.g. `?event=` retries) sends him off again
-        return null;
-      }
-      if (p.presence === 'leaving' || p.presence === 'returning') return null;
-      if (p.presence === 'in') {
-        if (!this.presence.free(p)) return null; // tied up (meeting, foosball, ...): not out of the middle of it
-        this.release(p);
-        drop(p);
-      }
-      if (kind === 'off') {
-        if (!this.presence.goHome(p, this.nav, 120)) return null;
-      } else {
-        this.presence.awayNow(p, kind, 120);
-        if (kind === 'home') p.homeAlter = true;
-      }
-      return strings.alterEgo.event[kind];
-    };
-    devEvents.register({ id: 'kurt-walkout', group: strings.presence.event.group, label: strings.alterEgo.label.off, run: kurt('off') });
-    devEvents.register({ id: 'kurt-home', group: strings.presence.event.group, label: strings.alterEgo.label.home, run: kurt('home') });
-    devEvents.register({ id: 'kurt-screen', group: strings.presence.event.group, label: strings.alterEgo.label.errand, run: kurt('errand') });
-    devEvents.register({
-      id: 'all-back',
-      group: strings.presence.event.group,
-      label: strings.presence.panel.callAllBack,
-      run: () => {
-        this.presence.callAllBack();
-        return strings.presence.event.allReturn;
       },
     });
   }
@@ -1380,14 +1006,14 @@ export class Game {
    */
   startAction(id: string, quiet = false): 'started' | 'failed' | 'unknown' {
     const def = OFFICE_ACTIONS.find((a) => a.id === id) ?? null;
-    const ev = devEvents.list().find((e) => e.id === (def?.eventId ?? id));
+    const ev = this.events.get(def?.eventId ?? id);
     if (!ev) return 'unknown';
     return this.runAction({ eventId: ev.id, label: def?.label ?? ev.label, action: def }, quiet);
   }
 
   /** Runs the event; when it ran, the camera flies in Orbit to the first person it moved (or to the place). */
   private runAction(pick: SheetPick, quiet = false): 'started' | 'failed' | 'unknown' {
-    const ev = devEvents.list().find((e) => e.id === pick.eventId);
+    const ev = this.events.get(pick.eventId);
     if (!ev) return 'unknown';
     const before = new Map(this.people.map((p) => [p, leadState(p)]));
     const result = this.day ? null : ev.run();

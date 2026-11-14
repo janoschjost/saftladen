@@ -1,4 +1,4 @@
-import { devEvents } from '../game/DevEvents';
+import type { DevEvents } from '../game/DevEvents';
 import { devSections } from './devSections';
 import { exclusivePanel } from './exclusive';
 
@@ -11,13 +11,13 @@ export class DevPanel {
 
   private closeOthers = exclusivePanel('dev', () => this.setOpen(false));
 
-  constructor() {
+  constructor(private events: DevEvents) {
     this.toggle.addEventListener('click', () => this.setOpen(!this.isOpen()));
     window.addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLElement && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
       if (e.key === '`') this.setOpen(!this.isOpen());
     });
-    devEvents.onChange(() => this.render());
+    this.events.onChange(() => this.render());
     this.render();
   }
 
@@ -32,7 +32,7 @@ export class DevPanel {
   }
 
   private render(): void {
-    const events = devEvents.list();
+    const events = this.events.list();
     const groups = new Map<string, typeof events>();
     for (const e of events) groups.set(e.group, [...(groups.get(e.group) ?? []), e]);
     this.body.replaceChildren();
@@ -48,7 +48,7 @@ export class DevPanel {
         b.className = 'm-button';
         b.textContent = ev.label;
         b.addEventListener('click', () => {
-          this.status.textContent = devEvents.trigger(ev.id);
+          this.status.textContent = this.events.trigger(ev.id);
         });
         wrap.appendChild(b);
       }

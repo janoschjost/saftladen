@@ -1,5 +1,4 @@
 import { OVERLAY_KINDS, type OverlayKind } from './DebugOverlays';
-import { devEvents } from './DevEvents';
 import type { Game } from './Game';
 import { getSeed, setSeed } from './rng';
 import { cycleOf } from './TimeOfDay';
@@ -100,7 +99,7 @@ function retry(game: Game, attempt: () => boolean, giveUp: () => void): void {
  * (nobody free, table busy, the person still on the way in) is retried for up to a minute.
  */
 function runEvent(game: Game, id: string): void {
-  const ev = devEvents.list().find((e) => e.id === id);
+  const ev = game.events.get(id);
   if (!ev) return console.warn(`[debug] no event "${id}", see dev.list()`);
   retry(
     game,

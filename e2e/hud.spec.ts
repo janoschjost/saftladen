@@ -223,12 +223,28 @@ test('actions.camera + actions.handback: Drucken flies to Orbit and follows the 
 test('actions.fail: an action that cannot run says so and leaves the camera alone', async ({ page }) => {
   // the pod is already taken
   await openGame(page, 'iso', undefined, 'event=pod');
-  await until(page, (g) => g.pod.current);
+  await until(page, (g) => g.sim.pod.current);
   await page.keyboard.press('a');
   await page.locator('#action-cards .m-card[data-action="pod"]').click();
   await expect(page.locator('#now')).toBeVisible();
   await expect(page.locator('#now-caption')).toHaveText('Holzhaus: nicht möglich');
   expect(await read(page, (g) => [g.views.mode, g.action, g.views.flying])).toEqual(['iso', null, false]);
+});
+
+// The card path to the event (`Game.startAction`): the card, the chip, and the people the event pulled out of their
+// chairs. What the event does from there (they stand up, walk, nobody glides sitting): src/game/simEvents.test.ts
+test('place.meeting: the Meeting card starts a meeting with the people at their desks and pulls them out of their chairs', async ({ page }) => {
+  const errors = await openGame(page);
+  const crew = ['oscar-grob', 'andrew-jelley', 'linda-peter', 'milica-rakic', 'alyosha-krajnc'];
+  // only these five are in the office, so the card can pick nobody else
+  await read(page, (g, ids) => g.people.forEach((p: { id: string }) => (ids.includes(p.id) ? g.scenario.put(p.id, 'desk', 'stay') : g.scenario.put(p.id, 'errand'))), crew);
+  await until(page, (g, ids) => g.people.filter((p: { id: string; sit: number }) => ids.includes(p.id) && p.sit > 0.9).length === ids.length, crew);
+  await page.keyboard.press('a');
+  await page.locator('#action-cards .m-card[data-action="meeting"]').click();
+  await expect(page.locator('#now-caption')).toContainText('Besprechung');
+  const members = await read(page, (g) => g.sim.meetingRoom.current?.members.map((p: { id: string; task: { phase: string } | null }) => [p.id, p.task?.phase !== 'work']).sort());
+  expect(members).toEqual([...crew].sort().map((id) => [id, true]));
+  expect(errors).toEqual([]);
 });
 
 test.describe('actions.touch', () => {

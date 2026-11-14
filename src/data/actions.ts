@@ -1,6 +1,6 @@
 /**
  * The curated cards of the Aktionen sheet (`A`): things that can happen in the office, each one an existing dev event
- * (`devEvents`, registered in `Game.ts`). Picking a card runs the event and flies the Orbit camera to `place`.
+ * (`sim.events`, registered in `src/game/simEvents.ts`). Picking a card runs the event and flies the Orbit camera to `place`.
  * The sheet's search also lists every other dev event; this list only decides which ones get a card with a preview.
  */
 export interface OfficeAction {
