@@ -1,3 +1,6 @@
+import * as THREE from 'three';
+import type { Person } from './Person';
+
 /** Back height of a pet in metres (where the hand strokes): a cat is lower than a dog. */
 export const PET_HEIGHT = { cat: 0.28, dog: 0.5 };
 
@@ -85,4 +88,45 @@ export function petPose(amt: number, petHeight: number, t: number, scale = 1): P
     armStroke: -0.95 * amt + Math.sin(t * 7) * 0.2 * amt,
     armRest: -0.25 * amt,
   };
+}
+
+/** The parts of a person's rig the pose touches. */
+interface PoseRig {
+  body: THREE.Object3D;
+  armL: THREE.Object3D;
+  armR: THREE.Object3D;
+  legL: THREE.Object3D;
+  legR: THREE.Object3D;
+  kneeL: THREE.Object3D;
+  kneeR: THREE.Object3D;
+}
+
+/** Every frame starts from the neutral rig: additive poses (`+=`) must never carry over from the last frame. */
+export function resetRig(r: Pick<PoseRig, 'body' | 'armL' | 'armR' | 'legL' | 'legR'>): void {
+  r.body.rotation.set(0, 0, 0);
+  r.body.position.set(0, 0, 0);
+  r.armL.rotation.set(0, 0, 0);
+  r.armR.rotation.set(0, 0, 0);
+  r.legL.rotation.set(0, 0, 0, 'XYZ'); // the kneel turns a leg out (y, order YXZ)
+  r.legR.rotation.set(0, 0, 0, 'XYZ');
+}
+
+/** Stroking a pet: down on one knee (dog) or both (cat), a little spine, head down at the animal, one hand stroking. Eases in and out (~0.4 s) and ends as soon as the petting does or is cut short (picked up, walking off, a talk). `now` is game time (s). */
+export function applyPetPose(w: Pick<Person, 'petting' | 'moving' | 'held' | 'sit' | 'petClock' | 'petAmt' | 'petHeight' | 'phase' | 'root'>, r: PoseRig, now: number): void {
+  const on = w.petting && w.moving < 0.2 && !w.held && w.sit < 0.05;
+  const dt = Math.max(0, now - w.petClock); // game time since the last pose, however many steps that was
+  w.petClock = now;
+  w.petAmt = Math.min(1, Math.max(0, w.petAmt + (on ? 1 : -1) * (dt / CROUCH_SECONDS)));
+  if (w.petAmt <= 0) return;
+  const k = smooth(w.petAmt);
+  const p = petPose(k, w.petHeight, now + w.phase, w.root.scale.y);
+  for (const [hip, knee, l] of [[r.legL, r.kneeL, p.legL], [r.legR, r.kneeR, p.legR]] as const) {
+    hip.rotation.set(l.rx, l.ry, 0, LEG_ORDER);
+    knee.rotation.x = l.knee;
+  }
+  r.legL.position.y = r.legR.position.y = 0.8 - p.drop;
+  r.body.position.y -= p.drop;
+  r.body.rotation.x += p.spine;
+  r.armR.rotation.x = THREE.MathUtils.lerp(r.armR.rotation.x, p.armStroke, k);
+  r.armL.rotation.x = THREE.MathUtils.lerp(r.armL.rotation.x, p.armRest, k);
 }

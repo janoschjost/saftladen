@@ -39,12 +39,12 @@ import { Christmas } from './Christmas';
 import { RainFx } from '../render/rainFx';
 import { SpawnFx } from '../render/spawnFx';
 import { loadState, saveState } from '../ui/persist';
-import { DOOR_LANES } from './Door';
+import { DOOR_LANES, laneBusy } from './Door';
 import { setTvMode } from '../render/screens';
 import { Person } from './Person';
 import { strings } from '../i18n/strings';
 import { RoomEditor } from './RoomEditor';
-import { CROUCH_SECONDS, LEG_ORDER, petPose, smooth } from './petPose';
+import { applyPetPose, resetRig } from './petPose';
 import { applySky, type SkyRig } from './TimeOfDay';
 import { MAX_FRAME, type Drawer, type FrameTime } from './seams';
 import { Sim } from './Sim';
@@ -1347,12 +1347,7 @@ export class Game {
       const r = w.rig;
       const sit = w.sit;
       // every frame starts from the neutral rig: additive poses below (`+=`) must never carry over from the last frame
-      r.body.rotation.set(0, 0, 0);
-      r.body.position.set(0, 0, 0);
-      r.armL.rotation.set(0, 0, 0);
-      r.armR.rotation.set(0, 0, 0);
-      r.legL.rotation.set(0, 0, 0, 'XYZ'); // the kneel turns a leg out (y, order YXZ)
-      r.legR.rotation.set(0, 0, 0, 'XYZ');
+      resetRig(r);
       // standing: walk cycle (knees bend while a leg swings forward); sitting: thighs flat, shins down
       r.legL.rotation.x = swing * (1 - sit) - 1.5 * sit;
       r.legR.rotation.x = -swing * (1 - sit) - 1.5 * sit;
@@ -1433,7 +1428,7 @@ export class Game {
         r.body.rotation.y = 0;
       }
       this.poseReaction(w, r);
-      this.posePet(w, r);
+      applyPetPose(w, r, this.clock);
       this.poseCup(w, r);
       this.poseSnack(w, r);
       this.poseEmote(w, r);
@@ -1524,26 +1519,6 @@ export class Game {
       sp.scale.set(sc, sc, 1);
       sp.material.opacity = Math.sin(k * Math.PI) * amt;
     });
-  }
-
-  /** Stroking a pet: down on one knee (dog) or both (cat), a little spine, head down at the animal, one hand stroking. Eases in and out (~0.4 s) and ends as soon as the petting does or is cut short (picked up, walking off, a talk). */
-  private posePet(w: Person, r: Person['rig']): void {
-    const on = w.petting && w.moving < 0.2 && !w.held && w.sit < 0.05;
-    const now = this.clock;
-    const dt = Math.max(0, now - w.petClock); // game time since the last pose, however many steps that was
-    w.petClock = now;
-    w.petAmt = Math.min(1, Math.max(0, w.petAmt + (on ? 1 : -1) * (dt / CROUCH_SECONDS)));
-    if (w.petAmt <= 0) return;
-    const p = petPose(smooth(w.petAmt), w.petHeight, now + w.phase, w.root.scale.y);
-    for (const [hip, knee, l] of [[r.legL, r.kneeL, p.legL], [r.legR, r.kneeR, p.legR]] as const) {
-      hip.rotation.set(l.rx, l.ry, 0, LEG_ORDER);
-      knee.rotation.x = l.knee;
-    }
-    r.legL.position.y = r.legR.position.y = 0.8 - p.drop;
-    r.body.position.y -= p.drop;
-    r.body.rotation.x += p.spine;
-    r.armR.rotation.x = THREE.MathUtils.lerp(r.armR.rotation.x, p.armStroke, smooth(w.petAmt));
-    r.armL.rotation.x = THREE.MathUtils.lerp(r.armL.rotation.x, p.armRest, smooth(w.petAmt));
   }
 
   /** The upper body leans around the hips, not around the feet: keeps the torso on the legs however far it bends. */
@@ -1979,7 +1954,7 @@ export class Game {
   /** Each wing of the front door swings open on its own while somebody is on the way through its lane (the interior doors: `Sim.step`). */
   private updateDoor(dt: number): void {
     for (const lane of DOOR_LANES) {
-      const near = this.sim.walkers.some((w) => !w.away && Math.abs(w.pos.x - lane.gate.x) < 0.6 && Math.abs(w.pos.z - lane.gate.z) < 1.4);
+      const near = laneBusy(lane, this.sim.walkers);
       const k = lane.wing;
       this.doorOpen[k] += ((near ? 1 : 0) - this.doorOpen[k]) * Math.min(1, dt * 6);
       this.entrance[k].rotation.y = (k === 'left' ? -1 : 1) * this.doorOpen[k] * 1.7;

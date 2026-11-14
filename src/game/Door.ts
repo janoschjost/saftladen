@@ -45,3 +45,7 @@ let nextLane = 0;
 export const pickDoorLane = (): DoorLane => DOOR_LANES[nextLane++ % 2];
 /** A new office starts with the left wing again (`Sim`): the same seed gives the same run, also for a second office in one process. */
 export const resetDoorLanes = (): void => void (nextLane = 0);
+
+/** True while somebody is on the way through this wing's lane (the wing opens then). People who are away, or just materialising on the porch, do not count. */
+export const laneBusy = (lane: DoorLane, walkers: ReadonlyArray<{ away: boolean; pos: Vec2 }>): boolean =>
+  walkers.some((w) => !w.away && Math.abs(w.pos.x - lane.gate.x) < 0.6 && Math.abs(w.pos.z - lane.gate.z) < 1.4);
