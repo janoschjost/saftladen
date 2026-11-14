@@ -1377,11 +1377,12 @@ export class Game {
         r.body.rotation.z = Math.cos(ph) * 0.035 * w.moving * (1 - sit);
         r.body.position.x = Math.sin(ph) * 0.02 * w.moving * (1 - sit);
         if (w.working) {
-          // typing: hands on the keyboard, small quick jitters, now and then a glance at the screen
-          const t = this.clock + w.phase;
-          r.armL.rotation.x = -1.2 + Math.sin(t * 17) * 0.05 + Math.sin(t * 5.3) * 0.04;
-          r.armR.rotation.x = -1.2 + Math.sin(t * 14 + 2) * 0.05 + Math.sin(t * 4.1) * 0.04;
-          r.body.position.y += Math.sin(t * 1.3) * 0.006;
+          // desk work (typing bursts, mouse, reading, leaning back): see DeskWork
+          const dw = w.deskWork.pose;
+          r.armL.rotation.x = dw.armL;
+          r.armR.rotation.x = dw.armR;
+          r.body.position.y += dw.bob;
+          r.body.rotation.x += dw.lean;
         } else if (sit > 0.01) {
           r.armL.rotation.x += -1.2 * sit;
           r.armR.rotation.x += -1.2 * sit;

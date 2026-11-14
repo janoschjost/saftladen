@@ -77,7 +77,8 @@ Rules:
 
 ## Desks and work
 - `desk.ownership` Every model desk is a numbered workplace with one owner; the owner asks a squatter to leave; others take a free desk nearby, preferring unowned ones — `src/game/Office.ts`, test: `src/game/Office.test.ts`
-- `desk.work` People mostly go sit and work (90–240 s), type with jittering hands, glance at the screen — `src/game/Person.ts`, `src/game/Game.ts`
+- `desk.work` People mostly go sit and work (90–240 s) — `src/game/Person.ts`, `src/game/Game.ts`
+- `desk.typing-mouse` At the desk each person switches between typing (alternating hands, bursts and pauses), mouse (forearm moves, clicks, now and then a scroll), reading and leaning back, with glances to the side; the mix follows the role (devs type, designers mouse), timing differs per person so nobody moves in sync; `person.deskActivity` exposes the state — `src/game/DeskWork.ts`, `src/game/Game.ts`, test: `src/game/DeskWork.test.ts`, url: `/?seed=1&time=11` (#14)
 - `desk.mug` Desk mug appears with the sitter, people sip, fill level visible — `src/game/Person.ts`, `src/render/officeModel.ts`
 - `desk.chair-call-vape` Phone people take calls and vapers take drags in the chair — `src/game/Person.ts`, url: `/?seed=1&time=11&event=vape-fabian-bucher` (#38)
 - `desk.gestures` Idle gestures every 12–38 s: yawn, stretch, head scratch, look around — `src/game/Game.ts`
