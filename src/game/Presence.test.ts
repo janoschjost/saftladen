@@ -216,9 +216,83 @@ describe('presence', () => {
     }
   });
 
+  /** A day run to 11:00 (the clock then stands still) with exactly 15 in: whoever is missing to 15 is back at the desk already. */
+  function fullOffice(seed: number) {
+    const { people, presence, nav } = runDay(seed, 5, 11);
+    const step = () => {
+      presence.update(STEP, nav);
+      for (const p of people) p.update(STEP);
+    };
+    const present = () => people.filter((p) => p.presence === 'in' || p.presence === 'returning').length;
+    const left = () => people.reduce((n, p) => n + p.leaves.length, 0);
+    for (const p of people) {
+      if (present() >= 15 || p.presence !== 'out' || p.awayKind === 'off') continue;
+      p.presence = 'in';
+      p.awayKind = null;
+    }
+    expect(present()).toBe(15);
+    return { people, presence, step, present, left, away: people.filter((p) => p.presence === 'out' && p.awayKind !== 'off') };
+  }
+
+  it('presence.caps: called back into a full office, everybody comes in and stays, nobody is sent out to make room', () => {
+    for (const seed of [1, 2, 3]) {
+      const { people, presence, step, present, left, away } = fullOffice(seed);
+      expect(away.length).toBeGreaterThan(2);
+      const before = left();
+      // one called back from the roster: in within seconds, and nobody leaves for them
+      const one = away[0];
+      presence.callBack(one as unknown as Person);
+      let t = 0;
+      for (; t < 30 && one.presence !== 'in'; t += STEP) step();
+      expect(one.presence, `seed ${seed}`).toBe('in');
+      expect(t).toBeLessThan(10);
+      expect(present(), `seed ${seed}`).toBe(16);
+      // "all back": everybody comes in, at most 2 on their way in at once
+      const rest = away.slice(1);
+      const arrived = new Set<Stub>();
+      presence.callAllBack();
+      for (t = 0; t < 180 && arrived.size < rest.length; t += STEP) {
+        step();
+        for (const p of rest) if (p.presence === 'in') arrived.add(p);
+        expect(people.filter((p) => p.presence === 'returning').length).toBeLessThanOrEqual(2);
+      }
+      expect(rest.filter((p) => !arrived.has(p)).map((p) => p.id), `seed ${seed}`).toEqual([]);
+      // and they stay: neither the cap nor an errand or home-office draw sends anybody out
+      for (t = 0; t < 120; t += STEP) step();
+      expect(left() - before, `seed ${seed}: sent out`).toBe(0);
+      expect(present(), `seed ${seed}: everybody in, off duty too`).toBe(people.length);
+    }
+  });
+
+  it('presence.caps: after a call back the office empties on its own; once down to 15 the cap works as before', () => {
+    const { people, presence, step, present, left, away } = fullOffice(1);
+    const [one, other] = away;
+    presence.callBack(one as unknown as Person);
+    for (let t = 0; t < 30 && one.presence !== 'in'; t += STEP) step();
+    expect(present()).toBe(16);
+    // the office stays at 16: nobody is sent out
+    const quiet = left();
+    for (let t = 0; t < 60; t += STEP) step();
+    expect(left()).toBe(quiet);
+    expect(present()).toBe(16);
+    // somebody leaves on their own (e.g. lunch): back at 15, the exception ends
+    const gone = people.find((p) => p.presence === 'in' && p !== one)!;
+    gone.presence = 'out';
+    gone.awayKind = 'errand';
+    gone.awayLeft = 600;
+    step();
+    // back to normal: one more in without a call back (16 again), and the cap sends somebody out to make room
+    other.presence = 'in';
+    other.awayKind = null;
+    const before = left();
+    step(); // the cap acts on the very next update (an errand draw would wait for its timer)
+    expect(left()).toBe(before + 1);
+  });
+
   it('kurt.behavior: Marco transforms when going home (end of day, home office), never for errands, lunch or a manual send', () => {
     let homeSpells = 0;
-    for (const seed of [1, 2, 3, 4, 5, 6]) {
+    // seeds where Marco walks out of the door for home at least once (on 5 his day ends while he is out on an errand)
+    for (const seed of [1, 2, 3, 4, 6, 7]) {
       const { people } = runDay(seed);
       const marco = people.find((p) => p.id === 'marco-rieser')!;
       expect(marco.leaves.some((l) => l.kind === 'off' || l.kind === 'home')).toBe(true);
@@ -323,6 +397,21 @@ describe('time jumps', () => {
     for (const p of onDuty) expect(p.presence === 'out' && p.awayKind === 'off').toBe(false);
     // the jump keeps today's plans
     expect(plans()).toEqual(today);
+  });
+
+  it('presence.caps: a time jump ends the call-back exception, the cap sends people out again', () => {
+    const { tod, people, presence, run } = office(1, 11);
+    run(120);
+    presence.callAllBack();
+    run(120);
+    expect(people.filter((p) => p.presence === 'in').length).toBeGreaterThan(16);
+    const sent = () => people.reduce((n, p) => n + p.leaves.filter((l) => l.kind !== 'off').length, 0);
+    const before = sent();
+    run(30);
+    expect(sent()).toBe(before); // the exception holds: nobody is sent out
+    tod.jumpToHour(10);
+    run(30);
+    expect(sent()).toBeGreaterThan(before);
   });
 
   it('time.jump: jumping to the night sends everybody off duty away at once', () => {

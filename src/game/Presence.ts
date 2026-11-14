@@ -102,6 +102,10 @@ export class Presence {
   private kept = new Set<Person>();
   /** dev: people taken out of the sim, hidden and off the schedule until they are restored (`remove` / `restore`) */
   private removed = new Set<Person>();
+  /** people called back who are still outside: a full office does not hold them back (see capOffice), they still queue at the door */
+  private calledBack = new Set<Person>();
+  /** somebody was called back by hand (roster, "Alle zurückholen", H, a dev event): nobody is sent out to make room until the office is down to MAX_OFFICE on its own */
+  private overfull = false;
 
   constructor(
     private people: readonly Person[],
@@ -155,6 +159,7 @@ export class Presence {
 
   /** A new working day: fresh plans for everybody, on some days a crunch keeps a few more people in for the night. */
   private rollDay(): void {
+    this.overfull = false; // a call back by hand does not carry over into another day
     this.overridden.clear();
     this.lunchers.clear();
     this.plans.clear();
@@ -316,9 +321,9 @@ export class Presence {
   private capOffice(nav: NavGrid): boolean {
     const present = this.present;
     if (present < MAX_OFFICE) return false;
-    // nobody walks back in while the office is full (0 = called back by the player: they do)
-    for (const p of this.people) if (p.presence === 'out' && p.awayKind !== 'off' && p.awayLeft > 0 && p.awayLeft < 5) p.awayLeft = 5 + random() * 15;
-    if (present === MAX_OFFICE) return false;
+    // nobody walks back in while the office is full, except who was called back: they do (one after the other, see clearDoor)
+    for (const p of this.people) if (p.presence === 'out' && p.awayKind !== 'off' && p.awayLeft > 0 && p.awayLeft < 5 && !this.calledBack.has(p)) p.awayLeft = 5 + random() * 15;
+    if (present === MAX_OFFICE || this.overfull) return false;
     if (this.people.some((p) => p.presence === 'leaving')) return false;
     const candidates = this.people.filter((p) => this.sendable(p));
     if (!candidates.length) return false;
@@ -359,7 +364,7 @@ export class Presence {
   /** `p` takes home office `room`; whoever works there comes back to the office (one person per room). */
   private moveInto(p: Person, room: number): void {
     p.homeVariant = room;
-    for (const o of this.people) if (o !== p && o.awayKind === 'home' && (o.presence === 'out' || o.presence === 'leaving') && o.homeVariant === room) this.callBack(o);
+    for (const o of this.people) if (o !== p && o.awayKind === 'home' && (o.presence === 'out' || o.presence === 'leaving') && o.homeVariant === room) this.recall(o);
   }
 
   /** A home office for `p` now or soon: a free one, their own, or one that `roomToFree` can clear. */
@@ -374,7 +379,7 @@ export class Presence {
   makeRoom(): void {
     for (const x of this.people) if (x.awayKind === 'home' && (x.presence === 'returning' || (x.presence === 'out' && x.awayLeft <= 1))) return;
     const o = this.roomToFree();
-    if (o) o.awayLeft = 0; // 0: called back, a full office does not hold them back (see capOffice)
+    if (o) this.comeBack(o);
   }
 
   get homeFull(): boolean {
@@ -456,6 +461,7 @@ export class Presence {
     this.admitted.delete(p);
     this.waiting.delete(p);
     this.exits.delete(p);
+    this.calledBack.delete(p);
     if (p.presence === 'out') {
       p.awayKind = 'off';
       p.awayLeft = OFF;
@@ -473,12 +479,24 @@ export class Presence {
     return this.removed.has(p);
   }
 
-  /** Bring somebody back to the office. */
+  /** Bring somebody back to the office (by hand): they come and stay, even into a full office (see `overfull`). */
   callBack(p: Person): void {
     if (this.kept.has(p) || this.removed.has(p)) return;
+    this.overfull = true;
+    this.recall(p);
+  }
+
+  /** Back to the office (also automatic, e.g. out of a home office somebody else needs): a full office makes room by sending somebody else out (see capOffice), unless a call back by hand holds it (`overfull`). */
+  private recall(p: Person): void {
     if (this.duty(p, this.workHour) !== 'duty') this.overridden.add(p);
-    if (p.presence === 'out') p.awayLeft = 0;
+    if (p.presence === 'out') this.comeBack(p);
     else p.cancelLeave();
+  }
+
+  /** Out and back in now, even when the office is full (see capOffice). */
+  private comeBack(p: Person): void {
+    p.awayLeft = 0;
+    this.calledBack.add(p);
   }
 
   callAllBack(): void {
@@ -522,8 +540,10 @@ export class Presence {
     for (const p of this.people) {
       if (p.presence !== 'out') {
         this.waiting.delete(p);
+        this.calledBack.delete(p);
         continue;
       }
+      if (p.awayLeft >= 1) this.calledBack.delete(p); // sent away again before they got in
       if (p.awayLeft >= 0.5 || this.admitted.has(p)) continue;
       if (busy) {
         const since = this.waiting.get(p) ?? this.clock;
@@ -637,6 +657,7 @@ export class Presence {
    */
   private jump(newDay: boolean): void {
     if (newDay) this.rollDay();
+    this.overfull = false; // nor into another hour
     const hour = (this.lastHour = this.workHour);
     for (const p of this.people) {
       const plan = this.planOf(p);
@@ -676,11 +697,13 @@ export class Presence {
       this.followPlans(hour, nav);
     }
     this.clearDoor();
+    if (this.overfull && !this.calledBack.size && this.present <= MAX_OFFICE) this.overfull = false;
     if (hour < ERRANDS.from || hour >= ERRANDS.to) return;
     this.capOffice(nav);
     this.timer -= dt;
     if (this.timer > 0) return;
     this.timer = between(CHECK);
+    if (this.overfull && this.present >= MAX_OFFICE) return; // called back by hand into a full office: nobody goes out on an errand or to the home office for now
     const leaving = this.people.filter((p) => p.presence === 'leaving').length;
     // enough people out already; a full office still lets somebody go, so that those waiting outside get their turn
     if ((this.away.length >= this.target && this.present < MAX_OFFICE) || leaving >= 2) return;
