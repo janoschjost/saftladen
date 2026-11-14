@@ -78,6 +78,8 @@ interface DeskTask {
   remaining: number; // seconds of work left
   retries: number;
   retryIn: number;
+  /** where standing up from the chair ends (`Office.exit`), picked when they get up */
+  out?: Vec2;
   /** about to leave the desk for a coffee: where at the machine, and how much work was left */
   errand?: { spot: MachineSpot; left: number; snack?: boolean };
 }
@@ -1234,6 +1236,7 @@ export class Person extends Walker {
           task.phase = 'enter';
           task.t = 0;
           task.from = { ...this.pos };
+          task.out = undefined;
           return true;
         }
         // stopped short (blocked, gave up): try again a few times
@@ -1283,8 +1286,9 @@ export class Person extends Walker {
       case 'leave': {
         task.t += dt / TRANSITION;
         const e = smooth((task.t - 0.35) / 0.65);
-        this.pos.x = d.seat.x + (d.approach.x - d.seat.x) * e;
-        this.pos.z = d.seat.z + (d.approach.z - d.seat.z) * e;
+        const out = this.exitOf(task);
+        this.pos.x = d.seat.x + (out.x - d.seat.x) * e;
+        this.pos.z = d.seat.z + (out.z - d.seat.z) * e;
         this.sit = 1 - smooth(task.t / 0.4);
         if (task.t > 0.25) this.turnTo(d.yaw + Math.PI, dt);
         this.step(dt, task.t > 0.35 ? 0.7 : 0);
@@ -1295,6 +1299,11 @@ export class Person extends Walker {
         return true;
       }
     }
+  }
+
+  /** Where standing up from this desk ends (`Office.exit`), picked once per stand-up (sitting down again forgets it). */
+  private exitOf(task: DeskTask): Vec2 {
+    return (task.out ??= this.office?.exit(task.desk) ?? task.desk.approach);
   }
 
   /** Pins this person for a day task: they walk to `at` first when `walk` is set (else they are there at once), then stay and turn to `yaw`. */
@@ -1771,8 +1780,9 @@ export class Person extends Walker {
     const t = this.task;
     if (t && t.phase !== 'approach') {
       // sitting (or sitting down / getting up): step out of the chair, the stand-up pose plays in control()
-      this.pos.x = t.desk.approach.x;
-      this.pos.z = t.desk.approach.z;
+      const out = this.exitOf(t);
+      this.pos.x = out.x;
+      this.pos.z = out.z;
       this.prev = { ...this.pos };
     }
     this.cancelTask();

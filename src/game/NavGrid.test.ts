@@ -77,3 +77,22 @@ describe('move.astar', () => {
     expect(g.walkable(5, 0)).toBe(true);
   });
 });
+
+describe('move.unstuck', () => {
+  it('move.unstuck: openNear keeps a cell with a way to the floor and finds the closest one from a walled-in cell', () => {
+    const g = new NavGrid(10, 10);
+    const floor = at(0, 0);
+    expect(g.openNear(at(5, 5), floor)).toEqual(at(5, 5));
+    // a ring around (5,5): walkable inside, no way out (corners cannot be cut)
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (dx || dz) g.block(5 + dx, 5 + dz);
+    expect(g.findPath(at(5, 5), floor)).toEqual([]);
+    const out = g.openNear(at(5, 5), floor)!;
+    expect(Math.max(Math.abs(g.toCell(out).cx - 5), Math.abs(g.toCell(out).cz - 5))).toBe(2);
+    expect(g.findPath(out, floor).length).toBeGreaterThan(0);
+    expect(g.opens(at(5, 5), floor)).toBe(false);
+    expect(g.opens(out, floor)).toBe(true);
+    // `away`: another open cell even when this one is open; none within reach is null
+    expect(g.openNear(at(0, 0), floor, 2, true)).not.toEqual(at(0, 0));
+    expect(g.openNear(at(5, 5), floor, 1)).toBeNull();
+  });
+});

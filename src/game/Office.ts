@@ -1,7 +1,7 @@
 import type * as THREE from 'three';
 import { screenOffMaterial, type DeskRig } from '../render/officeBuilder';
 import { kurtScreenMaterial, screenMaterial, tickScreens, tickTv, useScreen, type ScreenKind } from '../render/screens';
-import type { DeskPlacement, OfficeModel } from '../render/officeModel';
+import { CORRIDOR_POINT, type DeskPlacement, type OfficeModel } from '../render/officeModel';
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { Person } from './Person';
 import { random } from './rng';
@@ -123,7 +123,7 @@ export class Office {
 
   constructor(
     private model: OfficeModel,
-    nav: NavGrid,
+    private nav: NavGrid,
   ) {
     const stand = nav.nearestWalkable(model.printer.stand, 6);
     this.printer = stand ? new Printer({ x: stand.x, z: stand.z }, model.printer.stand.yaw, model.printer.paper) : null;
@@ -182,6 +182,14 @@ export class Office {
       move(spot.stand, nav.nearestWalkable({ x: f.x, z: f.z }, 3));
       spot.yaw = f.yaw;
     });
+  }
+
+  /**
+   * Where somebody standing up from `desk` steps to: its approach cell, or, when that has no way to the rest of the
+   * office now (something was put in the way after the desk was laid out), the closest cell next to the chair that has.
+   */
+  exit(desk: Desk): Vec2 {
+    return this.nav.openNear(desk.approach, CORRIDOR_POINT, 2) ?? this.nav.openNear(desk.seat, CORRIDOR_POINT, 3) ?? desk.approach;
   }
 
   /** `p` asks somebody who is free to play foosball; false when the table is busy or nobody is around. */
