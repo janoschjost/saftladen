@@ -1,5 +1,5 @@
 import { OFFICE_ACTIONS, validateActions, type OfficeAction } from '../data/actions';
-import { devEvents } from '../game/DevEvents';
+import type { DevEvents } from '../game/DevEvents';
 
 /** What the sheet hands to the game when something is picked: a curated card, or a plain dev event from the search. */
 export interface SheetPick {
@@ -42,10 +42,13 @@ export class ActionSheet {
   private previewsDone = false;
   private closing = 0;
 
-  constructor(private hooks: ActionSheetHooks) {
+  constructor(
+    private events: DevEvents,
+    private hooks: ActionSheetHooks,
+  ) {
     const problems = validateActions(
       OFFICE_ACTIONS,
-      devEvents.list().map((e) => e.id),
+      this.events.list().map((e) => e.id),
     );
     if (problems.length) console.warn(`[actions] ${problems.join('; ')}`);
     for (const action of OFFICE_ACTIONS) {
@@ -156,7 +159,7 @@ export class ActionSheet {
     for (const c of this.cards) c.li.hidden = !has(c.action.label, c.action.caption, c.action.place.name, c.action.eventId);
     this.visibleCards().forEach((c, i) => (c.key.textContent = i < 9 ? String(i + 1) : ''));
     const curated = new Set(this.cards.map((c) => c.action.eventId));
-    const more = q ? devEvents.list().filter((e) => !curated.has(e.id) && has(e.label, e.id, e.group)) : [];
+    const more = q ? this.events.list().filter((e) => !curated.has(e.id) && has(e.label, e.id, e.group)) : [];
     this.moreEl.replaceChildren(
       ...more.map((e) => {
         const li = el('li', 'm-sheet__more-item');

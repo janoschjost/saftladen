@@ -1,6 +1,7 @@
 /**
- * Registry of things a developer can trigger by hand (meeting, vaping, printer run, ...).
- * Add new behaviour by calling `devEvents.register(...)` where it lives; the dev panel and `window.dev` pick it up automatically.
+ * Registry of things a developer can trigger by hand (meeting, vaping, printer run, ...). Every `Sim` owns one
+ * (`sim.events`) with the events that only touch the simulation (`simEvents.ts`); the game adds the ones that need
+ * the view. The dev panel, the Aktionen sheet, `?event=` and `window.dev` read it.
  */
 export interface DevEvent {
   id: string;
@@ -13,7 +14,7 @@ export interface DevEvent {
 
 type Listener = () => void;
 
-class DevEvents {
+export class DevEvents {
   private events = new Map<string, DevEvent>();
   private listeners: Listener[] = [];
 
@@ -22,12 +23,12 @@ class DevEvents {
     this.listeners.forEach((l) => l());
   }
 
-  unregister(id: string): void {
-    if (this.events.delete(id)) this.listeners.forEach((l) => l());
-  }
-
   list(): DevEvent[] {
     return [...this.events.values()];
+  }
+
+  get(id: string): DevEvent | null {
+    return this.events.get(id) ?? null;
   }
 
   /** Subscribe to registry changes (panel re-renders). */
@@ -44,10 +45,12 @@ class DevEvents {
   }
 }
 
-export const devEvents = new DevEvents();
-
-// console access: dev.list(), dev.trigger('vape-fabian-bucher')
-(window as unknown as { dev: unknown }).dev = {
-  list: () => devEvents.list().map((e) => `${e.id}  (${e.group}: ${e.label})`),
-  trigger: (id: string) => devEvents.trigger(id),
-};
+/** Console access: `dev.list()`, `dev.trigger('vape-fabian-bucher')`. */
+export function exposeDevConsole(events: DevEvents): void {
+  // added to what is there: the overlays and `forceState` hang their own calls on `dev`, in whatever order
+  const w = window as unknown as { dev?: object };
+  w.dev = Object.assign(w.dev ?? {}, {
+    list: () => events.list().map((e) => `${e.id}  (${e.group}: ${e.label})`),
+    trigger: (id: string) => events.trigger(id),
+  });
+}

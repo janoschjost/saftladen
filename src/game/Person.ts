@@ -1731,10 +1731,16 @@ export class Person extends Walker {
     return true;
   }
 
+  /** There is a printer and nobody stands at it. */
+  get canPrint(): boolean {
+    const pr = this.office?.printer;
+    return !!pr && !pr.occupant;
+  }
+
   /** Walk to the printer and print; false when it is busy. */
   startPrint(nav: NavGrid): boolean {
     const pr = this.office?.printer;
-    if (!pr || pr.occupant) return false;
+    if (!pr || !this.canPrint) return false;
     pr.occupant = this;
     this.printJob = { phase: 'approach', remaining: PRINT_TIME.min + random() * (PRINT_TIME.max - PRINT_TIME.min), retries: 0, retryIn: 0.5 };
     this.goTo(nav, pr.stand);

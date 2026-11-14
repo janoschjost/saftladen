@@ -89,9 +89,14 @@ export class Pod {
     }
   }
 
+  /** Both seats empty: two can sit down. */
+  get free(): boolean {
+    return !this.current && this.seats.length >= 2 && !this.seats.some((s) => s.occupant);
+  }
+
   /** Sends two people to sit in the pod (they must be free: dropped from desk / conversation already). Null if the pod is taken. */
   start(people: Person[], nav: NavGrid): PodSession | null {
-    if (this.current || this.seats.length < 2 || people.length < 2 || this.seats.some((s) => s.occupant)) return null;
+    if (!this.free || people.length < 2) return null;
     const group = people.slice(0, 2);
     const session = new PodSession(group, this.model.center);
     group.forEach((p, i) => p.callToMeeting(nav, this.seats[i], session));

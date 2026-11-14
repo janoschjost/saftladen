@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import gameSource from '../game/Game.ts?raw';
+import { installHeadlessDom } from '../test/headlessDom';
+import { office } from '../test/office';
 import { OFFICE_ACTIONS, validateActions, type OfficeAction } from './actions';
 
-/** The dev events the game registers with a fixed id (`devEvents.register({ id: '…' })` in Game.ts). */
-const registered = [...gameSource.matchAll(/id: '([a-z0-9-]+)'/g)].map((m) => m[1]);
+installHeadlessDom();
+
+/** The dev events of a real office (`src/game/simEvents.ts`): every card must run one of them. */
+const registered = office().events.list().map((e) => e.id);
 
 describe('actions.list', () => {
   it('finds the registered dev events', () => {

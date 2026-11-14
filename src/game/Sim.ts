@@ -9,6 +9,7 @@ import { CoatRacks } from './CoatRacks';
 import { buildOffice, CORRIDOR_POINT, type OfficeModel } from '../render/officeModel';
 import { NAV_CELL, WORLD } from '../render/World';
 import { Kitchen } from './Coffee';
+import { DevEvents } from './DevEvents';
 import { Dog } from './Dog';
 import { resetDoorLanes } from './Door';
 import { Doors } from './Doors';
@@ -21,6 +22,7 @@ import { PhoneBooth } from './PhoneBooth';
 import { Pod } from './Pod';
 import { Presence } from './Presence';
 import { Scenario } from './Scenario';
+import { registerSimEvents } from './simEvents';
 import { Social } from './Social';
 import { TimeOfDay } from './TimeOfDay';
 import { Toilets } from './Toilets';
@@ -47,6 +49,8 @@ export interface SimOptions {
   stands?: (w: Walker) => boolean;
   /** where else somebody stands whom the interior doors open for (the player's eye in the walk view) */
   doorsSee?: () => Array<{ x: number; z: number }>;
+  /** an event points at somebody (a pet put into a passage, somebody starting to vape): a view selects them */
+  point?: (w: Walker) => void;
   /** called with the built office before anything is derived from where its furniture stands (the room editor moves it) */
   prepare?: (model: OfficeModel) => void;
 }
@@ -81,13 +85,18 @@ export class Sim {
   readonly welcome = new Welcome();
   /** states a scene instead of waiting for one: for tests and dev tools */
   readonly scenario = new Scenario(this);
+  /** what a developer can set off by hand (dev panel, Aktionen sheet, `?event=`); a view adds its own to it */
+  readonly events = new DevEvents();
+  /** an event points at somebody; without a view nobody looks */
+  readonly point: (w: Walker) => void;
   private stands: (w: Walker) => boolean;
   private doorsSee: () => Array<{ x: number; z: number }>;
   /** coats on the stands follow who is in the office */
   readonly coatRacks: CoatRacks;
 
-  constructor({ scene = new THREE.Scene(), cycle, seats = {}, homes = false, portrait = () => null, stands = () => false, doorsSee = () => [], prepare }: SimOptions = {}) {
+  constructor({ scene = new THREE.Scene(), cycle, seats = {}, homes = false, portrait = () => null, stands = () => false, doorsSee = () => [], point = () => {}, prepare }: SimOptions = {}) {
     this.scene = scene;
+    this.point = point;
     this.stands = stands;
     this.doorsSee = doorsSee;
     resetDoorLanes();
@@ -116,6 +125,7 @@ export class Sim {
     this.presence.seed(homes);
     for (const pet of this.pets) if (pet.owner.presence === 'out') pet.sendAway(); // pets of people who start away
     this.coatRacks.update();
+    registerSimEvents(this);
   }
 
   /** Walls and furniture as they stand now become what nobody can walk through. */
