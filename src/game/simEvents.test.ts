@@ -65,7 +65,7 @@ const CAT_OWNER = 'donata-manser';
 describe('dev events on the Sim', () => {
   it('dev.events: a Sim has its events without a game, an unknown id only reports', () => {
     const sim = office();
-    expect(sim.events.list().map((e) => e.id)).toEqual(expect.arrayContaining(['meeting-room', 'pod', 'coffee', 'phone-booth', 'toilet', 'printer', 'foosball', 'pet-dog', 'pet-cat', 'door-lettering', 'errand', 'home', 'remote-visit', 'all-back']));
+    expect(sim.events.list().map((e) => e.id)).toEqual(expect.arrayContaining(['meeting-room', 'pod', 'coffee', 'phone-booth', 'toilet', 'printer', 'foosball', 'nerf', 'pet-dog', 'pet-cat', 'door-lettering', 'errand', 'home', 'remote-visit', 'all-back']));
     expect(sim.events.trigger('nope')).toBe('unbekannt: nope');
   });
 
@@ -355,6 +355,26 @@ describe('dev events on the Sim', () => {
     const alone = office();
     only(alone, [GROUP[0]]);
     refused(alone, 'foosball');
+  });
+
+  it('play.nerf (nerf): a dev with a gun and the nearest free person: the dev aims at them; refused while a skirmish runs; without a dev in the office it calls one back', () => {
+    const sim = office();
+    const dev = sim.people.find((p) => p.member.look.nerf)!;
+    const other = sim.people.find((p) => !p.member.look.nerf)!;
+    only(sim, [dev.id, other.id]);
+    expect(sim.events.trigger('nerf')).toBe(`${first(dev)} schiesst auf ${first(other)}`);
+    expect(sim.nerf.active).toBe(true);
+    expect(dev.task?.phase).not.toBe('work');
+    refused(sim, 'nerf');
+
+    // nobody with a gun in the office: the event cannot run, but it calls one of them back for the next try
+    const none = office();
+    for (const p of none.people) if (p.member.look.nerf) none.scenario.put(p.id, 'errand', 'free');
+    const away = none.people.filter((p) => p.member.look.nerf);
+    expect(away.every((p) => p.awayLeft > 0)).toBe(true);
+    expect(none.events.trigger('nerf')).toMatch(/: nicht möglich$/);
+    expect(away.filter((p) => p.awayLeft === 0)).toHaveLength(1);
+    expect(none.nerf.active).toBe(false);
   });
 
   it('office.door-lettering (door-lettering): opens the lettered doors, the next call shuts them', () => {
