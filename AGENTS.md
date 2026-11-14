@@ -8,7 +8,7 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
    - Ask from a dev without an issue → search the open issues first (`gh issue list --search "<words>"`). If none fits, open one with `scripts/issue.sh new "<title>" <bug|enhancement> "<body with acceptance criteria>"`.
    - Docs, tooling and typo fixes may skip the issue and go straight to a PR.
 2. **Claim.** `scripts/issue.sh claim N`. Exit code 2 means another session owns the issue: don't touch it. Never take over an issue that is labeled `in progress`, assigned, or has an open PR. Giving up → `scripts/issue.sh release N "<reason>"`.
-   - Open questions or a product decision needed → `scripts/issue.sh ask N "<questions>"` (label `question`). Waiting on another PR or issue → `scripts/issue.sh block N "<reason>"` (label `blocked`). Agents don't work `question` issues; a dev answers in a comment and removes the label, or works through them with an agent via `/refine-issues`. `gh issue list --label question` is the devs' inbox.
+   - Open questions or a product decision needed → `scripts/issue.sh ask N "<questions>"` (label `question`). Waiting on another issue → `scripts/issue.sh block N "<reason>" M`: GitHub's native "blocked by #M" link, which a dev can also set on the issue page; it counts as blocked until #M is closed. Waiting on a PR (or older issues) → the same without a native link: label `blocked`. A split is a parent issue with sub-issues (`scripts/issue.sh sub P A B`): agents work the sub-issues, never the parent. Agents don't work `question` issues; a dev answers in a comment and removes the label, or works through them with an agent via `/refine-issues`. `gh issue list --label question` is the devs' inbox.
 3. **Worktree.** Never work in the main checkout. Other sessions and the dev's own dev server use it.
    ```sh
    git fetch origin
@@ -44,7 +44,7 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
    gh pr checks --watch --fail-fast
    cd ../saftladen && git worktree remove ../saftladen-issue-N
    ```
-   Red → read the log (`gh run view --log-failed`), fix in the worktree, push, watch again. Keep the worktree until the checks pass. "no checks reported" right after the push: wait a few seconds and retry. A PR that only changes `*.md` files gets no checks at all (`paths-ignore` in `ci.yml`), so remove its worktree right away.
+   Red → read the log (`gh run view --log-failed`), fix in the worktree, push, watch again. Keep the worktree until the checks pass. "no checks reported" right after the push: wait a few seconds and retry. A PR that only changes docs and agent tooling (`*.md`, `.claude/`, `scripts/issue.sh`) gets no checks at all (`paths-ignore` in `ci.yml`), so remove its worktree right away.
 
 ## Writing tests
 

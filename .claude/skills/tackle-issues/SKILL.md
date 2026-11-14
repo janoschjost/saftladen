@@ -6,7 +6,7 @@ argument-hint: "[issue numbers or label, e.g. '3 5' or 'bug'] (default: all elig
 
 # Tackle issues
 
-Invoking this skill authorizes everything the `AGENTS.md` workflow does for the issues it claims: branches, commits, pushes, PRs, and issue labels/comments/assignees. It does not authorize merging, pushing to `main` or closing issues by hand.
+Invoking this skill authorizes everything the `AGENTS.md` workflow does for the issues it claims: branches, commits, pushes, PRs, and issue labels/comments/assignees. It does not authorize merging, pushing to `main` or closing issues by hand (one exception: a parent whose sub-issues are all closed, see **Pick**).
 
 Args: `$ARGUMENTS`. Issue numbers restrict the run to those issues; a label filters by that label. Empty = every eligible issue, oldest first.
 
@@ -35,7 +35,7 @@ Repeat until no eligible PR or issue is left:
 2. Run the **`AGENTS.md` workflow** for it, steps 2–7: claim → worktree → implement → done → PR → CI green. Claim exits 2 → go back to 1. A `model:*` label hands this step to a subagent (see **Model labels**).
 3. Once the PR's checks are green and its worktree is removed, go straight back to 1. Don't wait for review or merge.
 
-Park an issue instead of working it when it is unclear or needs a product decision (`scripts/issue.sh ask N "<questions>"`), or depends on an unmerged PR or open issue (`scripts/issue.sh block N "<reason, naming #M>"`). Both work before or after claiming; they release a claim. For any other reason to give up after claiming, release it (`scripts/issue.sh release`).
+Park an issue instead of working it when it is unclear or needs a product decision (`scripts/issue.sh ask N "<questions>"`), or depends on an open issue (`scripts/issue.sh block N "<reason>" M`: native "blocked by #M" link) or an unmerged PR (`scripts/issue.sh block N "<reason, naming #M>"`: label `blocked`). Both work before or after claiming; they release a claim. For any other reason to give up after claiming, release it (`scripts/issue.sh release`).
 
 At the end, report: fixed PRs, issue → PR link (plus the model, if a label picked one), and the skipped issues and why.
 
@@ -59,7 +59,7 @@ The dev re-checks with `/review-pr P`. A `model:*` label on the PR's issue picks
 
 Without a label you work the issue yourself, on the session model. With `model:haiku`, `model:sonnet` or `model:opus`, hand loop step 2 to a subagent on that model: `Agent` tool, `subagent_type: "general-purpose"`, `model` taken from the label, no `isolation` (the workflow makes its own worktree). Brief it with:
 
-> Work issue #N of this repo through the `AGENTS.md` workflow, steps 2–7: claim → worktree → implement → done → PR → CI green. "Done" includes the tests `AGENTS.md` asks for (step 5): a Vitest or Playwright test for new or changed behavior, written the way the `write-tests` skill says (load it first), `npm run lint`, `npm test` and `npm run test:e2e` green. Read `AGENTS.md`, `README.md`, the issue and all of its comments first. You are authorized to branch, commit, push, open the PR and label, comment on and assign the issue. Never merge, push to `main` or close issues by hand. If the issue is unclear, park it with `scripts/issue.sh ask N "<questions>"`; if it waits on another PR or issue, with `scripts/issue.sh block N "<reason>"`. Then stop. Report the PR link, or why there is none.
+> Work issue #N of this repo through the `AGENTS.md` workflow, steps 2–7: claim → worktree → implement → done → PR → CI green. "Done" includes the tests `AGENTS.md` asks for (step 5): a Vitest or Playwright test for new or changed behavior, written the way the `write-tests` skill says (load it first), `npm run lint`, `npm test` and `npm run test:e2e` green. Read `AGENTS.md`, `README.md`, the issue and all of its comments first. You are authorized to branch, commit, push, open the PR and label, comment on and assign the issue. Never merge, push to `main` or close issues by hand. If the issue is unclear, park it with `scripts/issue.sh ask N "<questions>"`; if it waits on another issue, with `scripts/issue.sh block N "<reason>" M`; on a PR, with `scripts/issue.sh block N "<reason, naming #M>"`. Then stop. Report the PR link, or why there is none.
 
 Wait for its report, then go back to loop step 1. Devs set the label when they know an issue is trivial or hard: `gh issue edit N --add-label model:opus`, or as the last argument of `scripts/issue.sh new`. Add or change these labels only when a dev asks for that model, never on your own judgment. Exceptions: `/create-issue` suggests one from its complexity estimate and sets it after the dev confirmed; `/refine-issues` sets one on every issue it refines (clear-cut from its estimate, else after asking the dev).
 
@@ -74,8 +74,15 @@ F='sort:created-asc -label:"in progress" -label:question -label:wontfix -label:d
 } | jq -s 'add | sort_by(.createdAt) | map(.number)'
 # per candidate, must print 0 (no PR already closes it):
 gh issue view N --json closedByPullRequestsReferences -q '[.closedByPullRequestsReferences[]] | length'
+# per candidate: open blockers, sub-issues, closed sub-issues
+gh api "repos/{owner}/{repo}/issues/N" -q '"\(.issue_dependencies_summary.blocked_by // 0) \(.sub_issues_summary.total // 0) \(.sub_issues_summary.completed // 0)"'
 ```
 
-A `blocked` issue is eligible only once what it waits on is in: read its latest `⏸ Blocked` comment. Merged or closed → `gh issue edit N --remove-label blocked` and work it. Still open → skip it without a new comment.
+Native links (set by `scripts/issue.sh block … M`, `scripts/issue.sh sub`, or by a dev on the issue page):
 
-Issue numbers given as args are taken even if they are assigned to someone. Only a claim by another session (`scripts/issue.sh claim` exits 2), a linked open PR or a closed issue stops them.
+- **Blocked by an open issue** (first number not 0) → skip it without a comment. GitHub drops the count when the blocker closes; nothing to clean up.
+- **A parent** (sub-issues, second number not 0) → never work it, its sub-issues are the work. All of them closed (third number = second) → close the parent: `gh issue close N --comment "All sub-issues done"`. That is the one issue this skill closes by hand.
+
+The `blocked` label (a PR dependency, or issues parked before native links): eligible only once what it waits on is in: read its latest `⏸ Blocked` comment. Merged or closed → `gh issue edit N --remove-label blocked` and work it. Still open → skip it without a new comment.
+
+Issue numbers given as args are taken even if they are assigned to someone. Only a claim by another session (`scripts/issue.sh claim` exits 2), a linked open PR, an open native blocker, being a parent, or a closed issue stops them.
