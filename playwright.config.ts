@@ -1,7 +1,63 @@
+import { readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
 
-// own port, so the e2e run never talks to a dev server of another checkout (5173 main, 5174+ worktrees)
-const port = Number(process.env.E2E_PORT ?? 5199);
+const alive = (pid: number): boolean => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === 'EPERM';
+  }
+};
+
+/**
+ * Own port, so the e2e run never talks to a dev server (5173 main, 5174+ worktrees) or to the e2e run of another
+ * checkout running at the same time: the first port from 5199 that no other run holds. A run holds its port with a lock
+ * file in the temp folder, created only if absent (two runs starting together cannot both get it), and removed when the
+ * run ends; a lock whose run is gone is taken over. The runner picks the port once and hands it to its workers (they
+ * load this file again) through `E2E_PORT`, which also overrides the pick. A second run in the same checkout stops: it
+ * would rebuild `dist-e2e` under the first one.
+ */
+function e2ePort(): number {
+  const dir = realpathSync(fileURLToPath(new URL('.', import.meta.url)));
+  /** 'mine' once the lock is ours, 'taken' while another run holds it, 'stale' when its run is gone (removed: try again) */
+  const tryLock = (port: number): 'mine' | 'taken' | 'stale' => {
+    const lock = join(tmpdir(), `saftladen-e2e-${port}.lock`);
+    try {
+      writeFileSync(lock, `${process.pid}\n${dir}`, { flag: 'wx' });
+      return 'mine';
+    } catch {
+      let held: string;
+      try {
+        held = readFileSync(lock, 'utf8');
+      } catch {
+        return 'stale'; // its run just ended and removed it
+      }
+      const [pid, owner] = held.split('\n');
+      if (!(Number(pid) > 0)) return 'taken'; // still being written
+      if (!alive(Number(pid))) {
+        rmSync(lock, { force: true });
+        return 'stale';
+      }
+      if (owner === dir) throw new Error(`another e2e run in this checkout (pid ${pid}) is still running on :${port}`);
+      return 'taken';
+    }
+  };
+  for (let port = 5199; port < 5299; port++) {
+    let got = tryLock(port);
+    for (let i = 0; got === 'stale' && i < 3; i++) got = tryLock(port);
+    if (got !== 'mine') continue;
+    process.on('exit', () => rmSync(join(tmpdir(), `saftladen-e2e-${port}.lock`), { force: true }));
+    process.env.E2E_PORT = String(port);
+    return port;
+  }
+  throw new Error('no free e2e port in 5199–5298');
+}
+
+const port = Number(process.env.E2E_PORT || e2ePort());
 
 export default defineConfig({
   testDir: 'e2e',
