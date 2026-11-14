@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { DEFAULT_LAYOUT, type ItemOverride, type Layout } from '../data/layout';
 import type { RoomItem } from '../render/roomItem';
+import type { Blockage } from './placement';
 import { EditorPanel } from '../ui/EditorPanel';
 
 const KEY = 'saftladen.layout';
@@ -22,7 +23,7 @@ export class RoomEditor {
   private selected: RoomItem | null = null;
   private hovered: RoomItem | null = null;
   /** `before`: where the item stood, `was`: what was cut off then; `blocking`: what it cuts off on top where it is now (null: the spot is fine) */
-  private drag: { item: RoomItem; before: ItemOverride; was: string[]; dx: number; dz: number; gx: number; gz: number; blocking: string | null } | null = null;
+  private drag: { item: RoomItem; before: ItemOverride; was: Blockage[]; dx: number; dz: number; gx: number; gz: number; blocking: string | null } | null = null;
   /** the last pointerdown grabbed an item (the click that follows must not deselect it) */
   private grabbed = false;
   private snap = true;
@@ -42,7 +43,7 @@ export class RoomEditor {
     /** furniture moved for good (drop, turn, remove, import, reset): rebuild the nav grid and everything that hangs on it */
     private onChange: () => void,
     /** what the furniture where it stands now cuts off (seats, places, doors); empty when nobody is cut off */
-    private blocked: () => string[],
+    private blocked: () => Blockage[],
   ) {
     const css = getComputedStyle(document.documentElement);
     const color = (variable: string) => new THREE.Color(css.getPropertyValue(variable).trim());
@@ -227,8 +228,8 @@ export class RoomEditor {
    * What the furniture cuts off now that `was` did not (the first of it), or null. Only what an edit adds counts: a
    * layout saved before the check existed may already cut something off, and that must not lock every other item.
    */
-  private added(was: string[]): string | null {
-    return this.blocked().find((b) => !was.includes(b)) ?? null;
+  private added(was: Blockage[]): string | null {
+    return this.blocked().find((b) => !was.some((w) => w.key === b.key))?.label ?? null;
   }
 
   /** `it` stays where it is now unless it cuts something off (`blocking`): then it goes back to `before` and the panel says why. */
@@ -270,9 +271,11 @@ export class RoomEditor {
   private restore(id: string): void {
     const it = this.items.find((o) => o.id === id);
     if (!it) return;
-    this.change(it, () => it.set({ ...it.override, hidden: false }));
-    if (!it.hidden) this.selected = it;
-    this.refresh();
+    this.change(it, () => {
+      it.set({ ...it.override, hidden: false });
+      this.selected = it;
+    });
+    if (it.hidden) this.deselect(); // refused
   }
 
   private exportJson(): string {
@@ -317,8 +320,9 @@ export class RoomEditor {
     const known = new Set(this.items.map((it) => it.id));
     const unknown = Object.keys(layout).filter((id) => !known.has(id));
     const before = this.items.map((it) => it.override ?? {});
+    const was = this.blocked();
     for (const it of this.items) it.set(layout[it.id] && typeof layout[it.id] === 'object' ? layout[it.id] : {});
-    const blocking = this.blocked()[0];
+    const blocking = this.added(was);
     if (blocking) {
       this.items.forEach((it, i) => it.set(before[i]));
       this.refresh();

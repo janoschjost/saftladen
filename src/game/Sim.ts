@@ -22,7 +22,7 @@ import { Person } from './Person';
 import { PetCare } from './PetCare';
 import { Nerf } from './Nerf';
 import { PhoneBooth } from './PhoneBooth';
-import { blockages } from './placement';
+import { blockages, type Blockage } from './placement';
 import { Pod } from './Pod';
 import { Presence } from './Presence';
 import { Scenario } from './Scenario';
@@ -183,7 +183,7 @@ export class Sim {
   private scratch: NavGrid | null = null;
 
   /** What the furniture where it stands now cuts off (seats, places, doors; see `placement.ts`); empty when nothing. */
-  blocked(): string[] {
+  blocked(): Blockage[] {
     return blockages(this, (this.scratch ??= new NavGrid(this.nav.cols, this.nav.rows, this.nav.cell)));
   }
 

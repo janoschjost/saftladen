@@ -10,6 +10,12 @@ interface Target {
   ring: number;
 }
 
+/** Something the furniture cuts off: `key` names this one (which door, which seat), `label` is for the message. */
+export interface Blockage {
+  key: string;
+  label: string;
+}
+
 /**
  * Every seat and standing spot the simulation sends people to, where the furniture puts it right now. A spot is fine
  * when a way from the corridor ends next to it (`ring` cells of 0.5 m), the way people standing up from a desk look
@@ -40,11 +46,7 @@ function doorSweep(d: OfficeModel['doors'][number]): Vec2[] {
   for (let i = 0; i <= 8; i++) {
     // the leaf runs along the pivot's local +x; rotation.y = a turns +x to (cos a, -sin a)
     const a = d.base + d.swing * DOOR_SWING * (i / 8);
-    for (let k = 1; k <= 6; k++)
-      out.push({
-        x: h.x + Math.cos(a) * d.width * (k / 6),
-        z: h.z - Math.sin(a) * d.width * (k / 6),
-      });
+    for (let k = 1; k <= 6; k++) out.push({ x: h.x + Math.cos(a) * d.width * (k / 6), z: h.z - Math.sin(a) * d.width * (k / 6) });
   }
   return out;
 }
@@ -57,12 +59,13 @@ const covers = (b: Box3, p: Vec2) => p.x > b.min.x && p.x < b.max.x && p.z > b.m
  * to from the corridor (`CORRIDOR_POINT`), and no piece of furniture stands in a doorway or where a door swings.
  * `nav` is a scratch grid of the office's size, rebuilt here from the furniture; the sim's own grid is not touched.
  */
-export function blockages(sim: Sim, nav: NavGrid): string[] {
+export function blockages(sim: Sim, nav: NavGrid): Blockage[] {
   const m = sim.model;
   const furniture = m.items.flatMap((it) => it.blockers());
   nav.clear();
   nav.blockBoxes(m.blockers());
-  const out = m.doors.filter((d) => doorSweep(d).some((p) => furniture.some((b) => covers(b, p)))).map(() => 'eine Tür');
-  for (const t of targets(sim)) if (!nav.openNear(t.at, CORRIDOR_POINT, t.ring)) out.push(t.label);
-  return [...new Set(out)];
+  const out: Blockage[] = [];
+  m.doors.forEach((d, i) => doorSweep(d).some((p) => furniture.some((b) => covers(b, p))) && out.push({ key: `swing ${i}`, label: 'eine Tür' }));
+  targets(sim).forEach((t, i) => !nav.openNear(t.at, CORRIDOR_POINT, t.ring) && out.push({ key: `${t.label} ${i}`, label: t.label }));
+  return out;
 }

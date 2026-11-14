@@ -75,7 +75,7 @@ test('editor.placement: a saved layout that already cuts off a seat does not loc
   await page.addInitScript(() => localStorage.setItem('saftladen.layout', JSON.stringify({ 'plant@27.1,9': {} })));
   const errors = await openGame(page, 'plan');
   await page.keyboard.press('e');
-  expect(await read(page, (g) => g.sim.blocked())).toEqual(['Platz 27']);
+  expect(await read(page, (g) => g.sim.blocked().map((b) => b.label))).toEqual(['Platz 27']);
   const before = await dividerAt(page);
   const at = await screenAt(page, before);
   await page.mouse.click(at.x, at.y);
