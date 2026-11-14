@@ -30,9 +30,9 @@ For each issue:
 5. **Write it into the issue.**
    - Rewrite the body (`gh issue edit N --body-file <file>`): keep the original request, then `## Acceptance criteria` as a checkable list, and `## Decisions` with what was decided in this session. The acceptance criteria are the definition of done (`AGENTS.md`), so they must be complete without the comments.
    - Split confirmed → open each part with `scripts/issue.sh new`, then close the original: `gh issue close N --reason "not planned" --comment "Split into #A, #B"` and release it (`scripts/issue.sh release N "split"`).
+   - Set the `model:*` label (each split-off issue gets its own). Estimate it with the table in the `create-issue` skill (step 5), from the code you read. Clear-cut → set it (`gh issue edit N --add-label model:<x>`, removing any other `model:*` label) and tell the dev with a one-line reason; they can overrule it. Unsure between two → ask in the last question round, the higher one first and marked `(Recommended)`, and set the answer. A refined issue never goes without one.
    - Then `scripts/issue.sh refined N "<short summary of the decisions>"`: comments, removes `question`/`blocked` and releases the claim. The issue is now eligible for `/tackle-issues`.
-   - A `model:*` label: suggest one if the issue is clearly trivial or hard, set it only if the dev says so.
 6. **Not settled** (dev unsure, wants to ask someone, still waiting on the dependency) → keep it parked: `scripts/issue.sh ask N "<what is still open>"` or `scripts/issue.sh block N "<reason>"`. Both release the claim.
 7. The dev wants to stop → finish the current issue with step 5 or 6 first. Never leave an issue claimed.
 
-At the end, report per issue: refined (link), split into which issues, or still parked and why.
+At the end, report per issue: refined (link, `model:*` label), split into which issues, or still parked and why.
