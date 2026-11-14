@@ -21,8 +21,8 @@ export class RoomEditor {
   active = false;
   private selected: RoomItem | null = null;
   private hovered: RoomItem | null = null;
-  /** `before`: where the item stood; `blocking`: what it cuts off where it is now (null: the spot is fine) */
-  private drag: { item: RoomItem; before: ItemOverride; dx: number; dz: number; gx: number; gz: number; blocking: string | null } | null = null;
+  /** `before`: where the item stood, `was`: what was cut off then; `blocking`: what it cuts off on top where it is now (null: the spot is fine) */
+  private drag: { item: RoomItem; before: ItemOverride; was: string[]; dx: number; dz: number; gx: number; gz: number; blocking: string | null } | null = null;
   /** the last pointerdown grabbed an item (the click that follows must not deselect it) */
   private grabbed = false;
   private snap = true;
@@ -41,8 +41,8 @@ export class RoomEditor {
     private floor: { width: number; depth: number },
     /** furniture moved for good (drop, turn, remove, import, reset): rebuild the nav grid and everything that hangs on it */
     private onChange: () => void,
-    /** what the furniture where it stands now cuts off (a seat, a place, a door), or null when nobody is cut off */
-    private blocked: () => string | null,
+    /** what the furniture where it stands now cuts off (seats, places, doors); empty when nobody is cut off */
+    private blocked: () => string[],
   ) {
     const css = getComputedStyle(document.documentElement);
     const color = (variable: string) => new THREE.Color(css.getPropertyValue(variable).trim());
@@ -114,7 +114,7 @@ export class RoomEditor {
     this.grabbed = !!item;
     if (!item) return false;
     this.selected = item;
-    if (ground) this.drag = { item, before: item.override ?? {}, dx: item.dx, dz: item.dz, gx: ground.x, gz: ground.z, blocking: null };
+    if (ground) this.drag = { item, before: item.override ?? {}, was: this.blocked(), dx: item.dx, dz: item.dz, gx: ground.x, gz: ground.z, blocking: null };
     this.refresh();
     return true;
   }
@@ -133,7 +133,7 @@ export class RoomEditor {
     const step = this.snap && !free ? GRID : 0.01;
     const dx = d.dx + Math.round((ground.x - d.gx) / step) * step;
     const dz = d.dz + Math.round((ground.z - d.gz) / step) * step;
-    if (this.place(d.item, dx, dz)) d.blocking = this.blocked();
+    if (this.place(d.item, dx, dz)) d.blocking = this.added(d.was);
     this.refresh();
   }
 
@@ -212,14 +212,23 @@ export class RoomEditor {
   private drop(): void {
     const d = this.drag;
     this.drag = null;
-    if (!d || sameOverride(d.item.override ?? {}, d.before)) return this.refresh();
+    if (!d || sameOverride(d.item.override ?? {}, d.before)) return this.refresh(); // back where it was: nothing new is cut off
     this.keep(d.item, d.before, d.blocking);
   }
 
   /** Applies `edit` to `it` (false: nothing changed), see `keep`. */
   private change(it: RoomItem, edit: () => boolean | void): void {
     const before = it.override ?? {};
-    if (edit() !== false) this.keep(it, before, this.blocked());
+    const was = this.blocked();
+    if (edit() !== false) this.keep(it, before, this.added(was));
+  }
+
+  /**
+   * What the furniture cuts off now that `was` did not (the first of it), or null. Only what an edit adds counts: a
+   * layout saved before the check existed may already cut something off, and that must not lock every other item.
+   */
+  private added(was: string[]): string | null {
+    return this.blocked().find((b) => !was.includes(b)) ?? null;
   }
 
   /** `it` stays where it is now unless it cuts something off (`blocking`): then it goes back to `before` and the panel says why. */
@@ -261,8 +270,9 @@ export class RoomEditor {
   private restore(id: string): void {
     const it = this.items.find((o) => o.id === id);
     if (!it) return;
-    this.selected = it;
     this.change(it, () => it.set({ ...it.override, hidden: false }));
+    if (!it.hidden) this.selected = it;
+    this.refresh();
   }
 
   private exportJson(): string {
@@ -308,7 +318,7 @@ export class RoomEditor {
     const unknown = Object.keys(layout).filter((id) => !known.has(id));
     const before = this.items.map((it) => it.override ?? {});
     for (const it of this.items) it.set(layout[it.id] && typeof layout[it.id] === 'object' ? layout[it.id] : {});
-    const blocking = this.blocked();
+    const blocking = this.blocked()[0];
     if (blocking) {
       this.items.forEach((it, i) => it.set(before[i]));
       this.refresh();

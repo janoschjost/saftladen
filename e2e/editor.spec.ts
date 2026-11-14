@@ -58,3 +58,28 @@ test('editor.placement: an arrow nudge that would cut off a seat is refused', as
   await expect(page.locator('#editor-status')).toContainText('Platz 9');
   expect(errors).toEqual([]);
 });
+
+test('editor.placement: a JSON import that would cut off a seat is not applied', async ({ page }) => {
+  const errors = await openGame(page, 'plan');
+  await page.keyboard.press('e');
+  const before = await dividerAt(page);
+  await page.locator('#editor-json').fill(JSON.stringify({ [DIVIDER]: { dx: -1 } }));
+  await page.locator('#editor-import').click();
+  await expect(page.locator('#editor-status')).toContainText('Nicht übernommen');
+  expect(await dividerAt(page)).toEqual(before);
+  expect(errors).toEqual([]);
+});
+
+test('editor.placement: a saved layout that already cuts off a seat does not lock the other items', async ({ page }) => {
+  // saved before the check existed: the plant stands in the only way to desk 27 again
+  await page.addInitScript(() => localStorage.setItem('saftladen.layout', JSON.stringify({ 'plant@27.1,9': {} })));
+  const errors = await openGame(page, 'plan');
+  await page.keyboard.press('e');
+  expect(await read(page, (g) => g.sim.blocked())).toEqual(['Platz 27']);
+  const before = await dividerAt(page);
+  const at = await screenAt(page, before);
+  await page.mouse.click(at.x, at.y);
+  await page.keyboard.press('Shift+ArrowLeft'); // nothing new is cut off: the nudge is kept
+  expect((await dividerAt(page)).dx).toBe(before.dx - 0.25);
+  expect(errors).toEqual([]);
+});
