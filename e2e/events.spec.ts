@@ -17,7 +17,7 @@ const cases: [string, string, (g: TestHook) => unknown][] = [
   ['home.son', 'remote-son', (g) => g.homes.some((h) => h?.sonHere)],
 ];
 
-// The kneel itself is drawn by the view (`Game.posePet` puts `petPose` on the rig); who strokes what: places.test.ts
+// The kneel itself is drawn by the view (`applyPetPose` puts `petPose` on the rig); who strokes what: places.test.ts
 const kneels = (g: TestHook) => g.sim.people.some((p) => p.petAmt > 0.9 && p.rig.legL.rotation.x < -0.4 && p.rig.kneeR.rotation.x > 1.2);
 for (const [id, owner, event] of [
   ['pet.crouch', 'ramon-lenherr', 'pet-dog'],

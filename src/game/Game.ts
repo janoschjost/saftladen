@@ -39,12 +39,12 @@ import { Christmas } from './Christmas';
 import { RainFx } from '../render/rainFx';
 import { SpawnFx } from '../render/spawnFx';
 import { loadState, saveState } from '../ui/persist';
-import { DOOR_LANES } from './Door';
+import { DOOR_LANES, laneBusy } from './Door';
 import { setTvMode } from '../render/screens';
 import { Person } from './Person';
 import { strings } from '../i18n/strings';
 import { RoomEditor } from './RoomEditor';
-import { CROUCH_SECONDS, LEG_ORDER, petPose, smooth } from './petPose';
+import { HIP_HEIGHT, poseFrame } from './petPose';
 import { applySky, type SkyRig } from './TimeOfDay';
 import { MAX_FRAME, type Drawer, type FrameTime } from './seams';
 import { Sim } from './Sim';
@@ -60,7 +60,6 @@ const BUSY_ANSWERS = ['Grad keine Zeit!', 'Später…', 'Bin im Fokus.', 'Psst, 
 const SEATS_KEY = 'saftladen.seats';
 const STEER_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
 const OVERCAST = new THREE.Color('#8c95a3'); // sky colour in the rain
-const HIP_HEIGHT = 0.8; // hip pivots of the character rig: the upper body bends here
 const ACTION_MAX = 240; // seconds: an action's chip and camera give up after this long at the latest
 const ACTION_NO_LEAD = 6; // seconds the chip stays for an action that moves nobody (e.g. rain)
 
@@ -76,7 +75,6 @@ export class Game {
   private roofWanted = false;
   private editor!: RoomEditor;
   private overlay: Overlay;
-  private hip = new THREE.Vector3();
   private poofFx = new PoofFx(this.scene);
   /** alter egos whose desk monitor shows Kurt right now, with that desk (see updateAlterEgos) */
   private kurtScreens = new Map<Person, Desk>();
@@ -1346,105 +1344,100 @@ export class Game {
     if (w instanceof Person) {
       const r = w.rig;
       const sit = w.sit;
-      // every frame starts from the neutral rig: additive poses below (`+=`) must never carry over from the last frame
-      r.body.rotation.set(0, 0, 0);
-      r.body.position.set(0, 0, 0);
-      r.armL.rotation.set(0, 0, 0);
-      r.armR.rotation.set(0, 0, 0);
-      r.legL.rotation.set(0, 0, 0, 'XYZ'); // the kneel turns a leg out (y, order YXZ)
-      r.legR.rotation.set(0, 0, 0, 'XYZ');
-      // standing: walk cycle (knees bend while a leg swings forward); sitting: thighs flat, shins down
-      r.legL.rotation.x = swing * (1 - sit) - 1.5 * sit;
-      r.legR.rotation.x = -swing * (1 - sit) - 1.5 * sit;
-      // knee bends while the leg swings forward through the middle of the step (foot lifts off), not at the extremes
-      const cph = Math.cos(ph);
-      const kneeSwing = 1.1 * w.moving;
-      r.kneeL.rotation.x = Math.max(0, -cph) * kneeSwing * (1 - sit) + 0.06 * w.moving * (1 - sit) + 1.5 * sit;
-      r.kneeR.rotation.x = Math.max(0, cph) * kneeSwing * (1 - sit) + 0.06 * w.moving * (1 - sit) + 1.5 * sit;
-      // pelvis rides on the planted foot: lowest when the legs are spread, highest when they pass, so the feet touch the ground
-      let hip = 0.8;
-      if (sit < 0.01 && w.lift < 0.02 && w.moving > 0.01) {
-        const depth = (a: number, k: number) => 0.4 * Math.cos(a) + 0.4 * Math.cos(a + k);
-        // only part of the full drop: the legs are not perfectly stiff, and a full drop looks bouncy
-        hip = 0.8 + (Math.max(depth(r.legL.rotation.x, r.kneeL.rotation.x), depth(r.legR.rotation.x, r.kneeR.rotation.x)) - 0.8) * 0.5;
-      }
-      r.legL.position.y = r.legR.position.y = hip * (1 - sit) + (0.8 - SIT_DROP) * sit;
-      r.armL.rotation.x = -swing * 0.8 * (1 - sit);
-      r.armR.rotation.x = swing * 0.8 * (1 - sit);
-      r.body.position.y = (hip - 0.8 + bob + breathe) * (1 - sit) - SIT_DROP * sit;
-      // gentle weight shift onto the planted leg
-      r.body.rotation.z = Math.cos(ph) * 0.035 * w.moving * (1 - sit);
-      r.body.position.x = Math.sin(ph) * 0.02 * w.moving * (1 - sit);
-      if (w.working) {
-        // typing: hands on the keyboard, small quick jitters, now and then a glance at the screen
-        const t = this.clock + w.phase;
-        r.armL.rotation.x = -1.2 + Math.sin(t * 17) * 0.05 + Math.sin(t * 5.3) * 0.04;
-        r.armR.rotation.x = -1.2 + Math.sin(t * 14 + 2) * 0.05 + Math.sin(t * 4.1) * 0.04;
-        r.body.position.y += Math.sin(t * 1.3) * 0.006;
-      } else if (sit > 0.01) {
-        r.armL.rotation.x += -1.2 * sit;
-        r.armR.rotation.x += -1.2 * sit;
-      }
-      if (w.foosAmt > 0) {
-        // foosball: both hands on the rods, quick sideways pushes and spins
-        const t = this.clock + w.phase;
-        r.armL.rotation.x = -1.1 + Math.sin(t * 9) * 0.25;
-        r.armR.rotation.x = -1.1 + Math.sin(t * 7.3 + 1.5) * 0.25;
-        r.armL.rotation.z = Math.sin(t * 5) * 0.12;
-        r.armR.rotation.z = Math.sin(t * 4.3 + 1) * 0.12;
-        r.body.position.y += Math.abs(Math.sin(t * 3)) * 0.015;
-      } else {
-        r.armL.rotation.z = r.armR.rotation.z = 0;
-      }
-      r.elbowL.rotation.set(0, 0, 0);
-      r.elbowR.rotation.set(0, 0, 0);
-      if (!w.working && sit < 0.01) {
-        // relaxed walking arms: elbows bend more as the hand swings forward
-        r.elbowL.rotation.x = Math.min(0, r.armL.rotation.x) * 0.6 - 0.12 * w.moving;
-        r.elbowR.rotation.x = Math.min(0, r.armR.rotation.x) * 0.6 - 0.12 * w.moving;
-      }
-      this.poseTired(w, r);
-      if (r.vape) this.poseVape(w, r.vape, ph);
-      if (r.phone) this.posePhone(w, r.phone);
-      const talking = !!(w.talk || (w.playerChat && !w.petting)) && w.moving < 0.2 && !(w.sit > 0.5 && !w.speaking);
-      w.talkAmt += ((talking ? 1 : 0) - w.talkAmt) * 0.12;
-      w.speakAmt += ((talking && w.speaking ? 1 : 0) - w.speakAmt) * 0.15;
-      const ta = w.talkAmt;
-      const sa = w.speakAmt;
-      if (ta > 0.01) {
-        const t = this.clock + w.phase;
-        const lively = w.talk?.kind === 'discussion' ? 1 : 0.65;
-        // speaker: phrases of gestures (a slow envelope makes beats), a lean in and a sway towards the audience
-        const beat = 0.55 + 0.45 * Math.sin(t * 1.7);
-        const rs = -0.9 + Math.sin(t * 8) * 0.55 * lively * beat;
-        const ls = -0.5 + Math.sin(t * 6.3 + 1) * 0.45 * lively * (1.1 - beat * 0.6);
-        // listener: relaxed arms, slow nods, the odd tilt of the head
-        const rl = Math.sin(t * 1.5) * 0.06;
-        const ll = -Math.sin(t * 1.5) * 0.06;
-        r.armR.rotation.x = THREE.MathUtils.lerp(r.armR.rotation.x, THREE.MathUtils.lerp(rl, rs, sa), ta);
-        r.armL.rotation.x = THREE.MathUtils.lerp(r.armL.rotation.x, THREE.MathUtils.lerp(ll, ls, sa), ta);
-        r.armR.rotation.z += sa * (0.12 + Math.sin(t * 3.1) * 0.06) * lively;
-        r.armL.rotation.z -= sa * (0.1 + Math.sin(t * 2.7 + 1) * 0.05) * lively;
-        r.body.position.y += (sa * Math.abs(Math.sin(t * 5)) * 0.03 * lively + (1 - sa) * Math.max(0, Math.sin(t * 2.2)) * 0.02) * ta;
-        const nod = (1 - sa) * Math.max(0, Math.sin(t * 2.2 - 0.6)) * 0.07;
-        r.body.rotation.x += (sa * 0.05 + nod) * ta;
-        r.body.rotation.y = (sa * Math.sin(t * 1.3) * 0.14 + (1 - sa) * Math.sin(t * 0.6) * 0.04) * ta;
-      } else {
-        r.body.rotation.y = 0;
-      }
-      this.poseReaction(w, r);
-      this.posePet(w, r);
-      this.poseCup(w, r);
-      this.poseSnack(w, r);
-      this.poseEmote(w, r);
-      this.poseEaster(w, r);
-      this.poseGameboy(w, r);
-      if (r.tail) {
-        // Kurt's tail sways from side to side with the steps, and rests still otherwise
-        r.tail.rotation.y = Math.sin(ph) * 0.35 * w.moving;
-        r.tail.rotation.x = -0.15 * sit;
-      }
-      this.hinge(r);
+      // reset, the two halves, the pet pose between them and the hip hinge: `poseFrame` (petPose.ts) keeps each frame off the last one's pose
+      poseFrame(w, r, this.clock, () => {
+        // standing: walk cycle (knees bend while a leg swings forward); sitting: thighs flat, shins down
+        r.legL.rotation.x = swing * (1 - sit) - 1.5 * sit;
+        r.legR.rotation.x = -swing * (1 - sit) - 1.5 * sit;
+        // knee bends while the leg swings forward through the middle of the step (foot lifts off), not at the extremes
+        const cph = Math.cos(ph);
+        const kneeSwing = 1.1 * w.moving;
+        r.kneeL.rotation.x = Math.max(0, -cph) * kneeSwing * (1 - sit) + 0.06 * w.moving * (1 - sit) + 1.5 * sit;
+        r.kneeR.rotation.x = Math.max(0, cph) * kneeSwing * (1 - sit) + 0.06 * w.moving * (1 - sit) + 1.5 * sit;
+        // pelvis rides on the planted foot: lowest when the legs are spread, highest when they pass, so the feet touch the ground
+        let hip = HIP_HEIGHT;
+        if (sit < 0.01 && w.lift < 0.02 && w.moving > 0.01) {
+          const depth = (a: number, k: number) => 0.4 * Math.cos(a) + 0.4 * Math.cos(a + k);
+          // only part of the full drop: the legs are not perfectly stiff, and a full drop looks bouncy
+          hip = HIP_HEIGHT + (Math.max(depth(r.legL.rotation.x, r.kneeL.rotation.x), depth(r.legR.rotation.x, r.kneeR.rotation.x)) - HIP_HEIGHT) * 0.5;
+        }
+        r.legL.position.y = r.legR.position.y = hip * (1 - sit) + (HIP_HEIGHT - SIT_DROP) * sit;
+        r.armL.rotation.x = -swing * 0.8 * (1 - sit);
+        r.armR.rotation.x = swing * 0.8 * (1 - sit);
+        r.body.position.y = (hip - HIP_HEIGHT + bob + breathe) * (1 - sit) - SIT_DROP * sit;
+        // gentle weight shift onto the planted leg
+        r.body.rotation.z = Math.cos(ph) * 0.035 * w.moving * (1 - sit);
+        r.body.position.x = Math.sin(ph) * 0.02 * w.moving * (1 - sit);
+        if (w.working) {
+          // typing: hands on the keyboard, small quick jitters, now and then a glance at the screen
+          const t = this.clock + w.phase;
+          r.armL.rotation.x = -1.2 + Math.sin(t * 17) * 0.05 + Math.sin(t * 5.3) * 0.04;
+          r.armR.rotation.x = -1.2 + Math.sin(t * 14 + 2) * 0.05 + Math.sin(t * 4.1) * 0.04;
+          r.body.position.y += Math.sin(t * 1.3) * 0.006;
+        } else if (sit > 0.01) {
+          r.armL.rotation.x += -1.2 * sit;
+          r.armR.rotation.x += -1.2 * sit;
+        }
+        if (w.foosAmt > 0) {
+          // foosball: both hands on the rods, quick sideways pushes and spins
+          const t = this.clock + w.phase;
+          r.armL.rotation.x = -1.1 + Math.sin(t * 9) * 0.25;
+          r.armR.rotation.x = -1.1 + Math.sin(t * 7.3 + 1.5) * 0.25;
+          r.armL.rotation.z = Math.sin(t * 5) * 0.12;
+          r.armR.rotation.z = Math.sin(t * 4.3 + 1) * 0.12;
+          r.body.position.y += Math.abs(Math.sin(t * 3)) * 0.015;
+        } else {
+          r.armL.rotation.z = r.armR.rotation.z = 0;
+        }
+        r.elbowL.rotation.set(0, 0, 0);
+        r.elbowR.rotation.set(0, 0, 0);
+        if (!w.working && sit < 0.01) {
+          // relaxed walking arms: elbows bend more as the hand swings forward
+          r.elbowL.rotation.x = Math.min(0, r.armL.rotation.x) * 0.6 - 0.12 * w.moving;
+          r.elbowR.rotation.x = Math.min(0, r.armR.rotation.x) * 0.6 - 0.12 * w.moving;
+        }
+        this.poseTired(w, r);
+        if (r.vape) this.poseVape(w, r.vape, ph);
+        if (r.phone) this.posePhone(w, r.phone);
+        const talking = !!(w.talk || (w.playerChat && !w.petting)) && w.moving < 0.2 && !(w.sit > 0.5 && !w.speaking);
+        w.talkAmt += ((talking ? 1 : 0) - w.talkAmt) * 0.12;
+        w.speakAmt += ((talking && w.speaking ? 1 : 0) - w.speakAmt) * 0.15;
+        const ta = w.talkAmt;
+        const sa = w.speakAmt;
+        if (ta > 0.01) {
+          const t = this.clock + w.phase;
+          const lively = w.talk?.kind === 'discussion' ? 1 : 0.65;
+          // speaker: phrases of gestures (a slow envelope makes beats), a lean in and a sway towards the audience
+          const beat = 0.55 + 0.45 * Math.sin(t * 1.7);
+          const rs = -0.9 + Math.sin(t * 8) * 0.55 * lively * beat;
+          const ls = -0.5 + Math.sin(t * 6.3 + 1) * 0.45 * lively * (1.1 - beat * 0.6);
+          // listener: relaxed arms, slow nods, the odd tilt of the head
+          const rl = Math.sin(t * 1.5) * 0.06;
+          const ll = -Math.sin(t * 1.5) * 0.06;
+          r.armR.rotation.x = THREE.MathUtils.lerp(r.armR.rotation.x, THREE.MathUtils.lerp(rl, rs, sa), ta);
+          r.armL.rotation.x = THREE.MathUtils.lerp(r.armL.rotation.x, THREE.MathUtils.lerp(ll, ls, sa), ta);
+          r.armR.rotation.z += sa * (0.12 + Math.sin(t * 3.1) * 0.06) * lively;
+          r.armL.rotation.z -= sa * (0.1 + Math.sin(t * 2.7 + 1) * 0.05) * lively;
+          r.body.position.y += (sa * Math.abs(Math.sin(t * 5)) * 0.03 * lively + (1 - sa) * Math.max(0, Math.sin(t * 2.2)) * 0.02) * ta;
+          const nod = (1 - sa) * Math.max(0, Math.sin(t * 2.2 - 0.6)) * 0.07;
+          r.body.rotation.x += (sa * 0.05 + nod) * ta;
+          r.body.rotation.y = (sa * Math.sin(t * 1.3) * 0.14 + (1 - sa) * Math.sin(t * 0.6) * 0.04) * ta;
+        } else {
+          r.body.rotation.y = 0;
+        }
+        this.poseReaction(w, r);
+      }, () => {
+        this.poseCup(w, r);
+        this.poseSnack(w, r);
+        this.poseEmote(w, r);
+        this.poseEaster(w, r);
+        this.poseGameboy(w, r);
+        if (r.tail) {
+          // Kurt's tail sways from side to side with the steps, and rests still otherwise
+          r.tail.rotation.y = Math.sin(ph) * 0.35 * w.moving;
+          r.tail.rotation.x = -0.15 * sit;
+        }
+      });
     } else if (w instanceof Dog) {
       const r = w.rig;
       const s = Math.sin(ph * 1.6) * 0.8 * w.moving;
@@ -1524,34 +1517,6 @@ export class Game {
       sp.scale.set(sc, sc, 1);
       sp.material.opacity = Math.sin(k * Math.PI) * amt;
     });
-  }
-
-  /** Stroking a pet: down on one knee (dog) or both (cat), a little spine, head down at the animal, one hand stroking. Eases in and out (~0.4 s) and ends as soon as the petting does or is cut short (picked up, walking off, a talk). */
-  private posePet(w: Person, r: Person['rig']): void {
-    const on = w.petting && w.moving < 0.2 && !w.held && w.sit < 0.05;
-    const now = this.clock;
-    const dt = Math.max(0, now - w.petClock); // game time since the last pose, however many steps that was
-    w.petClock = now;
-    w.petAmt = Math.min(1, Math.max(0, w.petAmt + (on ? 1 : -1) * (dt / CROUCH_SECONDS)));
-    if (w.petAmt <= 0) return;
-    const p = petPose(smooth(w.petAmt), w.petHeight, now + w.phase, w.root.scale.y);
-    for (const [hip, knee, l] of [[r.legL, r.kneeL, p.legL], [r.legR, r.kneeR, p.legR]] as const) {
-      hip.rotation.set(l.rx, l.ry, 0, LEG_ORDER);
-      knee.rotation.x = l.knee;
-    }
-    r.legL.position.y = r.legR.position.y = 0.8 - p.drop;
-    r.body.position.y -= p.drop;
-    r.body.rotation.x += p.spine;
-    r.armR.rotation.x = THREE.MathUtils.lerp(r.armR.rotation.x, p.armStroke, smooth(w.petAmt));
-    r.armL.rotation.x = THREE.MathUtils.lerp(r.armL.rotation.x, p.armRest, smooth(w.petAmt));
-  }
-
-  /** The upper body leans around the hips, not around the feet: keeps the torso on the legs however far it bends. */
-  private hinge(r: Person['rig']): void {
-    const hip = this.hip.set(0, HIP_HEIGHT, 0).applyEuler(r.body.rotation);
-    r.body.position.x -= hip.x;
-    r.body.position.y += HIP_HEIGHT - hip.y;
-    r.body.position.z -= hip.z;
   }
 
   /** Tired people: heavy eyelids, dark eye bags, a slouch and a yawn now and then (hand over the mouth). */
@@ -1979,7 +1944,7 @@ export class Game {
   /** Each wing of the front door swings open on its own while somebody is on the way through its lane (the interior doors: `Sim.step`). */
   private updateDoor(dt: number): void {
     for (const lane of DOOR_LANES) {
-      const near = this.sim.walkers.some((w) => !w.away && Math.abs(w.pos.x - lane.gate.x) < 0.6 && Math.abs(w.pos.z - lane.gate.z) < 1.4);
+      const near = laneBusy(lane, this.sim.walkers);
       const k = lane.wing;
       this.doorOpen[k] += ((near ? 1 : 0) - this.doorOpen[k]) * Math.min(1, dt * 6);
       this.entrance[k].rotation.y = (k === 'left' ? -1 : 1) * this.doorOpen[k] * 1.7;

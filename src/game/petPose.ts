@@ -1,3 +1,6 @@
+import * as THREE from 'three';
+import type { Person } from './Person';
+
 /** Back height of a pet in metres (where the hand strokes): a cat is lower than a dog. */
 export const PET_HEIGHT = { cat: 0.28, dog: 0.5 };
 
@@ -6,7 +9,9 @@ export const CROUCH_SECONDS = 0.4;
 
 /** Pets lower than this (rig units) get both knees, taller ones one knee. */
 const BOTH_KNEES_BELOW = 0.4;
-const SEG = 0.4; // thigh and shin length of the rig (hip pivot at 0.8, sole at 0)
+/** Hip pivots of the character rig (rig units above the floor): the upper body bends here. */
+export const HIP_HEIGHT = 0.8;
+const SEG = 0.4; // thigh and shin length of the rig (hip pivot at HIP_HEIGHT, sole at 0)
 export const KNEE_PAD = 0.1; // half the shin's thickness: how high the knee pivot sits when the knee rests on the floor
 
 /** One leg of the rig: hip pivot `rx` (negative = forward) and `ry` (turned out about the vertical, applied last: Euler order YXZ), knee `knee` (positive = shin back). */
@@ -77,7 +82,7 @@ export function petPose(amt: number, petHeight: number, t: number, scale = 1): P
   legL = scaleLeg(legL, amt);
   legR = scaleLeg(legR, amt);
   return {
-    drop: 0.8 - Math.max(legDepth(legL), legDepth(legR)),
+    drop: HIP_HEIGHT - Math.max(legDepth(legL), legDepth(legR)),
     legL,
     legR,
     both,
@@ -85,4 +90,57 @@ export function petPose(amt: number, petHeight: number, t: number, scale = 1): P
     armStroke: -0.95 * amt + Math.sin(t * 7) * 0.2 * amt,
     armRest: -0.25 * amt,
   };
+}
+
+type PoseRig = Pick<Person['rig'], 'body' | 'armL' | 'armR' | 'legL' | 'legR' | 'kneeL' | 'kneeR'>;
+
+/** Stroking a pet: down on one knee (dog) or both (cat), a little spine, head down at the animal, one hand stroking. Eases in and out (~0.4 s) and ends as soon as the petting does or is cut short (picked up, walking off, a talk). `now` is game time (s). */
+function applyPetPose(w: Pick<Person, 'petting' | 'moving' | 'held' | 'sit' | 'petClock' | 'petAmt' | 'petHeight' | 'phase' | 'root'>, r: PoseRig, now: number): void {
+  const on = w.petting && w.moving < 0.2 && !w.held && w.sit < 0.05;
+  const dt = Math.max(0, now - w.petClock); // game time since the last pose, however many steps that was
+  w.petClock = now;
+  w.petAmt = Math.min(1, Math.max(0, w.petAmt + (on ? 1 : -1) * (dt / CROUCH_SECONDS)));
+  if (w.petAmt <= 0) return;
+  const k = smooth(w.petAmt);
+  const p = petPose(k, w.petHeight, now + w.phase, w.root.scale.y);
+  for (const [hip, knee, l] of [[r.legL, r.kneeL, p.legL], [r.legR, r.kneeR, p.legR]] as const) {
+    hip.rotation.set(l.rx, l.ry, 0, LEG_ORDER);
+    knee.rotation.x = l.knee;
+  }
+  r.legL.position.y = r.legR.position.y = HIP_HEIGHT - p.drop;
+  r.body.position.y -= p.drop;
+  r.body.rotation.x += p.spine;
+  r.armR.rotation.x = THREE.MathUtils.lerp(r.armR.rotation.x, p.armStroke, k);
+  r.armL.rotation.x = THREE.MathUtils.lerp(r.armL.rotation.x, p.armRest, k);
+}
+
+const hipAt = new THREE.Vector3();
+
+/** The upper body leans around the hips, not around the feet: keeps the torso on the legs however far it bends. */
+function hinge(r: PoseRig): void {
+  hipAt.set(0, HIP_HEIGHT, 0).applyEuler(r.body.rotation);
+  r.body.position.x -= hipAt.x;
+  r.body.position.y += HIP_HEIGHT - hipAt.y;
+  r.body.position.z -= hipAt.z;
+}
+
+/**
+ * One frame of a person's rig, in the one order that keeps frames apart: start from the neutral rig (additive poses
+ * `+=` must never carry over from the last frame), `base` (walk, sit, talk, ...), the pet pose, `finish` (cup, snack,
+ * emote, ...), then the hip hinge. Every part the pose writes is reset first, `base` sets the rest again.
+ */
+export function poseFrame(w: Parameters<typeof applyPetPose>[0], r: PoseRig, now: number, base: () => void, finish: () => void = () => {}): void {
+  r.body.rotation.set(0, 0, 0);
+  r.body.position.set(0, 0, 0);
+  r.armL.rotation.set(0, 0, 0);
+  r.armR.rotation.set(0, 0, 0);
+  r.legL.rotation.set(0, 0, 0, 'XYZ'); // the kneel turns a leg out (y, order YXZ)
+  r.legR.rotation.set(0, 0, 0, 'XYZ');
+  r.kneeL.rotation.set(0, 0, 0);
+  r.kneeR.rotation.set(0, 0, 0);
+  r.legL.position.y = r.legR.position.y = HIP_HEIGHT;
+  base();
+  applyPetPose(w, r, now);
+  finish();
+  hinge(r);
 }

@@ -14,6 +14,8 @@ const STEP = 1 / 60;
 const WALK = 4;
 /** Real seconds per 24 h cycle, as in TimeOfDay. */
 const CYCLE_SECONDS = 600;
+/** Seconds a returning person may wait outside for the door (spacing between arrivals) on top of their time away. */
+const QUEUE = 10;
 
 /** Cycle position of a clock hour (inverse of `hourOf`, which rises monotonically over the day). */
 function cycleAt(hour: number): number {
@@ -34,7 +36,15 @@ function cycleAt(hour: number): number {
 class Stub {
   presence: 'in' | 'leaving' | 'out' | 'returning' = 'in';
   awayKind: AwayKind | null = null;
-  awayLeft = 0;
+  private left = 0;
+  get awayLeft(): number {
+    return this.left;
+  }
+  set awayLeft(v: number) {
+    // shortened (call back: 0) or extended (office cap 5-20 s, kept out: Infinity). Waiting for the door (<= 5 s a time) is no change of the spell.
+    if (this.presence === 'out' && (v === 0 || v > 5)) this.cut = true;
+    this.left = v;
+  }
   homeVariant = 0;
   preferredHome = 0;
   held = false;
@@ -47,7 +57,14 @@ class Stub {
   task = null;
   pos = { x: 0, z: 0 };
   /** every walk out of the door: kind and whether an alter ego transforms (#32) */
-  leaves: Array<{ kind: AwayKind; transform: boolean; manual: boolean }> = [];
+  leaves: Array<{ kind: AwayKind; transform: boolean; manual: boolean; seconds: number }> = [];
+  /** every spell spent out of sight (from the door to walking back in): kind and how long it really lasted */
+  spells: Array<{ kind: AwayKind; seconds: number; cut: boolean }> = [];
+  /** Presence shortened or extended this spell (not just the door queue): its length is not what was drawn */
+  private cut = false;
+  private outFor = 0;
+  /** the current spell began at the door (not the start-of-day `startAway`) */
+  private viaDoor = false;
   private walk = 0;
 
   constructor(readonly member: TeamMember) {}
@@ -59,10 +76,11 @@ class Stub {
     return this.presence === 'in';
   }
   leaveOffice(_nav: NavGrid, kind: AwayKind, seconds: number, manual = false): void {
-    this.leaves.push({ kind, transform: transformsOnLeave(this.member, kind, manual), manual });
+    this.leaves.push({ kind, transform: transformsOnLeave(this.member, kind, manual), manual, seconds });
     this.presence = 'leaving';
+    this.viaDoor = true;
     this.awayKind = kind;
-    this.awayLeft = seconds;
+    this.left = seconds;
     this.walk = WALK;
   }
   leaveAs(kind: AwayKind): void {
@@ -74,16 +92,22 @@ class Stub {
   startAway(kind: AwayKind, seconds: number): void {
     this.presence = 'out';
     this.awayKind = kind;
-    this.awayLeft = seconds;
+    this.left = seconds;
   }
   cancelLeave(): void {
     if (this.presence !== 'leaving') return;
     this.presence = 'in';
+    this.viaDoor = false;
     this.awayKind = null;
   }
   update(dt: number): void {
+    if (this.presence === 'out') this.outFor += dt;
     if (this.presence === 'leaving' && (this.walk -= dt) <= 0) this.presence = 'out';
-    else if (this.presence === 'out' && (this.awayLeft -= dt) <= 0) {
+    else if (this.presence === 'out' && (this.left -= dt) <= 0) {
+      if (this.viaDoor) this.spells.push({ kind: this.awayKind!, seconds: this.outFor, cut: this.cut });
+      this.viaDoor = false;
+      this.cut = false;
+      this.outFor = 0;
       this.presence = 'returning';
       this.walk = WALK;
     } else if (this.presence === 'returning' && (this.walk -= dt) <= 0) {
@@ -198,6 +222,56 @@ describe('presence', () => {
       expect(lunch.length).toBeGreaterThan(0);
       for (const s of lunch) expect(s.hour).toBeGreaterThanOrEqual(first);
     }
+  });
+
+  it('presence.errand: errands really last 25-70 s out of sight, home office 90-220 s', () => {
+    let spells = 0;
+    for (let seed = 1; seed <= 30; seed++) {
+      // before the first lunch, so every errand is a plain one (lunch ones are shorter: 22-45 s)
+      const { people, plans } = runDay(seed, 5, 11.1);
+      expect(Math.min(...[...plans.values()].map((p) => p.lunch))).toBeGreaterThan(11.1);
+      for (const { kind, seconds, cut } of people.filter((p) => !p.member.homebody).flatMap((p) => p.spells)) {
+        if (cut) continue; // called back early, held by the office cap or kept out: not the drawn length
+        spells++;
+        const [min, max] = kind === 'errand' ? [25, 70] : [90, 220];
+        expect(['errand', 'home']).toContain(kind);
+        expect(seconds).toBeGreaterThanOrEqual(min - 2 * STEP);
+        expect(seconds).toBeLessThanOrEqual(max + QUEUE); // waiting outside for a free slot at the door (presence.door-flow)
+      }
+    }
+    expect(spells).toBeGreaterThan(10);
+  });
+
+  it('presence.rain: with rain fewer leave, errands take longer, more of the time away is home office', () => {
+    const tally = (raining: boolean) => {
+      let leaves = 0;
+      let errands = 0;
+      let errandSeconds = 0;
+      let homeTime = 0;
+      let awayTime = 0;
+      for (let seed = 1; seed <= 20; seed++) {
+        // up to the first lunch: only the draws the weather acts on (lunch errands are fixed)
+        const { people, samples } = runDay(seed, 5, 10.5, raining);
+        leaves += people.reduce((n, p) => n + p.leaves.length, 0);
+        for (const sp of people.flatMap((p) => p.spells)) {
+          if (sp.kind !== 'errand' || sp.cut) continue; // same spells as presence.errand: untouched, no lunch (the run ends before it)
+          errands++;
+          errandSeconds += sp.seconds;
+        }
+        // person-seconds out on an errand or in the home office, from the once-a-second samples
+        for (const s of samples.filter((s) => s.hour >= 8)) {
+          const away = s.states.match(/o[eh]/g) ?? [];
+          awayTime += away.length;
+          homeTime += away.filter((a) => a === 'oh').length;
+        }
+      }
+      return { leaves, errandMean: errandSeconds / errands, homeShare: homeTime / awayTime };
+    };
+    const dry = tally(false);
+    const wet = tally(true);
+    expect(wet.leaves).toBeLessThan(dry.leaves);
+    expect(wet.errandMean).toBeGreaterThan(dry.errandMean);
+    expect(wet.homeShare).toBeGreaterThan(dry.homeShare);
   });
 
   it('presence.share: during core hours a good part of the team is out', () => {
