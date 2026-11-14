@@ -147,6 +147,20 @@ describe('dev events on the Sim', () => {
       expect(p.petHeight).toBe(PET_HEIGHT[kind]);
       expect(p.task?.phase).not.toBe('work');
       expect(pet.petted?.by).toBe(p);
+      // the pet comes to the spot in front of the person (0.65 m, or the nearest free floor to it) and stays there
+      // while stroked, it does not walk off (#100)
+      const standing: number[] = [];
+      run(
+        sim,
+        20,
+        () => false,
+        () => {
+          if (pet.state !== 'walk') standing.push(Math.hypot(pet.pos.x - p.pos.x, pet.pos.z - p.pos.z));
+        },
+      );
+      expect(standing.length).toBeGreaterThan(15 * 60);
+      expect(Math.max(...standing)).toBeLessThan(1);
+      expect(pet.petted?.by).toBe(p);
 
       const empty = office();
       only(empty, []);
