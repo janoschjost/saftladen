@@ -48,8 +48,10 @@ test('xmas.mode', async ({ page }) => {
   // snow fades in, decorations show
   await until(page, (g) => g.xmas.on && g.xmas.amount > 0.5 && g.xmas.decor.group.visible);
   await toggle.setChecked(false);
-  // snow starts fading out
+  // decorations hide at once, the snow is still fading out
   const full = await read(page, (g) => g.xmas.amount);
+  expect(full).toBeGreaterThan(0.5);
   expect(await read(page, (g) => g.xmas.on)).toBe(false);
+  expect(await read(page, (g) => g.xmas.decor.group.visible)).toBe(false);
   await until(page, (g, a) => g.xmas.amount < a * 0.8, full, 60_000);
 });

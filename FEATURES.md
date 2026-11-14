@@ -153,7 +153,7 @@ Rules:
 - `time.tired` Tiredness rises toward night — `src/game/TimeOfDay.ts`
 - `weather.auto` Auto weather: dry spells and showers, rain fades in/out; the environment popover forces Auto/Trocken/Regen — `src/game/Weather.ts`, `src/ui/Settings.ts`, e2e: `e2e/hud.spec.ts`, url: `/?seed=1&time=11` (#98)
 - `xmas.mode` Christmas mode: settings switch (`saftladen.settings.xmas`, default on in December); snowfall fading in/out, colder sky — `src/game/Christmas.ts`, `src/render/snowFx.ts`, `src/ui/Settings.ts`, e2e: `e2e/modes.spec.ts` (#34)
-- `xmas.decor` Christmas trees with presents, blinking light strands along the walls, wreaths — `src/render/xmasDecor.ts`
+- `xmas.decor` Christmas trees with presents, blinking light strands along the walls, wreaths; shown and hidden at once when Christmas mode is switched on or off (only the snow fades) — `src/render/xmasDecor.ts`, `src/game/Christmas.ts`, e2e: `e2e/modes.spec.ts`, url: `/?seed=1&time=11` (#171)
 - `xmas.wear` Santa hats (variety by look) and scarves on everyone, tiny hats on pets — `src/render/xmasWear.ts`
 - `weather.fx` Rain streaks ending at roof height, dimmer at night; greyer light and overcast sky — `src/render/rainFx.ts`, `src/game/Game.ts`
 
