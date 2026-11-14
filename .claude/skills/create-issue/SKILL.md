@@ -33,7 +33,7 @@ Description: `$ARGUMENTS`. Empty → ask the dev for it first.
    - **Interactions** with existing `FEATURES.md` lines that must keep working.
    - **How to see it:** the `url:` for the new or changed `FEATURES.md` line (`?seed=…&time=…`, `?event=<dev event id>`, hash view).
    - **Tests:** which logic needs Vitest, which interaction needs Playwright, what is only checked visually (see `AGENTS.md`, "Done means").
-   - **Dependencies:** other issues or PRs that must land first. If one is open, the new issue gets the `blocked` label via `scripts/issue.sh block N "<reason>"` after creating it.
+   - **Dependencies:** other issues or PRs that must land first. If one is open, block the new issue after creating it: on an issue `scripts/issue.sh block N "<reason>" M` (native "blocked by #M" link), on a PR `scripts/issue.sh block N "<reason, naming #M>"` (label `blocked`).
 5. **Estimate the complexity** from what you read, not from the description alone, and pick the model label:
    | Label | When |
    |-------|------|
@@ -68,7 +68,7 @@ Description: `$ARGUMENTS`. Empty → ask the dev for it first.
    ```sh
    scripts/issue.sh new "<title>" <bug|enhancement> "$(cat <body file>)" <haiku|sonnet|opus>
    ```
-   It prints the number and assigns the dev. Several issues from a confirmed split → one call each, name the order in the bodies if one depends on another.
+   It prints the number and assigns the dev. Several issues from a confirmed split → one call each; a part that builds on another gets `scripts/issue.sh block B "<reason>" A`. If the dev wants an umbrella issue for the whole (a goal that only the parts together reach), open it too and link the parts: `scripts/issue.sh sub P A B`.
 8. **Report:** issue link, labels, the model and why. `/tackle-issues` picks it up from here.
 
 ## Rules
