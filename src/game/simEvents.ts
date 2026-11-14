@@ -8,6 +8,7 @@ import type { Vec2 } from './NavGrid';
 import type { Person } from './Person';
 import { PET_HEIGHT } from './petPose';
 import { random } from './rng';
+import { MAX_GROUP } from './Social';
 import type { Sim } from './Sim';
 
 export const first = (p: Person): string => p.member.name.split(' ')[0];
@@ -270,6 +271,37 @@ export function registerSimEvents(sim: Sim): void {
   gather('meeting-chat', 'Gespräch (2)', 2, ...inCorridor);
   gather('meeting-small', 'Meeting (4)', 4, ...inCorridor);
   gather('meeting-big', 'Meeting (6)', 6, ...inCorridor);
+  events.register({
+    id: 'talk-join',
+    group: 'Meetings',
+    label: 'Jemand stösst dazu',
+    run: () => {
+      // somebody free walks over to a running talk with room and joins it, greeting first
+      const talk = sim.social.active.find((c) => c.members.length < MAX_GROUP);
+      if (!talk) return null;
+      const [p] = pickFree(1, (o) => !o.talk && !tiedUp(o));
+      if (!p) return null;
+      drop(p);
+      talk.join(p, nav);
+      return `${first(p)} stösst dazu`;
+    },
+  });
+  events.register({
+    id: 'crowd',
+    group: 'Meetings',
+    label: 'Gedränge (6)',
+    run: () => {
+      // six stand packed on one spot of the corridor at once: too many for a talk, they clear out
+      const n = 6; // one more than a talk tolerates around it
+      const group = pickFree(n, (o) => !tiedUp(o));
+      if (group.length < n) return null;
+      group.forEach((p, i) => {
+        const a = (i * Math.PI * 2) / n;
+        sim.scenario.put(p.id, { x: CORRIDOR_POINT.x + Math.cos(a) * 0.5, z: CORRIDOR_POINT.z + Math.sin(a) * 0.5 }, 'free');
+      });
+      return `Gedränge: ${firsts(group)}`;
+    },
+  });
   events.register({
     id: 'break-talks',
     group: 'Meetings',

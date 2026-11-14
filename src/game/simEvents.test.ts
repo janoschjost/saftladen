@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { strings } from '../i18n/strings';
+import { CORRIDOR_POINT } from '../render/officeModel';
 import { installHeadlessDom } from '../test/headlessDom';
 import { GROUP, office, run } from '../test/office';
+import { SIGNALS } from './Chatter';
 import type { Person } from './Person';
 import { PET_HEIGHT } from './petPose';
 import type { Sim } from './Sim';
@@ -269,6 +271,33 @@ describe('dev events on the Sim', () => {
       refused(alone, id);
     });
   }
+
+  it('social.join (talk-join): somebody free joins the running talk and greets first; refused without a talk', () => {
+    const sim = office();
+    const [a, b, c] = only(sim, GROUP.slice(0, 3));
+    refused(sim, 'talk-join');
+    sim.social.start([a, b], { ...CORRIDOR_POINT }, sim.nav);
+    expect(sim.events.trigger('talk-join')).toBe(`${first(c)} stösst dazu`);
+    const conv = sim.social.active[0];
+    expect(conv.members).toEqual([a, b, c]);
+    expect(c.task?.phase).not.toBe('work');
+    expect(run(sim, 30, () => conv.speaker === c && !!conv.text)).toBe(true);
+    expect(conv.text).toBe(SIGNALS.join.symbol);
+  });
+
+  it('social.crowd (crowd): six stand packed in the corridor at once, start no talk and are sent off; refused with five in the office', () => {
+    const sim = office();
+    const crowd = only(sim, [...GROUP, PHONE]);
+    run(sim, 4); // past the quiet start, in which nobody talks
+    expect(sim.events.trigger('crowd')).toMatch(/^Gedränge: /);
+    expect(sim.traffic.bodiesNear(CORRIDOR_POINT, 2.2)).toBe(6);
+    expect(run(sim, 1, () => sim.social.active.length > 0)).toBe(false);
+    expect(crowd.every((p) => p.socialCooldown > 0)).toBe(true);
+
+    const five = office();
+    only(five, GROUP);
+    refused(five, 'crowd');
+  });
 
   it('dev.events (break-talks): every running talk ends', () => {
     const sim = office();

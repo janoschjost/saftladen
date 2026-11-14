@@ -24,7 +24,7 @@ export function nextSpeaker(members: readonly Person[], current: Person, previou
 }
 
 const LINK_DISTANCE = 1.7; // people closer than this count as "meeting"
-const MAX_GROUP = 6;
+export const MAX_GROUP = 6;
 const CHECK_INTERVAL = 0.5; // seconds between social checks
 const GATHER_TIMEOUT = 6;
 
