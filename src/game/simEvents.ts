@@ -210,7 +210,7 @@ export function registerSimEvents(sim: Sim): void {
       const pair = pickFree(2, (p) => !tiedUp(p));
       if (pair.length < 2) return null;
       const ends = passageEnds();
-      if (!ends) return null;
+      if (!ends || [0, 1].some((i) => !nav.findPath(ends.from[i], ends.to[i]).length)) return null;
       pair.forEach((p, i) => {
         sim.pull(p);
         p.placeAt(ends.from[i]);

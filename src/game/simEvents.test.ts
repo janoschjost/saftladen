@@ -537,6 +537,7 @@ describe('dev events on the Sim', () => {
     const pair = only(sim, GROUP.slice(0, 2));
     expect(sim.events.trigger('passage-meeting')).toMatch(/ begegnen sich im Durchgang$/);
     const passages = sim.traffic.passages;
+    expect(pair.every((p) => p.state === 'walk' && p.path.length > 0)).toBe(true);
     const goal = pair.map((p) => p.path.at(-1)!);
     const through = (p: Person, i: number) => Math.hypot(p.pos.x - goal[i].x, p.pos.z - goal[i].z) < 0.5;
     const done = pair.map(() => false);
