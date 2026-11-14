@@ -40,15 +40,18 @@ export class NavGrid {
   }
 
   block(cx: number, cz: number, w = 1, d = 1): void {
+    this.reached = null;
     for (let z = cz; z < cz + d; z++) for (let x = cx; x < cx + w; x++) if (this.inside(x, z)) this.blocked[z * this.cols + x] = 1;
   }
 
   /** Everything walkable again (the room editor rebuilds the grid after furniture moved). */
   clear(): void {
+    this.reached = null;
     this.blocked.fill(0);
   }
 
   unblock(cx: number, cz: number): void {
+    this.reached = null;
     if (this.inside(cx, cz)) this.blocked[cz * this.cols + cx] = 0;
   }
 
@@ -65,23 +68,8 @@ export class NavGrid {
   /** Blocks every walkable cell that cannot be reached from `from`, so nobody spawns in a sealed pocket. Returns the count. */
   sealUnreachable(from: Vec2): number {
     const s = this.toCell(from);
-    const seen = new Uint8Array(this.cols * this.rows);
-    const stack = [s.cz * this.cols + s.cx];
-    if (!this.walkable(s.cx, s.cz)) return 0;
-    seen[stack[0]] = 1;
-    while (stack.length) {
-      const i = stack.pop()!;
-      const cx = i % this.cols;
-      const cz = (i / this.cols) | 0;
-      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const nx = cx + dx;
-        const nz = cz + dz;
-        const ni = nz * this.cols + nx;
-        if (!this.walkable(nx, nz) || seen[ni]) continue;
-        seen[ni] = 1;
-        stack.push(ni);
-      }
-    }
+    if (!this.walkable(s.cx, s.cz)) return 0; // an empty reach set would seal everything
+    const seen = this.reach(from);
     let sealed = 0;
     for (let i = 0; i < seen.length; i++) {
       if (!seen[i] && !this.blocked[i]) {
@@ -90,6 +78,49 @@ export class NavGrid {
       }
     }
     return sealed;
+  }
+
+  /** the last `reach` (from cell `from`); dropped whenever a cell is blocked or freed */
+  private reached: { from: number; open: Uint8Array } | null = null;
+
+  /** 1 for every cell a walker at `from` can get to (the moves of `findPath`: no corner cutting), 0 elsewhere. */
+  private reach(from: Vec2): Uint8Array {
+    const s = this.toCell(from);
+    const start = s.cz * this.cols + s.cx;
+    if (this.reached?.from === start) return this.reached.open;
+    const seen = new Uint8Array(this.cols * this.rows);
+    this.reached = { from: start, open: seen };
+    if (!this.walkable(s.cx, s.cz)) return seen;
+    const stack = [start];
+    seen[start] = 1;
+    while (stack.length) {
+      const i = stack.pop()!;
+      const cx = i % this.cols;
+      const cz = (i / this.cols) | 0;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const ni = (cz + dz) * this.cols + cx + dx;
+        if (!this.walkable(cx + dx, cz + dz) || seen[ni]) continue;
+        seen[ni] = 1;
+        stack.push(ni);
+      }
+    }
+    return seen;
+  }
+
+  /** True if somebody at p can walk to `floor` from there. */
+  opens(p: Vec2, floor: Vec2): boolean {
+    const { cx, cz } = this.toCell(p);
+    return this.inside(cx, cz) && this.reach(floor)[cz * this.cols + cx] === 1;
+  }
+
+  /**
+   * Closest cell centre to p (within `maxRing` cells) from which `floor` can be walked to: p itself when its own cell
+   * can, unless `away` asks for another cell. Null if there is none.
+   */
+  openNear(p: Vec2, floor: Vec2, maxRing = 6, away = false): Vec2 | null {
+    if (!away && this.opens(p, floor)) return p;
+    const open = this.reach(floor);
+    return this.nearest(p, maxRing, (x, z) => open[z * this.cols + x] === 1);
   }
 
   /** True if the straight segment a→b crosses no blocked cell (the last `skipEnd` metres before b are ignored, e.g. a chair). */
@@ -178,12 +209,18 @@ export class NavGrid {
   nearestWalkable(p: Vec2, maxRing = 4): Vec2 | null {
     const { cx, cz } = this.toCell(p);
     if (this.walkable(cx, cz)) return p;
+    return this.nearest(p, maxRing, (x, z) => this.walkable(x, z));
+  }
+
+  /** Centre of the closest cell around p's own one (ring by ring, up to `maxRing`) that `ok` takes, or null. */
+  private nearest(p: Vec2, maxRing: number, ok: (cx: number, cz: number) => boolean): Vec2 | null {
+    const { cx, cz } = this.toCell(p);
     let best: Vec2 | null = null;
     let bestD = Infinity;
     for (let r = 1; r <= maxRing && !best; r++) {
       for (let dz = -r; dz <= r; dz++) {
         for (let dx = -r; dx <= r; dx++) {
-          if (Math.max(Math.abs(dx), Math.abs(dz)) !== r || !this.walkable(cx + dx, cz + dz)) continue;
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== r || !this.inside(cx + dx, cz + dz) || !ok(cx + dx, cz + dz)) continue;
           const c = this.center(cx + dx, cz + dz);
           const d = Math.hypot(c.x - p.x, c.z - p.z);
           if (d < bestD) {

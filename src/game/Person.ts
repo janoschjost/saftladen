@@ -5,6 +5,7 @@ import type { TeamMember } from '../data/types';
 import type { CharacterRig } from '../render/characterBuilder';
 import { SIT_DROP } from '../render/officeBuilder';
 import { screenVariants, type ScreenKind } from '../render/screens';
+import { CORRIDOR_POINT } from '../render/officeModel';
 import { DOOR_LANES, pickDoorLane, type DoorLane } from './Door';
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { MeetSeat } from './Meeting';
@@ -36,6 +37,9 @@ const PHONE_TIME = { min: 30, max: 80 }; // seconds of one call
 const PHONE_PACE_CHANCE = 0.5; // chance that a call is spent pacing up and down one path instead of wandering
 const SEAT_PHONE_RATE = 0.02; // per second while working at the desk (phone people): chance to take a call right in the chair
 const SEAT_PHONE_TIME = { min: 15, max: 40 };
+const UNSTUCK_AFTER = 2; // seconds somebody who stood up from a chair may stand without getting away before they step out
+const UNSTUCK_AWAY = 0.6; // metres from where they stood up that count as got away
+const UNSTUCK_TRIES = 3; // steps out of one stand-up, then they are left alone
 const SEAT_VAPE_RATE = 0.015; // per second while working at the desk (vapers): chance to take a drag without getting up
 const PHONE_PACE_LEN = { min: 3.5, max: 9 }; // metres between the two ends of a pacing path
 const TRANSITION = 1.1; // seconds to sit down / stand up
@@ -78,6 +82,8 @@ interface DeskTask {
   remaining: number; // seconds of work left
   retries: number;
   retryIn: number;
+  /** where standing up from the chair ends (`Office.exit`), picked when they get up */
+  out?: Vec2;
   /** about to leave the desk for a coffee: where at the machine, and how much work was left */
   errand?: { spot: MachineSpot; left: number; snack?: boolean };
 }
@@ -282,6 +288,10 @@ export class Person extends Walker {
   meetFocus: Vec2 | null = null;
   /** called to a meeting while still at a desk: goes once they have stood up */
   private pendingMeet: { seat: MeetSeat; talk: Talk; nav: NavGrid } | null = null;
+  /** stood up from a desk: where, for how long they have not got away from there, and how often they stepped out (see `unstick`) */
+  private stoodUp: { at: Vec2; t: number; tries: number } | null = null;
+  /** the step out of a spot with no way on: a straight walk that ignores the nav grid (`fixed` meanwhile, so nothing pushes it back) */
+  private stepOut: { from: Vec2; to: Vec2; t: number; dur: number } | null = null;
   private presenceRetry = 0;
   private presenceRetries = 0;
   private baseHead: number;
@@ -335,7 +345,7 @@ export class Person extends Walker {
   }
 
   override get fixed(): boolean {
-    if (this.presence === 'out' || this.script || this.scripted?.arrived) return true;
+    if (this.presence === 'out' || this.script || this.stepOut || this.scripted?.arrived) return true;
     if (this.printJob?.phase === 'print') return true;
     if (this.run?.phase === 'brew') return true;
     if (this.foosJob?.phase === 'play') return true;
@@ -1149,6 +1159,7 @@ export class Person extends Walker {
   }
 
   protected override control(dt: number, nav: NavGrid): boolean {
+    if (this.unstick(dt, nav)) return true;
     if (this.presence !== 'in') {
       this.petting = false;
       return this.controlPresence(dt, nav);
@@ -1234,6 +1245,7 @@ export class Person extends Walker {
           task.phase = 'enter';
           task.t = 0;
           task.from = { ...this.pos };
+          task.out = undefined;
           return true;
         }
         // stopped short (blocked, gave up): try again a few times
@@ -1283,18 +1295,81 @@ export class Person extends Walker {
       case 'leave': {
         task.t += dt / TRANSITION;
         const e = smooth((task.t - 0.35) / 0.65);
-        this.pos.x = d.seat.x + (d.approach.x - d.seat.x) * e;
-        this.pos.z = d.seat.z + (d.approach.z - d.seat.z) * e;
+        const out = this.exitOf(task);
+        this.pos.x = d.seat.x + (out.x - d.seat.x) * e;
+        this.pos.z = d.seat.z + (out.z - d.seat.z) * e;
         this.sit = 1 - smooth(task.t / 0.4);
         if (task.t > 0.25) this.turnTo(d.yaw + Math.PI, dt);
         this.step(dt, task.t > 0.35 ? 0.7 : 0);
         if (task.t >= 1) {
+          this.stoodUp = { at: { ...this.pos }, t: 0, tries: 0 };
           if (task.errand) this.beginRun(task, nav);
           else this.finishTask();
         }
         return true;
       }
     }
+  }
+
+  /** Where standing up from this desk ends (`Office.exit`), picked once per stand-up (sitting down again forgets it). */
+  private exitOf(task: DeskTask): Vec2 {
+    return (task.out ??= this.office?.exit(task.desk) ?? task.desk.approach);
+  }
+
+  /**
+   * Safety net for standing up from a desk into a spot with no way on (a plant or a neighbour in the way, cells blocked
+   * since the desk was laid out): somebody who stood up and has not got away for UNSTUCK_AFTER seconds steps straight
+   * to the closest free cell that leads into the office, then carries on with what they stood up for. Returns true
+   * while stepping.
+   */
+  private unstick(dt: number, nav: NavGrid): boolean {
+    if (this.held || this.controlled || this.away) this.stepOut = null; // carried, steered or gone: no step of their own
+    const step = this.stepOut;
+    if (step) {
+      step.t = Math.min(1, step.t + dt / step.dur);
+      this.pos.x = step.from.x + (step.to.x - step.from.x) * step.t;
+      this.pos.z = step.from.z + (step.to.z - step.from.z) * step.t;
+      this.turnTo(Math.atan2(step.to.x - step.from.x, step.to.z - step.from.z), dt);
+      this.step(dt, 0.7);
+      if (step.t >= 1) this.stepOut = null;
+      return true;
+    }
+    const s = this.stoodUp;
+    if (!s) return false;
+    const seated = (this.task && this.task.phase !== 'approach') || (this.meetJob && this.meetJob.phase !== 'approach');
+    if (seated || this.held || this.controlled || this.away || Math.hypot(this.pos.x - s.at.x, this.pos.z - s.at.z) > UNSTUCK_AWAY) {
+      this.stoodUp = null;
+      return false;
+    }
+    // still getting up or spinning, in a chat of their own or with the player: standing there is what they do
+    if (this.sit > 0.01 || this.spin > 0 || this.playerChat || (this.talk && !this.meetJob && !this.coffeeJob)) return false;
+    // in the open with nowhere to go (standing about after work) is no reason to step anywhere
+    const going =
+      this.path.length > 0 ||
+      this.presence === 'leaving' ||
+      !!this.run ||
+      this.meetJob?.phase === 'approach' ||
+      this.coffeeJob?.phase === 'approach' ||
+      this.printJob?.phase === 'approach' ||
+      this.foosJob?.phase === 'approach' ||
+      this.task?.phase === 'approach';
+    // a way on from here: only a walker that gave up on it (path dropped) needs the step; waiting at a passage does not
+    if ((!going || this.path.length > 0) && nav.opens(this.pos, CORRIDOR_POINT)) {
+      s.t = 0; // the 2 s count one stall, not stalls added up
+      return false;
+    }
+    if ((s.t += dt) < UNSTUCK_AFTER) return false;
+    const to = nav.openNear(this.pos, CORRIDOR_POINT, 2, true); // a step (at most 1 m), not a walk through the furniture
+    if (!to || ++s.tries > UNSTUCK_TRIES) {
+      this.stoodUp = null;
+      return false;
+    }
+    s.at = { ...to };
+    s.t = 0;
+    this.path = [];
+    this.state = 'idle';
+    this.stepOut = { from: { ...this.pos }, to, t: 0, dur: Math.max(0.2, Math.hypot(to.x - this.pos.x, to.z - this.pos.z) / (this.speed * 0.6)) };
+    return true;
   }
 
   /** Pins this person for a day task: they walk to `at` first when `walk` is set (else they are there at once), then stay and turn to `yaw`. */
@@ -1767,13 +1842,16 @@ export class Person extends Walker {
   /** Drops whatever they were doing (desk, printer, vape) so a new activity can start. */
   interrupt(): void {
     this.phoneJob = null;
+    this.stepOut = null;
     if (this.inMeeting) this.dismissMeeting();
     const t = this.task;
     if (t && t.phase !== 'approach') {
       // sitting (or sitting down / getting up): step out of the chair, the stand-up pose plays in control()
-      this.pos.x = t.desk.approach.x;
-      this.pos.z = t.desk.approach.z;
+      const out = this.exitOf(t);
+      this.pos.x = out.x;
+      this.pos.z = out.z;
       this.prev = { ...this.pos };
+      this.stoodUp = { at: { ...out }, t: 0, tries: 0 };
     }
     this.cancelTask();
   }
