@@ -32,6 +32,16 @@ for (const [id, owner, event] of [
   });
 }
 
+// Away, the cats' owner is called in by the event, before her time out is up (put out `free`: 45 s) (#125)
+test("pet.crouch-cat: the event calls the cats' owner in when she is away (event pet-cat)", async ({ page }) => {
+  const errors = await openGame(page);
+  await scene(page, (s) => s.put('donata-manser', 'home', 'free'));
+  expect(await read(page, (g) => g.people.find((p: { id: string }) => p.id === 'donata-manser').presence)).toBe('out');
+  await until(page, () => !String((window as any).dev.trigger('pet-cat')).endsWith('nicht möglich'), undefined, 30_000);
+  await until(page, kneels, undefined, 40_000);
+  expect(errors).toEqual([]);
+});
+
 for (const [id, event, reached] of cases) {
   test(`${id} (?event=${event})`, async ({ page }) => {
     const errors = await openGame(page, '', undefined, `event=${event}`);

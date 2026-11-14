@@ -118,6 +118,11 @@ export class Dog extends Walker {
     return this.away || !!this.script || (this.onPorch && this.owner.presence !== 'in');
   }
 
+  /** Being stroked (once it stands in front of the person): stays at its spot. */
+  override get steady(): boolean {
+    return !!this.petted && this.state !== 'walk';
+  }
+
   /** On the porch in front of the door (arrived there, waiting for the owner to vanish with them). */
   get onPorch(): boolean {
     return !this.script && this.pos.z > DOOR.z;
