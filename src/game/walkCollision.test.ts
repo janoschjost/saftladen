@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { installHeadlessDom } from '../test/headlessDom';
+import { office } from '../test/office';
 import { NavGrid } from './NavGrid';
 import { walkFree, type WalkColliders } from './walkCollision';
+
+installHeadlessDom();
 
 const R = 0.3;
 
@@ -50,5 +54,24 @@ describe('view.walk', () => {
     c.boxes = [...c.boxes, { min: { x: 0.8, z: 0.8 }, max: { x: 1.2, z: 1.2 } }];
     expect(walkFree(1, 1, R, c)).toBe(false);
     expect(walkFree(1.55, 1, R, c)).toBe(true);
+  });
+
+  it('view.walk the player fits through every interior doorway of the real office (#70)', () => {
+    const sim = office();
+    // the phone booth and the WC cabins are left out: seat and table fill the booth, the cabins are blocked on purpose
+    // (people are scripted in, nobody walks there)
+    const closed = [sim.phoneBooth.doorPos, ...sim.model.toilets.cabins.map((c) => c.doorPos)];
+    // for each door: a straight line 0.6 m either side of its centre (wall and body clear), across the wall (one of the
+    // two axes is across)
+    const line = (x: number, z: number, ax: number, az: number) => {
+      for (let t = -0.6; t <= 0.6; t += 0.05) if (!walkFree(x + ax * t, z + az * t, R, sim.walkColliders)) return false;
+      return true;
+    };
+    const stuck = sim.model.doors
+      .filter((d) => closed.every((p) => Math.hypot(d.center.x - p.x, d.center.z - p.z) > 0.5))
+      .filter((d) => !line(d.center.x, d.center.z, 1, 0) && !line(d.center.x, d.center.z, 0, 1))
+      .map((d) => `${d.center.x.toFixed(2)},${d.center.z.toFixed(2)}`);
+    expect(sim.model.doors.length).toBeGreaterThan(5);
+    expect(stuck).toEqual([]);
   });
 });
