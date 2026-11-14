@@ -28,6 +28,7 @@ describe('pet.petting', () => {
     cat.petBy(owner, 20, sim.nav);
     for (let i = 0; i < 60 * 10 && cat.state === 'walk'; i++) sim.step(STEP); // the cat trots over
     expect(cat.petted && cat.state).toBe('idle');
+    expect(Math.hypot(cat.pos.x - owner.pos.x, cat.pos.z - owner.pos.z)).toBeLessThan(1); // in front of the person, not walked off (#100)
     const catAt = { ...cat.pos };
     const ownerAt = { ...owner.pos };
 
