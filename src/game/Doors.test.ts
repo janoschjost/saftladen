@@ -3,21 +3,26 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { DOOR_SWING, type DoorRig } from '../render/officeModel';
 import { installHeadlessDom } from '../test/headlessDom';
 import { GROUP, office, run, STEP } from '../test/office';
-import { Doors } from './Doors';
+import { Doors, type DoorState } from './Doors';
 import { setSeed } from './rng';
 import type { Person } from './Person';
 import type { Sim } from './Sim';
 
 installHeadlessDom();
 
-/** The slice of a door's state the tests look at (`Doors` keeps it private; `pivot` is what the player sees). */
-type DoorState = { rig: DoorRig; open: number; rest: number; hold: number; reroll: number; locked: boolean };
-const statesOf = (doors: Doors): DoorState[] => (doors as unknown as { states: DoorState[] }).states;
+const statesOf = (doors: Doors): readonly DoorState[] => doors.states;
 
-const rig = (x: number, z: number): DoorRig => ({
+/** The leaf's hinge side and rest angle as the model gives them: the office has both swings and non-zero bases. */
+type Hinge = { swing: 1 | -1; base: number };
+const HINGES: Hinge[] = [
+  { swing: 1, base: 0 },
+  { swing: -1, base: 1.2 },
+];
+
+const rig = (x: number, z: number, { swing, base }: Hinge = HINGES[0]): DoorRig => ({
   pivot: new THREE.Group(),
-  base: 0,
-  swing: 1,
+  base,
+  swing,
   center: { x, z },
   width: 0.9,
   height: 2.1,
@@ -26,9 +31,14 @@ const rig = (x: number, z: number): DoorRig => ({
 const swung = (r: DoorRig): number => (r.pivot.rotation.y - r.base) / (r.swing * DOOR_SWING);
 
 /** One door at the origin, resting shut for good (nobody rerolls it), nobody near. */
-function oneDoor(): { doors: Doors; door: DoorState; rig: DoorRig; step: (secs: number, at?: Array<{ x: number; z: number }>) => void } {
+function oneDoor(hinge?: Hinge): {
+  doors: Doors;
+  door: DoorState;
+  rig: DoorRig;
+  step: (secs: number, at?: Array<{ x: number; z: number }>) => void;
+} {
   setSeed(1);
-  const r = rig(0, 0);
+  const r = rig(0, 0, hinge);
   const doors = new Doors([r]);
   const door = statesOf(doors)[0];
   door.rest = 0;
@@ -43,28 +53,32 @@ function oneDoor(): { doors: Doors; door: DoorState; rig: DoorRig; step: (secs: 
 describe('doors', () => {
   beforeEach(() => setSeed(1));
 
-  it('door.auto: a door swings open when somebody comes within 1.25 m', () => {
-    const { rig, step } = oneDoor();
-    step(2, [{ x: 1.4, z: 0 }]); // just outside
-    expect(swung(rig)).toBeLessThan(0.01);
-    step(2, [{ x: 1.2, z: 0 }]); // just inside
-    expect(swung(rig)).toBeGreaterThan(0.95);
-  });
+  for (const hinge of HINGES) {
+    it(`door.auto: a door swings open when somebody comes within 1.25 m (swing ${hinge.swing}, base ${hinge.base})`, () => {
+      const { rig, step } = oneDoor(hinge);
+      step(2, [{ x: 1.4, z: 0 }]); // just outside
+      expect(swung(rig)).toBeLessThan(0.01);
+      step(2, [{ x: 1.2, z: 0 }]); // just inside
+      expect(swung(rig)).toBeGreaterThan(0.95);
+      expect(Math.sign(rig.pivot.rotation.y - rig.base)).toBe(hinge.swing); // swings to its own side
+    });
 
-  it('door.auto: it stays open about 0.9 s after the last person left, then closes again', () => {
-    const { door, rig, step } = oneDoor();
-    step(2, [{ x: 0.5, z: 0 }]);
-    expect(swung(rig)).toBeGreaterThan(0.95);
-    step(0.8); // still within the hold: kept open
-    expect(door.hold).toBeGreaterThan(0);
-    expect(swung(rig)).toBeGreaterThan(0.95);
-    step(0.2); // hold over (0.9 s): starts to close
-    expect(door.hold).toBe(0);
-    step(0.3);
-    expect(swung(rig)).toBeLessThan(0.95);
-    step(4);
-    expect(swung(rig)).toBeLessThan(0.01);
-  });
+    it(`door.auto: it stays open about 0.9 s after the last person left, then closes again (swing ${hinge.swing}, base ${hinge.base})`, () => {
+      const { door, rig, step } = oneDoor(hinge);
+      step(2, [{ x: 0.5, z: 0 }]);
+      expect(swung(rig)).toBeGreaterThan(0.99);
+      step(0.85); // still within the hold: kept open
+      expect(door.hold).toBeGreaterThan(0);
+      expect(swung(rig)).toBeGreaterThan(0.99);
+      step(0.1); // 0.95 s: the hold is over
+      expect(door.hold).toBe(0);
+      const before = swung(rig);
+      step(0.3);
+      expect(swung(rig)).toBeLessThan(before); // and the leaf has started to close
+      step(4);
+      expect(swung(rig)).toBeLessThan(0.01);
+    });
+  }
 
   it('door.auto: whoever keeps standing there keeps the door open', () => {
     const { rig, step } = oneDoor();
@@ -72,45 +86,55 @@ describe('doors', () => {
     expect(swung(rig)).toBeGreaterThan(0.95);
   });
 
-  it('door.rest: with nobody around a door rests closed, ajar or propped open, rerolled every 30-120 s', () => {
-    const doors = new Doors(Array.from({ length: 12 }, (_, i) => rig(i * 5, 0)));
+  it('door.rest: with nobody around a door rests closed, ajar or propped open and is rerolled 30-120 s after its last reroll', () => {
+    const doors = new Doors(Array.from({ length: 12 }, (_, i) => rig(i * 5, 0, HINGES[i % 2])));
     const rests = new Set<number>();
-    const gaps: number[] = [];
-    const last = new Map<DoorState, number>();
-    for (let t = 0; t < 1200; t += STEP) {
+    const gaps: number[] = []; // seconds between two rerolls of the same door
+    const lastAt = new Map<DoorState, number>();
+    const prev = new Map<DoorState, number>();
+    let t = 0;
+    for (; t < 1200; t += STEP) {
       doors.update(STEP, []);
       for (const s of statesOf(doors)) {
         rests.add(s.rest);
-        const before = last.get(s);
-        if (before !== undefined && s.reroll > before) gaps.push(s.reroll); // the timer jumped up: a reroll
-        last.set(s, s.reroll);
+        const before = prev.get(s);
+        if (before !== undefined && s.reroll > before) {
+          // the timer jumped up: a reroll (the first one comes off the staggered start, so it is not measured)
+          const since = lastAt.get(s);
+          if (since !== undefined) gaps.push(t - since);
+          lastAt.set(s, t);
+        }
+        prev.set(s, s.reroll);
       }
     }
     expect([...rests].sort((a, b) => a - b)).toEqual([0, 0.3, 1]);
     expect(gaps.length).toBeGreaterThan(50);
-    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(30);
-    expect(Math.max(...gaps)).toBeLessThanOrEqual(120);
-    // and the leaf follows the rest position
-    for (const s of statesOf(doors)) expect(swung(s.rig)).toBeCloseTo(s.rest, 1);
+    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(30 - STEP);
+    expect(Math.max(...gaps)).toBeLessThanOrEqual(120 + STEP);
+    // a door that has had time to settle since its last reroll lies at its rest position
+    const settled = statesOf(doors).filter((s) => t - (lastAt.get(s) ?? 0) > 5);
+    expect(settled.length).toBeGreaterThan(5);
+    for (const s of settled) expect(swung(s.rig)).toBeCloseTo(s.rest, 1);
   });
 
   describe('door.player', () => {
     // the player stands 1.5 m south of the door and looks north (+z) at it
     const look = (doors: Doors) => doors.facing(0, -1.5, 0, 1);
 
-    it('door.player: the player toggles the door they face, and the choice holds', () => {
-      const { doors, rig, step } = oneDoor();
-      look(doors)!.toggle();
-      step(3);
-      expect(swung(rig)).toBeGreaterThan(0.95);
-      expect(look(doors)!.open).toBe(true);
-      step(50); // `door.rest` would reroll it any time before: it does not undo the choice right away
-      expect(swung(rig)).toBeGreaterThan(0.95);
-      look(doors)!.toggle();
-      step(3);
-      expect(swung(rig)).toBeLessThan(0.01);
-      expect(look(doors)!.open).toBe(false);
-    });
+    for (const hinge of HINGES)
+      it(`door.player: the player toggles the door they face, and the choice holds (swing ${hinge.swing}, base ${hinge.base})`, () => {
+        const { doors, rig, step } = oneDoor(hinge);
+        look(doors)!.toggle();
+        step(3);
+        expect(swung(rig)).toBeGreaterThan(0.95);
+        expect(look(doors)!.open).toBe(true);
+        step(50); // `door.rest` would reroll it any time before: it does not undo the choice right away
+        expect(swung(rig)).toBeGreaterThan(0.95);
+        look(doors)!.toggle();
+        step(3);
+        expect(swung(rig)).toBeLessThan(0.01);
+        expect(look(doors)!.open).toBe(false);
+      });
 
     it('door.player: only the door in front of them, within reach', () => {
       const { doors } = oneDoor();
@@ -148,7 +172,15 @@ describe('doors', () => {
 
 /** The door of the real office nearest to `at`. */
 const doorAt = (sim: Sim, at: { x: number; z: number }): DoorState =>
-  statesOf(sim.doors).reduce((a, b) => (Math.hypot(a.rig.center.x - at.x, a.rig.center.z - at.z) <= Math.hypot(b.rig.center.x - at.x, b.rig.center.z - at.z) ? a : b));
+  statesOf(sim.doors).reduce((a, b) =>
+    Math.hypot(a.rig.center.x - at.x, a.rig.center.z - at.z) <= Math.hypot(b.rig.center.x - at.x, b.rig.center.z - at.z) ? a : b,
+  );
+
+/** After the unlock somebody stepping up to the door gets it open (the leaf really swings, not just the flag). */
+function opensFor(sim: Sim, door: DoorState): void {
+  for (let t = 0; t < 3 && swung(door.rig) < 0.95; t += STEP) sim.doors.update(STEP, [door.rig.center]);
+  expect(swung(door.rig)).toBeGreaterThan(0.95);
+}
 
 function crew(sim: Sim, ...ids: string[]): Person[] {
   const people = ids.map((id) => {
@@ -166,10 +198,11 @@ describe('door.lock in the office', () => {
     expect(door.locked).toBe(false);
     sim.meetingRoom.start(crew(sim, ...GROUP.slice(0, 3)), sim.nav);
     expect(run(sim, 120, () => door.locked)).toBe(true);
-    expect(run(sim, 20, () => false)).toBe(false);
+    run(sim, 20);
     expect(door.locked).toBe(true);
     expect(swung(door.rig)).toBeLessThan(0.01);
     expect(run(sim, 900, () => !door.locked)).toBe(true);
+    opensFor(sim, door);
   });
 
   it('door.lock: the phone booth door is locked while somebody is on a call and released afterwards', () => {
@@ -181,6 +214,7 @@ describe('door.lock in the office', () => {
     run(sim, 3); // the leaf swings shut
     expect(swung(door.rig)).toBeLessThan(0.01);
     expect(run(sim, 900, () => !door.locked)).toBe(true);
+    opensFor(sim, door);
   });
 
   it('door.lock: a toilet cabin door is locked while somebody sits on the toilet and released afterwards', () => {
@@ -193,6 +227,7 @@ describe('door.lock in the office', () => {
     expect(door.locked).toBe(false); // on the way in
     expect(run(sim, 120, () => cabin.session?.seated && door.locked)).toBe(true);
     expect(run(sim, 600, () => !door.locked)).toBe(true);
+    opensFor(sim, door);
     expect(cabin.session?.seated).toBeFalsy();
   });
 });
