@@ -169,9 +169,9 @@ function everySeed(plan: string[], scene: (nav: NavGrid, traffic: Traffic, p: Pa
 }
 
 describe('move.passages', () => {
-  for (const [name, plan, mid, a0, b0] of [
-    ['doorway', DOORWAY, at(5, 2.5), [at(4, 2.25), at(8.75, 1.25)], [at(6.25, 2.5), at(1.25, 4.25)]],
-    ['gap between desks', DESKS, at(5.75, 5.5), [at(4.5, 5.25), at(11.25, 4.25)], [at(7.25, 5.5), at(1.25, 6.75)]],
+  for (const [name, plan, mid, a0, b0, otherWay] of [
+    ['doorway', DOORWAY, at(5, 2.5), [at(4, 2.25), at(8.75, 1.25)], [at(6.25, 2.5), at(1.25, 4.25)], false],
+    ['gap between desks', DESKS, at(5.75, 5.5), [at(4.5, 5.25), at(11.25, 4.25)], [at(7.25, 5.5), at(1.25, 6.75)], true],
   ] as const) {
     it(`move.passages: two walkers meeting at a ${name}: one waits beside the entrance, the other passes, then the waiting one goes (or, after waiting a while, takes another way where there is one)`, () => {
       everySeed(plan, (nav, traffic, p) => {
@@ -190,7 +190,7 @@ describe('move.passages', () => {
           if (bIn < 0 && p.at(b.pos) === passage) bIn = t;
           if (b.yielding && aIn >= 0 && aOut < 0) aside = Math.max(aside, Math.abs(b.pos.z - lane));
         });
-        const ok = passage >= 0 && a.arrived && b.arrived && aIn >= 0 && aOut > aIn && (bIn > aOut || bIn < 0) && aside > 0.4;
+        const ok = passage >= 0 && a.arrived && b.arrived && aIn >= 0 && aOut > aIn && (bIn > aOut || (otherWay && bIn < 0)) && aside > 0.4;
         return ok ? null : `passage ${passage}, arrived ${a.arrived}/${b.arrived}, a in ${aIn.toFixed(2)} out ${aOut.toFixed(2)}, b in ${bIn.toFixed(2)}, aside ${aside.toFixed(2)}`;
       });
     });
@@ -234,7 +234,7 @@ describe('move.passages', () => {
           aOut = t;
           aBack = a.pos.x < 6;
         }
-        if (bUp >= 0 && bBack < 0 && p.at(b.pos) < 0 && b.pos.x > 6) bBack = t;
+        if (bUp >= 0 && bBack < 0 && p.at(b.pos) < 0 && b.pos.x > 7.5) bBack = t;
       });
       const ok = a.arrived && b.arrived && aIn >= 0 && aIn < bUp && !aBack && bBack >= 0 && bBack < aOut;
       return ok ? null : `arrived ${a.arrived}/${b.arrived}, a in ${aIn.toFixed(2)}, b up ${bUp.toFixed(2)}, a out ${aOut.toFixed(2)} back ${aBack}, b back ${bBack.toFixed(2)}`;
