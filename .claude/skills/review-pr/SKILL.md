@@ -32,7 +32,7 @@ cd ../saftladen-pr-N
   3. Read what changed in the rules (`git diff ORIG_HEAD HEAD -- AGENTS.md README.md .claude/skills e2e/game.ts playwright.config.ts`) and bring the PR's own work in line: a test written the old way is rewritten (load the `write-tests` skill first), a new check is run. One commit for that, subject in the style of `git log`.
   4. `npm ci && npm run lint && npm run build && npm test && npm run test:e2e`. All green → `git push --force-with-lease origin HEAD:$b`, `gh pr edit N --add-label e2e`; CI runs on the new commit while the dev reviews. Red because of the rebase → fix it like step 2/3. Red in the PR's own behavior → a finding (step 4), review anyway.
   5. In the overview (step 2) say what was resolved and adapted, and repeat it in the review comment (step 4).
-- e2e says its port is in use → another session runs its e2e tests on the same port (the main checkout, or a worktree whose path maps to the same one). Wait until the port is free (never kill it), then run again, or set another `E2E_PORT`.
+- e2e says its port is in use → a session on a branch from before #143 runs its e2e tests there (without a lock). Wait until the port is free (never kill it), then run again. "another e2e run in this checkout" → an e2e run of this worktree is still going: wait for it.
 
 Run `npm ci` before the dev server starts. A later `npm ci` (or a rebase that changes `package-lock.json`) while it runs → stop the server, `rm -rf node_modules/.vite`, start it again: otherwise the browser gets `504 (Outdated Optimize Dep)`.
 

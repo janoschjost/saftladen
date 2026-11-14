@@ -12,7 +12,7 @@ npm run dev            # http://localhost:5173
 npm run lint           # oxlint (.oxlintrc.json), type-aware
 npm run build
 npm test               # vitest: simulation tests (src/**/*.test.ts), deterministic via a fixed seed
-npm run test:e2e       # playwright: browser smoke tests (e2e/), headless Chromium against its own bundle on :5199 (a worktree: a fixed port in 5200–5299 from its path; E2E_PORT overrides)
+npm run test:e2e       # playwright: browser smoke tests (e2e/), headless Chromium against its own bundle on the first free port from :5199 (E2E_PORT overrides)
 npm run fetch-team     # re-scrape https://vitamin2.ch/agentur (names, roles, portraits -> public/team, src/data/team.raw.json)
 ```
 
