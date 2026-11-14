@@ -23,21 +23,34 @@ const alive = (pid: number): boolean => {
  */
 function e2ePort(): number {
   const dir = realpathSync(fileURLToPath(new URL('.', import.meta.url)));
-  for (let port = 5199; port < 5299; port++) {
+  /** 'mine' once the lock is ours, 'taken' while another run holds it, 'stale' when its run is gone (removed: try again) */
+  const tryLock = (port: number): 'mine' | 'taken' | 'stale' => {
     const lock = join(tmpdir(), `saftladen-e2e-${port}.lock`);
     try {
       writeFileSync(lock, `${process.pid}\n${dir}`, { flag: 'wx' });
+      return 'mine';
     } catch {
-      const [pid, owner] = readFileSync(lock, 'utf8').split('\n');
+      let held: string;
+      try {
+        held = readFileSync(lock, 'utf8');
+      } catch {
+        return 'stale'; // its run just ended and removed it
+      }
+      const [pid, owner] = held.split('\n');
+      if (!(Number(pid) > 0)) return 'taken'; // still being written
       if (!alive(Number(pid))) {
         rmSync(lock, { force: true });
-        port--; // try this port again
-        continue;
+        return 'stale';
       }
       if (owner === dir) throw new Error(`another e2e run in this checkout (pid ${pid}) is still running on :${port}`);
-      continue;
+      return 'taken';
     }
-    process.on('exit', () => rmSync(lock, { force: true }));
+  };
+  for (let port = 5199; port < 5299; port++) {
+    let got = tryLock(port);
+    for (let i = 0; got === 'stale' && i < 3; i++) got = tryLock(port);
+    if (got !== 'mine') continue;
+    process.on('exit', () => rmSync(join(tmpdir(), `saftladen-e2e-${port}.lock`), { force: true }));
     process.env.E2E_PORT = String(port);
     return port;
   }
