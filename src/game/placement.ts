@@ -59,9 +59,9 @@ const covers = (b: Box3, p: Vec2) => p.x > b.min.x && p.x < b.max.x && p.z > b.m
  */
 export function blockages(sim: Sim, nav: NavGrid): string[] {
   const m = sim.model;
-  nav.clear();
-  for (const b of m.blockers()) nav.blockWorld(b.min.x, b.min.z, b.max.x, b.max.z);
   const furniture = m.items.flatMap((it) => it.blockers());
+  nav.clear();
+  nav.blockBoxes(m.blockers());
   const out = m.doors.filter((d) => doorSweep(d).some((p) => furniture.some((b) => covers(b, p)))).map(() => 'eine Tür');
   for (const t of targets(sim)) if (!nav.openNear(t.at, CORRIDOR_POINT, t.ring)) out.push(t.label);
   return [...new Set(out)];

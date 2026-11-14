@@ -21,9 +21,8 @@ export class RoomEditor {
   active = false;
   private selected: RoomItem | null = null;
   private hovered: RoomItem | null = null;
-  private drag: { item: RoomItem; dx: number; dz: number; gx: number; gz: number; moved: boolean } | null = null;
-  /** what the item being dragged cuts off where it is now (null: the spot is fine) */
-  private blocking: string | null = null;
+  /** `before`: where the item stood; `blocking`: what it cuts off where it is now (null: the spot is fine) */
+  private drag: { item: RoomItem; before: ItemOverride; dx: number; dz: number; gx: number; gz: number; blocking: string | null } | null = null;
   /** the last pointerdown grabbed an item (the click that follows must not deselect it) */
   private grabbed = false;
   private snap = true;
@@ -96,7 +95,7 @@ export class RoomEditor {
 
   /** While dragging: what the item cuts off where it is now (red outline), null when it may be dropped there. */
   get dragBlocked(): string | null {
-    return this.drag ? this.blocking : null;
+    return this.drag?.blocking ?? null;
   }
 
   setActive(on: boolean): void {
@@ -115,7 +114,7 @@ export class RoomEditor {
     this.grabbed = !!item;
     if (!item) return false;
     this.selected = item;
-    if (ground) this.drag = { item, dx: item.dx, dz: item.dz, gx: ground.x, gz: ground.z, moved: false };
+    if (ground) this.drag = { item, before: item.override ?? {}, dx: item.dx, dz: item.dz, gx: ground.x, gz: ground.z, blocking: null };
     this.refresh();
     return true;
   }
@@ -134,10 +133,7 @@ export class RoomEditor {
     const step = this.snap && !free ? GRID : 0.01;
     const dx = d.dx + Math.round((ground.x - d.gx) / step) * step;
     const dz = d.dz + Math.round((ground.z - d.gz) / step) * step;
-    if (this.place(d.item, dx, dz)) {
-      d.moved = true;
-      this.blocking = this.blocked();
-    }
+    if (this.place(d.item, dx, dz)) d.blocking = this.blocked();
     this.refresh();
   }
 
@@ -215,29 +211,21 @@ export class RoomEditor {
   /** Dropped where it cuts something off: back to where the drag started. */
   private drop(): void {
     const d = this.drag;
-    const blocking = this.blocking;
     this.drag = null;
-    this.blocking = null;
-    if (!d?.moved) return this.refresh();
-    if (!blocking) return this.commit();
-    d.item.set({ ...d.item.override, dx: d.dx, dz: d.dz });
-    this.refuse(d.item, blocking);
+    if (!d || sameOverride(d.item.override ?? {}, d.before)) return this.refresh();
+    this.keep(d.item, d.before, d.blocking);
   }
 
-  /**
-   * Applies `edit` to `it` (false: nothing changed) and keeps it only when nothing is cut off; otherwise `it` goes
-   * back to where it was and the panel says why.
-   */
+  /** Applies `edit` to `it` (false: nothing changed), see `keep`. */
   private change(it: RoomItem, edit: () => boolean | void): void {
     const before = it.override ?? {};
-    if (edit() === false) return;
-    const blocking = this.blocked();
-    if (!blocking) return this.commit();
-    it.set(before);
-    this.refuse(it, blocking);
+    if (edit() !== false) this.keep(it, before, this.blocked());
   }
 
-  private refuse(it: RoomItem, blocking: string): void {
+  /** `it` stays where it is now unless it cuts something off (`blocking`): then it goes back to `before` and the panel says why. */
+  private keep(it: RoomItem, before: ItemOverride, blocking: string | null): void {
+    if (!blocking) return this.commit();
+    it.set(before);
     this.refresh();
     this.panel.status(`${it.label} würde ${blocking} versperren – bleibt, wo es war.`);
   }

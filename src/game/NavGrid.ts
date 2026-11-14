@@ -65,6 +65,11 @@ export class NavGrid {
     this.block(cx0, cz0, cx1 - cx0 + 1, cz1 - cz0 + 1);
   }
 
+  /** Blocks every cell overlapped by one of the boxes (their x / z footprints). */
+  blockBoxes(boxes: ReadonlyArray<{ min: Vec2; max: Vec2 }>): void {
+    for (const b of boxes) this.blockWorld(b.min.x, b.min.z, b.max.x, b.max.z);
+  }
+
   /** Blocks every walkable cell that cannot be reached from `from`, so nobody spawns in a sealed pocket. Returns the count. */
   sealUnreachable(from: Vec2): number {
     const s = this.toCell(from);

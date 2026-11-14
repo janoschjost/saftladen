@@ -160,7 +160,7 @@ export class Sim {
   blockNav(): void {
     this.nav.clear();
     const blockers = this.model.blockers();
-    for (const b of blockers) this.nav.blockWorld(b.min.x, b.min.z, b.max.x, b.max.z);
+    this.nav.blockBoxes(blockers);
     this.walkColliders.boxes = blockers;
     this.nav.sealUnreachable(CORRIDOR_POINT);
     this.traffic.rebuild();
