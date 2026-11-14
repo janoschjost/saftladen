@@ -147,6 +147,37 @@ export class Sim {
     this.toilets.relayout(this.nav);
   }
 
+  /** Dev: ids of the people and pets that are out of the sim right now. */
+  get removedIds(): string[] {
+    return [...this.people.filter((p) => this.presence.isRemoved(p)), ...this.pets.filter((d) => d.removed)].map((w) => w.id);
+  }
+
+  /**
+   * Dev: takes a person or pet out of the sim (what they do ends cleanly: desk, meeting seat, kitchen, conversation
+   * are freed; they vanish and are off the schedule) or brings them back into today's plan. Returns a status text, or
+   * null for an unknown id.
+   */
+  setRemoved(id: string, removed: boolean): string | null {
+    const person = this.people.find((p) => p.id === id);
+    const pet = person ? undefined : this.pets.find((d) => d.id === id);
+    if (!person && !pet) return null;
+    const name = person ? person.member.name : pet!.name;
+    if (!removed) {
+      if (person) this.presence.restore(person);
+      else pet!.removed = false;
+      return `${name} ist wieder dabei`;
+    }
+    if (person) {
+      person.held = false;
+      this.pull(person);
+      this.presence.remove(person);
+    } else {
+      pet!.held = false;
+      pet!.removed = true;
+    }
+    return `${name} ist raus`;
+  }
+
   private spawn(seats: Record<string, number>, portrait: NonNullable<SimOptions['portrait']>): void {
     const free = () => {
       const { cx, cz } = this.nav.randomWalkable();

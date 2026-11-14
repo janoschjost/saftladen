@@ -351,4 +351,28 @@ describe('time jumps', () => {
     run(1);
     expect(plans()).not.toEqual(before);
   });
+
+  it('dev.remove: a removed person stays away all day and is ignored by call-back; restore puts them back on the plan', () => {
+    const { tod, people, presence, run, plans } = office(3, 5);
+    tod.jumpToHour(10);
+    run(120);
+    const today = plans();
+    const victim = people.find((p) => p.presence === 'in' && today.get(p.id)!.end > 17)!;
+    presence.remove(victim as unknown as Person);
+    expect(victim.presence).toBe('out');
+    expect(presence.isRemoved(victim as unknown as Person)).toBe(true);
+    for (let h = 11; h <= 15; h++) {
+      tod.jumpToHour(h);
+      run(30);
+      presence.callAllBack();
+      run(30);
+      expect(victim.presence, `at ${h}:00`).toBe('out');
+      expect(victim.awayKind).toBe('off');
+    }
+    expect(people.filter((p) => p !== victim && p.presence === 'in').length).toBeGreaterThan(0); // everybody else keeps living
+    presence.restore(victim as unknown as Person);
+    run(120);
+    expect(presence.isRemoved(victim as unknown as Person)).toBe(false);
+    expect(victim.awayKind !== 'off' || victim.presence === 'in').toBe(true);
+  });
 });

@@ -100,6 +100,8 @@ export class Presence {
   private seenPicks: number;
   /** people a scene holds where they are, in or out (`keep`): no plan, lunch, errand or call back moves them */
   private kept = new Set<Person>();
+  /** dev: people taken out of the sim, hidden and off the schedule until they are restored (`remove` / `restore`) */
+  private removed = new Set<Person>();
 
   constructor(
     private people: readonly Person[],
@@ -385,7 +387,7 @@ export class Presence {
    * office and `p` gets that room (the dev event).
    */
   send(p: Person, kind: 'home' | 'errand', nav: NavGrid, takeRoom = false): boolean {
-    if (p.presence !== 'in' || p.held || p.controlled || p.talk || this.kept.has(p)) return false;
+    if (p.presence !== 'in' || p.held || p.controlled || p.talk || this.kept.has(p) || this.removed.has(p)) return false;
     if (p.member.homebody) kind = 'home'; // never out on errands
     if (kind === 'home') {
       if (this.homeFull && homeRoomOf(p.id) === null) {
@@ -409,7 +411,7 @@ export class Presence {
 
   /** Dev events: straight out of the office (no walk to the door), into the home office or on an errand; back after `seconds`. */
   awayNow(p: Person, kind: 'home' | 'errand', seconds: number): void {
-    if (this.kept.has(p)) return;
+    if (this.kept.has(p) || this.removed.has(p)) return;
     this.overridden.add(p);
     if (kind === 'home') {
       this.moveInto(p, this.freeVariant(p));
@@ -417,9 +419,9 @@ export class Presence {
     p.startAway(kind, seconds);
   }
 
-  /** The schedule does not move this person: the player did by hand today, or a scene holds them. */
+  /** The schedule does not move this person: the player did by hand today, a scene holds them or the dev panel took them out. */
   private leftAlone(p: Person): boolean {
-    return this.overridden.has(p) || this.kept.has(p);
+    return this.overridden.has(p) || this.kept.has(p) || this.removed.has(p);
   }
 
   /** A scene holds this person where they are: in the office they stay in, out they stay out, until `letGo`. */
@@ -437,16 +439,43 @@ export class Presence {
   letGo(p: Person): void {
     const was = this.kept.delete(p);
     this.overridden.delete(p);
-    if (was && p.presence === 'out') {
+    if (was && p.presence === 'out' && !this.removed.has(p)) {
       // in right away, even when the office is full: not queued at the door, where a full office would push them back again
       p.awayLeft = 0;
       this.admitted.add(p);
     }
   }
 
+  /** Dev: takes somebody out of the sim at once. They are off the schedule, off the roster and ignored by every call back until `restore`. */
+  remove(p: Person): void {
+    this.removed.add(p);
+    this.kept.delete(p);
+    this.overridden.delete(p);
+    this.lunchers.delete(p);
+    this.nightHomers.delete(p);
+    this.admitted.delete(p);
+    this.waiting.delete(p);
+    this.exits.delete(p);
+    if (p.presence === 'out') {
+      p.awayKind = 'off';
+      p.awayLeft = OFF;
+    } else {
+      p.startAway('off', OFF); // hides them on the spot and ends whatever they were walking to
+    }
+  }
+
+  /** Dev: back into the sim. They follow today's plan again: in through the door if they are on duty, else they stay off. */
+  restore(p: Person): void {
+    this.removed.delete(p);
+  }
+
+  isRemoved(p: Person): boolean {
+    return this.removed.has(p);
+  }
+
   /** Bring somebody back to the office. */
   callBack(p: Person): void {
-    if (this.kept.has(p)) return;
+    if (this.kept.has(p) || this.removed.has(p)) return;
     if (this.duty(p, this.workHour) !== 'duty') this.overridden.add(p);
     if (p.presence === 'out') p.awayLeft = 0;
     else p.cancelLeave();
@@ -581,7 +610,7 @@ export class Presence {
     for (const p of this.lunchers) if (p.presence === 'in') this.lunchers.delete(p);
     for (const p of this.people) {
       const duty = this.duty(p, hour);
-      if (duty !== 'off') onDuty++;
+      if (duty !== 'off' && !this.removed.has(p)) onDuty++;
       if (this.leftAlone(p)) continue;
       if (duty !== 'duty') {
         this.sendOff(p, duty, nav);
