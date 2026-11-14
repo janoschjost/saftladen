@@ -2,8 +2,9 @@
 # Claim protocol for GitHub issues and PRs, shared by every agent session (and humans). N may be a PR number.
 #
 #   scripts/issue.sh new "<title>" <bug|enhancement> [body] [haiku|sonnet|opus]
-#                                   open an issue assigned to you, print its number; a model adds the model:<x> label
-#   scripts/issue.sh claim N [label]   claim N, label `in progress` (or `in review`), assign an issue to you;
+#                                   open an unassigned issue, print its number; a model adds the model:<x> label
+#   scripts/issue.sh claim N [label]   claim N, label `in progress` (or `in review`), assign an issue to you
+#                                   (release takes back only an assignment the claim added);
 #                                   exit 0 = ours, exit 2 = taken by someone else
 #   scripts/issue.sh release N "<reason>"   hand a claimed issue or PR back
 #   scripts/issue.sh ask N "<questions>"     park N until a dev answers: comment + `question` label (releases a claim)
@@ -19,6 +20,7 @@ set -euo pipefail
 LABEL="in progress"
 CLAIM="🔒 claim"
 RELEASE="🔓 release"
+ASSIGNED="(assigned by claim)" # in the claim comment: the claim added the assignee, so the release removes it
 
 REVIEW="in review"
 
@@ -49,9 +51,16 @@ issue_id() {
 # release a claim held on issue $1 (if any), with reason $2
 unclaim() {
   if [ -n "$(winner "$1")" ]; then
+    local own; own=$(claim_assigned "$1")
     gh issue comment "$1" --body "$RELEASE — $2" >/dev/null
-    gh issue edit "$1" --remove-label "$LABEL" --remove-assignee @me >/dev/null
+    gh issue edit "$1" --remove-label "$LABEL" >/dev/null
+    [ -z "$own" ] || gh issue edit "$1" --remove-assignee @me >/dev/null
   fi
+}
+
+# "yes" if the claim held on $1 added its assignee (empty otherwise): a dev's own assignment survives a release
+claim_assigned() {
+  case "$(held_claim "$1")" in *"$ASSIGNED"*) echo yes ;; esac
 }
 
 # who holds the claim on $1, for the "taken" message: claim label and author of the latest claim comment
@@ -61,14 +70,19 @@ holder() {
      ([.comments[] | select(.body | startswith(\"$CLAIM \"))] | last | .author.login // empty)] | join(\" by \")"
 }
 
-# token of the first claim comment after the latest release (empty if none)
-winner() {
+# the first claim comment after the latest release (empty if none)
+held_claim() {
   gh "$(kind "$1")" view "$1" --json comments -q "
     [.comments[].body | select(startswith(\"$CLAIM \") or startswith(\"$RELEASE\"))]
     | (map(startswith(\"$RELEASE\")) | rindex(true)) as \$r
     | .[(if \$r == null then 0 else \$r + 1 end):]
-    | map(select(startswith(\"$CLAIM \")))[0] // \"\"
-    | split(\" \")[2] // \"\""
+    | map(select(startswith(\"$CLAIM \")))[0] // \"\""
+}
+
+# token of the claim held on $1 (empty if none)
+winner() {
+  local c; c=$(held_claim "$1")
+  [ -z "$c" ] || echo "$c" | cut -d' ' -f3
 }
 
 cmd=${1:-}
@@ -81,7 +95,7 @@ case "$cmd" in
       haiku|sonnet|opus) labels+=(--label "model:$model") ;;
       *) echo "model must be haiku, sonnet or opus" >&2; exit 1 ;;
     esac
-    url=$(gh issue create --title "$title" "${labels[@]}" --assignee @me --body "${body:-Opened by an agent session.}")
+    url=$(gh issue create --title "$title" "${labels[@]}" --body "${body:-Opened by an agent session.}")
     echo "${url##*/}"
     ;;
   claim)
@@ -92,7 +106,11 @@ case "$cmd" in
     held=$(winner "$n")
     if [ -n "$held" ]; then echo "#$n is already claimed: $(holder "$n")" >&2; exit 2; fi
     token=$(uuidgen)
-    gh "$k" comment "$n" --body "$CLAIM $token — $label." >/dev/null
+    note=""
+    if [ "$k" = issue ] && ! gh issue view "$n" --json assignees -q '.assignees[].login' | grep -qx "$(gh api user -q .login)"; then
+      note=" $ASSIGNED"
+    fi
+    gh "$k" comment "$n" --body "$CLAIM $token — $label.$note" >/dev/null
     if [ "$(winner "$n")" != "$token" ]; then
       # lost the race: drop our comment, leave label/assignee to the winner
       id=$(gh api "repos/{owner}/{repo}/issues/$n/comments" --paginate -q ".[] | select(.body | startswith(\"$CLAIM $token\")) | .id")
@@ -108,13 +126,11 @@ case "$cmd" in
   release)
     n=${2:?issue or PR number}; reason=${3:?reason}
     k=$(kind "$n")
+    own=""; [ "$k" = pr ] || own=$(claim_assigned "$n")
     gh "$k" comment "$n" --body "$RELEASE — $reason" >/dev/null
-    for l in "$LABEL" "$REVIEW"; do
-      if gh "$k" view "$n" --json labels -q '.labels[].name' | grep -qx "$l"; then
-        gh "$k" edit "$n" --remove-label "$l" >/dev/null
-      fi
-    done
-    [ "$k" = pr ] || gh issue edit "$n" --remove-assignee @me >/dev/null
+    # removed unread: right after a claim the label may not show yet, and removing an absent label is a no-op
+    gh "$k" edit "$n" --remove-label "$LABEL" --remove-label "$REVIEW" >/dev/null
+    [ -z "$own" ] || gh issue edit "$n" --remove-assignee @me >/dev/null
     echo "released #$n"
     ;;
   ask)
@@ -149,11 +165,7 @@ $q"
     gh issue comment "$n" --body "✅ Refined, ready for agents:
 
 $summary" >/dev/null
-    for l in question blocked; do
-      if gh issue view "$n" --json labels -q '.labels[].name' | grep -qx "$l"; then
-        gh issue edit "$n" --remove-label "$l" >/dev/null
-      fi
-    done
+    gh issue edit "$n" --remove-label question --remove-label blocked >/dev/null
     unclaim "$n" "refined"
     echo "#$n is ready"
     ;;
