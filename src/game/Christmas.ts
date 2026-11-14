@@ -11,7 +11,7 @@ export class Christmas {
   /** 0..1, eases so the snow fades in and out */
   amount = 0;
   private snow: SnowFx;
-  private decor: XmasDecor;
+  readonly decor: XmasDecor;
 
   constructor(scene: THREE.Scene) {
     this.snow = new SnowFx(scene);

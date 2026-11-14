@@ -236,6 +236,13 @@ export class Sim {
     return this.nav.nearestWalkable({ x: owner.pos.x + dx * 0.8, z: owner.pos.z + dz * 0.8 }, 6) ?? { ...owner.pos };
   }
 
+  /** Somebody by their id in the team data (`donata-manser`); an unknown id throws. */
+  person(id: string): Person {
+    const p = this.people.find((o) => o.id === id);
+    if (!p) throw new Error(`nobody is called "${id}"`);
+    return p;
+  }
+
   /** Pulls a person out of whatever they are doing (talk, desk, printer, meeting), so something else can take over. */
   drop(p: Person): void {
     this.social.leave(p);

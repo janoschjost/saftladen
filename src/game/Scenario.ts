@@ -18,7 +18,7 @@ const AWAY = 45;
 
 /**
  * States a scene instead of finding one: who is where, who stays there, which place is free. For tests and dev tools
- * (`sim.scenario`, in the browser `__game.scenario`).
+ * (`sim.scenario`, in the browser `__game.sim.scenario`).
  *
  * Everything here happens at once (no walk to the door) and rolls its dice apart from the simulation (`apart`): the
  * random stream is where it was, so a scene does not reshuffle the rest of the day. The people it touches act
@@ -32,15 +32,14 @@ const AWAY = 45;
 export class Scenario {
   constructor(private sim: Sim) {}
 
-  private person(id: string): Person {
-    const p = this.sim.people.find((o) => o.id === id);
-    if (!p) throw new Error(`scenario: nobody is called "${id}"`);
-    return p;
+  /** Something stands on this cell of the floor now: nobody walks through it. */
+  block(cx: number, cz: number): void {
+    this.sim.nav.block(cx, cz);
   }
 
   /** Puts `id` there, now. Out of the office they come in without the door, their pets with them. */
   put(id: string, where: Where, hold: Hold = 'pin'): void {
-    const p = this.person(id);
+    const p = this.sim.person(id);
     const point = typeof where === 'object' && Number.isFinite(where?.x) && Number.isFinite(where?.z);
     if (!point && !['desk', 'errand', 'home'].includes(where as string)) throw new Error(`scenario: cannot put "${id}" at ${JSON.stringify(where)}`);
     if (!['pin', 'stay', 'free'].includes(hold)) throw new Error(`scenario: unknown hold "${hold}"`);
@@ -61,7 +60,7 @@ export class Scenario {
 
   /** Nothing holds `id` any more: unpinned, and the schedule has them again (kept out, they come back in). */
   release(id: string): void {
-    const p = this.person(id);
+    const p = this.sim.person(id);
     p.unpin();
     this.sim.presence.letGo(p);
   }

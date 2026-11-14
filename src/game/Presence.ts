@@ -222,7 +222,7 @@ export class Presence {
     if (visit) this.nightHomers.delete(p); // an ordinary return through the door, not a night shift ending
   }
 
-  /** Today's hours of everybody (for a look in the console: `__game.presence.schedule`). */
+  /** Today's hours of everybody (for a look in the console: `__game.sim.presence.schedule`). */
   get schedule(): Array<{ id: string; arrive: number; leave: number; end: number; lunch: number; night: boolean; remote: boolean }> {
     return this.people.map((p) => {
       const { arrive, leave, end, lunch, night, remote } = this.planOf(p);

@@ -1,9 +1,10 @@
 import { expect, openGame, test, until } from './game';
+import type { TestHook } from '../src/game/Game';
 
-const seatedSpeakerBubble = (g: any) => {
-  const m = g.meetingRoom.current;
+const seatedSpeakerBubble = (g: TestHook) => {
+  const m = g.sim.meetingRoom.current;
   if (m?.phase !== 'session' || m.speaker.sit < 0.95) return null;
-  const b = g.bubbles.state.find((s: any) => s.id === m.speaker.id && s.opacity > 0.9);
+  const b = g.bubbles.state.find((s) => s.id === m.speaker.id && s.opacity > 0.9);
   return b ? { ...b, sit: m.speaker.sit, standingHead: m.speaker.rig.headHeight } : null;
 };
 
