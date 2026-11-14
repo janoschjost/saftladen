@@ -352,6 +352,16 @@ export class Person extends Walker {
     return this.baseHead - SIT_DROP * this.scale * this.sit;
   }
 
+  /** A steered person has no plan: the doors open for them by proximity. The glide onto / off a seat and a step out are straight lines of their own. */
+  override get doorPath(): Vec2[] | null {
+    if (this.controlled && !this.scripted) return null;
+    const j = this.meetJob;
+    if (j?.phase === 'enter') return [j.seat.seat];
+    if (j?.phase === 'leave') return [j.seat.approach];
+    if (this.stepOut) return [this.stepOut.to];
+    return super.doorPath;
+  }
+
   override get fixed(): boolean {
     if (this.presence === 'out' || this.script || this.stepOut || this.scripted?.arrived) return true;
     if (this.printJob?.phase === 'print') return true;

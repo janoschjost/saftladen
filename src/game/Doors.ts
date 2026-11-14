@@ -21,6 +21,41 @@ export interface DoorState {
   letters: LetterSpring;
 }
 
+/** how far past the jambs a route may run and still count as going through the doorway (path waypoints are jittered) */
+const DOORWAY_SLACK = 0.25;
+
+/**
+ * Somebody the doors can see. Without `path` they open the door by proximity (the player's eye, a steered person);
+ * with `path` (the rest of their planned route) only when that route goes through the doorway.
+ */
+export interface Sight {
+  x: number;
+  z: number;
+  path?: Array<{ x: number; z: number }>;
+}
+
+/** True when the line from `at` along `path` crosses the wall of `rig` inside its doorway (entering or leaving). */
+function goesThrough(rig: DoorRig, at: { x: number; z: number }, path: Array<{ x: number; z: number }>): boolean {
+  const c = rig.center;
+  // base 0 = the wall runs along x (the leaf hangs along x), -PI/2 = along z
+  const alongX = Math.cos(rig.base) > 0.7;
+  const half = rig.width / 2 + DOORWAY_SLACK;
+  // along: coordinate along the wall, across: distance from the wall line
+  const along = (p: { x: number; z: number }) => (alongX ? p.x - c.x : p.z - c.z);
+  const across = (p: { x: number; z: number }) => (alongX ? p.z - c.z : p.x - c.x);
+  let a = at;
+  for (const b of path) {
+    const da = across(a);
+    const db = across(b);
+    if (da * db <= 0 && da !== db) {
+      const t = da / (da - db);
+      if (Math.abs(along(a) + (along(b) - along(a)) * t) <= half) return true;
+    }
+    a = b;
+  }
+  return false;
+}
+
 const pickRest = (): number => {
   const r = random();
   return r < 0.5 ? 0 : r < 0.7 ? 0.3 : 1;
@@ -41,10 +76,10 @@ export class Doors {
     });
   }
 
-  update(dt: number, positions: Array<{ x: number; z: number }>): void {
+  update(dt: number, sights: Sight[]): void {
     for (const s of this.states) {
       const c = s.rig.center;
-      const near = positions.some((p) => Math.hypot(p.x - c.x, p.z - c.z) < TRIGGER);
+      const near = sights.some((p) => Math.hypot(p.x - c.x, p.z - c.z) < TRIGGER && (!p.path || goesThrough(s.rig, p, p.path)));
       if (near) s.hold = HOLD;
       else {
         s.hold = Math.max(0, s.hold - dt);
