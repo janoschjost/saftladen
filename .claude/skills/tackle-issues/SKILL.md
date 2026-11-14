@@ -65,7 +65,7 @@ Wait for its report, then go back to loop step 1. Devs set the label when they k
 
 ## Pick
 
-Eligible: open, no `in progress` label, unassigned **or assigned to you** (issues you opened with `scripts/issue.sh new` are assigned to you right away), no open PR linked to it, not labeled `question`, `wontfix`, `duplicate` or `invalid`. Issues assigned to other devs are theirs: skip them.
+Eligible: open, no `in progress` label, unassigned **or assigned to you** (`scripts/issue.sh new` leaves issues unassigned; an assignee is a claim or a dev who picked the issue), no open PR linked to it, not labeled `question`, `wontfix`, `duplicate` or `invalid`. Issues assigned to other devs are theirs: skip them.
 
 ```sh
 F='sort:created-asc -label:"in progress" -label:question -label:wontfix -label:duplicate -label:invalid'

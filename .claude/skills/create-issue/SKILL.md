@@ -68,7 +68,7 @@ Description: `$ARGUMENTS`. Empty → ask the dev for it first.
    ```sh
    scripts/issue.sh new "<title>" <bug|enhancement> "$(cat <body file>)" <haiku|sonnet|opus>
    ```
-   It prints the number and assigns the dev. Several issues from a confirmed split → one call each; a part that builds on another gets `scripts/issue.sh block B "<reason>" A`. If the dev wants an umbrella issue for the whole (a goal that only the parts together reach), open it too and link the parts: `scripts/issue.sh sub P A B`.
+   It prints the number and leaves the issue unassigned, so every dev's `/tackle-issues` can take it; a dev who wants it for themselves assigns it (`gh issue edit N --add-assignee @me`). Several issues from a confirmed split → one call each; a part that builds on another gets `scripts/issue.sh block B "<reason>" A`. If the dev wants an umbrella issue for the whole (a goal that only the parts together reach), open it too and link the parts: `scripts/issue.sh sub P A B`.
 8. **Report:** issue link, labels, the model and why. `/tackle-issues` picks it up from here.
 
 ## Rules
