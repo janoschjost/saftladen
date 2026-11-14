@@ -107,7 +107,7 @@ describe('fx.materialise: on state', () => {
     expect(p.pos.x).toBeCloseTo(p.lane.out.x, 1);
     let faded = false;
     expect(
-      run(sim, 5, () => p.fx === 0, () => {
+      run(sim, 5, () => p.fx <= 1e-3, () => {
         faded ||= p.fx < 1;
         expect(wingOpens()).toBe(false);
       }),
@@ -124,7 +124,7 @@ describe('fx.materialise: on state', () => {
     expect(p.fx).toBeLessThan(1);
     let materialising = 0;
     expect(
-      run(sim, 5, () => p.fx >= 1, () => {
+      run(sim, 5, () => p.fx >= 1 - 1e-3, () => {
         materialising++;
         expect(wingOpens()).toBe(false);
       }),

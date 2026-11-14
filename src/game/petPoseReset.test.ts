@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { installHeadlessDom } from '../test/headlessDom';
 import { office, STEP } from '../test/office';
 import type { Person } from './Person';
-import { applyPetPose, CROUCH_SECONDS, petPose, PET_HEIGHT, resetRig } from './petPose';
+import { CROUCH_SECONDS, petPose, PET_HEIGHT, HIP_HEIGHT, poseFrame } from './petPose';
 
 installHeadlessDom();
 
@@ -11,7 +11,7 @@ const OTHER = 'oscar-grob';
 
 /**
  * The owner strokes their dog (the `pet-dog` event) in an otherwise empty office. `frame(s)` runs `s` seconds of
- * simulation and poses the owner's rig after every step in the order `Game.pose` does: reset, then the pet pose.
+ * simulation and poses the owner's rig after every step with `poseFrame`, the function `Game.pose` runs each frame (reset, pose, hip hinge).
  */
 function stroke() {
   const sim = office();
@@ -23,11 +23,11 @@ function stroke() {
   const rig = owner.rig;
   let now = 0;
   const frame = (seconds: number) => {
-    for (let t = 0; t < seconds; t += STEP) {
+    for (let i = 0, n = Math.round(seconds / STEP); i < n; i++) {
       sim.step(STEP);
       now += STEP;
-      resetRig(rig);
-      applyPetPose(owner, rig, now);
+      // a stand-in for what the walk and the other poses do to the rig each frame: add to it (`+=`), as they do
+      poseFrame(owner, rig, now, () => void (rig.body.position.y += 0.01));
     }
   };
   return { sim, owner, rig, frame };
@@ -38,9 +38,10 @@ function expectNeutral(r: Person['rig']): void {
   for (const part of [r.body, r.armL, r.armR, r.legL, r.legR, r.kneeL, r.kneeR]) {
     expect(part.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
   }
-  expect(r.body.position.toArray()).toEqual([0, 0, 0]);
-  expect(r.legL.position.y).toBe(0.8);
-  expect(r.legR.position.y).toBe(0.8);
+  expect(r.body.position.x).toBeCloseTo(0);
+  expect(r.body.position.y).toBeCloseTo(0.01); // only this frame's own addition: nothing piled up
+  expect(r.legL.position.y).toBe(HIP_HEIGHT);
+  expect(r.legR.position.y).toBe(HIP_HEIGHT);
 }
 
 describe('pet.pose-reset', () => {

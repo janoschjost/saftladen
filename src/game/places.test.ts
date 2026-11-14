@@ -133,7 +133,7 @@ describe('places', () => {
     ['pet.crouch', 'ramon-lenherr', 'dog'],
     ['pet.crouch-cat', 'donata-manser', 'cat'],
   ] as const) {
-    // what the view eases the pose in from (`Game.posePet`): petting, standing still, not on a chair
+    // what the view eases the pose in from (`applyPetPose`): petting, standing still, not on a chair
     it(`${id}: the owner stops at the ${kind}, stands and strokes it, at its height`, () => {
       const sim = office();
       const [p] = crew(sim, owner);
