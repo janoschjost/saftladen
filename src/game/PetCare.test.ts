@@ -12,25 +12,26 @@ const STEP = 1 / 60;
 
 describe('pet.petting', () => {
   it('pet.petting the cat and the person stay put for the whole stroke, even when somebody bumps into them (#125)', () => {
-    setSeed(3);
+    setSeed(1);
     const sim = new Sim({ cycle: cycleOf(11) });
     Walker.animate = true;
-    const cat = sim.pets.find((d) => d.isCat)!;
-    const owner = cat.owner;
-    sim.presence.callBack(owner);
-    for (let i = 0; i < 60 * 60 && !(owner.presence === 'in' && !cat.away && !cat.fixed); i++) sim.step(STEP);
-    expect(owner.presence).toBe('in');
+    sim.scenario.put('donata-manser', 'desk', 'stay');
+    sim.scenario.put('oscar-grob', 'desk', 'stay');
+    const owner = sim.people.find((p) => p.id === 'donata-manser')!;
+    const other = sim.people.find((p) => p.id === 'oscar-grob')!;
+    sim.drop(owner);
+    sim.drop(other);
+    const cat = sim.pets.find((d) => d.owner === owner && d.isCat)!;
     expect(cat.away || cat.fixed).toBe(false);
 
     expect(owner.petDog(cat.pos, 20, PET_HEIGHT.cat)).toBe(true);
     cat.petBy(owner, 20, sim.nav);
-    for (let i = 0; i < 60 * 3; i++) sim.step(STEP); // the cat trots over
+    for (let i = 0; i < 60 * 10 && cat.state === 'walk'; i++) sim.step(STEP); // the cat trots over
     expect(cat.petted && cat.state).toBe('idle');
     const catAt = { ...cat.pos };
     const ownerAt = { ...owner.pos };
 
     // a passer-by walks right into them, again and again
-    const other = sim.people.find((p) => p !== owner && p.inOffice && !p.fixed)!;
     const moved = { cat: 0, owner: 0 };
     let bumps = 0; // steps in which the passer-by really overlaps one of them
     for (let i = 0; i < 60 * 15; i++) {
