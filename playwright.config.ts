@@ -1,7 +1,21 @@
+import { createHash } from 'node:crypto';
+import { statSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
 
-// own port, so the e2e run never talks to a dev server of another checkout (5173 main, 5174+ worktrees)
-const port = Number(process.env.E2E_PORT ?? 5199);
+/**
+ * Own port, so the e2e run never talks to a dev server (5173 main, 5174+ worktrees) or to the e2e run of another
+ * checkout: the main checkout (and CI) 5199, a worktree a fixed port in 5200–5299 taken from its path. Fixed, not "the
+ * next free one": two runs started together would both find the same port free, and the runner and its workers each
+ * load this file. `E2E_PORT` wins.
+ */
+function e2ePort(): number {
+  const dir = fileURLToPath(new URL('.', import.meta.url));
+  const inWorktree = statSync(`${dir}.git`, { throwIfNoEntry: false })?.isFile() ?? false; // a file in a worktree, a directory in the main checkout
+  return inWorktree ? 5200 + (createHash('sha1').update(dir).digest().readUInt32BE(0) % 100) : 5199;
+}
+
+const port = Number(process.env.E2E_PORT ?? e2ePort());
 
 export default defineConfig({
   testDir: 'e2e',

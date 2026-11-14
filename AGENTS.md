@@ -16,7 +16,7 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
    cd ../saftladen-issue-N && npm ci
    ```
    Worktrees live next to the repo (`../saftladen-<name>`), the same place PhpStorm's "New Worktree…" puts them.
-   `npm run dev` in a worktree picks the next free port from 5174 (the main checkout keeps 5173).
+   `npm run dev` in a worktree picks the next free port from 5174 (the main checkout keeps 5173). `npm run test:e2e` serves its bundle on 5199 in the main checkout and on a fixed port in 5200–5299 per worktree (from its path), so runs in parallel worktrees don't collide; `E2E_PORT` overrides it.
 4. **Implement.** Read the issue and all of its comments. Follow `README.md` and the existing code. Keep the change scoped to the issue.
 5. **Done means:**
    - `npm run lint` and `npm run build` pass. CI (`.github/workflows/ci.yml`) runs lint, build and Vitest on every PR; a red check is not done. The e2e tests run on CI only with the `e2e` label (Actions minutes are limited), so run them locally and note the result in the PR body. A failing local run is not done, whatever the load on the machine: the waits count game time, not seconds. A test that also fails on `main` → say so in the PR body and link its issue (open one if there is none). Add the label (`gh pr edit --add-label e2e`) whenever the PR adds or changes a file under `e2e/`, `playwright.config.ts`, the `?test` hook or the CI workflow: a spec must have run on CI before it reaches `main`. Other PRs get it from the reviewer (`/review-pr`).
