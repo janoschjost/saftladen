@@ -47,7 +47,7 @@ class Stub {
   task = null;
   pos = { x: 0, z: 0 };
   /** every walk out of the door: kind and whether an alter ego transforms (#32) */
-  leaves: Array<{ kind: AwayKind; transform: boolean; manual: boolean }> = [];
+  leaves: Array<{ kind: AwayKind; transform: boolean; manual: boolean; seconds: number }> = [];
   private walk = 0;
 
   constructor(readonly member: TeamMember) {}
@@ -59,7 +59,7 @@ class Stub {
     return this.presence === 'in';
   }
   leaveOffice(_nav: NavGrid, kind: AwayKind, seconds: number, manual = false): void {
-    this.leaves.push({ kind, transform: transformsOnLeave(this.member, kind, manual), manual });
+    this.leaves.push({ kind, transform: transformsOnLeave(this.member, kind, manual), manual, seconds });
     this.presence = 'leaving';
     this.awayKind = kind;
     this.awayLeft = seconds;
@@ -198,6 +198,58 @@ describe('presence', () => {
       expect(lunch.length).toBeGreaterThan(0);
       for (const s of lunch) expect(s.hour).toBeGreaterThanOrEqual(first);
     }
+  });
+
+  it('presence.errand: errands last 25-70 s, home office 90-220 s', () => {
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      // before the first lunch, so every errand is a plain one (lunch ones are shorter: 22-45 s)
+      const { people, plans } = runDay(seed, 5, 10.5);
+      expect(Math.min(...[...plans.values()].map((p) => p.lunch))).toBeGreaterThan(10.5);
+      const leaves = people.filter((p) => !p.member.homebody).flatMap((p) => p.leaves);
+      const errands = leaves.filter((l) => l.kind === 'errand');
+      const homes = leaves.filter((l) => l.kind === 'home');
+      expect(errands.length + homes.length, `seed ${seed}`).toBeGreaterThan(0);
+      for (const l of errands) {
+        expect(l.seconds).toBeGreaterThanOrEqual(25);
+        expect(l.seconds).toBeLessThanOrEqual(70);
+      }
+      for (const l of homes) {
+        expect(l.seconds).toBeGreaterThanOrEqual(90);
+        expect(l.seconds).toBeLessThanOrEqual(220);
+      }
+    }
+  });
+
+  it('presence.rain: with rain fewer leave, errands take longer, more of the time away is home office', () => {
+    const tally = (raining: boolean) => {
+      let leaves = 0;
+      let errands = 0;
+      let errandSeconds = 0;
+      let homeTime = 0;
+      let awayTime = 0;
+      for (let seed = 1; seed <= 20; seed++) {
+        // up to the first lunch: only the draws the weather acts on (lunch errands are fixed)
+        const { people, samples } = runDay(seed, 5, 10.5, raining);
+        for (const l of people.flatMap((p) => p.leaves)) {
+          leaves++;
+          if (l.kind !== 'errand') continue;
+          errands++;
+          errandSeconds += l.seconds;
+        }
+        // person-seconds out on an errand or in the home office, from the once-a-second samples
+        for (const s of samples.filter((s) => s.hour >= 8)) {
+          const away = s.states.match(/o[eh]/g) ?? [];
+          awayTime += away.length;
+          homeTime += away.filter((a) => a === 'oh').length;
+        }
+      }
+      return { leaves, errandMean: errandSeconds / errands, homeShare: homeTime / awayTime };
+    };
+    const dry = tally(false);
+    const wet = tally(true);
+    expect(wet.leaves).toBeLessThan(dry.leaves);
+    expect(wet.errandMean).toBeGreaterThan(dry.errandMean);
+    expect(wet.homeShare).toBeGreaterThan(dry.homeShare);
   });
 
   it('presence.share: during core hours a good part of the team is out', () => {

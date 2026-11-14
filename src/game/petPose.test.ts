@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { CROUCH_SECONDS, KNEE_PAD, PET_HEIGHT, legDepth, legPoints, petPose, smooth } from './petPose';
+import { team } from '../data/team';
+import { buildCharacter } from '../render/characterBuilder';
+import { DOOR_LANES } from './Door';
+import type { NavGrid } from './NavGrid';
+import { Person } from './Person';
+import { setSeed } from './rng';
+import { CROUCH_SECONDS, KNEE_PAD, PET_HEIGHT, applyPetPose, legDepth, legPoints, petPose, resetRig, smooth } from './petPose';
 
 /** Height above the floor (rig units) of a leg's knee pivot and sole in pose `p`. */
 const heights = (p: ReturnType<typeof petPose>, leg: 'legL' | 'legR') => {
@@ -61,4 +67,61 @@ describe('pet.crouch', () => {
     expect(petPose(1, PET_HEIGHT.dog, 0).spine).toBeLessThan(0.45);
     expect(petPose(1, PET_HEIGHT.cat, 0).spine).toBeLessThan(0.45);
   });
+});
+
+describe('pet.pose-reset', () => {
+  const STEP = 1 / 60;
+  const nav = { findPath: () => [] } as unknown as NavGrid;
+
+  /** A person at the door, stroking a pet; `frame()` poses their rig the way `Game.pose` does: reset, then the pet pose. */
+  function stroker() {
+    setSeed(1);
+    const m = team.find((t) => t.id === 'marco-rieser')!;
+    const rig = buildCharacter(m.look);
+    const p = new Person(m, rig, { ...DOOR_LANES[0].in });
+    expect(p.petDog({ x: p.pos.x, z: p.pos.z + 0.65 }, 60, PET_HEIGHT.dog)).toBe(true);
+    let now = 0;
+    const frame = (seconds: number) => {
+      for (let t = 0; t < seconds; t += STEP) {
+        p.update(STEP, nav, []);
+        now += STEP;
+        resetRig(rig);
+        applyPetPose(p, rig, now);
+      }
+    };
+    return { p, rig, frame };
+  }
+
+  const neutral = (r: Person['rig']) => {
+    for (const part of [r.body, r.armL, r.armR, r.legL, r.legR]) {
+      expect(part.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+    }
+    expect(r.body.position.toArray()).toEqual([0, 0, 0]);
+  };
+
+  it('pet.pose-reset: the rig does not pile up: after a long stroke the bend is that of one frame, not of all of them', () => {
+    const { p, rig, frame } = stroker();
+    frame(0.2);
+    frame(5);
+    expect(p.petAmt).toBe(1);
+    expect(rig.body.rotation.x).toBeCloseTo(petPose(1, PET_HEIGHT.dog, 0).spine);
+  });
+
+  for (const [how, end] of [
+    ['it ends', (p: Person) => void (p.petting = false)],
+    ['the pet is picked up', (p: Person) => void (p.held = true)],
+    ['the person is pulled into a chat', (p: Person) => void p.talkTo({ x: p.pos.x + 1, z: p.pos.z }, 3, false)],
+    ['a conversation takes the person', (p: Person) => void (p.talk = { speaker: null, center: { x: p.pos.x + 1, z: p.pos.z } } as unknown as Person['talk'])],
+  ] as const) {
+    it(`pet.pose-reset: the rig is back to neutral when ${how}`, () => {
+      const { p, rig, frame } = stroker();
+      frame(1);
+      expect(p.petAmt).toBe(1);
+      expect(rig.body.rotation.x).toBeGreaterThan(0.1); // really bent
+      end(p);
+      frame(CROUCH_SECONDS + 0.2);
+      expect(p.petAmt).toBe(0);
+      neutral(rig);
+    });
+  }
 });
