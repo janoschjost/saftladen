@@ -159,6 +159,7 @@ export class Presence {
 
   /** A new working day: fresh plans for everybody, on some days a crunch keeps a few more people in for the night. */
   private rollDay(): void {
+    this.overfull = false; // a call back by hand does not carry over into another day
     this.overridden.clear();
     this.lunchers.clear();
     this.plans.clear();
@@ -656,7 +657,7 @@ export class Presence {
    */
   private jump(newDay: boolean): void {
     if (newDay) this.rollDay();
-    this.overfull = false; // a call back by hand does not carry over into another hour or day
+    this.overfull = false; // nor into another hour
     const hour = (this.lastHour = this.workHour);
     for (const p of this.people) {
       const plan = this.planOf(p);
@@ -702,7 +703,7 @@ export class Presence {
     this.timer -= dt;
     if (this.timer > 0) return;
     this.timer = between(CHECK);
-    if (this.overfull) return; // called back by hand: nobody goes out on an errand or to the home office for now
+    if (this.overfull && this.present >= MAX_OFFICE) return; // called back by hand into a full office: nobody goes out on an errand or to the home office for now
     const leaving = this.people.filter((p) => p.presence === 'leaving').length;
     // enough people out already; a full office still lets somebody go, so that those waiting outside get their turn
     if ((this.away.length >= this.target && this.present < MAX_OFFICE) || leaving >= 2) return;
