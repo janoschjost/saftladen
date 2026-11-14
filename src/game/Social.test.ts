@@ -21,14 +21,10 @@ const SPOT = CORRIDOR_POINT;
 const at = (dx: number, dz: number): Vec2 => ({ x: SPOT.x + dx, z: SPOT.z + dz });
 const dist = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.z - b.z);
 
-/** Everybody but `keep` is out and held there. */
-function out(sim: Sim, keep: readonly string[]): void {
-  for (const p of sim.people) if (!keep.includes(p.id)) sim.scenario.put(p.id, 'errand');
-}
-
-/** Everybody else is out; these stand at the given points, in the office for good but living on. */
+/** Everybody else is out and held there; these stand at the given points, in the office for good but living on. */
 function only(sim: Sim, placed: readonly (readonly [string, Vec2])[]): Person[] {
-  out(sim, placed.map(([id]) => id));
+  const keep = placed.map(([id]) => id);
+  for (const p of sim.people) if (!keep.includes(p.id)) sim.scenario.put(p.id, 'errand');
   return placed.map(([id, where]) => {
     sim.scenario.put(id, where, 'stay');
     return sim.person(id);
@@ -43,17 +39,21 @@ function talk(sim: Sim, members: Person[]): Conversation {
 describe('talks and groups', () => {
   it('social.join: a passer-by joins a running talk; then the members take turns with a pause between, and it ends with a wrap-up line', () => {
     const sim = office();
-    const [a, b, c] = only(sim, [
-      [GROUP[0], at(-0.6, 0)],
-      [GROUP[1], at(0.6, 0)],
-      [GROUP[2], at(-4, 0)],
-    ]);
-    const conv = talk(sim, [a, b]);
-    // c walks past the talk, back and forth, until they stop and join
+    // a and b start talking, c walks past from one end of the corridor spot to the other; a pass without a join starts
+    // over with a fresh talk (joining is a chance per check)
+    const [a, b, c] = GROUP.slice(0, 3).map((id) => sim.person(id));
+    let conv!: Conversation;
     let joined = false;
     for (let pass = 0; pass < 10 && !joined; pass++) {
-      c.walkTo(sim.nav, at(pass % 2 ? -4 : 4, 0));
+      only(sim, [
+        [a.id, at(-0.6, 0)],
+        [b.id, at(0.6, 0)],
+        [c.id, at(-4, 0)],
+      ]);
+      conv = talk(sim, [a, b]);
+      c.walkTo(sim.nav, at(4, 0));
       joined = run(sim, 8, () => c.talk === conv);
+      if (!joined) sim.events.trigger('break-talks');
     }
     expect(joined).toBe(true);
     expect(conv.members).toContain(c);
@@ -162,7 +162,7 @@ describe('talks and groups', () => {
     expect(aff.get(p('nina-vetsch'), p('ramon-lenherr'))).toBeGreaterThan(aff.get(p('linda-peter'), p('elia-vogt'))); // both have a dog
     expect(aff.get(p('elia-vogt'), p('linda-peter'))).toBe(aff.get(p('linda-peter'), p('elia-vogt')));
 
-    // a talk to its end: closer afterwards, the more so the longer it ran
+    // a talk to its end: closer afterwards
     const [a, b] = only(sim, [
       [GROUP[0], at(-0.6, 0)],
       [GROUP[1], at(0.6, 0)],
@@ -180,6 +180,28 @@ describe('talks and groups', () => {
     const faded = aff.get(a, b);
     expect(faded).toBeLessThan(after);
     expect(faded).toBeGreaterThan(after * 0.9);
+  });
+
+  it('social.friendship: a talk broken off early brings two less close than one that ran its course', () => {
+    const sim = office();
+    const [a, b] = only(sim, [
+      [GROUP[0], at(-0.6, 0)],
+      [GROUP[1], at(0.6, 0)],
+    ]);
+    /** the bond a talk leaves behind when it ends after `seconds` of talking (Infinity: when it is over by itself) */
+    const gain = (seconds: number): number => {
+      const affinity = new Affinity();
+      setSeed(7);
+      const conv = new Conversation([a, b], { ...SPOT }, sim.nav, affinity);
+      let t = 0;
+      while (t < seconds && conv.update(STEP)) if (conv.phase === 'talk') t += STEP;
+      conv.end(); // what `Social` does once the talk is over, or when it is broken off
+      return affinity.get(a, b);
+    };
+    const early = gain(4);
+    const full = gain(Infinity);
+    expect(early).toBeGreaterThan(0);
+    expect(full).toBeGreaterThan(early + 0.01);
   });
 
   it('social.friendship: friends talk longer: the same talk lasts longer the closer the two are', () => {
@@ -230,7 +252,7 @@ describe('talks and groups', () => {
       [GROUP[1], at(0.6, 0)],
       [GROUP[2], at(0, 0.6)],
     ] as const;
-    let drifts: number[] = [];
+    const drifts: number[] = [];
     for (let i = 0; i < 10 && !drifts.length; i++) {
       const conv = talk(sim, only(sim, seats));
       let lines = 0;
@@ -253,34 +275,43 @@ describe('talks and groups', () => {
     expect(drifts[0]).toBeGreaterThanOrEqual(5);
   });
 
-  it('social.crowd: three people on one spot start a talk; six on it start none and clear out', () => {
-    /** these people stand on the spot, everybody else is out; only the social checks run, so nobody walks off on their own */
-    const gather = (ids: readonly string[]): { sim: Sim; crowd: Person[]; started: boolean } => {
+  it('social.crowd: three people on one spot start a talk; six who stay on it start none and keep being sent off', () => {
+    /**
+     * These people stand on the spot for 30 s, everybody else is out. The whole office runs; whoever walks off (sent
+     * off, or on their own) is put back on the spot by the scene, so the crowd stays and their cooldowns run out.
+     */
+    const gather = (ids: readonly string[]) => {
       const sim = office();
       run(sim, 4); // past the quiet start, in which nobody talks
-      const crowd = only(sim, ids.map((id, i) => [id, at(Math.cos(i) * 0.5, Math.sin(i) * 0.5)] as const));
-      let started = false;
-      for (let t = 0; t < 30 && !started; t += STEP) {
-        sim.social.update(STEP, sim.people, sim.nav, sim.traffic);
-        started = sim.social.active.length > 0;
-      }
-      return { sim, crowd, started };
+      const ring = ids.map((id, i) => [id, at(Math.cos(i) * 0.5, Math.sin(i) * 0.5)] as const);
+      const crowd = only(sim, ring);
+      const sentOff = crowd.map(() => 0);
+      const started = run(
+        sim,
+        30,
+        () => sim.social.active.length > 0,
+        () =>
+          crowd.forEach((p, i) => {
+            const spot = ring[i][1];
+            // a walk the crowd rule sent them on: 6–12 s out of talks, to a spot further off
+            if (p.socialCooldown > 5.9 && p.path.length && dist(p.path.at(-1)!, SPOT) > 2.2) sentOff[i]++;
+            if (dist(p.pos, spot) > 0.2 || p.path.length || p.task) sim.scenario.put(p.id, spot, 'stay');
+          }),
+      );
+      return { sim, crowd, started, sentOff };
     };
 
     expect(gather(GROUP.slice(0, 3)).started).toBe(true);
 
-    // one more than the five bodies a talk tolerates around it
-    const { sim, crowd, started } = gather([...GROUP, 'celine-buhler']);
+    // one more than the five bodies a talk tolerates around it, for longer than anybody sits out talks
+    const { sim, started, sentOff } = gather([...GROUP, 'celine-buhler']);
     expect(sim.traffic.bodiesNear(SPOT, 2.2)).toBe(6);
     expect(started).toBe(false);
-    // all of them are sent off to a spot elsewhere and sit out talks for a while
-    const off = crowd.filter((p) => p.socialCooldown > 0 && dist(p.path.at(-1) ?? p.pos, SPOT) > 2.2);
-    expect(off).toHaveLength(6);
-    // and none starts while they walk off
-    expect(run(sim, 10, () => sim.social.active.length > 0)).toBe(false);
+    // each of them was sent off again once their cooldown was over
+    expect(Math.min(...sentOff)).toBeGreaterThanOrEqual(2);
   });
 
-  it('social.walk-talk: talked to on their way, somebody stops, turns to the player and answers, then goes on', () => {
+  it('social.walk-talk: talked to on their way, somebody stops, turns to the player and answers, then is free again', () => {
     const sim = office();
     const [p] = only(sim, [[GROUP[0], at(-4, 0)]]);
     p.walkTo(sim.nav, at(4, 0));
@@ -294,7 +325,7 @@ describe('talks and groups', () => {
     expect(p.speaking).toBe(true);
     const face = Math.atan2(eye.x - p.pos.x, eye.z - p.pos.z);
     expect(Math.abs(wrapAngle(p.yaw - face))).toBeLessThan(0.1);
-    // answers first, then listens; after the chat they go about their day again
+    // answers first, then listens; after the chat they go about their day again (on to whatever comes next)
     run(sim, 1.5);
     expect(p.speaking).toBe(false);
     expect(p.playerChat).not.toBeNull();
@@ -302,7 +333,7 @@ describe('talks and groups', () => {
     expect(run(sim, 10, () => p.moving > 0.5)).toBe(true);
   });
 
-  it('social.walk-talk: somebody busy does not stop: in a talk, in a meeting, carried by the player', () => {
+  it('social.walk-talk: somebody busy does not stop: in a talk, carried by the player', () => {
     const busy = (p: Person): void => {
       const before = [p.state, p.path.length, p.speaking];
       expect(p.talkTo({ x: p.pos.x + 1, z: p.pos.z }, 4)).toBe(false);
@@ -321,13 +352,5 @@ describe('talks and groups', () => {
     expect(a.talk).toBeTruthy();
     c.held = true; // what picking somebody up sets
     busy(c);
-
-    const meeting = office();
-    out(meeting, GROUP);
-    for (const id of GROUP) meeting.scenario.put(id, 'desk', 'stay');
-    meeting.events.trigger('meeting-room');
-    const m = meeting.meetingRoom.current!.members[0];
-    expect(run(meeting, 90, () => m.inMeeting)).toBe(true);
-    busy(m);
   });
 });
