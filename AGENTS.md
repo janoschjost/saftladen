@@ -44,7 +44,7 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
    gh pr checks --watch --fail-fast
    cd ../saftladen && git worktree remove ../saftladen-issue-N
    ```
-   Red → read the log (`gh run view --log-failed`), fix in the worktree, push, watch again. Keep the worktree until the checks pass. "no checks reported" right after the push: wait a few seconds and retry. A PR that only changes `*.md` files gets no checks at all (`paths-ignore` in `ci.yml`), so remove its worktree right away.
+   Red → read the log (`gh run view --log-failed`), fix in the worktree, push, watch again. Keep the worktree until the checks pass. "no checks reported" right after the push: wait a few seconds and retry. A PR that only changes docs and agent tooling (`*.md`, `.claude/`, `scripts/issue.sh`) gets no checks at all (`paths-ignore` in `ci.yml`), so remove its worktree right away.
 
 ## Writing tests
 
