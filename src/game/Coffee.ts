@@ -138,6 +138,11 @@ export class Kitchen {
   private tableTimer = between(TABLE_FIRST);
   private seatSources = new Map<MeetSeat, OfficeModel['kitchen']['table'][number]>();
 
+  /** where the model puts the benches in use right now (they move with the table in the room editor) */
+  get benches(): ReadonlyArray<OfficeModel['kitchen']['table'][number]> {
+    return [...this.seatSources.values()];
+  }
+
   constructor(
     private model: OfficeModel['kitchen'],
     nav: NavGrid,

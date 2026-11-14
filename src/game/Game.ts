@@ -211,7 +211,7 @@ export class Game {
       stands: (w) => (this.easter.disco > 0.3 && w instanceof Person && w.inOffice && w.sit < 0.05 && !w.held && !w.controlled) || this.easter.angry?.who === w,
       // a dev event points at somebody: selected
       point: (w) => (this.selected = w),
-      prepare: (m) => (this.editor = new RoomEditor(this.scene, m.items, WORLD, () => this.sim.relayout())),
+      prepare: (m) => (this.editor = new RoomEditor(this.scene, m.items, WORLD, () => this.sim.relayout(), () => this.sim.blocked()[0] ?? null)),
     });
     const model = this.sim.model;
     if (Number.isInteger(saved.weekday) && saved.weekday! >= 0 && saved.weekday! < 7) this.sim.tod.weekday = saved.weekday!;
@@ -687,6 +687,10 @@ export class Game {
       },
       get selected() {
         return g.selected;
+      },
+      /** the room editor (open, dragging, what a drag would cut off) */
+      get editor() {
+        return g.editor;
       },
       /** the running Aktionen card, if any */
       get action() {
