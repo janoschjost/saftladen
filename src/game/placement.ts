@@ -30,6 +30,24 @@ export interface Blockage {
   who?: string;
   /** two pieces in each other, or a piece on a seat: says it for whichever of them was moved */
   inside?: (moved: RoomItem) => string;
+  /** two pieces (or a piece and a wall) in each other: how far (`depth`, m² of floor) */
+  depth?: number;
+}
+
+/** Floor area (m²) a pair has to gain to count as deeper: well below what the smallest editor step adds. */
+const DEEPER = 1e-6;
+
+/**
+ * What `now` does that `was` did not: the room editor refuses an edit for that. Only what an edit adds counts (a saved
+ * layout may already cut something off, and that must not lock every other item). Two pieces that already stand in
+ * each other may stay so or come apart, but not go deeper.
+ */
+export function newBlockages(was: Blockage[], now: Blockage[]): Blockage[] {
+  const before = new Map(was.map((b) => [b.key, b]));
+  return now.filter((b) => {
+    const w = before.get(b.key);
+    return !w || (b.depth ?? 0) > (w.depth ?? 0) + DEEPER;
+  });
 }
 
 /**
@@ -76,35 +94,51 @@ const TOUCH = 0.02;
 const overlap = (a: Box3, b: Box3) =>
   a.min.x + TOUCH < b.max.x && b.min.x + TOUCH < a.max.x && a.min.y + TOUCH < b.max.y && b.min.y + TOUCH < a.max.y && a.min.z + TOUCH < b.max.z && b.min.z + TOUCH < a.max.z;
 
+/**
+ * How far `a` and `b` stand in each other: the largest floor area one box of `a` shares with one box of `b` (0: they
+ * do not overlap). The largest, not the sum: boxes of one piece overlap each other (the Holzhaus' walls and the room
+ * inside it), and a sum would grow when a piece only moves along.
+ */
+function depth(a: Box3[], b: Box3[]): number {
+  let most = 0;
+  for (const x of a)
+    for (const y of b) if (overlap(x, y)) most = Math.max(most, (Math.min(x.max.x, y.max.x) - Math.max(x.min.x, y.min.x)) * (Math.min(x.max.z, y.max.z) - Math.max(x.min.z, y.min.z)));
+  return most;
+}
+
 /** One box around all of `boxes` (null when there are none), to skip the far ones at once. */
 function around(boxes: Box3[]): Box3 | null {
   return boxes.length ? boxes.reduce((u, b) => u.union(b), boxes[0].clone()) : null;
 }
 
 /**
- * Every piece of furniture that stands in a wall, in another piece or on a seat or standing spot, one entry per pair.
- * Things that stand on top of each other (a plant on a desk) only touch and do not count.
+ * Every piece of furniture that stands in a wall, in another piece (`RoomItem.solids`: also in the room inside the
+ * Holzhaus) or on a seat or standing spot (its walking footprint), one entry per pair. Things that stand on top of each
+ * other (a plant on a desk) only touch and do not count.
  */
 function overlaps(m: OfficeModel, footprints: Box3[][], spots: Target[]): Blockage[] {
   const out: Blockage[] = [];
   const pieces = m.items.flatMap((it, i) => {
-    const boxes = footprints[i];
+    const boxes = it.solids();
     const all = around(boxes);
-    return all ? [{ it, boxes, all }] : [];
+    return all ? [{ it, boxes, all, feet: footprints[i] }] : [];
   });
-  const hits = (a: Box3[], b: Box3[]) => a.some((x) => b.some((y) => overlap(x, y)));
   pieces.forEach((p, i) => {
-    m.walls.forEach((w, k) => overlap(p.all, w) && p.boxes.some((b) => overlap(b, w)) && out.push({ key: `wall ${p.it.id} ${k}`, label: 'in einer Wand stehen', who: p.it.label }));
+    m.walls.forEach((w, k) => {
+      const d = overlap(p.all, w) ? depth(p.boxes, [w]) : 0;
+      if (d > 0) out.push({ key: `wall ${p.it.id} ${k}`, label: 'in einer Wand stehen', who: p.it.label, depth: d });
+    });
     for (let j = i + 1; j < pieces.length; j++) {
       const q = pieces[j];
-      if (!overlap(p.all, q.all) || !hits(p.boxes, q.boxes)) continue;
+      const d = overlap(p.all, q.all) ? depth(p.boxes, q.boxes) : 0;
+      if (!d) continue;
       const [a, b] = [p.it, q.it];
       const inside = (moved: RoomItem) => `in ${(moved === b ? a : b).label} stehen`;
-      out.push({ key: `overlap ${a.id} ${b.id}`, label: inside(a), who: a.label, inside });
+      out.push({ key: `overlap ${a.id} ${b.id}`, label: inside(a), who: a.label, inside, depth: d });
     }
     // its own seat (a meeting chair's) moves with it and does not count
     for (const t of spots) {
-      if (p.it.owns(t.at) || !p.boxes.some((b) => covers(b, t.at))) continue;
+      if (p.it.owns(t.at) || !p.feet.some((b) => covers(b, t.at))) continue;
       const label = `${t.label} zustellen`;
       out.push({ key: `spot ${t.id} ${p.it.id}`, label, who: p.it.label, inside: (moved) => (moved === p.it ? label : `${t.label} unter ${p.it.label} schieben`) });
     }

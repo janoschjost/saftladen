@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { DEFAULT_LAYOUT, type ItemOverride, type Layout } from '../data/layout';
 import type { RoomItem } from '../render/roomItem';
 import { tint } from '../render/tint';
-import type { Blockage } from './placement';
+import { newBlockages, type Blockage } from './placement';
 import { EditorPanel } from '../ui/EditorPanel';
 
 const KEY = 'saftladen.layout';
@@ -230,18 +230,15 @@ export class RoomEditor {
     if (edit() !== false) this.keep(it, before, this.added(was, it));
   }
 
-  /**
-   * What the furniture cuts off now that `was` did not (the first of it), or null. Only what an edit adds counts: a
-   * layout saved before the check existed may already cut something off, and that must not lock every other item.
-   */
+  /** What the furniture does now that `was` did not (the first of it, see `newBlockages`), said for `moved`, or null. */
   private added(was: Blockage[], moved: RoomItem): string | null {
     const b = this.firstNew(was);
     return b ? (b.inside?.(moved) ?? b.label) : null;
   }
 
-  /** The first thing the furniture does now that it did not do in `was` (see `added`). */
+  /** The first thing the furniture does now that it did not do in `was` (see `newBlockages`). */
   private firstNew(was: Blockage[]): Blockage | undefined {
-    return this.blocked().find((b) => !was.some((w) => w.key === b.key));
+    return newBlockages(was, this.blocked())[0];
   }
 
   /** `it` stays where it is now unless it cuts something off (`blocking`): then it goes back to `before` and the panel says why. */

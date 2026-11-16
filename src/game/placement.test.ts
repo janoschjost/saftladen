@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_LAYOUT } from '../data/layout';
 import { installHeadlessDom } from '../test/headlessDom';
 import { GROUP, office, STEP } from '../test/office';
+import { newBlockages } from './placement';
 import type { Sim } from './Sim';
 
 installHeadlessDom();
@@ -14,17 +15,20 @@ const shipped = (): Sim =>
   });
 const labels = (sim: Sim) => sim.blocked().map((b) => b.label);
 const item = (sim: Sim, id: string) => sim.model.items.find((it) => it.id === id)!;
-/** What `edit` adds to what the furniture already does (the room editor refuses an edit for that, see `RoomEditor.added`). */
-function adds(sim: Sim, edit: () => void): string[] {
-  const was = new Set(sim.blocked().map((b) => b.key));
+/** What `edit` adds to what the furniture already does (the room editor refuses an edit for that, see `newBlockages`). */
+function adds(sim: Sim, edit: () => void, by: 'label' | 'key' = 'label'): string[] {
+  const was = sim.blocked();
   edit();
-  return sim.blocked().filter((b) => !was.has(b.key)).map((b) => b.label);
+  return newBlockages(was, sim.blocked()).map((b) => b[by]);
 }
 /** Moves `id` so that the middle of its footprint lands on `at`. */
 function moveTo(sim: Sim, id: string, at: { x: number; z: number }): void {
   const it = item(sim, id);
   it.set({ dx: it.dx + at.x - it.x, dz: it.dz + at.z - it.z });
 }
+
+/** the Holzhaus (pod) */
+const POD = 'group@-1.9,2.2';
 
 describe('editor.placement', () => {
   it('editor.placement: the shipped layout cuts nobody off', () => {
@@ -95,6 +99,39 @@ describe('editor.placement', () => {
     expect(labels(sim)).toContain('in Tisch 2 stehen');
     expect(adds(sim, () => item(sim, 'plant@-9.1,0.57').set({ dz: 0.05 }))).toEqual([]);
     expect(adds(sim, () => item(sim, 'reception-counter').set({ dz: -0.05 }))).toEqual([]);
+  });
+
+  it('editor.placement: a plant that already stands in the Holzhaus may come out of it or move along it, but not go deeper', () => {
+    const sim = shipped();
+    const plant = item(sim, 'plant@-4,5.3'); // in front of the Holzhaus, its foliage in the house
+    const pair = `overlap ${POD} ${plant.id}`;
+    expect(sim.blocked().map((b) => b.key)).toContain(pair);
+    const at = { dx: plant.dx, dz: plant.dz };
+    expect(adds(sim, () => plant.set({ ...at, dz: at.dz - 0.25 }), 'key')).toEqual([pair]); // north, deeper into the house
+    plant.set(at);
+    expect(adds(sim, () => plant.set({ ...at, dz: at.dz + 0.25 }))).toEqual([]); // south, out of it
+    plant.set(at);
+    expect(adds(sim, () => plant.set({ ...at, dx: at.dx + 0.05 }))).toEqual([]); // east, along its front
+  });
+
+  it('editor.placement: no plant goes into the Holzhaus, through its open front or its walls, onto its benches or seats', () => {
+    const sim = shipped();
+    const pod = item(sim, POD).bounds();
+    const seat = sim.model.pod.seats[0];
+    const inside = [
+      { x: (pod.min.x + pod.max.x) / 2, z: pod.max.z - 0.45 }, // the open front, between the side benches
+      { x: pod.min.x + 0.6, z: (pod.min.z + pod.max.z) / 2 }, // a side bench
+      { x: pod.max.x - 0.4, z: pod.min.z + 0.4 }, // the back corner, behind the other bench
+      { x: seat.x, z: seat.z }, // a seat on the back bench
+    ];
+    for (const plant of sim.model.items.filter((it) => it.kind === 'plant')) {
+      const at = plant.override ?? {};
+      for (const p of inside) {
+        const keys = adds(sim, () => moveTo(sim, plant.id, p), 'key');
+        expect(keys.some((k) => k.startsWith('overlap ') && k.includes(POD)), `${plant.id} at ${p.x.toFixed(2)}, ${p.z.toFixed(2)}: ${keys.join(', ')}`).toBe(true);
+        plant.set(at);
+      }
+    }
   });
 });
 
