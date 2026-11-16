@@ -36,9 +36,9 @@ export function free(p: Person): boolean {
   return p.task ? p.task.phase === 'work' : onBreak(p);
 }
 
-/** Out, in somebody's hands, or in a meeting, call, toilet or talk: does not take part in the scene. */
-function tied(p: Person): boolean {
-  return !p.inOffice || p.held || p.controlled || !!p.talk || !!p.playerChat || p.inMeeting || !!p.phoneJob || p.boothCall;
+/** Out, in somebody's hands, or in a meeting, call, toilet or talk: does not take part in the scene. `stopped`: a stop (a word with the player, a stroke, a Nerf stand-off) counts too. */
+function tied(p: Person, stopped = true): boolean {
+  return !p.inOffice || p.held || p.controlled || !!p.talk || (stopped && !!p.playerChat) || p.inMeeting || !!p.phoneJob || p.boothCall;
 }
 
 // the boombox: a grey body with two speakers on each side, a cassette deck between them and a handle on top
@@ -234,13 +234,9 @@ export class Boombox {
   /** She hears it: stands up from her desk if she sits there, and stares at him. */
   private notice(s: Scene): void {
     const { dj, boss } = s;
-    // tied up meanwhile (meeting, WC, talk, call): she does not hear it. A printout, a game of foosball or a coffee
-    // run she drops for it
-    if (tied(boss)) return this.end();
-    boss.cancelPrint();
-    boss.cancelFoos();
-    boss.cancelRun();
-    boss.vapeJob = null;
+    // tied up meanwhile (meeting, WC, talk, call): she does not hear it. A stroke of a cat or a word with the player
+    // she breaks off (talkTo takes over the stop); a printout, foosball or a coffee run she drops (interrupt)
+    if (tied(boss, false)) return this.end();
     s.desk = boss.task?.phase === 'work' ? boss.task.desk : null;
     boss.interrupt(); // out of the chair, the stand-up plays while she stares
     if (!boss.talkTo({ x: dj.pos.x, z: dj.pos.z }, LOOK + 1, false)) return this.end();
@@ -320,7 +316,9 @@ export class Boombox {
     }
     if (s.pin && boss.scripted === s.pin) boss.unpin();
     this.clearNotes();
-    if (this.taken && s.desk) this.putOn(s.desk);
+    // on her desk, unless somebody else took that chair meanwhile: then she puts it away
+    const desk = s.desk && (!s.desk.occupant || s.desk.occupant === boss) ? s.desk : null;
+    if (this.taken && desk) this.putOn(desk);
     else this.hold(null);
   }
 

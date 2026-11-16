@@ -230,6 +230,18 @@ describe('play.boombox', () => {
     expect(box.onDesk).toBe(desk);
   });
 
+  it('play.boombox: stopped for something else when the music has played 3 s (the player talks to her), she breaks it off and comes', () => {
+    const s = stage();
+    const { sim, dj, boss } = s;
+    sim.scenario.put(BOSS, spotNear(sim, dj.pos, 3, undefined, true), 'stay');
+    expect(sim.boombox.start(dj, boss)).toBe(true);
+    run(sim, 1);
+    expect(boss.talkTo({ x: boss.pos.x + 1, z: boss.pos.z }, 10)).toBe(true);
+    expect(until(s, 'look', 3)).toBe(true);
+    expect(boss.playerChat?.at).toEqual({ x: dj.pos.x, z: dj.pos.z });
+    expect(until(s, 'yell', 20)).toBe(true);
+  });
+
   it('play.boombox: while the scene holds him, no random meeting, WC break, pod or phone box picks Sandro', () => {
     const s = stage();
     const { sim, dj, boss } = s;
