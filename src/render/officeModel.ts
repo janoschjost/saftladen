@@ -1645,10 +1645,10 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       product.userData.nonav = true;
       g.add(product);
       studioProduct = product;
-      // where the photographer stands: south-east of the table, so the chair of the editing desk stays free
+      // where the photographer stands: well back from the table and south-east of it, so the chair of the editing desk stays free
       track(studioStand);
       studioStand.x = g.position.x + 0.45;
-      studioStand.z = g.position.z + 1.75;
+      studioStand.z = g.position.z + 2.3;
       studioStand.yaw = Math.atan2(g.position.x - studioStand.x, g.position.z + 0.6 - studioStand.z);
       // light stand with clamp behind the table's front edge
       for (const sx of [-0.7]) {

@@ -15,10 +15,10 @@ const EDIT = { min: 20, max: 40 }; // seconds at the editing desk
 const GATHER_TIMEOUT = 45; // seconds to walk to the shooting spot, or to the chair
 const between = ({ min, max }: { min: number; max: number }) => min + random() * (max - min);
 
-/** the pictures the two monitors show while somebody edits: the editing tool and the contact sheet (`screens.ts`) */
+/** the pictures the two monitors show while somebody edits: the photo editor and the contact sheet, both of the product (`screens.ts`) */
 const EDITING = [
-  { kind: 'design', variant: 1 },
-  { kind: 'media', variant: 1 },
+  { kind: 'photo', variant: 0 },
+  { kind: 'photo', variant: 1 },
 ] as const;
 
 export type ShootPhase = 'walk' | 'shoot' | 'sit' | 'edit' | 'leave';

@@ -13,6 +13,7 @@ const MIX: Record<ScreenKind, { type: number; mouse: number }> = {
   docs: { type: 0.5, mouse: 0.2 },
   data: { type: 0.36, mouse: 0.3 },
   media: { type: 0.3, mouse: 0.42 },
+  photo: { type: 0.2, mouse: 0.6 },
 };
 
 /** Arm and body offsets for one frame, added by the renderer on top of the seated rig (radians / metres). */

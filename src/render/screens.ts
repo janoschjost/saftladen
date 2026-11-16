@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { fxRandom, seeded, type Rng } from '../game/rng';
 
 /** What a monitor shows, by kind of work. */
-export type ScreenKind = 'code' | 'design' | 'data' | 'sheet' | 'docs' | 'media';
+export type ScreenKind = 'code' | 'design' | 'data' | 'sheet' | 'docs' | 'media' | 'photo';
 
 const W = 192;
 const H = 120;
@@ -315,7 +315,49 @@ const media: Draw[] = [
   },
 ];
 
-const SETS: Record<ScreenKind, Draw[]> = { code, design, data, sheet, docs, media };
+/** A product bottle on white (the shoot's subject), `k` = pixels per 0.01 of its size, base centre at x / y. */
+function bottle(c: Ctx, x: number, y: number, k: number): void {
+  rect(c, '#dcdcd8', x - 5 * k, y - 0.5 * k, 10 * k, 1.5 * k); // soft shadow
+  rect(c, '#2d6e5c', x - 2 * k, y - 14 * k, 4 * k, 14 * k); // bottle
+  rect(c, '#e8892b', x - 2 * k, y - 9 * k, 4 * k, 5 * k); // label
+  rect(c, '#1b1b1d', x - 1 * k, y - 16 * k, 2 * k, 2 * k); // cap
+  rect(c, '#f7f6f2', x + 3 * k, y - 9 * k, 3 * k, 9 * k); // its box
+  rect(c, '#c9c8c2', x + 3 * k, y - 9 * k, 3 * k, 1 * k);
+}
+
+const photo: Draw[] = [
+  // photo editor: picture in the middle, sliders on the right, filmstrip below
+  (c, r) => {
+    rect(c, '#1c1e22', 0, 0, W, H);
+    rect(c, '#14151a', 0, 0, W, 9);
+    for (let i = 0; i < 5; i++) rect(c, i === 2 ? '#e6e9f2' : '#6b707c', 6 + i * 24, 3, 16, 3);
+    rect(c, '#f4f4f2', 4, 12, 128, 72);
+    rect(c, '#ebebe8', 4, 66, 128, 18); // the sweep curves into the table
+    bottle(c, 68, 80, 4);
+    for (let i = 0; i < 6; i++) {
+      rect(c, '#8b8f99', 138, 14 + i * 12, 14 + Math.floor(r() * 12), 2);
+      rect(c, '#3a3d44', 138, 20 + i * 12, 46, 2);
+    }
+    for (let i = 0; i < 6; i++) {
+      rect(c, '#f4f4f2', 4 + i * 31, 90, 28, 24);
+      bottle(c, 18 + i * 31 + (i % 3) * 2 - 2, 111, 0.9 + (i % 2) * 0.1);
+    }
+  },
+  // contact sheet: twelve shots of the product to pick from
+  (c, r) => {
+    rect(c, '#26282d', 0, 0, W, H);
+    for (let i = 0; i < 3; i++)
+      for (let j = 0; j < 4; j++) {
+        const x = 6 + j * 46;
+        const y = 6 + i * 38;
+        rect(c, '#f4f4f2', x, y, 42, 32);
+        bottle(c, x + 21 + (r() - 0.5) * 8, y + 29, 1.2 + r() * 0.3);
+        if (r() < 0.4) rect(c, '#f2c46d', x + 2, y + 2, 4, 4); // starred
+      }
+  },
+];
+
+const SETS: Record<ScreenKind, Draw[]> = { code, design, data, sheet, docs, media, photo };
 
 /** One shared texture per kind + picture: the still picture, plus the canvas the GPU texture shows. */
 interface Entry {
@@ -330,6 +372,8 @@ interface Entry {
   /** animation clock, runs faster while somebody types */
   t: number;
   seed: number;
+  /** which of the kind's pictures this is */
+  variant: number;
   /** a pre-rendered loop played on top of `base` (Kurt waving) */
   frames?: HTMLCanvasElement[];
 }
@@ -362,7 +406,7 @@ export function screenMaterial(kind: ScreenKind, variant: number): THREE.MeshBas
     const tex = new THREE.CanvasTexture(live);
     tex.colorSpace = THREE.SRGBColorSpace;
     const mat = new THREE.MeshBasicMaterial({ map: tex });
-    e = { kind, mat, tex, live, base, uses: 0, t: (seed >>> 8) % 97, seed };
+    e = { kind, mat, tex, live, base, uses: 0, t: (seed >>> 8) % 97, seed, variant: v };
     cache.set(key, e);
     byMat.set(mat, e);
   }
@@ -442,6 +486,24 @@ function paint(c: Ctx, e: Entry): void {
       c.lineWidth = 1;
       c.strokeRect(cx + 0.5, cy + 0.5, 27, 7);
       if (Math.floor(t * 2) % 2 === 0) rect(c, '#1c2430', cx + 4, cy + 2, 2, 4);
+      break;
+    }
+    case 'photo': {
+      if (e.variant === 0) {
+        // the sliders move, the picture brightens and dims, the filmstrip frame hops from shot to shot
+        for (let i = 0; i < 6; i++) rect(c, '#e6e9f2', 140 + (Math.sin(t * 0.8 + i * 1.3) * 0.5 + 0.5) * 40, 18 + i * 12, 3, 6);
+        rect(c, `rgba(255,255,255,${0.1 + Math.sin(t * 0.9) * 0.08})`, 4, 12, 128, 54);
+        c.strokeStyle = '#3b82f6';
+        c.lineWidth = 1;
+        c.strokeRect(4.5 + (Math.floor(t * 0.6) % 6) * 31, 90.5, 27, 23);
+      } else {
+        // the pick hops over the sheet
+        const k = Math.floor(t * 0.8) % 12;
+        c.strokeStyle = '#3b82f6';
+        c.lineWidth = 1;
+        c.strokeRect(5.5 + (k % 4) * 46, 5.5 + Math.floor(k / 4) * 38, 43, 33);
+        rect(c, '#34b38a', 8 + (k % 4) * 46, 8 + Math.floor(k / 4) * 38 + 24, 5, 5);
+      }
       break;
     }
     case 'media': {
@@ -731,7 +793,7 @@ export function kurtScreenMaterial(frames: HTMLCanvasElement[] | null): THREE.Me
     const tex = new THREE.CanvasTexture(live);
     tex.colorSpace = THREE.SRGBColorSpace;
     const mat = new THREE.MeshBasicMaterial({ map: tex });
-    e = { kind: 'kurt', mat, tex, live, base, uses: 0, t: 0, seed: 0, frames: frames ?? undefined };
+    e = { kind: 'kurt', variant: 0, mat, tex, live, base, uses: 0, t: 0, seed: 0, frames: frames ?? undefined };
     paint(live.getContext('2d')!, e);
     cache.set('kurt', e);
     byMat.set(mat, e);
