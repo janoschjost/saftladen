@@ -400,7 +400,7 @@ describe('dev events on the Sim', () => {
     expect(sim.boombox.taken).toBe(true);
     expect(sim.events.trigger('boombox')).toBe(`${first(dj)} packt die Boombox aus`);
     expect(sim.boombox.onDesk).toBeNull();
-    expect(sim.boombox.holder).toBe(dj);
+    expect(sim.boombox.mesh.parent).toBe(dj.rig.body);
 
     // the two away: the event cannot run yet, but calls them back for the next try
     const away = office();

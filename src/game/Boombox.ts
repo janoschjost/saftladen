@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { box, cyl, merge, propMaterial } from '../render/geo';
 import type { Desk } from './Office';
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { Person } from './Person';
@@ -31,30 +32,29 @@ const between = ({ min, max }: { min: number; max: number }) => min + random() *
  * errand, not in anybody's hands.
  */
 export function free(p: Person): boolean {
-  if (!p.inOffice || p.held || p.controlled || p.talk || p.playerChat || p.inMeeting || p.phoneJob || p.boothCall) return false;
+  if (tied(p)) return false;
   return p.task ? p.task.phase === 'work' : onBreak(p);
+}
+
+/** Out, in somebody's hands, or in a meeting, call, toilet or talk: does not take part in the scene. */
+function tied(p: Person): boolean {
+  return !p.inOffice || p.held || p.controlled || !!p.talk || !!p.playerChat || p.inMeeting || !!p.phoneJob || p.boothCall;
 }
 
 // the boombox: a grey body with two speakers on each side, a cassette deck between them and a handle on top
 const BOX = { w: 0.4, h: 0.2, d: 0.11 };
-function buildBoombox(): THREE.Group {
-  const g = new THREE.Group();
-  const add = (geo: THREE.BufferGeometry, color: string, x: number, y: number, z: number) => {
-    const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color }));
-    m.position.set(x, y, z);
-    m.castShadow = true;
-    m.userData.nonav = true;
-    g.add(m);
-    return m;
-  };
-  add(new THREE.BoxGeometry(BOX.w, BOX.h, BOX.d), '#3b3d44', 0, BOX.h / 2, 0);
+function buildBoombox(): THREE.Mesh {
+  const parts = [box(BOX.w, BOX.h, BOX.d, 0, BOX.h / 2, 0, '#3b3d44')];
   for (const side of [-1, 1]) {
-    for (const x of [-0.12, 0.12]) add(new THREE.CylinderGeometry(0.062, 0.062, 0.012, 14).rotateX(Math.PI / 2), '#16171b', x, BOX.h / 2, side * (BOX.d / 2 + 0.004));
-    add(new THREE.BoxGeometry(0.1, 0.07, 0.01), '#9aa0aa', 0, BOX.h / 2 + 0.02, side * (BOX.d / 2 + 0.003)); // cassette deck
+    for (const x of [-0.12, 0.12]) parts.push(cyl(0.062, 0.062, 0.012, 0, 0, 0, '#16171b', 14).rotateX(Math.PI / 2).translate(x, BOX.h / 2, side * (BOX.d / 2 + 0.004)));
+    parts.push(box(0.1, 0.07, 0.01, 0, BOX.h / 2 + 0.02, side * (BOX.d / 2 + 0.003), '#9aa0aa')); // cassette deck
   }
-  add(new THREE.BoxGeometry(0.3, 0.025, 0.03), '#c8ccd2', 0, BOX.h + 0.07, 0); // handle
-  for (const x of [-0.14, 0.14]) add(new THREE.BoxGeometry(0.02, 0.07, 0.03), '#c8ccd2', x, BOX.h + 0.035, 0);
-  return g;
+  parts.push(box(0.3, 0.025, 0.03, 0, BOX.h + 0.07, 0, '#c8ccd2')); // handle
+  for (const x of [-0.14, 0.14]) parts.push(box(0.02, 0.07, 0.03, x, BOX.h + 0.035, 0, '#c8ccd2'));
+  const m = new THREE.Mesh(merge(parts), propMaterial);
+  m.castShadow = true;
+  m.userData.nonav = true;
+  return m;
 }
 
 // a note (♪): head, stem and flag
@@ -126,13 +126,6 @@ export class Boombox {
   get playing(): boolean {
     const s = this.scene?.stage;
     return s === 'play' || s === 'look' || s === 'run';
-  }
-
-  /** who holds it right now: him while it plays, her until it is on her desk */
-  get holder(): Person | null {
-    const s = this.scene;
-    if (!s) return null;
-    return this.playing ? s.dj : s.boss;
   }
 
   /** taken away today: no more music until the next working day */
@@ -242,7 +235,7 @@ export class Boombox {
     const { dj, boss } = s;
     // tied up meanwhile (meeting, WC, talk, call): she does not hear it. A printout, a game of foosball or a coffee
     // run she drops for it
-    if (!boss.inOffice || boss.held || boss.controlled || boss.talk || boss.playerChat || boss.inMeeting || boss.phoneJob || boss.boothCall) return this.end();
+    if (tied(boss)) return this.end();
     boss.cancelPrint();
     boss.cancelFoos();
     boss.cancelRun();
@@ -331,16 +324,15 @@ export class Boombox {
     this.onDesk = null;
     m.visible = !!p;
     if (!p) return;
+    m.rotation.set(0, Math.PI / 2, 0); // speakers to the front and back on the shoulder, along the leg in the hand
     if (how === 'shoulder') {
       // on the right shoulder, beside the head, speakers to the front and back
       p.rig.body.add(m);
       m.position.set(0.3, 1.52, 0);
-      m.rotation.set(0, Math.PI / 2, 0);
     } else {
       // hanging by the handle from the fist, along the leg
       p.rig.elbowR.add(m);
       m.position.set(0, -0.62, 0);
-      m.rotation.set(0, Math.PI / 2, 0);
     }
   }
 

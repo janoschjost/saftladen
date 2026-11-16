@@ -187,7 +187,6 @@ describe('play.boombox', () => {
     expect(box.playing).toBe(false);
     expect(box.notes).toHaveLength(0);
     expect(box.dancers.size).toBe(0);
-    expect(box.holder).toBe(boss);
     expect(box.mesh.parent).toBe(boss.rig.elbowR);
     expect(boss.boomCarry).toBe(true);
     expect(boss.rush).toBe(false);
