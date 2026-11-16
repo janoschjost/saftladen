@@ -1128,11 +1128,11 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     box(0.012, 0.005, 0.76, 4.5, 1.549, -4.55, mat.lampWarm); // light strip
     box(0.24, 1.5, 0.45, 4.28, 1.79, -4.55, mat.steel);
     // wall cabinets over the espresso counter, glass shelf with glasses over the sink
-    box(0.36, 0.55, 1.7, 4.26, 1.5, -2.05, mat.white);
-    for (const z of [-1.6, -2.5]) box(0.02, 0.02, 0.3, 4.45, 1.55, z, mat.steel);
-    box(0.012, 0.55, 0.01, 4.445, 1.5, -2.05, mat.grey);
-    box(0.2, 0.015, 1.0, 4.25, 1.45, -3.5, mat.glass);
-    for (let i = 0; i < 8; i++) cyl(0.03, 0.025, 0.1, 4.25, 1.465, -3.04 - i * 0.12, mat.glass, world, 10);
+    box(0.36, 0.55, 2.15, 4.26, 1.55, -2.975, mat.white); // two-door cupboard right next to the fridge, over the machine and the glass shelf
+    for (const z of [-2.55, -3.4]) box(0.02, 0.02, 0.3, 4.45, 1.62, z, mat.steel);
+    box(0.012, 0.55, 0.01, 4.445, 1.55, -2.975, mat.grey);
+    box(0.2, 0.015, 1.0, 4.25, 1.4, -3.5, mat.glass);
+    for (let i = 0; i < 8; i++) cyl(0.03, 0.025, 0.1, 4.25, 1.415, -3.04 - i * 0.12, mat.glass, world, 10);
     // two-group espresso machine: chrome body, cup warmer with cups, two screens, portafilters with wooden handles, drip tray, steam wand
     const MZ = -2.4;
     box(0.46, 0.34, 0.9, 4.38, 0.9, MZ, mat.steel);
