@@ -1099,15 +1099,15 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   // kitchen (x 4..10.5): fridge + counter line on the west wall, dining table east
   within(4.0, B.z0, () => {
     // west wall, south to north: fridge-freezer, espresso counter, sink, hob with oven, bins on the floor beyond
-    box(0.62, 1.96, 0.65, 4.4, 0.04, -1.5, mat.white); // fridge-freezer: tall body on a plinth
+    box(0.62, 2.21, 0.65, 4.4, 0.04, -1.5, mat.white); // fridge-freezer: tall body on a plinth
     box(0.56, 0.04, 0.6, 4.4, 0, -1.5, mat.dark);
-    box(0.012, 0.012, 0.65, 4.716, 1.28, -1.5, mat.dark); // gap between the fridge door above and the freezer door below
-    box(0.012, 1.9, 0.012, 4.716, 0.06, -1.175 - 0.002, mat.grey); // door edge towards the wall
-    box(0.03, 0.62, 0.025, 4.74, 1.3, -1.8, mat.steel); // long bar handles on the free edge
-    box(0.03, 0.5, 0.025, 4.74, 0.65, -1.8, mat.steel);
+    box(0.012, 0.012, 0.65, 4.716, 1.4, -1.5, mat.dark); // gap between the fridge door above and the freezer door below
+    box(0.012, 2.15, 0.012, 4.716, 0.06, -1.175 - 0.002, mat.grey); // door edge towards the wall
+    box(0.03, 0.7, 0.025, 4.74, 1.5, -1.8, mat.steel); // long bar handles on the free edge
+    box(0.03, 0.55, 0.025, 4.74, 0.7, -1.8, mat.steel);
     box(0.02, 0.4, 0.28, 4.716, 1.35, -1.45, mat.lightgrey); // notes held by magnets (rota, shopping list)
     box(0.02, 0.3, 0.2, 4.716, 1.0, -1.35, mat.lightgrey);
-    box(0.02, 0.22, 0.14, 4.716, 1.7, -1.6, mat.cardboard);
+    box(0.02, 0.22, 0.14, 4.716, 1.85, -1.6, mat.cardboard);
     box(0.62, 0.86, 3.5, 4.4, 0, -3.6, mat.white); // base units over the rest of the wall
     box(0.66, 0.04, 3.5, 4.4, 0.86, -3.6, mat.woodDark); // worktop
     for (const z of [-2.55, -3.25, -3.9, -4.85]) box(0.01, 0.8, 0.01, 4.715, 0.04, z, mat.grey); // door seams
@@ -1128,11 +1128,11 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     box(0.012, 0.005, 0.76, 4.5, 1.549, -4.55, mat.lampWarm); // light strip
     box(0.24, 1.5, 0.45, 4.28, 1.79, -4.55, mat.steel);
     // wall cabinets over the espresso counter, glass shelf with glasses over the sink
-    box(0.36, 0.55, 2.15, 4.26, 1.55, -2.975, mat.white); // two-door cupboard right next to the fridge, over the machine and the glass shelf
-    for (const z of [-2.55, -3.4]) box(0.02, 0.02, 0.3, 4.45, 1.62, z, mat.steel);
-    box(0.012, 0.55, 0.01, 4.445, 1.55, -2.975, mat.grey);
-    box(0.2, 0.015, 1.0, 4.25, 1.4, -3.5, mat.glass);
-    for (let i = 0; i < 8; i++) cyl(0.03, 0.025, 0.1, 4.25, 1.415, -3.04 - i * 0.12, mat.glass, world, 10);
+    box(0.36, 0.55, 1.7, 4.26, 1.7, -2.75, mat.white); // two-door cupboard right next to the fridge, over the machine and the glass shelf
+    for (const z of [-2.4, -3.1]) box(0.02, 0.02, 0.3, 4.45, 1.77, z, mat.steel);
+    box(0.012, 0.55, 0.01, 4.445, 1.7, -2.75, mat.grey);
+    box(0.2, 0.015, 0.8, 4.25, 1.5, -3.2, mat.glass);
+    for (let i = 0; i < 7; i++) cyl(0.03, 0.025, 0.1, 4.25, 1.515, -2.85 - i * 0.1, mat.glass, world, 10);
     // two-group espresso machine: chrome body, cup warmer with cups, two screens, portafilters with wooden handles, drip tray, steam wand
     const MZ = -2.4;
     box(0.46, 0.34, 0.9, 4.38, 0.9, MZ, mat.steel);
