@@ -21,6 +21,15 @@ test('place.photo-shoot (?action=photo-shoot)', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+// the repair itself: src/game/ServerRack.test.ts. This is the way there: the Aktionen card's action → sparks, then a dev at the rack in the repair pose, then it works again
+test('place.server-rack (?action=server-rack)', async ({ page }) => {
+  const errors = await openGame(page, '', undefined, 'action=server-rack');
+  await until(page, (g) => g.sim.serverRack.state === 'broken' && g.sim.serverRack.sparks.count > 0, undefined, 60_000);
+  await until(page, (g) => g.sim.serverRack.current?.phase === 'fix', undefined, 60_000);
+  await until(page, (g) => g.sim.serverRack.state === 'ok' && g.sim.serverRack.free, undefined, 60_000);
+  expect(errors).toEqual([]);
+});
+
 const cases: [string, string, (g: TestHook) => unknown][] = [
   ['home.son', 'remote-son', (g) => g.homes.some((h) => h?.sonHere)],
 ];

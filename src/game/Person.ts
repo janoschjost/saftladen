@@ -218,6 +218,12 @@ export class Person extends Walker {
   camera = 0;
   /** 1 when the camera's flash just went off, fading out fast (set by the shoot) */
   flash = 0;
+  /** a dev fixing the server rack: leaning in, fiddling and banging on it (see `repair` for the eased amount) */
+  repairOn = false;
+  /** 0..1 eased: the repair pose */
+  repair = 0;
+  /** 1 when the fist just hit the rack, fading out fast (set by the repair) */
+  repairHit = 0;
   /** at the studio desk editing the shots: typing and mouse work like at a desk (set by the shoot) */
   editing = false;
   /** the player (walk mode) is talking to this person: they stop and face `at` until `t` runs out */
@@ -739,6 +745,9 @@ export class Person extends Walker {
     this.camera += ((this.cameraOn && this.presence === 'in' ? 1 : 0) - this.camera) * Math.min(1, dt * 8);
     if (this.camera < 0.005) this.camera = 0;
     this.flash = Math.max(0, this.flash - dt * 6);
+    this.repair += ((this.repairOn && this.presence === 'in' ? 1 : 0) - this.repair) * Math.min(1, dt * 8);
+    if (this.repair < 0.005) this.repair = 0;
+    this.repairHit = Math.max(0, this.repairHit - dt * 5);
     // up from the WC (or the console put away): a console taken out later, e.g. at the desk, is held the normal way
     if (this.sit === 0 || (this.gameboy === 0 && !this.gameboyOn)) this.gameboyOnWc = false;
     this.updatePhone(dt);

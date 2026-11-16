@@ -28,6 +28,7 @@ import { registerSimEvents } from './simEvents';
 import { Social } from './Social';
 import { TimeOfDay } from './TimeOfDay';
 import { PhotoStudio } from './PhotoShoot';
+import { ServerRack } from './ServerRack';
 import { Toilets } from './Toilets';
 import { Traffic } from './Traffic';
 import { Walker } from './Walker';
@@ -81,6 +82,8 @@ export class Sim {
   readonly phoneBooth: PhoneBooth;
   readonly toilets: Toilets;
   readonly photoStudio: PhotoStudio;
+  /** the server rack: breaks now and then, a dev comes and fixes it */
+  readonly serverRack: ServerRack;
   readonly walkers: Walker[] = [];
   readonly people: Person[] = [];
   /** pets (dogs and cats) */
@@ -133,6 +136,13 @@ export class Sim {
     this.toilets.onLocked = (cabin, locked) => this.doors.setLocked(cabin.doorPos, locked);
     this.toilets.onOccupied = (cabin, occupied) => model.toilets.cabins[this.toilets.cabins.indexOf(cabin)]?.sign.color.setHex(occupied ? 0xe0342c : 0x3fbf5a);
     this.photoStudio = new PhotoStudio(model.photoStudio, this.nav);
+    this.serverRack = new ServerRack(
+      model.serverRack,
+      scene,
+      this.nav,
+      (p) => this.pull(p),
+      (p) => p.boothCall || this.toilets.queue.some((w) => w.person === p) || this.toilets.cabins.some((c) => c.session?.person === p),
+    );
     this.spawn(seats, portrait);
     this.pets = this.walkers.filter((w): w is Dog => w instanceof Dog);
     this.coatRacks = new CoatRacks(model.coatRacks, this.people);
@@ -163,6 +173,7 @@ export class Sim {
     this.phoneBooth.relayout(this.nav);
     this.toilets.relayout(this.nav);
     this.photoStudio.relayout(this.nav);
+    this.serverRack.relayout(this.nav);
   }
 
   /** Dev: ids of the people and pets that are out of the sim right now. */
@@ -328,6 +339,7 @@ export class Sim {
     this.phoneBooth.update(dt, this.people, this.nav);
     this.toilets.update(dt, this.people, this.nav);
     this.photoStudio.update(dt, this.nav);
+    this.serverRack.update(dt, this.people, this.nav);
     this.doors.update(dt, [...this.walkers.filter((w) => !w.away).map((w) => ({ x: w.pos.x, z: w.pos.z, path: w.doorPath ?? undefined })), ...this.doorsSee()]);
     this.coatRacks.update();
     this.separate();

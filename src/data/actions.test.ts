@@ -17,7 +17,7 @@ describe('actions.list', () => {
     expect(validateActions(OFFICE_ACTIONS, registered)).toEqual([]);
   });
 
-  it('has the ten default cards in order', () => {
+  it('has the default cards in order', () => {
     expect(OFFICE_ACTIONS.map((a) => [a.label, a.eventId])).toEqual([
       ['Drucken', 'printer'],
       ['Meeting', 'meeting-room'],
@@ -30,6 +30,7 @@ describe('actions.list', () => {
       ['Gespräch', 'meeting-chat'],
       ['Nerf-Gefecht', 'nerf'],
       ['Fotoshooting', 'photo-shoot'],
+      ['Serverschrank', 'server-rack'],
     ]);
   });
 

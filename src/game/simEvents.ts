@@ -310,6 +310,31 @@ export function registerSimEvents(sim: Sim): void {
     },
   });
   events.register({
+    id: 'server-rack',
+    group: 'Aktionen',
+    label: 'Serverschrank geht kaputt',
+    run: () => {
+      if (!sim.serverRack.free) return null;
+      const [dev] = sim.serverRack.fixers(people);
+      if (!dev) return null; // nobody to fix it
+      sim.pull(dev);
+      sim.serverRack.breakDown();
+      if (sim.serverRack.start(dev, nav)) return `Serverschrank sprüht Funken, ${first(dev)} repariert`;
+      sim.serverRack.abort(); // nobody went: it does not stay broken
+      return null;
+    },
+  });
+  events.register({
+    id: 'server-rack-end',
+    group: 'Aktionen',
+    label: 'Serverschrank reparieren',
+    run: () => {
+      if (sim.serverRack.free) return null;
+      sim.serverRack.abort();
+      return 'Serverschrank läuft wieder';
+    },
+  });
+  events.register({
     id: 'printer',
     group: 'Aktionen',
     label: 'Jemand druckt',
