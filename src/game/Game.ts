@@ -44,7 +44,7 @@ import { setTvMode } from '../render/screens';
 import { Person } from './Person';
 import { strings } from '../i18n/strings';
 import { RoomEditor } from './RoomEditor';
-import { HIP_HEIGHT, LEG_ORDER, petPose, poseFrame, smooth } from './petPose';
+import { HIP_HEIGHT, LEG_ORDER, petPose, poseFrame, SIT_POSE, smooth } from './petPose';
 import { applySky, type SkyRig } from './TimeOfDay';
 import { MAX_FRAME, type Drawer, type FrameTime } from './seams';
 import { Sim } from './Sim';
@@ -52,6 +52,7 @@ import { first } from './simEvents';
 import { Walker } from './Walker';
 import { kurtOnScreen } from './AlterEgo';
 import { random } from './rng';
+import { poseGameboy } from './gameboyPose';
 
 const STEP = 1 / 60; // fixed simulation step
 const TALK_REACH = 2.6; // metres: how far the player can be from somebody to talk to them
@@ -1355,13 +1356,13 @@ export class Game {
       // reset, the two halves, the pet pose between them and the hip hinge: `poseFrame` (petPose.ts) keeps each frame off the last one's pose
       poseFrame(w, r, this.clock, () => {
         // standing: walk cycle (knees bend while a leg swings forward); sitting: thighs flat, shins down
-        r.legL.rotation.x = swing * (1 - sit) - 1.5 * sit;
-        r.legR.rotation.x = -swing * (1 - sit) - 1.5 * sit;
+        r.legL.rotation.x = swing * (1 - sit) + SIT_POSE.leg * sit;
+        r.legR.rotation.x = -swing * (1 - sit) + SIT_POSE.leg * sit;
         // knee bends while the leg swings forward through the middle of the step (foot lifts off), not at the extremes
         const cph = Math.cos(ph);
         const kneeSwing = 1.1 * w.moving;
-        r.kneeL.rotation.x = Math.max(0, -cph) * kneeSwing * (1 - sit) + 0.06 * w.moving * (1 - sit) + 1.5 * sit;
-        r.kneeR.rotation.x = Math.max(0, cph) * kneeSwing * (1 - sit) + 0.06 * w.moving * (1 - sit) + 1.5 * sit;
+        r.kneeL.rotation.x = Math.max(0, -cph) * kneeSwing * (1 - sit) + 0.06 * w.moving * (1 - sit) + SIT_POSE.knee * sit;
+        r.kneeR.rotation.x = Math.max(0, cph) * kneeSwing * (1 - sit) + 0.06 * w.moving * (1 - sit) + SIT_POSE.knee * sit;
         // pelvis rides on the planted foot: lowest when the legs are spread, highest when they pass, so the feet touch the ground
         let hip = HIP_HEIGHT;
         if (sit < 0.01 && w.lift < 0.02 && w.moving > 0.01) {
@@ -1384,8 +1385,8 @@ export class Game {
           r.body.position.y += dw.bob;
           r.body.rotation.x += dw.lean;
         } else if (sit > 0.01) {
-          r.armL.rotation.x += -1.2 * sit;
-          r.armR.rotation.x += -1.2 * sit;
+          r.armL.rotation.x += SIT_POSE.arm * sit;
+          r.armR.rotation.x += SIT_POSE.arm * sit;
         }
         if (w.foosAmt > 0) {
           // foosball: both hands on the rods, quick sideways pushes and spins
@@ -1441,7 +1442,7 @@ export class Game {
         this.poseSnack(w, r);
         this.poseEmote(w, r);
         this.poseEaster(w, r);
-        this.poseGameboy(w, r);
+        poseGameboy(r, w.gameboy, w.gameboyOnWc ? sit : 0, this.clock + w.phase);
         if (r.tail) {
           // Kurt's tail sways from side to side with the steps, and rests still otherwise
           r.tail.rotation.y = Math.sin(ph) * 0.35 * w.moving;
@@ -1611,25 +1612,6 @@ export class Game {
     if (!r.cup.visible) return;
     r.cup.quaternion.copy(r.armL.quaternion).invert();
     r.cup.rotateX(-0.7 * sip);
-  }
-
-  /** Handheld console in both hands in front of the chest, head bowed over it, thumbs twitching; the screen flickers. */
-  private poseGameboy(w: Person, r: Person['rig']): void {
-    const a = w.gameboy;
-    r.gameboy.visible = a > 0.02;
-    if (a < 0.02) return;
-    const lerp = THREE.MathUtils.lerp;
-    const t = this.clock + w.phase;
-    r.armL.rotation.x = lerp(r.armL.rotation.x, -1.05, a);
-    r.armR.rotation.x = lerp(r.armR.rotation.x, -1.05, a);
-    r.armL.rotation.z = lerp(r.armL.rotation.z, 0.3, a);
-    r.armR.rotation.z = lerp(r.armR.rotation.z, -0.3, a);
-    r.elbowL.rotation.x = -1.35 * a + Math.sin(t * 23) * 0.04 * a;
-    r.elbowR.rotation.x = -1.35 * a + Math.sin(t * 19 + 1) * 0.04 * a;
-    r.body.rotation.x += 0.14 * a;
-    r.gameboy.position.y = lerp(0.7, 1.0, a);
-    r.gameboy.rotation.x = 0.5; // screen towards his face
-    r.gameboyScreen.color.setHex(Math.sin(t * 9) > 0.85 ? 0x8bac0f : 0x9bbc0f);
   }
 
   /** Eating chips: the left hand holds the bag (see `poseCup`), the right hand fetches a chip and takes it to the mouth now and then. */
