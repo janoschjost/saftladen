@@ -230,6 +230,27 @@ describe('play.boombox', () => {
     expect(box.onDesk).toBe(desk);
   });
 
+  it('play.boombox: while the scene holds him, no random meeting, WC break, pod or phone box picks Sandro', () => {
+    const s = stage();
+    const { sim, dj, boss } = s;
+    sim.boombox.start(dj, boss);
+    run(sim, 1);
+    expect(dj.playerChat).not.toBeNull();
+    const others = GROUP.map((id) => {
+      sim.scenario.put(id, 'desk', 'stay');
+      return sim.person(id);
+    });
+    // their timers run out now: they pick from whoever is free
+    sim.toilets.update(999, [dj], sim.nav);
+    sim.pod.update(999, [dj], sim.nav);
+    sim.phoneBooth.update(999, [dj], sim.nav);
+    sim.meetingRoom.update(999, [dj, ...others], sim.nav);
+    expect(sim.meetingRoom.current?.members ?? []).not.toContain(dj);
+    expect(dj.inMeeting).toBe(false);
+    expect(dj.talk).toBeNull();
+    expect(sim.boombox.stage).toBe('play');
+  });
+
   it('play.boombox: the next working day (04:00) it is gone from her desk and the gag can happen again', () => {
     const s = stage();
     const { sim, dj, boss, desk } = s;

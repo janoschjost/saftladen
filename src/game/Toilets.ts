@@ -207,7 +207,7 @@ export class Toilets {
     this.timer -= dt;
     if (this.timer > 0) return;
     this.timer = 10;
-    const free = people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.task && !p.inMeeting && !p.printJob && !p.foosJob && !p.vapeJob && !p.phoneJob && !p.snackLeft && !p.run && !p.coffeeJob && !p.cupHeld && p.sit < 0.05);
+    const free = people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.playerChat && !p.task && !p.inMeeting && !p.printJob && !p.foosJob && !p.vapeJob && !p.phoneJob && !p.snackLeft && !p.run && !p.coffeeJob && !p.cupHeld && p.sit < 0.05);
     if (!free.length) return;
     if (this.go(free[Math.floor(random() * free.length)], nav)) this.timer = between(PAUSE);
   }

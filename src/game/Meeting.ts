@@ -331,7 +331,7 @@ export class MeetingRoom {
     if (this.timer > 0) return;
     this.timer = 10;
     const kart = this.kartPending;
-    const free = people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob);
+    const free = people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.playerChat && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob);
     const size = kart ? KART_GROUP : GROUP;
     const n = Math.min(free.length, Math.round(size.min + random() * (size.max - size.min)));
     if (n < size.min) return;
