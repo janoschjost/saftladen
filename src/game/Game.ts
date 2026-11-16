@@ -54,6 +54,7 @@ import { kurtOnScreen } from './AlterEgo';
 import { random } from './rng';
 import { poseGameboy } from './gameboyPose';
 import { poseCamera } from './cameraPose';
+import { poseRepair } from './repairPose';
 
 const STEP = 1 / 60; // fixed simulation step
 const TALK_REACH = 2.6; // metres: how far the player can be from somebody to talk to them
@@ -1449,6 +1450,7 @@ export class Game {
         this.poseEaster(w, r);
         poseGameboy(r, w.gameboy, w.gameboyOnWc ? sit : 0, this.clock + w.phase);
         poseCamera(r, w.camera, w.flash, this.clock + w.phase);
+        poseRepair(r, w.repair, w.repairHit, this.clock + w.phase);
         if (r.tail) {
           // Kurt's tail sways from side to side with the steps, and rests still otherwise
           r.tail.rotation.y = Math.sin(ph) * 0.35 * w.moving;
@@ -1912,6 +1914,7 @@ export class Game {
           .filter((d) => !d.away && (d.barkT > 0 || (d.petted && d.happy > 0.5)))
           .map((d) => say(`pet-${d.id}`, d.barkT > 0 ? (d.isCat ? 'Miau!' : 'Wuff!') : '♥', d)),
         ...(meet?.phase === 'session' ? [say(meet.speaker.id, meet.text, meet.speaker)] : []),
+        ...(this.sim.serverRack.current?.text && !this.sim.serverRack.current.person.away ? [say(`rack-${this.sim.serverRack.current.person.id}`, this.sim.serverRack.current.text, this.sim.serverRack.current.person)] : []),
         ...this.sim.toilets.cabins.flatMap((c) => (c.session?.text && !c.session.person.away ? [say(`wc-${c.session.person.id}`, c.session.text, c.session.person)] : [])),
       ],
       this.views.camera,

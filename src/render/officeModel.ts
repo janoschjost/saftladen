@@ -117,6 +117,11 @@ export interface OfficeModel {
    * picture on them while somebody edits) and `flash` (0..1) which lights the softboxes and the white paper for a shot.
    */
   photoStudio: { stand: { x: number; z: number; yaw: number }; product: THREE.Object3D; seat: { x: number; z: number; yaw: number }; screens: THREE.Mesh[]; flash: (amount: number) => void };
+  /**
+   * The server rack: where somebody stands to fix it (yaw = facing it), the point on its front where the sparks come
+   * out when it breaks, and `leds(fault, t)`: the LEDs blink (green, amber) while it is fine, flicker red when it is broken (`t` a clock).
+   */
+  serverRack: { stand: { x: number; z: number; yaw: number }; spark: THREE.Object3D; leds: (fault: boolean, t: number) => void };
 }
 
 type Mat = THREE.Material;
@@ -196,6 +201,10 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   const studioSeat = { x: 0, z: 0, yaw: -Math.PI / 2 }; // faces west (the monitors on the west wall)
   let studioProduct: THREE.Object3D = new THREE.Group(); // the product on the sweep, set by the shooting table below
   const studioScreens: THREE.Mesh[] = [];
+  /** the server rack: where somebody stands to fix it (yaw = facing it), where its sparks come out, and its LEDs (blinking, or red and flickering) */
+  const rackStand = { x: 0, z: 0, yaw: Math.PI };
+  let rackSpark: THREE.Object3D = new THREE.Group();
+  let rackLeds: (fault: boolean, t: number) => void = () => {};
   /** the studio flash: the softbox faces and the white paper light up (`OfficeModel.photoStudio.flash`) */
   const softFace = new THREE.MeshBasicMaterial({ color: 0x0b0b0c });
   const flashPaper = new THREE.MeshLambertMaterial({ color: 0xf2f0e9, side: THREE.DoubleSide, emissive: 0xffffff, emissiveIntensity: 0 });
@@ -1457,22 +1466,129 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   item('server-rack', 'server-rack', 'Serverschrank', () => {
     const RX = 16.8;
     const RZ = -5.04;
-    const ledG = new THREE.MeshBasicMaterial({ color: 0x3cff7a });
-    const ledA = new THREE.MeshBasicMaterial({ color: 0xffb02e });
-    for (const dx of [-0.38, 0.38]) for (const dz of [-0.38, 0.38]) box(0.05, 2.0, 0.05, RX + dx, 0, RZ + dz, mat.lightgrey);
-    box(0.8, 0.04, 0.8, RX, 0, RZ, mat.lightgrey);
-    box(0.8, 0.04, 0.8, RX, 1.96, RZ, mat.lightgrey);
-    box(0.72, 1.9, 0.72, RX, 0.04, RZ, mat.dark); // dark interior
-    box(0.3, 0.9, 0.12, RX - 0.12, 0.9, RZ + 0.05, aMat.orange); // bundle of orange cables
-    for (let i = 0; i < 5; i++) {
-      const y = 1.2 + i * 0.12;
-      box(0.62, 0.07, 0.4, RX, y, RZ - 0.1, i % 2 ? mat.lightgrey : mat.steel); // patch panels / switches
-      box(0.02, 0.02, 0.02, RX + 0.25, y + 0.02, RZ + 0.1, i % 3 === 2 ? ledA : ledG);
+    const FZ = RZ + 0.33; // front face of the rack-mounted units
+    const U = 0.044; // one rack unit
+    const y0 = 0.12; // bottom of the first unit
+    const yU = (u: number) => y0 + u * U;
+    const rackBlack = L(0x161719);
+    const rackGrey = L(0x3a3d42);
+    const slat = L(0x08090a);
+    const cableMats = [0x2a6fdb, 0xe8cf2a, 0xc23a2e, 0x3f8a3a, 0x2a6fdb, 0xe8742a].map((c) => L(c));
+    // blinking LEDs: a few meshes of their own (a colour per mesh, switched by `leds` below), merged per colour
+    const ledGeos: Record<'steady' | 'a' | 'b' | 'c', THREE.BufferGeometry[]> = { steady: [], a: [], b: [], c: [] };
+    const led = (kind: keyof typeof ledGeos, x: number, y: number, z = FZ + 0.012) => ledGeos[kind].push(new THREE.BoxGeometry(0.014, 0.012, 0.008).translate(gx(x), y, gz(z)));
+    // posts, base, roof, casters
+    for (const dx of [-0.38, 0.38]) for (const dz of [-0.38, 0.38]) box(0.05, 1.94, 0.05, RX + dx, 0.06, RZ + dz, rackGrey);
+    for (const dx of [-0.34, 0.34]) for (const dz of [-0.34, 0.34]) cyl(0.025, 0.025, 0.06, RX + dx, 0, RZ + dz, mat.black, world, 8); // casters
+    box(0.8, 0.04, 0.8, RX, 0.06, RZ, rackGrey);
+    box(0.8, 0.04, 0.8, RX, 1.96, RZ, rackGrey);
+    box(0.72, 1.86, 0.6, RX, 0.1, RZ - 0.06, rackBlack); // dark interior (and the side and back panels)
+    // 19" mounting rails with their hole strips
+    for (const dx of [-0.265, 0.265]) {
+      box(0.03, 1.84, 0.03, RX + dx, 0.1, FZ - 0.01, mat.steel);
+      box(0.012, 1.8, 0.005, RX + dx, 0.12, FZ + 0.006, slat);
     }
-    box(0.3, 0.2, 0.3, RX, 0.1, RZ, mat.black); // UPS
-    box(0.3, 0.25, 0.3, RX, 0.5, RZ, mat.black); // NAS
-    box(0.74, 1.9, 0.02, RX, 0.04, RZ + 0.39, mat.glass); // glass door on the front
-    box(0.03, 0.3, 0.03, RX + 0.3, 0.9, RZ + 0.41, mat.black); // lock
+    // cable duct on the left: orange / blue bundles run up the side
+    box(0.08, 1.7, 0.1, RX - 0.325, 0.14, FZ - 0.05, rackGrey);
+    box(0.05, 1.6, 0.06, RX - 0.325, 0.2, FZ + 0.01, aMat.orange);
+    box(0.025, 1.5, 0.04, RX - 0.35, 0.25, FZ + 0.01, aMat.blue);
+    // units, bottom to top
+    const unit = (u: number, h: number, w: number, m: Mat) => box(w, h * U - 0.004, 0.5, RX, yU(u), FZ - 0.25, m);
+    const vents = (u: number, h: number, x0: number, x1: number, n: number) => {
+      for (let i = 0; i < n; i++) box(0.006, h * U - 0.016, 0.006, x0 + ((x1 - x0) * (i + 0.5)) / n, yU(u) + 0.006, FZ + 0.004, slat);
+    };
+    // UPS (3U): heavy black box with a little display
+    unit(0, 3, 0.62, rackBlack);
+    box(0.12, 0.04, 0.006, RX - 0.15, yU(0) + 0.05, FZ + 0.004, mat.dark);
+    box(0.1, 0.028, 0.006, RX - 0.15, yU(0) + 0.056, FZ + 0.008, new THREE.MeshBasicMaterial({ color: 0x4fc3a1 }));
+    for (let i = 0; i < 4; i++) led(i === 3 ? 'b' : 'steady', RX + 0.04 + i * 0.04, yU(0) + 0.05);
+    // two 2U storage servers: drive bays with a LED each
+    for (const u of [3, 5]) {
+      unit(u, 2, 0.62, rackGrey);
+      for (let i = 0; i < 8; i++) {
+        const bx = RX - 0.25 + i * 0.045;
+        box(0.038, 0.058, 0.008, bx, yU(u) + 0.014, FZ + 0.002, rackBlack);
+        led(i % 3 === 1 ? 'a' : 'b', bx, yU(u) + 0.05);
+      }
+      box(0.05, 0.03, 0.01, RX + 0.24, yU(u) + 0.03, FZ + 0.004, mat.steel); // power button
+      led('steady', RX + 0.24, yU(u) + 0.065);
+    }
+    // blank panel
+    unit(7, 1, 0.62, slat);
+    // 24 1U servers: vent slats on the left, ears, two LEDs and a label
+    for (let k = 0; k < 24; k++) {
+      const u = 8 + k;
+      unit(u, 1, 0.62, k % 2 ? rackBlack : rackGrey);
+      vents(u, 1, RX - 0.24, RX + 0.05, 14);
+      box(0.07, 0.016, 0.004, RX + 0.12, yU(u) + 0.014, FZ + 0.004, mat.white); // label
+      led('steady', RX + 0.22, yU(u) + 0.02);
+      led(k % 3 === 0 ? 'c' : 'b', RX + 0.25, yU(u) + 0.02);
+    }
+    // PDU (1U): outlets and a red switch
+    unit(32, 1, 0.62, mat.dark);
+    for (let i = 0; i < 8; i++) box(0.03, 0.022, 0.006, RX - 0.22 + i * 0.045, yU(32) + 0.01, FZ + 0.004, slat);
+    box(0.02, 0.026, 0.01, RX + 0.24, yU(32) + 0.008, FZ + 0.005, aMat.red);
+    // network switch (1U): 24 ports in two rows, a LED above each
+    unit(33, 1, 0.62, rackBlack);
+    for (let i = 0; i < 12; i++) {
+      const px = RX - 0.24 + i * 0.034;
+      for (const row of [0, 1]) {
+        box(0.022, 0.012, 0.008, px, yU(33) + 0.004 + row * 0.02, FZ + 0.004, mat.steel);
+        led(i % 4 === 0 ? 'a' : 'c', px, yU(33) + 0.016 + row * 0.02 + (row ? 0 : 0.004));
+      }
+    }
+    // patch panel (1U) with colourful cables to the duct
+    unit(34, 1, 0.62, mat.grey);
+    for (let i = 0; i < 12; i++) {
+      const px = RX - 0.24 + i * 0.034;
+      box(0.02, 0.014, 0.008, px, yU(34) + 0.012, FZ + 0.004, mat.black);
+      box(0.008, 0.07 + (i % 3) * 0.03, 0.008, px, yU(34) - 0.07 - (i % 3) * 0.03, FZ + 0.016 + (i % 2) * 0.01, cableMats[i % cableMats.length]);
+    }
+    // second switch and a few blanks
+    unit(35, 1, 0.62, rackBlack);
+    for (let i = 0; i < 12; i++) box(0.022, 0.012, 0.008, RX - 0.24 + i * 0.034, yU(35) + 0.014, FZ + 0.004, mat.steel);
+    for (let i = 0; i < 12; i++) led(i % 3 ? 'c' : 'a', RX - 0.24 + i * 0.034, yU(35) + 0.032);
+    unit(36, 1, 0.62, slat);
+    // fan tray on the roof: two grilled fans
+    for (const dx of [-0.17, 0.17]) {
+      cyl(0.11, 0.11, 0.015, RX + dx, 2.0, RZ, mat.dark, world, 20);
+      cyl(0.095, 0.095, 0.018, RX + dx, 2.0, RZ, slat, world, 20);
+      cyl(0.03, 0.03, 0.026, RX + dx, 2.0, RZ, mat.steel, world, 12);
+      for (const a of [0, Math.PI / 3, (2 * Math.PI) / 3]) box(0.2, 0.004, 0.012, RX + dx, 2.019, RZ, mat.steel, a);
+    }
+    // no front door: the units are open to see (a door would hide them)
+    // the leds, one mesh per colour group: `leds` switches them (blinking when fine, red and flickering when broken)
+    const ledMeshes = (Object.keys(ledGeos) as Array<keyof typeof ledGeos>).map((kind) => {
+      const m = new THREE.Mesh(mergeGeometries(ledGeos[kind], false), new THREE.MeshBasicMaterial({ color: 0x3cff7a }));
+      m.userData.keep = true; // a mesh of its own when the item is merged: its colour changes
+      m.userData.nonav = true;
+      world.add(m);
+      return m;
+    });
+    const leds = (fault: boolean, t: number): void => {
+      const [steady, a, b, c] = ledMeshes;
+      steady.visible = !fault || Math.sin(t * 31) > -0.4;
+      (steady.material as THREE.MeshBasicMaterial).color.setHex(fault ? 0xff2a1f : 0x3cff7a);
+      a.visible = fault ? Math.sin(t * 23 + 1) > 0 : Math.sin(t * 7) > -0.2;
+      b.visible = fault ? Math.sin(t * 17) > 0.2 : Math.sin(t * 4.6 + 1) > 0.1;
+      c.visible = fault ? Math.sin(t * 29 + 2) > -0.3 : Math.sin(t * 11 + 2) > 0;
+      (a.material as THREE.MeshBasicMaterial).color.setHex(fault ? 0xff2a1f : 0xffb02e);
+      (b.material as THREE.MeshBasicMaterial).color.setHex(fault ? 0xff6a1f : 0x3cff7a);
+      (c.material as THREE.MeshBasicMaterial).color.setHex(fault ? 0xff2a1f : 0x3cff7a);
+    };
+    // where the sparks come out (an invisible mesh: it moves with the item), and where somebody stands to fix it
+    const spark = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.01, 0.01), mat.black);
+    spark.position.set(gx(RX + 0.1), 1.3, gz(RZ + 0.45));
+    spark.visible = false;
+    spark.userData.keep = true;
+    spark.userData.nonav = true;
+    world.add(spark);
+    rackSpark = spark;
+    rackLeds = leds;
+    track(rackStand);
+    rackStand.x = gx(RX);
+    rackStand.z = gz(RZ + 1.0);
+    rackStand.yaw = Math.PI; // faces the rack (north)
   });
 
   // east wall: copier (the printer), black board, AC
@@ -2650,7 +2766,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     }
   };
   setRoofVisible(false); // the roof starts hidden
-  return { desks, items, pendantCords: [...pendantCords.values()], setRoofVisible, coatRacks, blockers: allBlockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter, machine: kitchenMachine, stands: kitchenStands, table: tableSeats }, phoneBooth: { seat: boothSeat, doorPos: { x: ax(23.75), z: az(CZ) } }, toilets: { cabins: toiletCabins, wait: [{ x: ax(3.35), z: az(-3.3) }, { x: ax(0.7), z: az(-3.2) }] }, photoStudio: { stand: studioStand, product: studioProduct, seat: studioSeat, screens: studioScreens, flash: studioFlash } };
+  return { desks, items, pendantCords: [...pendantCords.values()], setRoofVisible, coatRacks, blockers: allBlockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter, machine: kitchenMachine, stands: kitchenStands, table: tableSeats }, phoneBooth: { seat: boothSeat, doorPos: { x: ax(23.75), z: az(CZ) } }, toilets: { cabins: toiletCabins, wait: [{ x: ax(3.35), z: az(-3.3) }, { x: ax(0.7), z: az(-3.2) }] }, photoStudio: { stand: studioStand, product: studioProduct, seat: studioSeat, screens: studioScreens, flash: studioFlash }, serverRack: { stand: rackStand, spark: rackSpark, leds: rackLeds } };
 }
 
 /**
