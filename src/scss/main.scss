@@ -216,18 +216,26 @@
         }
 
         &__meta {
+            position: fixed;
+            top: 1.5rem;
+            left: 50%;
             display: flex;
             flex-wrap: wrap;
+            justify-content: center;
             gap: 0.375rem;
-            margin-top: 0.625rem;
+            max-width: 40vw;
+            margin: 0;
             padding: 0;
+            transform: translateX(-50%);
             list-style: none;
+            pointer-events: none;
         }
 
         &__chip {
             padding: 0.25rem 0.625rem;
             border-radius: 1rem;
-            background: rgba(255, 255, 255, 0.6);
+            background: black;
+            color: white;
             font-size: 0.875rem;
             line-height: 1.25;
             white-space: nowrap;
@@ -3341,6 +3349,10 @@
         top: 0.75rem;
         left: 0.75rem;
         right: 0.75rem;
+    }
+
+    .m-hud-title__meta {
+        top: 0.75rem;
     }
 
     .m-settings {
