@@ -20,7 +20,7 @@ const KEEP_RIGHT = 0.25; // radians the wish leans to the right with somebody co
 const KEEP_RIGHT_RANGE = 4; // ... within this distance ahead
 const REPLAN = 1.5; // seconds held up (crawling) before a route around the crowd is planned
 const GIVE_UP = 5; // ... before the walker drops its route and does something else
-const CLOSE_ENOUGH = 0.6; // metres from the last waypoint at which a held-up walker counts as arrived
+const CLOSE_ENOUGH = 0.5; // metres from its target at which a held-up walker counts as arrived (jobs take 0.6)
 const CLOSE_ENOUGH_AFTER = 0.4; // ... once it has been held up this long
 const SQUEEZE_PAST = 0.5; // seconds held up after which bodies standing in the way no longer count
 const SQUEEZE_FOR = 1.5; // ... for this long, until the walker is past them
@@ -47,6 +47,8 @@ export abstract class Walker {
    */
   heading: Vec2 = STILL;
   path: Vec2[] = [];
+  /** where the route leads: the spot asked for (the route itself ends on that spot's nav cell centre) */
+  private target: Vec2 = STILL;
   timer = random() * 3;
   abstract speed: number;
   abstract radius: number;
@@ -319,7 +321,7 @@ export abstract class Walker {
     this.blockedTime = progress < 0.4 ? this.blockedTime + dt : 0;
     if (this.blockedTime === 0) this.replanned = false;
     // nearly there, but somebody stands on the spot or it hugs a wall: close enough
-    if (this.blockedTime > CLOSE_ENOUGH_AFTER && this.path.length === 1 && dist < CLOSE_ENOUGH) {
+    if (this.blockedTime > CLOSE_ENOUGH_AFTER && this.path.length === 1 && Math.hypot(this.target.x - this.pos.x, this.target.z - this.pos.z) < CLOSE_ENOUGH) {
       this.halt(this.idleTime());
       return;
     }
@@ -448,7 +450,7 @@ export abstract class Walker {
       this.gateDetoured = true;
       const detour = this.traffic!.detour(this, this.path[this.path.length - 1], gate.passage);
       if (detour) {
-        this.follow(nav, detour);
+        this.follow(nav, detour, this.target);
         return true;
       }
     }
@@ -605,10 +607,11 @@ export abstract class Walker {
       this.timer = 0.5;
       return;
     }
-    this.follow(nav, path);
+    this.follow(nav, path, to);
   }
 
-  private follow(nav: NavGrid, path: Vec2[]): void {
+  private follow(nav: NavGrid, path: Vec2[], target = path[path.length - 1]): void {
+    this.target = target;
     const j = nav.cell * 0.3;
     this.path = path.map((p, i) => (i === path.length - 1 ? p : { x: p.x + (random() - 0.5) * j, z: p.z + (random() - 0.5) * j }));
     this.state = 'walk';
