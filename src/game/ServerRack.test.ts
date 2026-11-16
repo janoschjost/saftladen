@@ -66,13 +66,25 @@ describe('place.server-rack', () => {
     expect(repair.phase).toBe('relief');
   });
 
-  it('is refused while broken, and without a dev in the office', () => {
+  it('while broken the event fixes it first and breaks it again; it is refused when a scene holds every dev away', () => {
     const { sim } = breakIt();
-    expect(sim.events.trigger('server-rack')).toMatch(/: nicht möglich$/);
+    expect(sim.events.trigger('server-rack')).toMatch(/^Serverschrank sprüht Funken, \w+ repariert$/);
+    expect(sim.serverRack.state).toBe('broken');
     const other = office();
     for (const d of other.people.filter((p) => p.member.look.nerf)) other.scenario.put(d.id, 'home', 'stay');
     expect(other.events.trigger('server-rack')).toMatch(/: nicht möglich$/);
     expect(other.serverRack.state).toBe('ok');
+  });
+
+  it('the event brings a dev in when none is in the office', () => {
+    const sim = office();
+    const devs = sim.people.filter((p) => p.member.look.nerf);
+    for (const d of devs) sim.scenario.put(d.id, 'errand', 'free');
+    expect(devs.every((d) => d.presence !== 'in')).toBe(true);
+    expect(sim.events.trigger('server-rack')).toMatch(/^Serverschrank sprüht Funken, \w+ repariert$/);
+    expect(devs.filter((d) => d.presence === 'in')).toHaveLength(1); // one is enough
+    expect(sim.serverRack.state).toBe('broken');
+    expect(run(sim, 90, () => sim.serverRack.state === 'ok')).toBe(true);
   });
 
   it('breaks by itself now and then, but only while a dev is in', () => {

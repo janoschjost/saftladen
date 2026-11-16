@@ -511,6 +511,16 @@ export class Presence {
     this.recall(p);
   }
 
+  /** Dev: on duty from now on (not sent out again, even when the office is full), like `callBack`. False when a scene or the dev panel holds them. */
+  stay(p: Person): boolean {
+    if (this.isRemoved(p) || this.kept.has(p)) return false;
+    this.overfull = true;
+    if (this.duty(p, this.workHour) !== 'duty') this.overridden.add(p);
+    this.calledBack.delete(p);
+    this.admitted.delete(p);
+    return true;
+  }
+
   /** Back to the office (also automatic, e.g. out of a home office somebody else needs): a full office makes room by sending somebody else out (see capOffice), unless a call back by hand holds it (`overfull`). */
   private recall(p: Person): void {
     if (this.duty(p, this.workHour) !== 'duty') this.overridden.add(p);

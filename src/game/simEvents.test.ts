@@ -69,7 +69,7 @@ describe('dev events on the Sim', () => {
     expect(sim.events.trigger('nope')).toBe('unbekannt: nope');
   });
 
-  it('place.meeting (meeting-room): five people are pulled from their chairs, stand up and walk to the room, nobody glides sitting; a second meeting, or nobody free, is refused', () => {
+  it('place.meeting (meeting-room): five people are pulled from their chairs, stand up and walk to the room, nobody glides sitting; a second meeting takes the room over, nobody free (held by a scene) is refused', () => {
     const sim = office();
     const group = only(sim, GROUP);
     expect(run(sim, 20, () => group.every((p) => p.sit > 0.9))).toBe(true);
@@ -77,7 +77,10 @@ describe('dev events on the Sim', () => {
     expect(ids(sim.meetingRoom.current!.members)).toEqual(ids(group));
     expect(sim.meetingRoom.current!.screen).toBe('slides');
     expect(group.every((p) => p.meetJob && p.task?.phase !== 'work')).toBe(true);
-    refused(sim, 'meeting-room');
+    // the room is taken: the meeting is ended on the spot and a new one starts
+    const first = sim.meetingRoom.current!;
+    expect(sim.events.trigger('meeting-room')).toMatch(/^Besprechung mit 5: /);
+    expect(sim.meetingRoom.current).not.toBe(first);
     // out of the chair first: nobody walks to the room in the seated pose
     const gliding: string[] = [];
     let walked = 0;
@@ -114,13 +117,13 @@ describe('dev events on the Sim', () => {
     expect(group.filter((p) => p.task?.phase === 'work')).toEqual(group.filter((p) => !members.includes(p)));
   });
 
-  it('place.meeting-tv (meeting-kart): three start a kart round; refused while the room is taken', () => {
+  it('place.meeting-tv (meeting-kart): three start a kart round; a taken room is cleared first', () => {
     const sim = office();
     const group = only(sim, GROUP.slice(0, 3));
     expect(sim.events.trigger('meeting-kart')).toMatch(/^Kart-Runde mit 3: /);
     expect(sim.meetingRoom.current!.screen).toBe('kart');
     expect(ids(sim.meetingRoom.current!.members)).toEqual(ids(group));
-    refused(sim, 'meeting-kart');
+    expect(sim.events.trigger('meeting-kart')).toMatch(/^Kart-Runde mit 3: /);
   });
 
   it('dev.events (meeting-room-status, meeting-room-end): status reports, end sends everybody out; without a meeting end is refused', () => {
@@ -138,7 +141,7 @@ describe('dev events on the Sim', () => {
     ['pet.crouch', 'dog', DOG_OWNER],
     ['pet.crouch-cat', 'cat', CAT_OWNER],
   ] as const) {
-    it(`${feature} (pet-${kind}): the owner leaves the desk and strokes the ${kind}; an owner who is out is called in; refused, with nobody disturbed, when the owner is held or tied up`, () => {
+    it(`${feature} (pet-${kind}): the owner leaves the desk and strokes the ${kind}; an owner who is out is called in; a meeting or the WC queue they are in is cleared for it`, () => {
       const sim = office();
       const [p] = only(sim, [owner]);
       const pet = sim.pets.find((d) => d.owner === p && d.isCat === (kind === 'cat'))!;
@@ -171,15 +174,16 @@ describe('dev events on the Sim', () => {
       const owners = [...new Set(away.pets.filter((d) => d.isCat === (kind === 'cat')).map((d) => d.owner))];
       for (const o of owners) away.scenario.put(o.id, 'home', 'free');
       expect(owners.every((o) => o.awayLeft > 0)).toBe(true);
-      expect(away.events.trigger(`pet-${kind}`)).toMatch(/: nicht möglich$/);
-      expect(owners.filter((o) => o.awayLeft === 0)).toHaveLength(1);
+      expect(away.events.trigger(`pet-${kind}`)).toMatch(/ streichelt /);
+      expect(owners.filter((o) => o.presence === 'in')).toHaveLength(1);
 
-      // the owner sits in a meeting: not called out of it
+      // the owner sits in a meeting: it is ended for them (nobody else could stroke)
       const busy = office();
       only(busy, [owner, GROUP[0]]);
       busy.events.trigger('meeting-room');
       expect(who(busy, owner).inMeeting).toBe(true);
-      refused(busy, `pet-${kind}`);
+      expect(busy.events.trigger(`pet-${kind}`)).toMatch(/ streichelt /);
+      expect(who(busy, owner).inMeeting).toBe(false);
 
       // in a coffee break they can be had: the break ends for them
       const coffee = office();
@@ -190,12 +194,13 @@ describe('dev events on the Sim', () => {
       expect(coffee.events.trigger(`pet-${kind}`)).toMatch(/ streichelt /);
       expect(drinker.petting).toBe(true);
 
-      // nor out of the queue in front of the WC
+      // and out of the queue in front of the WC
       const queue = office();
       const [waiting, a, b] = only(queue, [owner, GROUP[0], GROUP[1]]);
       queue.scenario.clear('wc');
       expect([a, b, waiting].map((x) => (queue.drop(x), queue.toilets.go(x, queue.nav)))).toEqual(['cabin', 'cabin', 'queue']);
-      refused(queue, `pet-${kind}`);
+      expect(queue.events.trigger(`pet-${kind}`)).toMatch(/ streichelt /);
+      expect(queue.toilets.queue).toHaveLength(0);
     });
   }
 
@@ -215,19 +220,21 @@ describe('dev events on the Sim', () => {
     refused(empty, 'pet-passage');
   });
 
-  it('place.pod (pod, pod-end): two sit down in the pod, a second pair is refused; pod-end empties it and is refused when empty', () => {
+  it('place.pod (pod, pod-end): two sit down in the pod, a second pair takes it over; pod-end empties it and is refused when empty', () => {
     const sim = office();
     const two = only(sim, GROUP.slice(0, 2));
     refused(sim, 'pod-end');
     expect(sim.events.trigger('pod')).toMatch(/ setzen sich ins Holzhaus$/);
     expect(ids(sim.pod.current!.members)).toEqual(ids(two));
     expect(two.every((p) => p.task?.phase !== 'work')).toBe(true);
-    refused(sim, 'pod');
+    const first = sim.pod.current!;
+    expect(sim.events.trigger('pod')).toMatch(/ setzen sich ins Holzhaus$/);
+    expect(sim.pod.current).not.toBe(first);
     expect(sim.events.trigger('pod-end')).toBe('Holzhaus wird verlassen');
     expect(run(sim, 60, () => !sim.pod.current)).toBe(true);
   });
 
-  it('place.coffee-break (coffee, coffee-end): two start a break and nobody else is pulled from the desk, a second break is refused; coffee-end ends it and is refused without one', () => {
+  it('place.coffee-break (coffee, coffee-end): two start a break and nobody else is pulled from the desk, a second one clears the kitchen first; coffee-end ends it and is refused without one', () => {
     const sim = office();
     const three = only(sim, GROUP.slice(0, 3));
     sim.scenario.clear('kitchen', 'coffee');
@@ -237,7 +244,9 @@ describe('dev events on the Sim', () => {
     const members = sim.kitchen.current!.members;
     expect(members).toHaveLength(2);
     expect(three.filter((p) => p.task?.phase === 'work')).toEqual(three.filter((p) => !members.includes(p)));
-    refused(sim, 'coffee');
+    const first = sim.kitchen.current!;
+    expect(sim.events.trigger('coffee')).toMatch(/^Kaffeepause: /);
+    expect(sim.kitchen.current).not.toBe(first);
     expect(sim.events.trigger('coffee-end')).toBe('Kaffeepause beendet');
     expect(run(sim, 60, () => !sim.kitchen.current)).toBe(true);
   });
@@ -293,14 +302,14 @@ describe('dev events on the Sim', () => {
     });
   }
 
-  it('place.booth (phone-booth, phone-booth-end): a phone person goes into the booth, refused while it is taken; with no phone person in, one is called back', () => {
+  it('place.booth (phone-booth, phone-booth-end): a phone person goes into the booth, a second call sends the first out; with no phone person in, one is brought in', () => {
     const sim = office();
     const [jan] = only(sim, [PHONE, GROUP[0]]);
     refused(sim, 'phone-booth-end');
     expect(sim.events.trigger('phone-booth')).toBe('Jan geht telefonieren in die Kabine');
     expect(sim.phoneBooth.current!.members).toEqual([jan]);
     expect(jan.task?.phase).not.toBe('work');
-    refused(sim, 'phone-booth');
+    expect(sim.events.trigger('phone-booth')).toBe('Jan geht telefonieren in die Kabine');
     expect(sim.events.trigger('phone-booth-end')).toBe('Kabine wird verlassen');
     expect(run(sim, 60, () => !sim.phoneBooth.current)).toBe(true);
 
@@ -309,17 +318,17 @@ describe('dev events on the Sim', () => {
     only(steered, [PHONE, GROUP[0]])[0].controlled = true;
     refused(steered, 'phone-booth');
 
-    // nobody with a phone in the office: the event cannot run, but it calls one of them back for the next try
+    // nobody with a phone in the office: one of them appears and goes in
     const none = office();
     for (const p of none.people) if (p.member.look.phone) none.scenario.put(p.id, 'errand', 'free');
     const away = none.people.filter((p) => p.member.look.phone);
     expect(away.every((p) => p.awayLeft > 0)).toBe(true);
-    expect(none.events.trigger('phone-booth')).toMatch(/: nicht möglich$/);
-    expect(away.filter((p) => p.awayLeft === 0)).toHaveLength(1);
-    expect(none.phoneBooth.current).toBeNull();
+    expect(none.events.trigger('phone-booth')).toMatch(/ geht telefonieren in die Kabine$/);
+    expect(away.filter((p) => p.presence === 'in')).toHaveLength(1);
+    expect(none.phoneBooth.current).not.toBeNull();
   });
 
-  it('place.toilet (toilet, toilet-end): two take the cabins, two wait, the fifth is refused; toilet-end empties the room and is refused when empty', () => {
+  it('place.toilet (toilet, toilet-end): two take the cabins, two wait, the fifth empties the room first; toilet-end empties the room and is refused when empty', () => {
     const sim = office();
     only(sim, GROUP);
     sim.scenario.clear('wc');
@@ -327,7 +336,7 @@ describe('dev events on the Sim', () => {
     expect([1, 2, 3, 4].map(() => sim.events.trigger('toilet').replace(/^\S+ /, ''))).toEqual(['geht aufs WC', 'geht aufs WC', 'wartet vor dem WC', 'wartet vor dem WC']);
     const inside = [...sim.toilets.cabins.map((c) => c.session!.person), ...sim.toilets.queue.map((w) => w.person)];
     expect(new Set(inside).size).toBe(4); // four different people: nobody already there was picked again
-    refused(sim, 'toilet');
+    expect(sim.events.trigger('toilet')).toMatch(/ (geht aufs WC|wartet vor dem WC)$/);
     expect(sim.events.trigger('toilet-end')).toBe('WCs werden verlassen');
     expect(sim.toilets.queue).toHaveLength(0);
     expect(run(sim, 60, () => sim.toilets.cabins.every((c) => !c.session))).toBe(true);
@@ -357,7 +366,7 @@ describe('dev events on the Sim', () => {
     refused(alone, 'foosball');
   });
 
-  it('play.nerf (nerf): a dev with a gun and the nearest free person: the dev aims at them; refused while a skirmish runs; without a dev in the office it calls one back', () => {
+  it('play.nerf (nerf): a dev with a gun and the nearest free person: the dev aims at them; a running skirmish is stopped and started again; without a dev in the office one is brought in', () => {
     const sim = office();
     const dev = sim.people.find((p) => p.member.look.nerf)!;
     const other = sim.people.find((p) => !p.member.look.nerf)!;
@@ -365,16 +374,15 @@ describe('dev events on the Sim', () => {
     expect(sim.events.trigger('nerf')).toBe(`${first(dev)} schiesst auf ${first(other)}`);
     expect(sim.nerf.active).toBe(true);
     expect(dev.task?.phase).not.toBe('work');
-    refused(sim, 'nerf');
 
-    // nobody with a gun in the office: the event cannot run, but it calls one of them back for the next try
+    // nobody with a gun in the office: one of them appears
     const none = office();
     for (const p of none.people) if (p.member.look.nerf) none.scenario.put(p.id, 'errand', 'free');
     const away = none.people.filter((p) => p.member.look.nerf);
     expect(away.every((p) => p.awayLeft > 0)).toBe(true);
-    expect(none.events.trigger('nerf')).toMatch(/: nicht möglich$/);
-    expect(away.filter((p) => p.awayLeft === 0)).toHaveLength(1);
-    expect(none.nerf.active).toBe(false);
+    expect(none.events.trigger('nerf')).toMatch(/ schiesst auf /);
+    expect(away.filter((p) => p.presence === 'in').length).toBeGreaterThanOrEqual(1);
+    expect(none.nerf.active).toBe(true);
   });
 
   it('office.door-lettering (door-lettering): opens the lettered doors, the next call shuts them', () => {
@@ -436,8 +444,7 @@ describe('dev events on the Sim', () => {
     const owners = none.people.filter((o) => o.pets.length);
     for (const o of owners) none.scenario.put(o.id, 'errand', 'free');
     expect(owners.every((o) => o.awayLeft > 0)).toBe(true);
-    expect(none.events.trigger('pet-errand')).toMatch(/: nicht möglich$/);
-    expect(owners.filter((o) => o.awayLeft === 0)).toHaveLength(1);
+    expect(none.events.trigger('pet-errand')).toMatch(/ geht raus$/);
   });
 
   it('pet.announce (door-greet): the pets in the office bark or meow, those outside do not', () => {
@@ -451,7 +458,7 @@ describe('dev events on the Sim', () => {
     expect(sim.pets.filter((d) => d.away).every((d) => d.barkT === 0)).toBe(true);
   });
 
-  it('kurt.behavior (kurt-walkout): Marco leaves his desk for home; out of the office he is called back first; refused in the middle of a meeting', () => {
+  it('kurt.behavior (kurt-walkout): Marco leaves his desk for home; out of the office he is called back first; pulled out of a meeting', () => {
     const sim = office();
     const [marco] = only(sim, [KURT], 'free');
     expect(sim.events.trigger('kurt-walkout')).toBe(strings.alterEgo.event.off);
@@ -461,14 +468,15 @@ describe('dev events on the Sim', () => {
     const out = office();
     out.scenario.put(KURT, 'errand', 'free');
     expect(who(out, KURT).awayLeft).toBeGreaterThan(0);
-    expect(out.events.trigger('kurt-walkout')).toMatch(/: nicht möglich$/);
-    expect(who(out, KURT).awayLeft).toBe(0);
+    expect(out.events.trigger('kurt-walkout')).toBe(strings.alterEgo.event.off);
+    expect(who(out, KURT).presence).toBe('leaving');
 
     const busy = office();
     only(busy, [KURT, ...GROUP.slice(0, 4)], 'free');
     busy.events.trigger('meeting-room');
     expect(who(busy, KURT).meetJob).toBeTruthy();
-    for (const id of ['kurt-walkout', 'kurt-home', 'kurt-screen']) refused(busy, id);
+    expect(busy.events.trigger('kurt-walkout')).toBe(strings.alterEgo.event.off);
+    expect(who(busy, KURT).meetJob).toBeFalsy();
   });
 
   for (const [feature, id, kind] of [

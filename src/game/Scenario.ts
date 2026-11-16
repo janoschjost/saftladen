@@ -100,7 +100,7 @@ export class Scenario {
   }
 
   /** Somebody who is not in the office is, at `at`. Their pets are there too, also those that stay home today (`pet.schedule`): a scene does not hope for the dice. */
-  private enter(p: Person, at: { x: number; z: number }): void {
+  enter(p: Person, at: { x: number; z: number }): void {
     if (p.presence !== 'in') p.arriveNow(at);
     for (const [i, pet] of p.pets.entries()) {
       if (pet.removed) continue;
