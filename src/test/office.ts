@@ -9,9 +9,9 @@ export const STEP = 1 / 60;
 /** five people who sit in the office at 11:00 with seed 1 and have no pet, phone or other habit of their own */
 export const GROUP = ['oscar-grob', 'andrew-jelley', 'linda-peter', 'milica-rakic', 'alyosha-krajnc'];
 
-/** The whole office without a view, at 11:00 with seed 1. Call `installHeadlessDom()` first. */
-export function office(options: SimOptions = {}): Sim {
-  setSeed(1);
+/** The whole office without a view, at 11:00 with seed 1 (or `seed`). Call `installHeadlessDom()` first. */
+export function office(options: SimOptions = {}, seed = 1): Sim {
+  setSeed(seed);
   const sim = new Sim({ cycle: cycleOf(11), ...options });
   Walker.animate = true;
   return sim;
