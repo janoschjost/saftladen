@@ -16,6 +16,8 @@ const firsts = (group: Person[], sep = ', '): string => group.map(first).join(se
  *
  * An event that cannot run returns null and leaves everybody as they were. The exceptions call somebody back who has
  * to be in the office for it (`phone-booth`, `pet-dog`, `pet-cat`, `pet-errand`, `kurt-walkout`): the next try finds them there.
+ * The registry does not leave it at that: a null makes `makePossible` clear the way (people in, occupants out) and run
+ * the event again. Only the events marked `asIs` (they end or read something) stay refused when there is nothing to do.
  */
 export function registerSimEvents(sim: Sim): void {
   const { events, people, pets, nav, presence } = sim;
@@ -59,6 +61,7 @@ export function registerSimEvents(sim: Sim): void {
   gather('meeting-kart', 'Mittags-Mariokart (3)', 3, ...inRoom('kart', 'Kart-Runde'));
   events.register({
     id: 'meeting-room-status',
+    asIs: true,
     group: 'Meetings',
     label: 'Besprechung: Status',
     run: () => {
@@ -68,6 +71,7 @@ export function registerSimEvents(sim: Sim): void {
   });
   events.register({
     id: 'meeting-room-end',
+    asIs: true,
     group: 'Meetings',
     label: 'Besprechung beenden',
     run: () => {
@@ -167,6 +171,7 @@ export function registerSimEvents(sim: Sim): void {
   );
   events.register({
     id: 'pod-end',
+    asIs: true,
     group: 'Meetings',
     label: 'Holzhaus leeren',
     run: () => {
@@ -187,6 +192,7 @@ export function registerSimEvents(sim: Sim): void {
   );
   events.register({
     id: 'coffee-end',
+    asIs: true,
     group: 'Meetings',
     label: 'Kaffeepause beenden',
     run: () => {
@@ -253,6 +259,7 @@ export function registerSimEvents(sim: Sim): void {
   });
   events.register({
     id: 'phone-booth-end',
+    asIs: true,
     group: 'Aktionen',
     label: 'Telefonkabine leeren',
     run: () => {
@@ -278,6 +285,7 @@ export function registerSimEvents(sim: Sim): void {
   });
   events.register({
     id: 'toilet-end',
+    asIs: true,
     group: 'Aktionen',
     label: 'WCs leeren',
     run: () => {
@@ -301,6 +309,7 @@ export function registerSimEvents(sim: Sim): void {
   });
   events.register({
     id: 'photo-shoot-end',
+    asIs: true,
     group: 'Aktionen',
     label: 'Fotostudio leeren',
     run: () => {
@@ -326,6 +335,7 @@ export function registerSimEvents(sim: Sim): void {
   });
   events.register({
     id: 'server-rack-end',
+    asIs: true,
     group: 'Aktionen',
     label: 'Serverschrank reparieren',
     run: () => {
@@ -407,6 +417,7 @@ export function registerSimEvents(sim: Sim): void {
   }
   events.register({
     id: 'remote-visit',
+    asIs: true,
     group: ev.group,
     label: ev.remoteVisit,
     run: () => {

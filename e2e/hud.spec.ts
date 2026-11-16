@@ -235,15 +235,31 @@ test('actions.camera + actions.handback: Drucken flies to Orbit and follows the 
   await until(page, (g) => !g.views.flying && Math.abs(g.views.orbitShot.dist - g.views.overviewShot().dist) < 0.5, undefined, 60_000);
 });
 
-test('actions.fail: an action that cannot run says so and leaves the camera alone', async ({ page }) => {
-  // the pod is already taken
-  await openGame(page, 'iso', undefined, 'event=pod');
-  await until(page, (g) => g.sim.pod.current);
+test('actions.fail: an action that cannot run (everybody held by a scene) says so and leaves the camera alone', async ({ page }) => {
+  await openGame(page, 'iso');
+  const everybody = await read(page, (g) => g.sim.people.map((p) => p.id));
+  await scene(page, (s, ids) => ids.forEach((id) => s.put(id, 'errand')), everybody);
   await page.keyboard.press('a');
   await page.locator('#action-cards .m-card[data-action="pod"]').click();
   await expect(page.locator('#now')).toBeVisible();
   await expect(page.locator('#now-caption')).toHaveText('Holzhaus: nicht möglich');
   expect(await read(page, (g) => [g.views.mode, g.action, g.views.flying])).toEqual(['iso', null, false]);
+});
+
+test('actions.force: an action asked for happens: a taken place is cleared, a dev who is away comes in', async ({ page }) => {
+  await openGame(page, 'iso', undefined, 'event=pod');
+  await until(page, (g) => g.sim.pod.current);
+  await page.keyboard.press('a');
+  await page.locator('#action-cards .m-card[data-action="pod"]').click();
+  await expect(page.locator('#now-caption')).not.toContainText('nicht möglich');
+  // no dev in the office: one comes in to fix the rack
+  await page.keyboard.press('Escape');
+  const devs = await read(page, (g) => g.sim.people.filter((p) => p.member.look.nerf).map((p) => p.id));
+  await scene(page, (s, ids) => ids.forEach((id) => s.put(id, 'errand', 'free')), devs);
+  await page.keyboard.press('a');
+  await page.locator('#action-cards .m-card[data-action="server-rack"]').click();
+  await expect(page.locator('#now-caption')).not.toContainText('nicht möglich');
+  expect(await read(page, (g) => g.sim.serverRack.state)).toBe('broken');
 });
 
 // The card path to the event (`Game.startAction`): the card, the chip, and the people the event pulled out of their

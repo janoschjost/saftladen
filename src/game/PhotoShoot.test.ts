@@ -71,11 +71,13 @@ describe('place.photo-shoot', () => {
     expect(p.talk).toBe(null);
   });
 
-  it('the studio is taken while somebody shoots or edits: a second start does nothing', () => {
+  it('the studio is taken while somebody shoots or edits: a second start does nothing, the event clears it and starts again', () => {
     const { sim } = shoot();
-    expect(sim.events.trigger('photo-shoot')).toMatch(/: nicht möglich$/);
+    expect(sim.photoStudio.start(sim.people[0], sim.nav)).toBeNull();
+    expect(sim.events.trigger('photo-shoot')).toMatch(/ fotografiert im Studio$/);
     run(sim, 60, () => phase(sim) === 'edit');
-    expect(sim.events.trigger('photo-shoot')).toMatch(/: nicht möglich$/);
+    expect(sim.photoStudio.start(sim.people[0], sim.nav)).toBeNull();
+    expect(sim.events.trigger('photo-shoot')).toMatch(/ fotografiert im Studio$/);
   });
 
   it.each(['walk', 'shoot', 'sit', 'edit'] as const)('being pulled out while %s leaves no camera, product or lit monitor behind', (at) => {

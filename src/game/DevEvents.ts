@@ -11,6 +11,8 @@ export interface DevEvent {
   group: string;
   /** Runs the event. Return a short status message (shown in the panel) or nothing. Return false-y message `null` to say "could not run". */
   run: () => string | void | null;
+  /** The event ends or reads something and null just means "nothing to do": it is not forced (see `DevEvents.forcer`). */
+  asIs?: true;
 }
 
 type Listener = () => void;
@@ -18,8 +20,15 @@ type Listener = () => void;
 export class DevEvents {
   private events = new Map<string, DevEvent>();
   private listeners: Listener[] = [];
+  /**
+   * Set by the simulation: when an event cannot run, it clears the way (brings people in, moves occupants out) and
+   * runs it again, so that an action a dev asks for always happens. Events with `asIs` are left alone.
+   */
+  forcer: ((run: () => string | void | null) => string | void | null) | null = null;
 
   register(ev: DevEvent): void {
+    const run = ev.run;
+    if (!ev.asIs) ev = { ...ev, run: () => { const r = run(); return r === null && this.forcer ? this.forcer(run) : r; } };
     this.events.set(ev.id, ev);
     this.listeners.forEach((l) => l());
   }

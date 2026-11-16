@@ -9,6 +9,7 @@ import { CoatRacks } from './CoatRacks';
 import { buildOffice, CORRIDOR_POINT, type OfficeModel } from '../render/officeModel';
 import { NAV_CELL, WORLD } from '../render/World';
 import { Kitchen } from './Coffee';
+import { makePossible } from './makePossible';
 import { WALL_CLEARANCE } from './Avoidance';
 import { DevEvents } from './DevEvents';
 import { Dog } from './Dog';
@@ -150,6 +151,7 @@ export class Sim {
     this.presence.seed(homes);
     for (const pet of this.pets) if (pet.owner.presence === 'out' || !pet.comesToday) pet.sendAway(); // pets of people who start away, and pets that stay home today
     this.coatRacks.update();
+    this.events.forcer = (run) => makePossible(this, run);
     registerSimEvents(this);
   }
 
