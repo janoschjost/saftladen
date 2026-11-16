@@ -177,7 +177,7 @@ export class Passages {
       }
       const v = this.heading(w, path, next, i);
       const p = this.list[next];
-      if (!force && this.opposed(w, p, v.x, v.z, waited)) {
+      if (!force && this.opposed(w, next, v.x, v.z, waited)) {
         p.waits.set(w, { dx: v.x, dz: v.z, waited, stamp: this.clock, since: this.clock, checked: 0 });
         // the lane leads from the last step on open floor into the passage
         const lx = q.x - px;
@@ -272,12 +272,17 @@ export class Passages {
   }
 
   /** Oncoming traffic in the passage, or somebody on the other side whose turn comes first. */
-  private opposed(w: Walker, p: Passage, dx: number, dz: number, waited: number): boolean {
+  private opposed(w: Walker, passage: number, dx: number, dz: number, waited: number): boolean {
+    const p = this.list[passage];
     for (const o of p.standing) if (o !== w && !w.ignores(o)) return true;
     if (!dx && !dz) return false;
+    const since = p.holds.get(w)?.since ?? Infinity;
     for (const [o, h] of p.holds) {
       if (this.clock - h.stamp > STALE || o.away) p.holds.delete(o);
-      else if (o !== w && !w.ignores(o) && h.dx * dx + h.dz * dz < OPPOSITE) return true;
+      else if (o === w || w.ignores(o)) continue;
+      else if (h.dx * dx + h.dz * dz < OPPOSITE) return true;
+      // one at a time through the entrance: whoever got there first goes in, then the next follows
+      else if (h.since < since && this.at(o.pos) !== passage) return true;
     }
     for (const [o, h] of p.waits) {
       if (this.clock - h.stamp > STALE || o.away) p.waits.delete(o);
