@@ -1098,12 +1098,57 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   }
   // kitchen (x 4..10.5): fridge + counter line on the west wall, dining table east
   within(4.0, B.z0, () => {
-    box(0.62, 2.0, 0.65, 4.4, 0, -1.5, mat.white);
-    box(0.62, 0.86, 2.7, 4.4, 0, -3.2, mat.white);
-    box(0.66, 0.04, 2.7, 4.4, 0.86, -3.2, mat.woodDark);
-    box(0.36, 0.55, 2.2, 4.26, 1.5, -3.0, mat.white);
-    box(0.5, 0.42, 0.9, 4.42, 0.9, -2.4, mat.steel); // espresso machine
-    box(0.12, EXACT ? 2.6 : CUT, 4.2, 4.07, 0, -3.1, mat.black); // dark splash wall
+    // west wall, south to north: fridge-freezer, espresso counter, sink, hob with oven, bins on the floor beyond
+    box(0.62, 2.21, 0.65, 4.4, 0.04, -1.5, mat.white); // fridge-freezer: tall body on a plinth
+    box(0.56, 0.04, 0.6, 4.4, 0, -1.5, mat.dark);
+    box(0.012, 0.012, 0.65, 4.716, 1.4, -1.5, mat.dark); // gap between the fridge door above and the freezer door below
+    box(0.012, 2.15, 0.012, 4.716, 0.06, -1.175 - 0.002, mat.grey); // door edge towards the wall
+    box(0.03, 0.7, 0.025, 4.74, 1.5, -1.8, mat.steel); // long bar handles on the free edge
+    box(0.03, 0.55, 0.025, 4.74, 0.7, -1.8, mat.steel);
+    box(0.02, 0.4, 0.28, 4.716, 1.35, -1.45, mat.lightgrey); // notes held by magnets (rota, shopping list)
+    box(0.02, 0.3, 0.2, 4.716, 1.0, -1.35, mat.lightgrey);
+    box(0.02, 0.22, 0.14, 4.716, 1.85, -1.6, mat.cardboard);
+    box(0.62, 0.86, 3.5, 4.4, 0, -3.6, mat.white); // base units over the rest of the wall
+    box(0.66, 0.04, 3.5, 4.4, 0.86, -3.6, mat.woodDark); // worktop
+    for (const z of [-2.55, -3.25, -3.9, -4.85]) box(0.01, 0.8, 0.01, 4.715, 0.04, z, mat.grey); // door seams
+    for (const z of [-2.25, -2.9, -3.55, -5.1]) box(0.02, 0.4, 0.02, 4.73, 0.4, z, mat.steel); // bar handles
+    box(0.01, 0.46, 0.56, 4.715, 0.2, -4.55, mat.black); // built-in oven below the hob
+    box(0.025, 0.02, 0.4, 4.735, 0.58, -4.55, mat.steel); // oven handle
+    // sink: steel basin with a mixer tap
+    box(0.42, 0.012, 0.62, 4.4, 0.9, -3.55, mat.steel);
+    box(0.34, 0.014, 0.5, 4.4, 0.903, -3.55, mat.dark);
+    cyl(0.015, 0.015, 0.22, 4.22, 0.9, -3.55, mat.steel);
+    box(0.14, 0.02, 0.025, 4.29, 1.1, -3.55, mat.steel);
+    // hob: black glass plate with four rings
+    box(0.5, 0.01, 0.58, 4.43, 0.9, -4.55, mat.black);
+    for (const x of [4.31, 4.55]) for (const z of [-4.7, -4.4]) cyl(0.07, 0.07, 0.004, x, 0.91, z, mat.grey);
+    // extractor hood: canopy over the hob, chimney up to the ceiling
+    box(0.5, 0.1, 0.9, 4.42, 1.55, -4.55, mat.steel);
+    box(0.36, 0.14, 0.8, 4.35, 1.65, -4.55, mat.steel);
+    box(0.012, 0.005, 0.76, 4.5, 1.549, -4.55, mat.lampWarm); // light strip
+    box(0.24, 1.5, 0.45, 4.28, 1.79, -4.55, mat.steel);
+    // wall cabinets over the espresso counter, glass shelf with glasses over the sink
+    box(0.36, 0.55, 1.7, 4.26, 1.7, -2.75, mat.white); // two-door cupboard right next to the fridge, over the machine and the glass shelf
+    for (const z of [-2.4, -3.1]) box(0.02, 0.02, 0.3, 4.45, 1.77, z, mat.steel);
+    box(0.012, 0.55, 0.01, 4.445, 1.7, -2.75, mat.grey);
+    box(0.2, 0.015, 0.8, 4.25, 1.5, -3.2, mat.glass);
+    for (let i = 0; i < 7; i++) cyl(0.03, 0.025, 0.1, 4.25, 1.515, -2.85 - i * 0.1, mat.glass, world, 10);
+    // two-group espresso machine: chrome body, cup warmer with cups, two screens, portafilters with wooden handles, drip tray, steam wand
+    const MZ = -2.4;
+    box(0.46, 0.34, 0.9, 4.38, 0.9, MZ, mat.steel);
+    box(0.4, 0.03, 0.9, 4.37, 1.24, MZ, mat.steel); // cup warmer
+    for (const z of [-2.78, -2.62, -2.46, -2.3, -2.14, -1.98]) cyl(0.035, 0.028, 0.05, 4.37, 1.27, z, mat.white);
+    for (const z of [-2.65, -2.15]) {
+      box(0.05, 0.1, 0.13, 4.62, 1.1, z, mat.dark); // screen housing
+      box(0.01, 0.075, 0.1, 4.65, 1.115, z, mat.lightgrey); // screen
+      cyl(0.05, 0.05, 0.05, 4.63, 1.0, z, mat.grey); // group head
+      cyl(0.04, 0.035, 0.04, 4.64, 0.96, z, mat.black); // portafilter basket
+      box(0.2, 0.025, 0.03, 4.76, 0.97, z, mat.wood); // wooden handle
+    }
+    box(0.2, 0.03, 0.9, 4.63, 0.9, MZ, mat.steel); // drip tray
+    box(0.17, 0.008, 0.84, 4.64, 0.93, MZ, mat.dark); // grille
+    cyl(0.012, 0.012, 0.22, 4.6, 0.95, -1.93, mat.steel); // steam wand
+    box(0.12, EXACT ? 2.6 : CUT, 4.5, 4.07, 0, -3.25, mat.black); // dark splash wall
     cyl(0.18, 0.18, 0.55, 5.3, 0, -5.1, mat.steel);
     cyl(0.2, 0.18, 0.5, 5.8, 0, -5.1, mat.grey);
     kitchenCenter.x = gx(5.5);
