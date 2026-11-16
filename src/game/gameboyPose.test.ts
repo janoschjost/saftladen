@@ -108,6 +108,22 @@ describe('gameboyPose', () => {
     expect(seen.size).toBe(2);
   });
 
+  it('day.gameboy: a console taken out again right after the WC is held the normal way once standing', () => {
+    const sim = office();
+    sim.scenario.clear('wc');
+    sim.scenario.put(GROUP[0], 'desk', 'free');
+    const p = sim.person(GROUP[0]);
+    sim.drop(p);
+    expect(sim.toilets.go(p, sim.nav)).toBe('cabin');
+    expect(run(sim, 200, () => p.gameboyOnWc && p.sit === 1)).toBe(true);
+    expect(run(sim, 200, () => !p.gameboyOn)).toBe(true); // done: the WC session puts the console away
+    p.gameboyOn = true; // the day task takes it out again while it is still fading (gameboy > 0)
+    expect(p.gameboy).toBeGreaterThan(0);
+    expect(run(sim, 5, () => p.sit === 0)).toBe(true);
+    sim.step(STEP);
+    expect(p.gameboyOnWc).toBe(false);
+  });
+
   it('day.gameboy: off the WC the pose is the old one (console low in front, arms at -1.05, elbows at -1.35)', () => {
     const sim = office();
     const p = sim.person(GROUP[0]);
