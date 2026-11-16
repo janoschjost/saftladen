@@ -53,6 +53,7 @@ import { Walker } from './Walker';
 import { kurtOnScreen } from './AlterEgo';
 import { random } from './rng';
 import { poseGameboy } from './gameboyPose';
+import { poseCamera } from './cameraPose';
 
 const STEP = 1 / 60; // fixed simulation step
 const TALK_REACH = 2.6; // metres: how far the player can be from somebody to talk to them
@@ -1381,7 +1382,7 @@ export class Game {
         // gentle weight shift onto the planted leg
         r.body.rotation.z = Math.cos(ph) * 0.035 * w.moving * (1 - sit);
         r.body.position.x = Math.sin(ph) * 0.02 * w.moving * (1 - sit);
-        if (w.working) {
+        if (w.working || w.editing) {
           // desk work (typing bursts, mouse, reading, leaning back): see DeskWork
           const dw = w.deskWork.pose;
           r.armL.rotation.x = dw.armL;
@@ -1447,6 +1448,7 @@ export class Game {
         this.poseEmote(w, r);
         this.poseEaster(w, r);
         poseGameboy(r, w.gameboy, w.gameboyOnWc ? sit : 0, this.clock + w.phase);
+        poseCamera(r, w.camera, w.flash, this.clock + w.phase);
         if (r.tail) {
           // Kurt's tail sways from side to side with the steps, and rests still otherwise
           r.tail.rotation.y = Math.sin(ph) * 0.35 * w.moving;

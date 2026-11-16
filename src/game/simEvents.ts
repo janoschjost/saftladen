@@ -287,6 +287,29 @@ export function registerSimEvents(sim: Sim): void {
     },
   });
   events.register({
+    id: 'photo-shoot',
+    group: 'Aktionen',
+    label: 'Jemand fotografiert im Studio',
+    run: () => {
+      if (!sim.photoStudio.free) return null;
+      // not somebody in a talk or a meeting, and so not whoever waits in front of the WC
+      const [p] = pickFree(1, (o) => !o.talk && !o.inMeeting);
+      if (!p) return null;
+      drop(p);
+      return sim.photoStudio.start(p, nav) ? `${first(p)} fotografiert im Studio` : null;
+    },
+  });
+  events.register({
+    id: 'photo-shoot-end',
+    group: 'Aktionen',
+    label: 'Fotostudio leeren',
+    run: () => {
+      if (!sim.photoStudio.current) return null;
+      sim.photoStudio.abort();
+      return 'Fotostudio wird verlassen';
+    },
+  });
+  events.register({
     id: 'printer',
     group: 'Aktionen',
     label: 'Jemand druckt',

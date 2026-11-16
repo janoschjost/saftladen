@@ -133,6 +133,17 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
     caption: 'Nerf-Gefecht im Büro',
     who: 'Ein Dev und ein Opfer',
   },
+  {
+    id: 'photo-shoot',
+    label: 'Fotoshooting',
+    icon: 'M3 8h4l2-3h6l2 3h4v12H3zM12 11a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z',
+    eventId: 'photo-shoot',
+    place: { name: 'Fotostudio', x: 30.4, z: 1.7 },
+    angle: 15,
+    zoom: 3,
+    caption: 'Fotoshooting im Studio',
+    who: 'Eine freie Person',
+  },
 ];
 
 /** Problems of an action list: duplicate ids, unknown dev events, bad numbers. Empty when the list is fine. */

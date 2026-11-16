@@ -212,6 +212,14 @@ export class Person extends Walker {
   gameboy = 0;
   /** playing on the WC: seated, the console is held up clear of the lap (set by the WC session each seated frame, cleared once standing or the console is away) */
   gameboyOnWc = false;
+  /** a photo shoot has the camera up at the face (see `camera` for the eased amount) */
+  cameraOn = false;
+  /** 0..1 eased: a camera held up to the face in both hands */
+  camera = 0;
+  /** 1 when the camera's flash just went off, fading out fast (set by the shoot) */
+  flash = 0;
+  /** at the studio desk editing the shots: typing and mouse work like at a desk (set by the shoot) */
+  editing = false;
   /** the player (walk mode) is talking to this person: they stop and face `at` until `t` runs out */
   playerChat: { t: number; total: number; at: Vec2 } | null = null;
   /** stroking a pet (reuses the stop-and-turn of `playerChat`, but without the talking gestures) */
@@ -728,6 +736,9 @@ export class Person extends Walker {
   override update(dt: number, nav: NavGrid, others: readonly Walker[] = []): void {
     this.gameboy += ((this.gameboyOn && this.presence === 'in' ? 1 : 0) - this.gameboy) * Math.min(1, dt * 10);
     if (this.gameboy < 0.005) this.gameboy = 0;
+    this.camera += ((this.cameraOn && this.presence === 'in' ? 1 : 0) - this.camera) * Math.min(1, dt * 8);
+    if (this.camera < 0.005) this.camera = 0;
+    this.flash = Math.max(0, this.flash - dt * 6);
     // up from the WC (or the console put away): a console taken out later, e.g. at the desk, is held the normal way
     if (this.sit === 0 || (this.gameboy === 0 && !this.gameboyOn)) this.gameboyOnWc = false;
     this.updatePhone(dt);
@@ -742,7 +753,7 @@ export class Person extends Walker {
     if (rc && ((rc.t += dt) >= rc.dur || (!rc.free && (!this.talk || this.moving > 0.3)))) this.reaction = null;
     super.update(dt, nav, others);
     this.clock += dt;
-    if (this.working) this.deskWork.update(dt);
+    if (this.working || this.editing) this.deskWork.update(dt);
     else this.deskWork.reset();
     if (this.rig.setMood && (this.moodTimer -= dt) <= 0) {
       this.moodTimer = 4 + random() * 10;

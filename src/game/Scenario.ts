@@ -11,7 +11,7 @@ export type Where = 'desk' | 'errand' | 'home' | { x: number; z: number };
  * - `free`: put there once, the simulation takes over at the next step.
  */
 export type Hold = 'pin' | 'stay' | 'free';
-export type Place = 'printer' | 'coffee' | 'kitchen' | 'meeting' | 'wc';
+export type Place = 'printer' | 'coffee' | 'kitchen' | 'meeting' | 'wc' | 'studio';
 
 /** Seconds somebody put out with `free` stays away (held, they stay out until released). */
 const AWAY = 45;
@@ -74,6 +74,7 @@ export class Scenario {
       kitchen: () => sim.kitchen.abort(),
       meeting: () => sim.meetingRoom.abort(sim.nav),
       wc: () => sim.toilets.abort(),
+      studio: () => sim.photoStudio.abort(),
     };
     for (const place of places) if (!Object.hasOwn(empty, place)) throw new Error(`scenario: no place called "${place}"`);
     apart(() => places.forEach((place) => empty[place]()));

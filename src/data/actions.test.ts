@@ -29,6 +29,7 @@ describe('actions.list', () => {
       ['WC', 'toilet'],
       ['Gespräch', 'meeting-chat'],
       ['Nerf-Gefecht', 'nerf'],
+      ['Fotoshooting', 'photo-shoot'],
     ]);
   });
 
