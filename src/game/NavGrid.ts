@@ -176,32 +176,41 @@ export class NavGrid {
         }
         return;
       }
-      const reach = Math.ceil(r / this.cell);
       let moved = false;
-      for (let dz = -reach; dz <= reach; dz++) {
-        for (let dx = -reach; dx <= reach; dx++) {
-          if ((!dx && !dz) || this.walkable(cx + dx, cz + dz)) continue;
-          const x0 = (cx + dx) * this.cell;
-          const z0 = (cz + dz) * this.cell;
-          const qx = Math.min(Math.max(p.x, x0), x0 + this.cell);
-          const qz = Math.min(Math.max(p.z, z0), z0 + this.cell);
-          let ox = p.x - qx;
-          let oz = p.z - qz;
-          let d = Math.hypot(ox, oz);
-          if (d >= r) continue;
-          if (d < 1e-6) {
-            // exactly on the cell edge: push straight away from the blocked cell
-            ox = -dx;
-            oz = -dz;
-            d = Math.hypot(ox, oz) || 1;
-          }
-          const push = (r - Math.hypot(p.x - qx, p.z - qz)) / d;
-          p.x += ox * push;
-          p.z += oz * push;
-          moved = true;
+      this.blockedNear(p, r, (qx, qz, dx, dz) => {
+        let ox = p.x - qx;
+        let oz = p.z - qz;
+        let d = Math.hypot(ox, oz);
+        if (d >= r) return;
+        if (d < 1e-6) {
+          // exactly on the cell edge: push straight away from the blocked cell
+          ox = -dx;
+          oz = -dz;
+          d = Math.hypot(ox, oz) || 1;
         }
-      }
+        const push = (r - Math.hypot(p.x - qx, p.z - qz)) / d;
+        p.x += ox * push;
+        p.z += oz * push;
+        moved = true;
+      });
       if (!moved) return;
+    }
+  }
+
+  /**
+   * Calls `fn` for every blocked cell up to `reach` from p's own cell (that one left out) with the point of the cell
+   * closest to p, read from p at the moment of the call (so `fn` may move p), and the cell's offset from p's cell.
+   */
+  blockedNear(p: Vec2, reach: number, fn: (qx: number, qz: number, dx: number, dz: number) => void): void {
+    const { cx, cz } = this.toCell(p);
+    const n = Math.ceil(reach / this.cell);
+    for (let dz = -n; dz <= n; dz++) {
+      for (let dx = -n; dx <= n; dx++) {
+        if ((!dx && !dz) || this.walkable(cx + dx, cz + dz)) continue;
+        const x0 = (cx + dx) * this.cell;
+        const z0 = (cz + dz) * this.cell;
+        fn(Math.min(Math.max(p.x, x0), x0 + this.cell), Math.min(Math.max(p.z, z0), z0 + this.cell), dx, dz);
+      }
     }
   }
 

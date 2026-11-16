@@ -3,6 +3,7 @@ import type { NavGrid } from './NavGrid';
 import type { Person } from './Person';
 import { PET_HEIGHT } from './petPose';
 import { random } from './rng';
+import type { Walker } from './Walker';
 
 const REACH = 1.5; // metres: a passer-by this close to a pet may stop to stroke it
 const CHECK = 0.4; // seconds between two looks
@@ -42,6 +43,9 @@ export class PetCare {
         const own = p === dog.owner;
         if (!own && p.moving < 0.3) continue; // strangers have to be passing by
         if (Math.hypot(p.pos.x - dog.pos.x, p.pos.z - dog.pos.z) > REACH) continue;
+        // right on top of a stroke that is going on: two who hold their ground would push each other off the spot
+        const onTop = (o: Walker) => o !== p && o !== dog && o.steady && Math.hypot(o.pos.x - p.pos.x, o.pos.z - p.pos.z) < o.radius + p.radius;
+        if (people.some(onTop) || pets.some(onTop)) continue;
         if (random() > (own ? OWNER_CHANCE : CHANCE)) continue;
         if (!p.petDog(dog.pos, between(STROKE), dog.isCat ? PET_HEIGHT.cat : PET_HEIGHT.dog)) continue;
         dog.petBy(p, p.playerChat?.total ?? 4, nav);

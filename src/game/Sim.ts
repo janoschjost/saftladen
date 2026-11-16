@@ -9,6 +9,7 @@ import { CoatRacks } from './CoatRacks';
 import { buildOffice, CORRIDOR_POINT, type OfficeModel } from '../render/officeModel';
 import { NAV_CELL, WORLD } from '../render/World';
 import { Kitchen } from './Coffee';
+import { WALL_CLEARANCE } from './Avoidance';
 import { DevEvents } from './DevEvents';
 import { Dog } from './Dog';
 import { resetDoorLanes } from './Door';
@@ -34,7 +35,10 @@ import { Weather } from './Weather';
 import { Welcome } from './Welcome';
 import { random } from './rng';
 
-const BODY_RADIUS = 0.2; // how close to a wall a walker may get (nav cells are 0.5 m)
+/** `a` is a pet that `b` strokes right now (the two of one stroke still keep apart). */
+function strokes(a: Walker, b: Walker): boolean {
+  return a instanceof Dog && a.petted?.by === b;
+}
 
 export interface SimOptions {
   /** the scene the office and everybody in it are built into; a view draws it, a test ignores it */
@@ -352,6 +356,7 @@ export class Sim {
         // who gives way: the walker the player drags never, then whoever holds their ground (a stroke); equals part evenly
         const ra = a.held ? 2 : a.steady ? 1 : 0;
         const rb = b.held ? 2 : b.steady ? 1 : 0;
+        if (ra === 1 && rb === 1 && !strokes(a, b) && !strokes(b, a)) continue; // two strokes side by side: neither leaves the spot
         const wa = ra > rb ? 0 : ra < rb ? 2 : 1;
         const wb = rb > ra ? 0 : rb < ra ? 2 : 1;
         a.pos.x -= dx * push * wa;
@@ -365,7 +370,7 @@ export class Sim {
       w.pos.x = THREE.MathUtils.clamp(w.pos.x, 0.4, WORLD.width - 0.4);
       w.pos.z = THREE.MathUtils.clamp(w.pos.z, 0.4, WORLD.depth - 0.4);
       // walls, windows and furniture are solid (seated people are scripted into their chair and skip this)
-      if (!w.held) this.nav.resolve(w.pos, Math.min(w.radius, BODY_RADIUS));
+      if (!w.held) this.nav.resolve(w.pos, Math.min(w.radius, WALL_CLEARANCE));
     }
   }
 }
