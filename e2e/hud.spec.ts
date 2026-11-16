@@ -136,7 +136,7 @@ test('actions.sheet + actions.search: A toggles the sheet, previews, number keys
   await expect(sheet).toBeVisible();
   await expect(sheet).toHaveClass(/is-open/);
   await expect(page.locator('#open-actions')).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.locator('#action-cards .m-card')).toHaveCount(6);
+  await expect(page.locator('#action-cards .m-card')).toHaveCount(10);
   await expect(page.locator('#action-cards .m-card').first()).toContainText('Drucken');
   await expect(page.locator('#action-cards .m-card__key').first()).toHaveText('1');
   // every other dev event is listed without typing anything
