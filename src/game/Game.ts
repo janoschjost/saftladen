@@ -67,6 +67,9 @@ const ACTION_NO_LEAD = 6; // seconds the chip stays for an action that moves nob
 /** What an action may change on a person; the first person whose values change is the one the camera follows. */
 const leadState = (p: Person): unknown[] => [p.printJob, p.foosJob, p.meetPhase, p.coffeeJob, p.vapeJob, p.phoneJob, p.talk, p.presence === 'in' ? null : p.presence];
 
+/** the card pictures are this much closer than the flight's settle shot, so the place fills the picture */
+const PREVIEW_ZOOM = 1.6;
+
 export class Game {
   private scene = new THREE.Scene();
   /** the office and everybody in it; this class is its view and its input */
@@ -1245,6 +1248,7 @@ export class Game {
     const cam = this.previewCam;
     for (const { action, canvas } of this.previews) {
       const s = this.placeShot(action);
+      s.dist /= PREVIEW_ZOOM;
       const p = shotPosition(s);
       cam.position.set(p.x, p.y, p.z);
       cam.lookAt(s.x, s.y, s.z);

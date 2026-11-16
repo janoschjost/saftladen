@@ -17,7 +17,7 @@ describe('actions.list', () => {
     expect(validateActions(OFFICE_ACTIONS, registered)).toEqual([]);
   });
 
-  it('has the six default cards in order', () => {
+  it('has the ten default cards in order', () => {
     expect(OFFICE_ACTIONS.map((a) => [a.label, a.eventId])).toEqual([
       ['Drucken', 'printer'],
       ['Meeting', 'meeting-room'],
@@ -25,6 +25,10 @@ describe('actions.list', () => {
       ['Telefonbox', 'phone-booth'],
       ['Kicker', 'foosball'],
       ['Holzhaus', 'pod'],
+      ['Mariokart', 'meeting-kart'],
+      ['WC', 'toilet'],
+      ['Gespräch', 'meeting-chat'],
+      ['Nerf-Gefecht', 'nerf'],
     ]);
   });
 

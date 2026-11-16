@@ -28,7 +28,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, te
 
 /**
  * Aktionen sheet (`A` or the button bottom centre): slides up with a card per curated action (`src/data/actions.ts`),
- * each with a live preview of its place. The search also lists every other dev event. Number keys 1-9 start the
+ * each with a live preview of its place, followed by every other dev event as a plain list. The search filters both. Number keys 1-9 start the
  * matching card while it is open; Esc, the scrim or the close button close it.
  */
 export class ActionSheet {
@@ -36,6 +36,7 @@ export class ActionSheet {
   private button = document.getElementById('open-actions') as HTMLButtonElement;
   private cardsEl = document.getElementById('action-cards') as HTMLElement;
   private moreEl = document.getElementById('action-more') as HTMLElement;
+  private moreHead = document.getElementById('action-more-head') as HTMLElement;
   private emptyEl = document.getElementById('action-empty') as HTMLElement;
   private search = document.getElementById('action-search') as HTMLInputElement;
   private cards: Array<{ action: OfficeAction; li: HTMLLIElement; button: HTMLButtonElement; key: HTMLElement; canvas: HTMLCanvasElement }> = [];
@@ -152,14 +153,14 @@ export class ActionSheet {
     return this.cards.filter((c) => !c.li.hidden);
   }
 
-  /** Cards whose label, caption or place match; with a query also the other dev events (plain entries). */
+  /** Cards whose label, caption or place match, then every other dev event that matches (plain entries). Without a query: all of them. */
   private filter(): void {
     const q = this.search.value.trim().toLowerCase();
     const has = (...texts: string[]) => !q || texts.some((t) => t.toLowerCase().includes(q));
     for (const c of this.cards) c.li.hidden = !has(c.action.label, c.action.caption, c.action.place.name, c.action.eventId);
     this.visibleCards().forEach((c, i) => (c.key.textContent = i < 9 ? String(i + 1) : ''));
     const curated = new Set(this.cards.map((c) => c.action.eventId));
-    const more = q ? this.events.list().filter((e) => !curated.has(e.id) && has(e.label, e.id, e.group)) : [];
+    const more = this.events.list().filter((e) => !curated.has(e.id) && has(e.label, e.id, e.group));
     this.moreEl.replaceChildren(
       ...more.map((e) => {
         const li = el('li', 'm-sheet__more-item');
@@ -172,7 +173,7 @@ export class ActionSheet {
         return li;
       }),
     );
-    this.moreEl.hidden = more.length === 0;
+    this.moreEl.hidden = this.moreHead.hidden = more.length === 0;
     this.emptyEl.hidden = this.visibleCards().length > 0 || more.length > 0;
   }
 }
