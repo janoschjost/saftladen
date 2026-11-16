@@ -19,6 +19,8 @@ interface Hold {
   /** traffic clock when the reservation was made, and when a head-on meeting was last looked into */
   since: number;
   checked: number;
+  /** the holder has been inside (it is not just about to go in) */
+  entered: boolean;
 }
 
 interface Wait extends Hold {
@@ -178,7 +180,7 @@ export class Passages {
       const v = this.heading(w, path, next, i);
       const p = this.list[next];
       if (!force && this.opposed(w, next, v.x, v.z, waited)) {
-        p.waits.set(w, { dx: v.x, dz: v.z, waited, stamp: this.clock, since: this.clock, checked: 0 });
+        p.waits.set(w, { dx: v.x, dz: v.z, waited, stamp: this.clock, since: this.clock, checked: 0, entered: false });
         // the lane leads from the last step on open floor into the passage
         const lx = q.x - px;
         const lz = q.z - pz;
@@ -282,7 +284,7 @@ export class Passages {
       else if (o === w || w.ignores(o)) continue;
       else if (h.dx * dx + h.dz * dz < OPPOSITE) return true;
       // one at a time through the entrance: whoever got there first goes in, then the next follows
-      else if (h.since < since && this.at(o.pos) !== passage) return true;
+      else if (h.since < since && !h.entered && this.at(o.pos) !== passage) return true;
     }
     for (const [o, h] of p.waits) {
       if (this.clock - h.stamp > STALE || o.away) p.waits.delete(o);
@@ -294,8 +296,10 @@ export class Passages {
   private hold(w: Walker, passage: number, dx: number, dz: number): void {
     const holds = this.list[passage].holds;
     const h = holds.get(w);
-    if (!h) holds.set(w, { dx, dz, stamp: this.clock, since: this.clock, checked: 0 });
+    const inside = this.at(w.pos) === passage;
+    if (!h) holds.set(w, { dx, dz, stamp: this.clock, since: this.clock, checked: 0, entered: inside });
     else {
+      h.entered ||= inside;
       // close to the way out the direction gets vague: keep the one it came in with
       if (dx || dz) {
         h.dx = dx;

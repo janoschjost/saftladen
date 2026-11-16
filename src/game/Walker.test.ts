@@ -114,3 +114,35 @@ describe('move.passing (ORCA)', () => {
     expect(walker.arrived, `walker ${walker.pos.x.toFixed(2)},${walker.pos.z.toFixed(2)}`).toBe(true);
   });
 });
+
+describe('move.passages', () => {
+  it('move.passages two going the same way reach a doorway together: the second waits beside the entrance until the first is through, both get there', () => {
+    for (let seed = 1; seed <= 5; seed++) {
+      setSeed(seed);
+      // two 4 × 4 m rooms, between them a doorway one cell wide and two cells (1 m) deep
+      const nav = new NavGrid(18, 8, 0.5);
+      nav.block(8, 0, 2, 8);
+      nav.unblock(8, 4);
+      nav.unblock(9, 4);
+      const a = new Goer('a', { x: 2.75, z: 1.25 }, { x: 7.25, z: 1.25 });
+      const b = new Goer('b', { x: 2.75, z: 3.25 }, { x: 7.25, z: 3.25 });
+      const traffic = new Traffic(nav);
+      a.traffic = b.traffic = traffic;
+      const door = traffic.passages.at({ x: 4.25, z: 2.25 });
+      expect(door).toBeGreaterThanOrEqual(0);
+      let both = 0;
+      let waited = 0;
+      const dt = 1 / 60;
+      for (let t = 0; t < 20 && !(a.arrived && b.arrived); t += dt) {
+        traffic.update(dt, [a, b]);
+        a.update(dt, nav, [a, b]);
+        b.update(dt, nav, [a, b]);
+        if (traffic.passages.at(a.pos) === door && traffic.passages.at(b.pos) === door) both++;
+        if (a.yielding || b.yielding) waited++; // waiting at the passage, out of its lane
+      }
+      expect(a.arrived && b.arrived, `seed ${seed}`).toBe(true);
+      expect(both, `seed ${seed}: steps both were in the doorway`).toBe(0);
+      expect(waited, `seed ${seed}: steps the second one waited beside the entrance`).toBeGreaterThan(0);
+    }
+  });
+});
