@@ -219,6 +219,8 @@ export function avoid(self: Omit<Body, 'share'>, want: Vec2, maxSpeed: number, o
   for (const o of others) lines.push(bodyLine(self, o, dt));
   const res: Result = { x: 0, z: 0 };
   const failed = lp2(lines, maxSpeed, want.x, want.z, false, res);
-  if (failed < lines.length) lp3(lines, walls, failed, maxSpeed, res);
+  // the walls alone can contradict each other (a body pushed onto a cell's edge, furniture just dropped on it): only body
+  // lines are ever given up, the best velocity so far stays and the wall push in `Sim` sorts out the rest
+  if (failed < lines.length) lp3(lines, walls, Math.max(failed, walls), maxSpeed, res);
   return { x: res.x, z: res.z };
 }
