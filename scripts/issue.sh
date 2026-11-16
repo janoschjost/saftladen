@@ -12,6 +12,8 @@
 #                                   link + comment, else comment + `blocked` label (releases a claim either way)
 #   scripts/issue.sh sub P C...       make C... sub-issues of P (a split: P stays open as the parent)
 #   scripts/issue.sh refined N "<summary>"   N is ready for agents: comment, drop `question`/`blocked` (releases a claim)
+#   scripts/issue.sh similar "<words>"...    issues and PRs of any state matching any of the keyword sets, with why
+#                                   they were closed (an issue closed as not planned: its last comment)
 #
 # Label + assignee make a claim visible. The lock is the claim comment: GitHub orders comments by creation
 # time, so the earliest claim comment after the last release wins a race between two sessions.
@@ -169,8 +171,32 @@ $summary" >/dev/null
     unclaim "$n" "refined"
     echo "#$n is ready"
     ;;
+  similar)
+    shift; [ $# -gt 0 ] || { echo 'usage: scripts/issue.sh similar "<words>"...' >&2; exit 1; }
+    # one row per hit: kind, number, state (+ why closed), labels ("-" if none: read collapses empty tab fields), title
+    row='[$k, .number, (.state | ascii_downcase) + (if .stateReason == "NOT_PLANNED" then " (not planned)" else "" end),
+          ([.labels[].name] | join(",") | if . == "" then "-" else . end), .title] | @tsv'
+    hits=$(for words in "$@"; do
+      gh issue list --state all --search "$words" --limit 20 --json number,title,state,stateReason,labels \
+        | jq -r --arg k issue ".[] | $row"
+      gh pr list --state all --search "$words" --limit 20 --json number,title,state,labels \
+        | jq -r --arg k pr ".[] | $row"
+    done | sort -t$'\t' -k2,2n -u)
+    if [ -z "$hits" ]; then echo "nothing similar found"; exit 0; fi
+    while IFS=$'\t' read -r k n state labels title; do
+      [ "$labels" = - ] && labels=""
+      printf '%-5s #%-4s %-20s %s%s\n' "$k" "$n" "$state" "$title" "${labels:+  [$labels]}"
+      case "$k $state ,$labels," in
+        "issue "*"not planned"*|"issue "*,wontfix,*|"issue "*,duplicate,*|"issue "*,invalid,*)
+          # the last comment that isn't this script's own protocol (claim, release, park, refined)
+          why=$(gh issue view "$n" --json comments -q '[.comments[].body | select(test("^(🔒|🔓|⏸|✅)") | not)]
+            | last // "" | split("\n")[0][:200]')
+          [ -z "$why" ] || echo "            why: $why" ;;
+      esac
+    done <<< "$hits"
+    ;;
   *)
-    sed -n '2,16p' "$0" >&2
+    sed -n '2,18p' "$0" >&2
     exit 1
     ;;
 esac

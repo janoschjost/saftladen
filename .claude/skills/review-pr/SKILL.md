@@ -66,7 +66,7 @@ Show the dev every finding as it will be posted and let them edit or drop each.
   # {"event":"COMMENT","body":"...","comments":[{"path":"src/...","line":42,"side":"RIGHT","body":"..."}]}
   ```
   Then `gh pr edit N --add-label "changes requested"` (create the label once if missing: `gh label create "changes requested" --color D93F0B --description "Review found problems; /tackle-issues fixes them"`). `/tackle-issues` picks the PR up from there.
-- **Not part of this PR** → `scripts/issue.sh new "<title>" <bug|enhancement> "<body with acceptance criteria, found while reviewing #N>"`, and mention the new issues in the review body.
+- **Not part of this PR** → look first (`AGENTS.md` step 1): `scripts/issue.sh similar "<words>"`. Already open → comment the finding there. Closed as not planned → show the dev the reason and ask. Otherwise `scripts/issue.sh new "<title>" <bug|enhancement> "<body with acceptance criteria, found while reviewing #N, plus Related: #M lines>"`. Mention the issues in the review body.
 - **Nothing found** → `gh pr review N --comment --body "Reviewed in the app: all criteria OK. <steps checked>"` and remove `changes requested` if it is set.
 
 ## 5. Finish
