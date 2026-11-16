@@ -5,7 +5,12 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
 ## Every change: issue → worktree → PR
 
 1. **Issue.** A change to behavior (feature or bug) needs an issue, and its acceptance criteria are the definition of done.
-   - Ask from a dev without an issue → search the open issues first (`gh issue list --search "<words>"`). If none fits, open one with `scripts/issue.sh new "<title>" <bug|enhancement> "<body with acceptance criteria>"`.
+   - Ask from a dev without an issue → find or open one. `/create-issue` does this with the dev; every other new issue (a dev's ask, review findings, follow-ups) follows these rules:
+     - **Look first.** `scripts/issue.sh similar "<words>" "<other words>"` with 2–3 keyword sets (nouns, synonyms, the feature area) lists open and closed issues and PRs, and why an issue was closed as not planned. Also grep `FEATURES.md`, including "Removed on purpose".
+     - **Same, still open** → comment on that issue instead of opening a new one.
+     - **Closed as not planned** (`wontfix`, `duplicate`) → it was decided before. With a dev, show them the reason and ask. Without one, open the issue anyway, quote the old decision and say what is different now.
+     - **Related** → open the new one with a `Related: #M` line in its body for each, e.g. `Related: #149 (closed as not planned: Blender props dropped for now)`, so the dev implementing it sees what came before.
+     - Then `scripts/issue.sh new "<title>" <bug|enhancement> "<body with acceptance criteria>"`.
    - Docs, tooling and typo fixes may skip the issue and go straight to a PR.
 2. **Claim.** `scripts/issue.sh claim N`. Exit code 2 means another session owns the issue: don't touch it. Never take over an issue that is labeled `in progress`, assigned, or has an open PR. Giving up → `scripts/issue.sh release N "<reason>"`.
    - Open questions or a product decision needed → `scripts/issue.sh ask N "<questions>"` (label `question`). Waiting on another issue → `scripts/issue.sh block N "<reason>" M`: GitHub's native "blocked by #M" link, which a dev can also set on the issue page; it counts as blocked until #M is closed. Waiting on a PR (or older issues) → the same without a native link: label `blocked`. A split is a parent issue with sub-issues (`scripts/issue.sh sub P A B`): agents work the sub-issues, never the parent. Agents don't work `question` issues; a dev answers in a comment and removes the label, or works through them with an agent via `/refine-issues`. `gh issue list --label question` is the devs' inbox.
@@ -26,7 +31,7 @@ These rules apply to every agent session, local or automated (`/tackle-issues`).
    - The diff has been through one pass of `/simplify` and one of `/code-review` (medium), in that order, both limited to this branch's diff:
      1. `/simplify`, apply what keeps the change inside the issue's scope.
      2. `npm run lint && npm run build && npm test && npm run test:e2e`.
-     3. `/code-review`. Fix the confirmed correctness findings only. Everything else (style, taste, things outside the issue) goes under `## Notes` in the PR body or into a new issue.
+     3. `/code-review`. Fix the confirmed correctness findings only. Everything else (style, taste, things outside the issue) goes under `## Notes` in the PR body or into a new issue (step 1's rules: look first).
      4. Step 3 changed code → tests again, then one more `/code-review`. Two rounds at most: after the second, open the PR and list what is still open under `## Notes`. Never loop until a review comes back empty; it won't.
 
      Docs-only changes skip this.

@@ -15,13 +15,13 @@ Description: `$ARGUMENTS`. Empty → ask the dev for it first.
 ## Steps
 
 1. **Take the description as is.** Restate it in one or two lines so the dev sees it was understood. Don't ask anything yet.
-2. **Look for duplicates.** Search open and closed issues and PRs with a few different keyword sets (nouns from the description, synonyms, the feature area):
+2. **Look for duplicates**, following the rules in `AGENTS.md` step 1. Search open and closed issues and PRs with a few different keyword sets (nouns from the description, synonyms, the feature area):
    ```sh
-   gh issue list --state all --search "<words>" --json number,title,state,labels --limit 20
-   gh pr list --state all --search "<words>" --json number,title,state --limit 20
+   scripts/issue.sh similar "<words>" "<other words>" "<feature area>"
    ```
    Also grep `FEATURES.md` for the area: the behavior may already exist, or be listed under "Removed on purpose".
-   - Similar issue or PR found → tell the dev with number, title, state and link, and how it overlaps (same, partial, related). Ask with `AskUserQuestion`: add a comment to the existing issue instead (recommended when it is the same), refine the existing one, or open a new one anyway. A `question` or `blocked` issue belongs to `/refine-issues`.
+   - Similar issue or PR found → tell the dev with number, title, state and link, and how it overlaps (same, partial, related). For one closed as not planned, add why (the `why:` line, or read the issue). Ask with `AskUserQuestion`: add a comment to the existing issue instead (recommended when it is the same and open), refine the existing one, or open a new one anyway. A `question` or `blocked` issue belongs to `/refine-issues`.
+   - A new one anyway → it gets a `Related: #M (<state, why closed>)` line in its body for each hit the dev called related (step 6).
    - Nothing found → say so in one line and continue.
 3. **Read before asking.** Read the `FEATURES.md` lines of the areas it touches and the code involved (`Game.ts`, `Person.ts`, `officeModel.ts`, `src/game/`, `src/render/`, `src/ui/`, existing tests, whatever applies). Don't ask what the code or `FEATURES.md` already answers.
 4. **Interview.** Ask with `AskUserQuestion`, at most 4 questions per round, your recommendation first and marked `(Recommended)`, each question understandable on its own. Repeat until an agent could implement the issue without asking anything. Cover what is still unknown of:
@@ -46,7 +46,8 @@ Description: `$ARGUMENTS`. Empty → ask the dev for it first.
    <the request in the dev's words, cleaned up: what and why>
 
    ## Context
-   Where it lives: files, `FEATURES.md` ids, related issues/PRs (#N). Reproduction steps for a bug.
+   Where it lives: files, `FEATURES.md` ids. Reproduction steps for a bug.
+   Related: #M (<state; why it was closed, if not planned>), one line per issue or PR from step 2.
 
    ## Acceptance criteria
    - [ ] Each one observable and checkable in the running app, with the URL where it shows
