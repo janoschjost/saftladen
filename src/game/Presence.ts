@@ -122,6 +122,9 @@ export class Presence {
     this.seenPicks = tod.picks;
   }
 
+  /** Counts the working days: a new one starts at 04:00, or when the player picks another day. */
+  days = 0;
+
   /** Weekday of the running working day, 0 = Monday (the clock's). */
   get weekday(): number {
     return this.tod.weekday;
@@ -168,6 +171,7 @@ export class Presence {
 
   /** A new working day: fresh plans for everybody, on some days a crunch keeps a few more people in for the night. */
   private rollDay(): void {
+    this.days++;
     this.overfull = false; // a call back by hand does not carry over into another day
     this.overridden.clear();
     this.lunchers.clear();

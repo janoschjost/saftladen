@@ -24,6 +24,7 @@ const PRINT_CHANCE = 0.12; // chance per decision to walk to the printer
 const PRINT_TIME = { min: 4, max: 9 }; // seconds spent at the printer
 const STEER_WALK = 2.2; // m/s while steered with the keyboard
 const STEER_RUN = 5.4;
+const RUSH = 2; // running is this much faster than walking
 const VAPE_CHANCE = 0.15; // chance per decision (vapers only) to take a drag instead
 const VAPE_RAISE = 0.6; // timeline of one drag, seconds: raise the hand, inhale, hold, exhale (arm drops during it)
 const VAPE_DRAW = 2.0;
@@ -182,7 +183,16 @@ const smooth = (v: number) => {
 };
 
 export class Person extends Walker {
-  speed = 1.0 + random() * 0.5;
+  /** walking speed (m/s) */
+  private pace = 1.0 + random() * 0.5;
+  /** running after somebody (see Boombox.ts): faster than walking */
+  rush = false;
+  get speed(): number {
+    return this.pace * (this.rush ? RUSH : 1);
+  }
+  set speed(v: number) {
+    this.pace = v;
+  }
   radius = 0.3;
   root: THREE.Object3D;
   id: string;
@@ -238,6 +248,14 @@ export class Person extends Walker {
   nerfAmt = 0;
   nerfKick = 0;
   nerfClock = 0;
+  /**
+   * Boombox scene (see Boombox.ts): what this person does in it (plays it on the shoulder, yells at the one who
+   * played it, cowers under the yelling), whether the boombox hangs from their hand, and the eased pose
+   */
+  boomPose: 'play' | 'scold' | 'cower' | null = null;
+  boomCarry = false;
+  boomAmt = 0;
+  boomClock = 0;
   /** back height (m) of the pet being stroked: sets how deep the crouch goes */
   petHeight = 0.4;
   /** last frame time of the pet pose (s), to ease it in real time */

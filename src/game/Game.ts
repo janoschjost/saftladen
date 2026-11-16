@@ -1419,7 +1419,7 @@ export class Game {
         this.poseTired(w, r);
         if (r.vape) this.poseVape(w, r.vape, ph);
         if (r.phone) this.posePhone(w, r.phone);
-        const talking = !!(w.talk || (w.playerChat && !w.petting && !w.nerfOn)) && w.moving < 0.2 && !(w.sit > 0.5 && !w.speaking);
+        const talking = !!(w.talk || (w.playerChat && !w.petting && !w.nerfOn && !w.boomPose)) && w.moving < 0.2 && !(w.sit > 0.5 && !w.speaking);
         w.talkAmt += ((talking ? 1 : 0) - w.talkAmt) * 0.12;
         w.speakAmt += ((talking && w.speaking ? 1 : 0) - w.speakAmt) * 0.15;
         const ta = w.talkAmt;
@@ -1448,6 +1448,7 @@ export class Game {
         this.poseReaction(w, r);
       }, () => {
         this.poseNerf(w, r);
+        this.poseBoombox(w, r);
         this.poseCup(w, r);
         this.poseSnack(w, r);
         this.poseEmote(w, r);
@@ -1605,6 +1606,57 @@ export class Game {
         arm.rotation.z = lerp(arm.rotation.z, side * 0.3, a);
         elbow.rotation.x = lerp(elbow.rotation.x, -1.0, a);
       }
+    }
+  }
+
+  /**
+   * Boombox scene: on the shoulder (right arm up holding it, bobbing to the beat), scolding (left index finger wagging
+   * at him, the boombox hanging from the right hand), cowering (shrug, leaning back). Whoever stands near the music
+   * bobs along; she carries it with a stiff right arm. Eases in and out like the Nerf poses.
+   */
+  private poseBoombox(w: Person, r: Person['rig']): void {
+    const box = this.sim.boombox;
+    const now = this.clock;
+    const dt = Math.max(0, now - w.boomClock);
+    w.boomClock = now;
+    const on = !!w.boomPose && w.moving < 0.2 && !w.held && w.sit < 0.05;
+    w.boomAmt = Math.min(1, Math.max(0, w.boomAmt + (on ? 1 : -1) * (dt / 0.25)));
+    const lerp = THREE.MathUtils.lerp;
+    if (box.dancers.has(w)) {
+      // two bobs a second, a little nod with each
+      const b = Math.abs(Math.sin(box.beat * Math.PI * 2));
+      r.body.position.y += b * 0.04;
+      r.body.rotation.x += b * 0.08;
+    }
+    if (w.boomCarry && w.boomPose !== 'scold') {
+      // the weight in the right hand: the arm hangs stiff, barely swinging
+      r.armR.rotation.x *= 0.3;
+      r.armR.rotation.z = 0.08;
+      r.elbowR.rotation.x = -0.05;
+    }
+    if (w.boomAmt <= 0) return;
+    const a = smooth(w.boomAmt);
+    if (w.boomPose === 'play') {
+      r.armR.rotation.x = lerp(r.armR.rotation.x, -0.2, a);
+      r.armR.rotation.z = lerp(r.armR.rotation.z, 2.6, a);
+      r.elbowR.rotation.x = lerp(r.elbowR.rotation.x, -1.3, a);
+    } else if (w.boomPose === 'scold') {
+      const wag = Math.sin(now * 14) * 0.18;
+      r.armL.rotation.x = lerp(r.armL.rotation.x, -1.9 + wag, a);
+      r.armL.rotation.z = lerp(r.armL.rotation.z, -0.15, a);
+      r.elbowL.rotation.x = lerp(r.elbowL.rotation.x, -0.5 - wag, a);
+      r.armR.rotation.x = lerp(r.armR.rotation.x, 0, a);
+      r.elbowR.rotation.x = lerp(r.elbowR.rotation.x, -0.05, a);
+      r.body.rotation.x += 0.12 * a;
+      r.body.position.y += Math.abs(Math.sin(now * 7)) * 0.02 * a;
+    } else if (w.boomPose === 'cower') {
+      for (const [arm, elbow, side] of [[r.armL, r.elbowL, -1], [r.armR, r.elbowR, 1]] as const) {
+        arm.rotation.x = lerp(arm.rotation.x, -0.5, a);
+        arm.rotation.z = lerp(arm.rotation.z, side * 0.5, a);
+        elbow.rotation.x = lerp(elbow.rotation.x, -1.3, a);
+      }
+      r.body.rotation.x += -0.14 * a;
+      r.body.position.y -= 0.05 * a;
     }
   }
 
@@ -1903,6 +1955,7 @@ export class Game {
     const coffee = this.sim.kitchen.current;
     const rep = this.reply;
     const call = this.sim.welcome.call;
+    const boom = this.sim.boombox.bubble;
     const say = (id: string, text: string, who: Walker) => ({ id, text, head: this.headTop(who) });
     const bubbleDt = this.clock - this.bubbleClock;
     this.bubbleClock = this.clock;
@@ -1910,6 +1963,7 @@ export class Game {
       [
         ...(this.easter.angry && !this.easter.angry.who.away ? [say(`angry-${this.easter.angry.who.id}`, this.easter.angry.text, this.easter.angry.who)] : []),
         ...(call && !call.who.away ? [say(`welcome-${call.who.id}`, call.text, call.who)] : []),
+        ...(boom ? [say(`boombox-${boom.who.id}`, boom.text, boom.who)] : []),
         ...(rep && !rep.who.away ? [say(`reply-${rep.who.id}`, rep.text, rep.who)] : []),
         ...this.sim.social.active.filter((c) => c.phase !== 'gather' && c.text).map((c) => say(c.speaker.id, c.text, c.speaker)),
         ...(coffee?.phase === 'chat' ? [say(coffee.speaker.id, coffee.text, coffee.speaker)] : []),
