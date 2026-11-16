@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { Vec2 } from '../game/NavGrid';
 import type { RoomLamp } from '../game/RoomLight';
 import { screenOffMaterial, type DeskRig } from './officeBuilder';
+import { box as boxGeo, cyl as cylGeo, merge as mergeGeos, propMaterial } from './geo';
 import { tvMaterial } from './screens';
 import { planClutter, type DeskProp, type DeskPlantSpot } from './deskClutter';
 import { seeded } from '../game/rng';
@@ -110,6 +111,12 @@ export interface OfficeModel {
   phoneBooth: { seat: { x: number; z: number; yaw: number }; doorPos: Vec2 };
   /** the two WC cabins in the washroom (seat on the bowl facing the door, doorway centre, the occupied light above the door) and where people queue when both are taken */
   toilets: { cabins: Array<{ seat: { x: number; z: number; yaw: number }; doorPos: Vec2; sign: THREE.MeshBasicMaterial }>; wait: Vec2[] };
+  /**
+   * The photo studio: where the photographer stands (yaw = facing the product), the product on the white sweep (hidden
+   * until a shoot), the chair at the editing desk (yaw = facing the monitors), the two monitors (dark; `Game` puts a
+   * picture on them while somebody edits) and `flash` (0..1) which lights the softboxes and the white paper for a shot.
+   */
+  photoStudio: { stand: { x: number; z: number; yaw: number }; product: THREE.Object3D; seat: { x: number; z: number; yaw: number }; screens: THREE.Mesh[]; flash: (amount: number) => void };
 }
 
 type Mat = THREE.Material;
@@ -185,6 +192,17 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   const podSeats: Array<{ x: number; z: number; yaw: number }> = [];
   const podCenter: Vec2 = { x: 0, z: 0 };
   const boothSeat = { x: 0, z: 0, yaw: -Math.PI / 2 }; // faces west (the table on the west wall)
+  const studioStand = { x: 0, z: 0, yaw: 0 };
+  const studioSeat = { x: 0, z: 0, yaw: -Math.PI / 2 }; // faces west (the monitors on the west wall)
+  let studioProduct: THREE.Object3D = new THREE.Group(); // the product on the sweep, set by the shooting table below
+  const studioScreens: THREE.Mesh[] = [];
+  /** the studio flash: the softbox faces and the white paper light up (`OfficeModel.photoStudio.flash`) */
+  const softFace = new THREE.MeshBasicMaterial({ color: 0x0b0b0c });
+  const flashPaper = new THREE.MeshLambertMaterial({ color: 0xf2f0e9, side: THREE.DoubleSide, emissive: 0xffffff, emissiveIntensity: 0 });
+  const studioFlash = (amount: number): void => {
+    softFace.color.setHex(0x0b0b0c).lerp(new THREE.Color(0xffffff), amount);
+    flashPaper.emissiveIntensity = 0.6 * amount;
+  };
   const meetCenter: Vec2 = { x: 0, z: 0 };
   const meetTv: Vec2 = { x: 0, z: 0 };
   const toiletCabins: OfficeModel['toilets']['cabins'] = [];
@@ -1554,7 +1572,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       return g;
     };
     const R = (w: number, h: number, d: number, x: number, y: number, z: number, m: Mat, p: THREE.Object3D, ry = 0) => rbox(w, h, d, x, y, z, m, ry, p);
-    const paper = L(0xf2f0e9, { side: THREE.DoubleSide });
+    const paper = flashPaper;
     const pine = L(0xd8b87a);
     const pineDark = L(0xb98f55);
     const felt = L(0xb4b1aa);
@@ -1615,6 +1633,23 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       }
       R(1.17, 0.03, 0.03, 0, 0.7, 0.98, mat.black, g);
       R(0.5, 0.005, 0.35, 0.0, 0.76, 0.6, mat.white, g); // sheet on the table
+      // the product to shoot (only there during a shoot): a bottle with an orange label next to its box, one mesh of its own
+      const product = new THREE.Mesh(
+        mergeGeos([cylGeo(0.045, 0.05, 0.2, 0.05, 0.1, 0, '#2d6e5c'), cylGeo(0.051, 0.051, 0.07, 0.05, 0.09, 0, '#e8892b'), cylGeo(0.02, 0.02, 0.04, 0.05, 0.22, 0, '#1b1b1d'), boxGeo(0.09, 0.2, 0.06, -0.08, 0.1, 0, '#f7f6f2')]),
+        propMaterial,
+      );
+      product.position.set(0, 0.76, 0.6);
+      product.visible = false;
+      product.castShadow = true;
+      product.userData.keep = true; // stays a mesh of its own when the item is merged, so the studio can show and hide it
+      product.userData.nonav = true;
+      g.add(product);
+      studioProduct = product;
+      // where the photographer stands: south-east of the table, so the chair of the editing desk stays free
+      track(studioStand);
+      studioStand.x = g.position.x + 0.45;
+      studioStand.z = g.position.z + 1.75;
+      studioStand.yaw = Math.atan2(g.position.x - studioStand.x, g.position.z + 0.6 - studioStand.z);
       // light stand with clamp behind the table's front edge
       for (const sx of [-0.7]) {
         R(0.03, 1.0, 0.03, sx, 0, 0.55, mat.black, g);
@@ -1645,7 +1680,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
         const g = grp(x, z, ry);
         g.rotation.x = -0.08;
         R(0.72, 1.5, 0.38, 0, 0.04, 0, mat.black, g);
-        R(0.66, 1.42, 0.01, 0, 0.08, 0.195, L(0x0b0b0c), g);
+        R(0.66, 1.42, 0.01, 0, 0.08, 0.195, softFace, g);
         R(0.16, 0.16, 0.2, 0, 0.75, 0.26, L(0xc9c9c9), g);
         R(0.12, 0.05, 0.1, 0, 0.91, 0.26, aMat.orange, g);
       });
@@ -1672,7 +1707,9 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
         R(0.06, 0.22, 0.04, mx, 0.76, -0.27, mat.dark, g);
         R(0.26, 0.015, 0.2, mx, 0.76, -0.27, mat.dark, g);
         R(0.62, 0.38, 0.04, mx, 0.95, -0.25, mat.black, g);
-        R(0.56, 0.32, 0.006, mx, 0.98, -0.225, L(0x20262c), g);
+        const screen = R(0.56, 0.32, 0.006, mx, 0.98, -0.225, screenOffMaterial(), g);
+        screen.userData.keep = true; // a mesh of its own: the studio puts a picture on it while somebody edits
+        studioScreens.push(screen);
         R(0.62, 0.02, 0.2, mx, 1.33, -0.14, mat.dark, g); // hood
         for (const sx of [-0.31, 0.31]) R(0.02, 0.38, 0.2, mx + sx, 0.95, -0.14, mat.dark, g);
       }
@@ -1683,13 +1720,14 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       R(0.16, 0.05, 0.1, -0.75, 0.76, 0.18, aMat.yellow, g); // battery charger
       R(0.18, 0.015, 0.12, -0.35, 0.76, 0.3, mat.black, g); // headphones
     });
-    const chair = (id: string, x: number, z: number, ry: number): void => {
-      item('chair', id, 'Bürostuhl', () => {
-        const g = grp(x, z, ry);
-        officeChair(g, 0, 0);
-      });
-    };
-    chair('studio-chair-1', 20.5, -3.35, Math.PI / 2 + 0.2);
+    item('chair', 'studio-chair-1', 'Bürostuhl', () => {
+      const g = grp(20.5, -3.35, Math.PI / 2 + 0.2);
+      officeChair(g, 0, 0);
+      track(studioSeat);
+      studioSeat.x = g.position.x;
+      studioSeat.z = g.position.z;
+      studioSeat.yaw = g.rotation.y - Math.PI; // the chair faces -Z: towards the monitors
+    });
 
     // pallet bar along the east wall: standing pallets, wooden beam on top, long cardboard box, flight case
     item('pallet-bar', 'studio-pallet-bar', 'Palettenbar', () => {
@@ -2612,7 +2650,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     }
   };
   setRoofVisible(false); // the roof starts hidden
-  return { desks, items, pendantCords: [...pendantCords.values()], setRoofVisible, coatRacks, blockers: allBlockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter, machine: kitchenMachine, stands: kitchenStands, table: tableSeats }, phoneBooth: { seat: boothSeat, doorPos: { x: ax(23.75), z: az(CZ) } }, toilets: { cabins: toiletCabins, wait: [{ x: ax(3.35), z: az(-3.3) }, { x: ax(0.7), z: az(-3.2) }] } };
+  return { desks, items, pendantCords: [...pendantCords.values()], setRoofVisible, coatRacks, blockers: allBlockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter, machine: kitchenMachine, stands: kitchenStands, table: tableSeats }, phoneBooth: { seat: boothSeat, doorPos: { x: ax(23.75), z: az(CZ) } }, toilets: { cabins: toiletCabins, wait: [{ x: ax(3.35), z: az(-3.3) }, { x: ax(0.7), z: az(-3.2) }] }, photoStudio: { stand: studioStand, product: studioProduct, seat: studioSeat, screens: studioScreens, flash: studioFlash } };
 }
 
 /**

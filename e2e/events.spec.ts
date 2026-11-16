@@ -13,6 +13,14 @@ test('dev.params: ?event=<id> starts its event at load (?event=meeting-room)', a
   expect(errors).toEqual([]);
 });
 
+// the shoot itself: src/game/PhotoShoot.test.ts. This is the way there: the Aktionen card's action → the camera on the rig, then the editing pose
+test('place.photo-shoot (?action=photo-shoot)', async ({ page }) => {
+  const errors = await openGame(page, '', undefined, 'action=photo-shoot');
+  await until(page, (g) => g.sim.photoStudio.current?.person.rig.camera.visible, undefined, 60_000);
+  await until(page, (g) => g.sim.photoStudio.current?.phase === 'edit' && g.sim.photoStudio.current.person.rig.camera.visible === false, undefined, 60_000);
+  expect(errors).toEqual([]);
+});
+
 const cases: [string, string, (g: TestHook) => unknown][] = [
   ['home.son', 'remote-son', (g) => g.homes.some((h) => h?.sonHere)],
 ];

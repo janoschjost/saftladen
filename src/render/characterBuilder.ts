@@ -38,6 +38,9 @@ export interface CharacterRig {
   /** handheld console held in both hands in front of the chest (hidden until a day task plays it); `screen` is its lit display */
   gameboy: THREE.Object3D;
   gameboyScreen: THREE.MeshBasicMaterial;
+  /** camera held up to the face in both hands, lens forward (hidden until a photo shoot); `flash` is its flash head and the glow around it */
+  camera: THREE.Object3D;
+  cameraFlash: { head: THREE.MeshBasicMaterial; glow: THREE.Mesh };
   /** the person's own look, one group per bone; an alter ego (see kurtBuilder.ts) hides them and shows its own */
   skin: THREE.Object3D[];
   /** only with an alter-ego skin added: shows it (true) or the person's own look (false) */
@@ -494,6 +497,30 @@ export function buildCharacter(look: Look): CharacterRig {
   gameboy.position.set(0, 1.0, 0.3);
   body.add(gameboy);
 
+  // camera for the photo shoot: held at the face in both hands, lens forward, a flash on top (hidden until somebody shoots)
+  const camera = new THREE.Group();
+  camera.visible = false;
+  camera.add(
+    mesh([
+      box(0.26, 0.15, 0.1, 0, 0, 0, '#2b2d33'), // body
+      box(0.07, 0.17, 0.11, 0.08, -0.01, 0.01, '#202228'), // grip
+      box(0.1, 0.1, 0.12, 0, 0, 0.11, '#1b1c20'), // lens
+      box(0.12, 0.12, 0.03, 0, 0, 0.19, '#3a3d45'), // lens ring
+      box(0.08, 0.04, 0.07, 0, 0.095, -0.005, '#202228'), // prism
+      box(0.06, 0.04, 0.05, 0, 0.135, -0.005, '#1b1c20'), // hot shoe
+    ]),
+  );
+  const flashHead = new THREE.MeshBasicMaterial({ color: 0x4a4d55 });
+  const flashLamp = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.055, 0.025), flashHead);
+  flashLamp.position.set(0, 0.18, 0.02);
+  camera.add(flashLamp);
+  const glow = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false }));
+  glow.position.set(0, 0.18, 0.06);
+  glow.visible = false;
+  camera.add(glow);
+  camera.position.set(0, 0.9, 0.3);
+  body.add(camera);
+
   // ---- legs (pivot at hip)
   const shoe = new THREE.Color(look.bottom).getHSL({ h: 0, s: 0, l: 0 }).l > 0.6 ? SHOE_DARK : SHOE_LIGHT;
   const mkLeg = (side: 1 | -1) => {
@@ -532,5 +559,5 @@ export function buildCharacter(look: Look): CharacterRig {
   const h = look.heightM ? look.heightM / REF_HEIGHT_M : look.height ?? 1;
   root.scale.setScalar(h);
 
-  return { root, body, legL, legR, kneeL, kneeR, armL, armR, elbowL, elbowR, handset, gun, headHeight: 1.95 * h, setTired, setMood, vape, phone, cup, chips, chip, gameboy, gameboyScreen, skin: skinGroups };
+  return { root, body, legL, legR, kneeL, kneeR, armL, armR, elbowL, elbowR, handset, gun, headHeight: 1.95 * h, setTired, setMood, vape, phone, cup, chips, chip, gameboy, gameboyScreen, camera, cameraFlash: { head: flashHead, glow }, skin: skinGroups };
 }

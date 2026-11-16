@@ -27,6 +27,7 @@ import { Scenario } from './Scenario';
 import { registerSimEvents } from './simEvents';
 import { Social } from './Social';
 import { TimeOfDay } from './TimeOfDay';
+import { PhotoStudio } from './PhotoShoot';
 import { Toilets } from './Toilets';
 import { Traffic } from './Traffic';
 import { Walker } from './Walker';
@@ -79,6 +80,7 @@ export class Sim {
   readonly kitchen: Kitchen;
   readonly phoneBooth: PhoneBooth;
   readonly toilets: Toilets;
+  readonly photoStudio: PhotoStudio;
   readonly walkers: Walker[] = [];
   readonly people: Person[] = [];
   /** pets (dogs and cats) */
@@ -130,6 +132,7 @@ export class Sim {
     this.toilets = new Toilets(model.toilets, this.nav);
     this.toilets.onLocked = (cabin, locked) => this.doors.setLocked(cabin.doorPos, locked);
     this.toilets.onOccupied = (cabin, occupied) => model.toilets.cabins[this.toilets.cabins.indexOf(cabin)]?.sign.color.setHex(occupied ? 0xe0342c : 0x3fbf5a);
+    this.photoStudio = new PhotoStudio(model.photoStudio, this.nav);
     this.spawn(seats, portrait);
     this.pets = this.walkers.filter((w): w is Dog => w instanceof Dog);
     this.coatRacks = new CoatRacks(model.coatRacks, this.people);
@@ -159,6 +162,7 @@ export class Sim {
     this.kitchen.relayout(this.nav);
     this.phoneBooth.relayout(this.nav);
     this.toilets.relayout(this.nav);
+    this.photoStudio.relayout(this.nav);
   }
 
   /** Dev: ids of the people and pets that are out of the sim right now. */
@@ -323,6 +327,7 @@ export class Sim {
     this.kitchen.update(dt, this.people, this.nav);
     this.phoneBooth.update(dt, this.people, this.nav);
     this.toilets.update(dt, this.people, this.nav);
+    this.photoStudio.update(dt, this.nav);
     this.doors.update(dt, [...this.walkers.filter((w) => !w.away).map((w) => ({ x: w.pos.x, z: w.pos.z, path: w.doorPath ?? undefined })), ...this.doorsSee()]);
     this.coatRacks.update();
     this.separate();
