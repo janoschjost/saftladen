@@ -9,6 +9,7 @@ import { CoatRacks } from './CoatRacks';
 import { buildOffice, CORRIDOR_POINT, type OfficeModel } from '../render/officeModel';
 import { NAV_CELL, WORLD } from '../render/World';
 import { Kitchen } from './Coffee';
+import { WALL_CLEARANCE } from './Avoidance';
 import { DevEvents } from './DevEvents';
 import { Dog } from './Dog';
 import { resetDoorLanes } from './Door';
@@ -33,8 +34,6 @@ import type { WalkColliders } from './walkCollision';
 import { Weather } from './Weather';
 import { Welcome } from './Welcome';
 import { random } from './rng';
-
-const BODY_RADIUS = 0.2; // how close to a wall a walker may get (nav cells are 0.5 m)
 
 export interface SimOptions {
   /** the scene the office and everybody in it are built into; a view draws it, a test ignores it */
@@ -365,7 +364,7 @@ export class Sim {
       w.pos.x = THREE.MathUtils.clamp(w.pos.x, 0.4, WORLD.width - 0.4);
       w.pos.z = THREE.MathUtils.clamp(w.pos.z, 0.4, WORLD.depth - 0.4);
       // walls, windows and furniture are solid (seated people are scripted into their chair and skip this)
-      if (!w.held) this.nav.resolve(w.pos, Math.min(w.radius, BODY_RADIUS));
+      if (!w.held) this.nav.resolve(w.pos, Math.min(w.radius, WALL_CLEARANCE));
     }
   }
 }

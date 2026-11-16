@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { avoid, WALL_CLEARANCE, type Body } from './Avoidance';
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { Gate } from './Passages';
 import type { Talk } from './Social';
@@ -13,6 +14,17 @@ const MOUTH_SIDE = 0.9; // metres a waiting walker keeps to the side of a passag
 const MOUTH_DEPTH = 2; // ... within this distance in front of its entrance
 const LOITER = 1; // seconds somebody may stand idle inside a passage before moving on
 const GATE_PUSH = 4; // seconds a walker that gave way in vain ignores reservations and goes through anyway
+const NEIGHBOUR = 3; // metres within which other bodies are avoided
+const MAX_NEIGHBOURS = 10; // ... the closest ones of them
+const KEEP_RIGHT = 0.25; // radians the wish leans to the right with somebody coming the other way
+const KEEP_RIGHT_RANGE = 4; // ... within this distance ahead
+const REPLAN = 1.5; // seconds held up (crawling) before a route around the crowd is planned
+const GIVE_UP = 5; // ... before the walker drops its route and does something else
+const CLOSE_ENOUGH = 0.6; // metres from the last waypoint at which a held-up walker counts as arrived
+const CLOSE_ENOUGH_AFTER = 0.4; // ... once it has been held up this long
+const SQUEEZE_PAST = 0.5; // seconds held up after which bodies standing in the way no longer count
+const SQUEEZE_FOR = 1.5; // ... for this long, until the walker is past them
+const STILL: Vec2 = { x: 0, z: 0 };
 
 /**
  * Base for everything that wanders the floor. Holds sim state only;
@@ -27,6 +39,13 @@ export abstract class Walker {
   prevPhase = this.phase;
   moving = 0; // 0..1 eased walk amount (drives animation)
   state: WalkerState = 'idle';
+  /** velocity of the last step (m/s); zero unless walking */
+  vel: Vec2 = STILL;
+  /**
+   * unit direction this walker was last steering towards (its next waypoint). Kept, not recomputed from the route: while
+   * it waits at a door it still counts as going that way for whoever comes the other way (keep right)
+   */
+  heading: Vec2 = STILL;
   path: Vec2[] = [];
   timer = random() * 3;
   abstract speed: number;
@@ -52,6 +71,8 @@ export abstract class Walker {
   private gateGaveWay = false;
   /** seconds this walker still pushes through passages regardless of reservations (deadlock fallback) */
   private gateForce = 0;
+  /** seconds this walker still squeezes past bodies standing in its way */
+  private squeeze = 0;
   /** the traffic director (routes and destinations); set by the game */
   traffic: Traffic | null = null;
   /** which way this walker prefers to pass head-on (stable, so nobody dithers) */
@@ -228,18 +249,20 @@ export abstract class Walker {
   }
 
   update(dt: number, nav: NavGrid, others: readonly Walker[] = []): void {
+    // how fast we really got on last step, the bodies' collision included (ORCA may pick a speed that a push undoes)
+    const last = this.vel;
+    const made = (last.x || last.z) && dt > 0 ? Math.hypot(this.pos.x - this.prev.x, this.pos.z - this.prev.z) / dt : Infinity;
     this.prev = { ...this.pos };
     this.prevYaw = this.yaw;
     this.prevPhase = this.phase;
 
     this.socialCooldown = Math.max(0, this.socialCooldown - dt);
+    this.vel = STILL;
 
     if (this.control(dt, nav)) return;
 
     if (this.held) {
-      this.path = [];
-      this.state = 'idle';
-      this.timer = 0.6;
+      this.halt(0.6);
       this.moving += (0 - this.moving) * Math.min(1, dt * 8);
       return;
     }
@@ -288,81 +311,26 @@ export abstract class Walker {
 
     if (this.waitAtPassage(dt, nav, others, dx, dz)) return;
 
-    // steering: sidestep walkers ahead (right-hand rule so head-on pairs pass each other), slow down if close
-    let sx = 0;
-    let sz = 0;
-    let speedFactor = 1;
-    let back = 0;
-    let backSide = 1;
-    for (const o of others) {
-      if (o === this || o.away || this.ignores(o)) continue;
-      const ox = o.pos.x - this.pos.x;
-      const oz = o.pos.z - this.pos.z;
-      const d = Math.hypot(ox, oz);
-      const reach = this.radius + o.radius + 1.7;
-      if (d >= reach || d === 0) continue;
-      const ahead = (ox * dx + oz * dz) / d; // 1 = straight ahead
-      if (ahead < -0.5) continue; // behind us
-      const k = 1 - d / reach;
-      // lateral offset of the other relative to our heading: side > 0 means it is on our right
-      const side = ox * dz - oz * dx;
-      // somebody waiting beside our lane for us to come through is no obstacle
-      const yielding = o.yielding;
-      if (yielding && Math.abs(side) > this.radius + o.radius) continue;
-      const dodge = Math.abs(side) < 0.15 ? this.dodgePref : side > 0 ? 1 : -1; // go to the opposite side of it (head-on: our usual side)
-      // perpendicular to heading (left = (-dz, dx)); dodge > 0 means other is on right, so go left
-      sx += (-dz * dodge - ox / d * 0.3) * k * 3.2;
-      sz += (dx * dodge - oz / d * 0.3) * k * 3.2;
-      if (ahead > 0.4 && d < this.radius + o.radius + 0.9) {
-        speedFactor = Math.min(speedFactor, Math.max(yielding ? 0.6 : 0.25, (d - this.radius - o.radius) / 0.9));
-        // nose to nose: back off a little instead of pushing through (only from somebody walking, and not if they wait for us: walk around those).
-        // If they come at us too, only one of the two backs off; the other edges past. Both backing off creep apart ever
-        // slower, come back and stay in each other's way for good
-        const mutual = (-ox * Math.sin(o.yaw) - oz * Math.cos(o.yaw)) / d > 0.4;
-        if (!yielding && o.state === 'walk' && d < this.radius + o.radius + 0.4 && !(mutual && this.id < o.id)) {
-          back = Math.max(back, 1 - (d - this.radius - o.radius) / 0.4);
-          backSide = side > 0 ? -1 : 1;
-        }
-      }
-    }
-    let mx = dx + sx;
-    let mz = dz + sz;
-    const ml = Math.hypot(mx, mz) || 1;
-    mx /= ml;
-    mz /= ml;
-    // avoidance must never steer us into a wall: fall back to the plain heading (or a pure slowdown)
-    if (!this.clear(nav, mx, mz)) {
-      mx = dx;
-      mz = dz;
-      if (!this.clear(nav, mx, mz)) speedFactor = Math.max(speedFactor, 0.6);
-    }
+    const v = this.avoidance(dt, nav, others, dx, dz, last);
+    const speedFactor = Math.hypot(v.x, v.z) / this.speed;
+    const progress = Math.min(speedFactor, made / this.speed);
 
-    // stuck for too long -> give up and pick something else
-    this.blockedTime = speedFactor < 0.5 ? this.blockedTime + dt : 0;
+    // held up by a crowd: re-plan a route that stays well clear of it, and give up if that does not help either
+    this.blockedTime = progress < 0.4 ? this.blockedTime + dt : 0;
     if (this.blockedTime === 0) this.replanned = false;
-    if (this.blockedTime > 0.8 && !this.replanned && this.path.length) {
-      // wedged behind people: flip our passing side and plan a route that stays well clear of them
-      this.replanned = true;
-      this.dodgePref = this.dodgePref === 1 ? -1 : 1;
-      const goal = this.path[this.path.length - 1];
-      this.goTo(nav, goal, 12);
-      if (this.path.length) return;
-    }
-    if (this.blockedTime > 2.5) {
-      this.blockedTime = 0;
-      this.path = [];
-      this.state = 'idle';
-      this.timer = 0.3 + random();
+    // nearly there, but somebody stands on the spot or it hugs a wall: close enough
+    if (this.blockedTime > CLOSE_ENOUGH_AFTER && this.path.length === 1 && dist < CLOSE_ENOUGH) {
+      this.halt(this.idleTime());
       return;
     }
-
-    if (back > 0 && this.clear(nav, -dx, -dz)) {
-      // step backwards (and slightly sideways), keep facing the way we were going
-      const bs = this.speed * 0.5 * Math.min(1, back) * dt;
-      this.pos.x += (-dx - dz * backSide * 0.6) * bs;
-      this.pos.z += (-dz + dx * backSide * 0.6) * bs;
-      this.moving += (0.4 - this.moving) * Math.min(1, dt * 8);
-      this.phase -= dt * this.speed * 2;
+    if (this.blockedTime > REPLAN && !this.replanned && this.path.length) {
+      this.replanned = true;
+      this.goTo(nav, this.path[this.path.length - 1], 12);
+      if (this.path.length) return;
+    }
+    if (this.blockedTime > GIVE_UP) {
+      this.blockedTime = 0;
+      this.halt(0.3 + random());
       return;
     }
 
@@ -372,13 +340,11 @@ export abstract class Walker {
       const moved = Math.hypot(this.pos.x - this.stuckFrom.x, this.pos.z - this.stuckFrom.z);
       this.stuckClock = 0;
       this.stuckFrom = { ...this.pos };
-      if (moved < this.speed * 0.25) {
+      if (moved < this.speed * 0.25 && this.blockedTime === 0) {
         const goal = this.path[this.path.length - 1];
         if (++this.stuckCount >= 2 || !goal) {
           this.stuckCount = 0;
-          this.path = [];
-          this.state = 'idle';
-          this.timer = 0.2 + random() * 0.5;
+          this.halt(0.2 + random() * 0.5);
           return;
         }
         this.goTo(nav, goal, 12);
@@ -387,14 +353,53 @@ export abstract class Walker {
       this.stuckCount = 0;
     }
 
-    const step = this.speed * speedFactor * dt;
-    this.pos.x += mx * step;
-    this.pos.z += mz * step;
+    this.pos.x += v.x * dt;
+    this.pos.z += v.z * dt;
+    this.vel = v;
     const arrive = this.path.length > 1 ? 0.35 : 0.2;
-    if (Math.hypot(next.x - this.pos.x, next.z - this.pos.z) <= Math.max(arrive, step)) this.path.shift();
-    if (speedFactor > 0.3) this.turnTo(Math.atan2(mx, mz), dt);
+    if (Math.hypot(next.x - this.pos.x, next.z - this.pos.z) <= Math.max(arrive, speedFactor * this.speed * dt)) this.path.shift();
+    if (speedFactor > 0.3) this.turnTo(Math.atan2(v.x, v.z), dt);
     this.moving += (Math.min(1, speedFactor * 1.5) - this.moving) * Math.min(1, dt * 8);
     this.phase += dt * this.speed * speedFactor * 4.2;
+  }
+
+  /**
+   * The velocity to walk with this step: towards the next waypoint at full speed, bent by ORCA (`Avoidance.ts`) around
+   * everybody close by and off the walls. Walking neighbours share the avoiding; standing, seated or waiting ones are
+   * fixed obstacles. With somebody coming the other way, the wish leans a little to the right, so both sides keep to
+   * their own lane and two streams pass each other.
+   */
+  private avoidance(dt: number, nav: NavGrid, others: readonly Walker[], dx: number, dz: number, vel: Vec2): Vec2 {
+    this.squeeze = this.blockedTime > SQUEEZE_PAST ? SQUEEZE_FOR : Math.max(0, this.squeeze - dt);
+    let wx = dx * this.speed;
+    let wz = dz * this.speed;
+    const near: Array<Body & { d: number }> = [];
+    let oncoming = false;
+    for (const o of others) {
+      if (o === this || o.away || this.ignores(o)) continue;
+      const ox = o.pos.x - this.pos.x;
+      const oz = o.pos.z - this.pos.z;
+      const dSq = ox * ox + oz * oz;
+      if (dSq > NEIGHBOUR * NEIGHBOUR || dSq < 1e-12) continue;
+      const d = Math.sqrt(dSq);
+      const moving = o.state === 'walk' && !o.fixed && !o.held && !o.yielding;
+      const standing = !moving && !o.held;
+      // somebody standing in a gap only one fits through (a doorway, the row of meeting seats): after a moment squeeze
+      // past them ("excuse me"); the bodies' collision then nudges a bystander aside
+      if (standing && this.squeeze > 0) continue;
+      // coming the other way: judged by where they want to go, as somebody held up stands still
+      if (o.state === 'walk' && d < KEEP_RIGHT_RANGE && (ox * dx + oz * dz) / d > 0.5 && o.heading.x * dx + o.heading.z * dz < -0.2) oncoming = true;
+      near.push({ pos: o.pos, vel: moving ? o.vel : STILL, radius: o.radius, share: moving ? 0.5 : 1, d });
+    }
+    this.heading = { x: dx, z: dz };
+    near.sort((a, b) => a.d - b.d);
+    if (near.length > MAX_NEIGHBOURS) near.length = MAX_NEIGHBOURS;
+    if (oncoming) {
+      const c = Math.cos(KEEP_RIGHT);
+      const s = Math.sin(KEEP_RIGHT);
+      [wx, wz] = [wx * c - wz * s, wx * s + wz * c];
+    }
+    return avoid({ pos: this.pos, vel, radius: this.radius }, { x: wx, z: wz }, this.speed, near, nav, WALL_CLEARANCE, dt);
   }
 
   /**
@@ -436,9 +441,7 @@ export abstract class Walker {
         return false;
       }
       this.gateGaveWay = true;
-      this.path = [];
-      this.state = 'idle';
-      this.timer = 0.2 + random() * 0.5;
+      this.halt(0.2 + random() * 0.5);
       return true;
     }
     if (this.gateWait > GATE_DETOUR && !this.gateDetoured) {
@@ -564,6 +567,13 @@ export abstract class Walker {
     this.phase += dt * this.speed * 2.5;
     if (idle) this.timer = Math.max(this.timer, 0.4); // don't wander off while shuffling
     return true;
+  }
+
+  /** Drops the route and stands, for `timer` seconds before deciding again. */
+  private halt(timer: number): void {
+    this.path = [];
+    this.state = 'idle';
+    this.timer = timer;
   }
 
   walkTo(nav: NavGrid, to: Vec2): void {

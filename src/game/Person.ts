@@ -183,7 +183,7 @@ const smooth = (v: number) => {
 
 export class Person extends Walker {
   speed = 1.0 + random() * 0.5;
-  radius = 0.4;
+  radius = 0.3;
   root: THREE.Object3D;
   id: string;
   /** 0 standing .. 1 sitting (drives the pose) */
