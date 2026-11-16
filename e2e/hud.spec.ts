@@ -6,6 +6,11 @@ test('hud.minimal + hud.modes: only title, gear, Aktionen and the key line; Rund
   const errors = await openGame(page);
   await expect(page.locator('.m-hud-title')).toBeVisible();
   await expect(page.locator('#help')).toBeVisible();
+  // status chips: top centre, black, level with the gear button
+  const chip = page.locator('.m-hud-title__chip').first();
+  await expect(chip).toBeVisible();
+  expect((await chip.boundingBox())!.y).toBe((await page.locator('#open-settings').boundingBox())!.y);
+  await expect(chip).toHaveCSS('background-color', 'rgb(0, 0, 0)');
   for (const id of ['#open-env', '#open-settings', '#open-actions']) {
     const box = await page.locator(id).boundingBox();
     expect(box!.height).toBeGreaterThanOrEqual(44);

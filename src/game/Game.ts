@@ -1936,7 +1936,7 @@ export class Game {
         if (absent.length - home > 0) meta.push(strings.presence.count.errand(absent.length - home));
         if (home > 0) meta.push(strings.presence.count.home(home));
       }
-      meta.push(`${pets} Tiere`);
+      if (pets > 0) meta.push(`${pets} Tiere`);
       if (working) meta.push(`${working} arbeiten`);
       if (talking) meta.push(`${talking} im Gespräch`);
       if (inMeeting) meta.push(`${inMeeting} im Meeting`);
