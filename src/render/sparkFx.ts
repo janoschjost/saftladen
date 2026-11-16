@@ -37,6 +37,9 @@ export class SparkFx {
       const side = (fxRandom() - 0.5) * 2.4;
       const vel = new THREE.Vector3(dir.x * out - dir.z * side, 0.3 + fxRandom() * 2.6, dir.z * out + dir.x * side);
       const size = 0.012 + fxRandom() * 0.02;
+      // the size is set now, not at the next `update`: a burst after this frame's update would show 1 m cubes for a frame
+      mesh.scale.set(size, size, size * 3);
+      mesh.lookAt(this.at.x + vel.x, this.at.y + vel.y, this.at.z + vel.z);
       this.scene.add(mesh);
       this.bits.push({ mesh, vel, life: 0.35 + fxRandom() * 0.5, t: 0, size });
     }
