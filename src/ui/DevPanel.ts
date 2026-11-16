@@ -17,6 +17,7 @@ export class DevPanel {
       if (e.target instanceof HTMLElement && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
       if (e.key === '`') this.setOpen(!this.isOpen());
     });
+    document.getElementById('dev-close')!.addEventListener('click', () => this.setOpen(false));
     this.events.onChange(() => this.render());
     this.render();
   }

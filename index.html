@@ -335,7 +335,7 @@
       <p class="m-people-empty" id="people-empty">Alle sind im Büro.</p>
     </div>
     <aside class="m-dev" id="dev" aria-label="Dev-Events" hidden>
-      <h2 class="m-flyout__title">Dev-Events <span class="m-dev__hint">( ` )</span></h2>
+      <h2 class="m-flyout__title">Dev-Events <span class="m-dev__hint">( ` )</span><button class="m-dev__close" id="dev-close" type="button" aria-label="Dev-Events schliessen"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></h2>
       <div id="dev-people"></div>
       <div id="dev-body"></div>
       <p class="m-dev__status" id="dev-status" role="status"></p>
@@ -374,9 +374,12 @@
           <input class="m-sheet__search" id="action-search" type="search" placeholder="Suchen …" aria-label="Aktionen suchen" autocomplete="off" />
           <button class="m-sheet__close" id="action-sheet-close" type="button" aria-label="Aktionen schliessen"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
         </header>
-        <ul class="m-sheet__cards" id="action-cards"></ul>
-        <ul class="m-sheet__more" id="action-more" hidden></ul>
-        <p class="m-sheet__empty" id="action-empty" hidden>Nichts gefunden.</p>
+        <div class="m-sheet__body">
+          <ul class="m-sheet__cards" id="action-cards"></ul>
+          <h3 class="m-sheet__subhead" id="action-more-head" hidden>Alle Aktionen</h3>
+          <ul class="m-sheet__more" id="action-more" hidden></ul>
+          <p class="m-sheet__empty" id="action-empty" hidden>Nichts gefunden.</p>
+        </div>
       </div>
     </section>
     <aside class="m-editor" id="editor" aria-label="Raum bearbeiten" hidden>
