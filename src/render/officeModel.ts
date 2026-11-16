@@ -87,6 +87,8 @@ export interface OfficeModel {
   coatRacks: CoatRackRig[];
   /** footprints (game space) that block walking, for the nav grid: architecture + the items where they stand right now */
   blockers(): THREE.Box3[];
+  /** the part of `blockers` that never moves: walls, windows, built-in fittings (WC cabins, annex) */
+  walls: THREE.Box3[];
   /** ceiling, beams, clerestory, bunting, string lights (hidden by default) */
   roof: THREE.Group;
   /** the two wings of the front door, each hinged at its outer jamb and swinging on its own: rotation.y = 0 is closed, negative (left) / positive (right) swings it outwards */
@@ -2587,6 +2589,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     root.position.set(s.x, 0, s.z);
     root.rotation.y = s.rot;
     const screen = new THREE.Mesh(screenGeo, screenOffMaterial());
+    screen.userData.liveMaterial = true; // the office swaps its picture (`Desk.show`)
     screen.position.set(0, 1.03, -0.22 + 0.0165);
     root.add(screen);
     // a little plant in a back corner next to the monitor: seeded per desk so it is stable but varied
@@ -2766,7 +2769,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     }
   };
   setRoofVisible(false); // the roof starts hidden
-  return { desks, items, pendantCords: [...pendantCords.values()], setRoofVisible, coatRacks, blockers: allBlockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter, machine: kitchenMachine, stands: kitchenStands, table: tableSeats }, phoneBooth: { seat: boothSeat, doorPos: { x: ax(23.75), z: az(CZ) } }, toilets: { cabins: toiletCabins, wait: [{ x: ax(3.35), z: az(-3.3) }, { x: ax(0.7), z: az(-3.2) }] }, photoStudio: { stand: studioStand, product: studioProduct, seat: studioSeat, screens: studioScreens, flash: studioFlash }, serverRack: { stand: rackStand, spark: rackSpark, leds: rackLeds } };
+  return { desks, items, pendantCords: [...pendantCords.values()], setRoofVisible, coatRacks, blockers: allBlockers, walls: blockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter, machine: kitchenMachine, stands: kitchenStands, table: tableSeats }, phoneBooth: { seat: boothSeat, doorPos: { x: ax(23.75), z: az(CZ) } }, toilets: { cabins: toiletCabins, wait: [{ x: ax(3.35), z: az(-3.3) }, { x: ax(0.7), z: az(-3.2) }] }, photoStudio: { stand: studioStand, product: studioProduct, seat: studioSeat, screens: studioScreens, flash: studioFlash }, serverRack: { stand: rackStand, spark: rackSpark, leds: rackLeds } };
 }
 
 /**

@@ -101,6 +101,11 @@ export class RoomItem {
     this.onApply?.();
   }
 
+  /** True when `p` is one of the points that move with this item (its own seat or standing spot). */
+  owns(p: ItemAnchor): boolean {
+    return this.anchors.some((a) => a.target === p);
+  }
+
   /** Footprints that block walking (game coordinates); none while hidden. */
   blockers(): THREE.Box3[] {
     return this.hidden ? [] : this.localBlockers.map((b) => this.place(b));

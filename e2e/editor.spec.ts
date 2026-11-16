@@ -15,14 +15,42 @@ const screenAt = (page: Page, at: { x: number; z: number }) =>
     at,
   );
 
-const dividerAt = (page: Page) =>
+const itemAt = (page: Page, id: string) =>
   read(
     page,
     (g, id) => {
       const it = g.sim.model.items.find((i) => i.id === id)!;
       return { x: it.x, z: it.z, dx: it.dx, dz: it.dz };
     },
-    DIVIDER,
+    id,
+  );
+const dividerAt = (page: Page) => itemAt(page, DIVIDER);
+/** Middle of a plant's pot (its foliage may lean away from the middle of the whole plant). */
+const potAt = (page: Page, id: string) =>
+  read(
+    page,
+    (g, id) => {
+      const pot = g.sim.model.items.find((i) => i.id === id)!.blockers()[0];
+      return { x: (pot.min.x + pot.max.x) / 2, z: (pot.min.z + pot.max.z) / 2 };
+    },
+    id,
+  );
+
+/** How many of the item's meshes are see-through right now (the red tint over a blocked spot). */
+const seeThrough = (page: Page, id: string) =>
+  read(
+    page,
+    (g, id) => {
+      let n = 0;
+      g.sim.model.items
+        .find((i) => i.id === id)!
+        .holder.traverse((o) => {
+          const m = (o as { material?: { transparent: boolean } | Array<{ transparent: boolean }> }).material;
+          if (m && [m].flat().some((x) => x.transparent)) n++;
+        });
+      return n;
+    },
+    id,
   );
 
 test('editor.placement: an item dropped where it cuts off a seat goes back where it was', async ({ page }) => {
@@ -36,7 +64,7 @@ test('editor.placement: an item dropped where it cuts off a seat goes back where
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
   await page.mouse.move(to.x, to.y, { steps: 8 });
-  expect(await read(page, (g) => g.editor.dragBlocked)).toBe('Platz 9'); // red outline
+  expect(await read(page, (g) => g.editor.dragBlocked)).toBe('Platz 9 versperren'); // red outline, red see-through item
   await page.mouse.up();
 
   expect(await dividerAt(page)).toEqual(before);
@@ -75,11 +103,51 @@ test('editor.placement: a saved layout that already cuts off a seat does not loc
   await page.addInitScript(() => localStorage.setItem('saftladen.layout', JSON.stringify({ 'plant@27.1,9': {} })));
   const errors = await openGame(page, 'plan');
   await page.keyboard.press('e');
-  expect(await read(page, (g) => g.sim.blocked().map((b) => b.label))).toEqual(['Platz 27']);
+  expect(await read(page, (g) => g.sim.blocked().filter((b) => !/^(wall|overlap|spot) /.test(b.key)).map((b) => b.label))).toEqual(['Platz 27 versperren']);
   const before = await dividerAt(page);
   const at = await screenAt(page, before);
   await page.mouse.click(at.x, at.y);
   await page.keyboard.press('Shift+ArrowLeft'); // nothing new is cut off: the nudge is kept
   expect((await dividerAt(page)).dx).toBe(before.dx - 0.25);
+  expect(errors).toEqual([]);
+});
+
+
+test('editor.placement: an item dragged into another one turns red and goes back where it was', async ({ page }) => {
+  const errors = await openGame(page, 'plan');
+  await page.keyboard.press('e');
+  const before = await itemAt(page, 'foosball');
+  const from = await screenAt(page, before);
+  const to = await screenAt(page, await itemAt(page, 'reception-counter'));
+  const opaque = await seeThrough(page, 'foosball');
+
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 8 });
+  expect(await read(page, (g) => g.editor.dragBlocked)).toBe('in Empfangstheke stehen');
+  expect(await seeThrough(page, 'foosball')).toBeGreaterThan(opaque); // red and see-through ...
+  expect(await seeThrough(page, 'reception-counter')).toBe(0); // ... only the dragged item
+  await page.mouse.up();
+
+  expect(await itemAt(page, 'foosball')).toEqual(before);
+  expect(await seeThrough(page, 'foosball')).toBe(opaque);
+  await expect(page.locator('#editor-status')).toContainText('in Empfangstheke stehen');
+  expect(errors).toEqual([]);
+});
+
+test('editor.placement: an arrow nudge into a wall is refused', async ({ page }) => {
+  const plant = 'plant@32.1,-0.9'; // against the east wall
+  const errors = await openGame(page, 'plan');
+  await page.keyboard.press('e');
+  const before = await itemAt(page, plant);
+  const at = await screenAt(page, await potAt(page, plant));
+  await page.mouse.click(at.x, at.y);
+  expect(await read(page, (g) => g.editor.selectedItem?.id)).toBe(plant);
+
+  await page.keyboard.press('ArrowRight'); // east, into the wall
+  expect(await itemAt(page, plant)).toEqual(before);
+  await expect(page.locator('#editor-status')).toContainText('in einer Wand stehen');
+  await page.keyboard.press('ArrowLeft'); // away from it: fine
+  expect((await itemAt(page, plant)).dx).toBe(before.dx - 0.05);
   expect(errors).toEqual([]);
 });

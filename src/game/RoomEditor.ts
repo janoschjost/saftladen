@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { DEFAULT_LAYOUT, type ItemOverride, type Layout } from '../data/layout';
 import type { RoomItem } from '../render/roomItem';
+import { tint } from '../render/tint';
 import type { Blockage } from './placement';
 import { EditorPanel } from '../ui/EditorPanel';
 
@@ -9,6 +10,8 @@ const KEY = 'saftladen.layout';
 const GRID = 0.25;
 /** Arrow keys nudge by this much (Shift = one grid step). */
 const FINE = 0.05;
+/** how see-through the dragged item is over a spot where it may not go */
+const BLOCKED_OPACITY = 0.5;
 
 const sameOverride = (a: ItemOverride, b: ItemOverride): boolean =>
   (a.dx ?? 0) === (b.dx ?? 0) && (a.dz ?? 0) === (b.dz ?? 0) && (a.rot ?? 0) === (b.rot ?? 0) && !!a.hidden === !!b.hidden;
@@ -33,6 +36,8 @@ export class RoomEditor {
   private hoverHelper: THREE.Box3Helper;
   private selColor: THREE.Color;
   private blockedColor: THREE.Color;
+  /** the dragged item shown red and see-through over a blocked spot, and how to undo that */
+  private tinted: { item: RoomItem; undo: () => void } | null = null;
   private panel: EditorPanel;
 
   constructor(
@@ -134,7 +139,7 @@ export class RoomEditor {
     const step = this.snap && !free ? GRID : 0.01;
     const dx = d.dx + Math.round((ground.x - d.gx) / step) * step;
     const dz = d.dz + Math.round((ground.z - d.gz) / step) * step;
-    if (this.place(d.item, dx, dz)) d.blocking = this.added(d.was);
+    if (this.place(d.item, dx, dz)) d.blocking = this.added(d.was, d.item);
     this.refresh();
   }
 
@@ -162,6 +167,7 @@ export class RoomEditor {
       return true;
     }
     if (!this.active) return false;
+    if (this.drag) return true; // the drop decides where the dragged item ends up: no keyboard edits in between
     if (e.code === 'Escape') {
       if (!this.selected) this.setActive(false);
       else this.deselect();
@@ -221,15 +227,21 @@ export class RoomEditor {
   private change(it: RoomItem, edit: () => boolean | void): void {
     const before = it.override ?? {};
     const was = this.blocked();
-    if (edit() !== false) this.keep(it, before, this.added(was));
+    if (edit() !== false) this.keep(it, before, this.added(was, it));
   }
 
   /**
    * What the furniture cuts off now that `was` did not (the first of it), or null. Only what an edit adds counts: a
    * layout saved before the check existed may already cut something off, and that must not lock every other item.
    */
-  private added(was: Blockage[]): string | null {
-    return this.blocked().find((b) => !was.some((w) => w.key === b.key))?.label ?? null;
+  private added(was: Blockage[], moved: RoomItem): string | null {
+    const b = this.firstNew(was);
+    return b ? (b.inside?.(moved) ?? b.label) : null;
+  }
+
+  /** The first thing the furniture does now that it did not do in `was` (see `added`). */
+  private firstNew(was: Blockage[]): Blockage | undefined {
+    return this.blocked().find((b) => !was.some((w) => w.key === b.key));
   }
 
   /** `it` stays where it is now unless it cuts something off (`blocking`): then it goes back to `before` and the panel says why. */
@@ -237,7 +249,7 @@ export class RoomEditor {
     if (!blocking) return this.commit();
     it.set(before);
     this.refresh();
-    this.panel.status(`${it.label} würde ${blocking} versperren – bleibt, wo es war.`);
+    this.panel.status(`${it.label} würde ${blocking} – bleibt, wo es war.`);
   }
 
   private rotate(): void {
@@ -322,11 +334,11 @@ export class RoomEditor {
     const before = this.items.map((it) => it.override ?? {});
     const was = this.blocked();
     for (const it of this.items) it.set(layout[it.id] && typeof layout[it.id] === 'object' ? layout[it.id] : {});
-    const blocking = this.added(was);
+    const blocking = this.firstNew(was);
     if (blocking) {
       this.items.forEach((it, i) => it.set(before[i]));
       this.refresh();
-      return `Nicht übernommen: das Layout würde ${blocking} versperren.`;
+      return `Nicht übernommen: ${blocking.who ?? 'das Layout'} würde ${blocking.label}.`;
     }
     this.selected = null;
     this.commit();
@@ -371,13 +383,21 @@ export class RoomEditor {
     this.refresh();
   }
 
-  /** Outlines and panel follow the selection. */
+  /** Shows `it` red and see-through (null: nothing), with its own materials back on everything else. */
+  private tint(it: RoomItem | null): void {
+    if (this.tinted?.item === it) return;
+    this.tinted?.undo();
+    this.tinted = it ? { item: it, undo: tint(it.holder, this.blockedColor, BLOCKED_OPACITY) } : null;
+  }
+
+  /** Outlines, the blocked tint and the panel follow the selection and the drag. */
   private refresh(): void {
     const sel = this.active ? this.selected : null;
     const hov = this.active && !this.drag && this.hovered !== sel ? this.hovered : null;
     this.selHelper.visible = !!sel;
     if (sel) this.selBox.copy(sel.bounds()).expandByScalar(0.03);
     (this.selHelper.material as THREE.LineBasicMaterial).color.copy(this.dragBlocked ? this.blockedColor : this.selColor);
+    this.tint(this.dragBlocked ? this.drag!.item : null);
     this.hoverHelper.visible = !!hov;
     if (hov) this.hoverBox.copy(hov.bounds()).expandByScalar(0.03);
     this.panel.show(

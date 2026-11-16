@@ -1,19 +1,35 @@
 import type { Box3 } from 'three';
 import { CORRIDOR_POINT, DOOR_SWING, type OfficeModel } from '../render/officeModel';
+import type { RoomItem } from '../render/roomItem';
 import type { NavGrid, Vec2 } from './NavGrid';
+import { Passages } from './Passages';
 import type { Sim } from './Sim';
 
-/** A place the sim sends people to: fine when a cell within `ring` cells of `at` can be walked to from the corridor. */
+/**
+ * A place the sim sends people to: fine when a cell within `ring` cells of `at` can be walked to from the corridor.
+ * `id` names it for good (it stays the same when other places come and go). `stand`: people stand there for a while
+ * (kicker, printer, coffee machine), on the free cell closest to `at` (within `ring`, as the sim picks it); that very
+ * cell has to be reached. `seat`: somebody sits or stands right on `at`, so no other piece may cover it.
+ */
 interface Target {
+  id: string;
   label: string;
   at: Vec2;
   ring: number;
+  stand: boolean;
+  seat: boolean;
 }
 
-/** Something the furniture cuts off: `key` names this one (which door, which seat), `label` is for the message. */
+/**
+ * Something the furniture does that an edit may not add: `key` names this one (which door, which seat, which two
+ * pieces), `label` says it for the panel after "… würde" ("Platz 9 versperren"), `who` the piece that does it.
+ */
 export interface Blockage {
   key: string;
   label: string;
+  who?: string;
+  /** two pieces in each other, or a piece on a seat: says it for whichever of them was moved */
+  inside?: (moved: RoomItem) => string;
 }
 
 /**
@@ -23,19 +39,21 @@ export interface Blockage {
  */
 function targets(sim: Sim): Target[] {
   const m = sim.model;
-  const spot = (label: string, ring: number) => (at: Vec2) => ({ label, at, ring });
+  const spots = (label: string, ring: number, points: ReadonlyArray<Vec2 | null>, kind: { stand?: boolean; seat?: boolean } = {}): Target[] =>
+    points.flatMap((at, k) => (at ? [{ id: `${label} ${k}`, label, at, ring, stand: !!kind.stand, seat: kind.seat ?? true }] : []));
   return [
-    ...sim.office.desks.map((d) => spot(`Platz ${d.number}`, 3)(d.seat)),
-    spot('den Drucker', 2)(m.printer.stand),
-    ...m.foosball.map(spot('den Kicker', 2)),
-    ...m.meeting.seats.map(spot('das Sitzungszimmer', 3)),
-    ...m.pod.seats.map(spot('das Holzhaus', 4)),
-    ...m.kitchen.stands.map(spot('die Kaffeemaschine', 2)),
-    ...sim.kitchen.benches.map(spot('den Küchentisch', 3)),
-    spot('die Telefonbox', 5)(m.phoneBooth.seat),
-    ...m.toilets.cabins.map((c) => spot('das WC', 2)(c.doorPos)),
-    ...m.coatRacks.filter((r) => r.root.visible).map((r) => spot('eine Garderobe', 2)({ x: r.root.position.x, z: r.root.position.z })),
-    ...m.doors.map((d) => spot('eine Tür', 1)(d.center)),
+    ...sim.office.desks.flatMap((d) => spots(`Platz ${d.number}`, 3, [d.seat])),
+    ...spots('den Drucker', 6, [m.printer.stand], { stand: true }), // the rings of `Office` and `Kitchen`
+    ...spots('den Kicker', 3, m.foosball, { stand: true }),
+    ...spots('das Sitzungszimmer', 3, m.meeting.seats),
+    ...spots('das Holzhaus', 4, m.pod.seats),
+    ...spots('die Kaffeemaschine', 2, m.kitchen.stands, { stand: true }),
+    ...spots('den Küchentisch', 3, sim.kitchen.benches),
+    ...spots('die Telefonbox', 5, [m.phoneBooth.seat]),
+    ...spots('das WC', 2, m.toilets.cabins.map((c) => c.doorPos)),
+    // a coat stand is a piece of furniture itself: other pieces in it are overlaps
+    ...spots('eine Garderobe', 2, m.coatRacks.map((r) => (r.root.visible ? { x: r.root.position.x, z: r.root.position.z } : null)), { seat: false }),
+    ...spots('eine Tür', 1, m.doors.map((d) => d.center), { seat: false }),
   ];
 }
 
@@ -53,19 +71,90 @@ function doorSweep(d: OfficeModel['doors'][number]): Vec2[] {
 
 const covers = (b: Box3, p: Vec2) => p.x > b.min.x && p.x < b.max.x && p.z > b.min.z && p.z < b.max.z;
 
+/** Boxes that only touch (one standing on, or against, the other) do not overlap: the same margin as `NavGrid.blockWorld`. */
+const TOUCH = 0.02;
+const overlap = (a: Box3, b: Box3) =>
+  a.min.x + TOUCH < b.max.x && b.min.x + TOUCH < a.max.x && a.min.y + TOUCH < b.max.y && b.min.y + TOUCH < a.max.y && a.min.z + TOUCH < b.max.z && b.min.z + TOUCH < a.max.z;
+
+/** One box around all of `boxes` (null when there are none), to skip the far ones at once. */
+function around(boxes: Box3[]): Box3 | null {
+  return boxes.length ? boxes.reduce((u, b) => u.union(b), boxes[0].clone()) : null;
+}
+
 /**
- * Checks the furniture where it stands now (room editor). Lists what it cuts off, for the editor's message; empty
- * when the layout is fine: every desk seat, every place the sim sends people to and every door can still be walked
- * to from the corridor (`CORRIDOR_POINT`), and no piece of furniture stands in a doorway or where a door swings.
+ * Every piece of furniture that stands in a wall, in another piece or on a seat or standing spot, one entry per pair.
+ * Things that stand on top of each other (a plant on a desk) only touch and do not count.
+ */
+function overlaps(m: OfficeModel, footprints: Box3[][], spots: Target[]): Blockage[] {
+  const out: Blockage[] = [];
+  const pieces = m.items.flatMap((it, i) => {
+    const boxes = footprints[i];
+    const all = around(boxes);
+    return all ? [{ it, boxes, all }] : [];
+  });
+  const hits = (a: Box3[], b: Box3[]) => a.some((x) => b.some((y) => overlap(x, y)));
+  pieces.forEach((p, i) => {
+    m.walls.forEach((w, k) => overlap(p.all, w) && p.boxes.some((b) => overlap(b, w)) && out.push({ key: `wall ${p.it.id} ${k}`, label: 'in einer Wand stehen', who: p.it.label }));
+    for (let j = i + 1; j < pieces.length; j++) {
+      const q = pieces[j];
+      if (!overlap(p.all, q.all) || !hits(p.boxes, q.boxes)) continue;
+      const [a, b] = [p.it, q.it];
+      const inside = (moved: RoomItem) => `in ${(moved === b ? a : b).label} stehen`;
+      out.push({ key: `overlap ${a.id} ${b.id}`, label: inside(a), who: a.label, inside });
+    }
+    // its own seat (a meeting chair's) moves with it and does not count
+    for (const t of spots) {
+      if (p.it.owns(t.at) || !p.boxes.some((b) => covers(b, t.at))) continue;
+      const label = `${t.label} zustellen`;
+      out.push({ key: `spot ${t.id} ${p.it.id}`, label, who: p.it.label, inside: (moved) => (moved === p.it ? label : `${t.label} unter ${p.it.label} schieben`) });
+    }
+  });
+  return out;
+}
+
+/**
+ * Checks the furniture where it stands now (room editor). Lists what it does wrong, for the editor's message; empty
+ * when the layout is fine:
+ * - every desk seat, every place the sim sends people to and every door can still be walked to from the corridor
+ *   (`CORRIDOR_POINT`), also while people stand at the kicker, the printer and the coffee machine;
+ * - no piece of furniture stands in a doorway or where a door swings;
+ * - no piece stands in a wall, in another piece or on a seat or standing spot.
+ * The room editor only refuses what an edit adds: a saved layout (or the office model) may already have some of these.
  * `nav` is a scratch grid of the office's size, rebuilt here from the furniture; the sim's own grid is not touched.
  */
 export function blockages(sim: Sim, nav: NavGrid): Blockage[] {
   const m = sim.model;
-  const furniture = m.items.flatMap((it) => it.blockers());
+  const footprints = m.items.map((it) => it.blockers());
+  const furniture = footprints.flat();
   nav.clear();
-  nav.blockBoxes(m.blockers());
+  nav.blockBoxes(m.walls);
+  nav.blockBoxes(furniture);
+  nav.sealUnreachable(CORRIDOR_POINT); // as the sim's own grid (`Sim.blockNav`): nobody is sent into a sealed pocket
   const out: Blockage[] = [];
-  m.doors.forEach((d, i) => doorSweep(d).some((p) => furniture.some((b) => covers(b, p))) && out.push({ key: `swing ${i}`, label: 'eine Tür' }));
-  targets(sim).forEach((t, i) => !nav.openNear(t.at, CORRIDOR_POINT, t.ring) && out.push({ key: `${t.label} ${i}`, label: t.label }));
-  return out;
+  m.doors.forEach((d, i) => doorSweep(d).some((p) => furniture.some((b) => covers(b, p))) && out.push({ key: `swing ${i}`, label: 'eine Tür versperren' }));
+  const all = targets(sim);
+  // the free cell next to a standing spot where the sim puts people (null: there is none)
+  const cells = all.map((t) => (t.stand ? nav.nearestWalkable(t.at, t.ring) : null));
+  const reach = (t: Target, i: number) => (t.stand ? !!cells[i] && nav.opens(cells[i], CORRIDOR_POINT) : !!nav.openNear(t.at, CORRIDOR_POINT, t.ring));
+  const cut = all.map((t, i) => !reach(t, i));
+  // Somebody standing still in a narrow passage plugs it for everybody else (`Passages`): a way through the passage
+  // somebody plays, prints or gets a coffee in does not count for the other places.
+  const passages = new Passages(nav);
+  const plugs = cells.map((c) => !!c && passages.at(c) >= 0);
+  cells.forEach((c, i) => {
+    if (!c || !plugs[i]) return;
+    const { cx, cz } = nav.toCell(c);
+    nav.block(cx, cz);
+  });
+  all.forEach((t, i) => {
+    if (cut[i]) return;
+    if (!plugs[i]) return void (cut[i] = !reach(t, i));
+    // a stand that plugs a passage itself: still reachable past the others (two players one behind the other are not)
+    const { cx, cz } = nav.toCell(cells[i]!);
+    nav.unblock(cx, cz);
+    cut[i] = !reach(t, i);
+    nav.block(cx, cz);
+  });
+  all.forEach((t, i) => cut[i] && out.push({ key: t.id, label: `${t.label} versperren` }));
+  return [...overlaps(m, footprints, all.filter((t) => t.seat)), ...out]; // what the moved piece itself runs into first, for the message
 }
