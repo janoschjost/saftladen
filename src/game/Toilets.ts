@@ -56,6 +56,7 @@ export class ToiletSession implements Talk {
     const seated = this.seated;
     p.gameboyOn = seated;
     if (seated) {
+      p.gameboyOnWc = true;
       this.seatedTime += dt;
       if (this.reactLeft > 0 && (this.reactLeft -= dt) <= 0) this.text = '';
       if ((this.reactIn -= dt) <= 0) {

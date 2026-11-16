@@ -52,6 +52,7 @@ import { first } from './simEvents';
 import { Walker } from './Walker';
 import { kurtOnScreen } from './AlterEgo';
 import { random } from './rng';
+import { poseGameboy } from './gameboyPose';
 
 const STEP = 1 / 60; // fixed simulation step
 const TALK_REACH = 2.6; // metres: how far the player can be from somebody to talk to them
@@ -1441,7 +1442,7 @@ export class Game {
         this.poseSnack(w, r);
         this.poseEmote(w, r);
         this.poseEaster(w, r);
-        this.poseGameboy(w, r);
+        poseGameboy(r, w.gameboy, w.gameboyOnWc ? sit : 0, this.clock + w.phase);
         if (r.tail) {
           // Kurt's tail sways from side to side with the steps, and rests still otherwise
           r.tail.rotation.y = Math.sin(ph) * 0.35 * w.moving;
@@ -1613,24 +1614,6 @@ export class Game {
     r.cup.rotateX(-0.7 * sip);
   }
 
-  /** Handheld console in both hands in front of the chest, head bowed over it, thumbs twitching; the screen flickers. */
-  private poseGameboy(w: Person, r: Person['rig']): void {
-    const a = w.gameboy;
-    r.gameboy.visible = a > 0.02;
-    if (a < 0.02) return;
-    const lerp = THREE.MathUtils.lerp;
-    const t = this.clock + w.phase;
-    r.armL.rotation.x = lerp(r.armL.rotation.x, -1.05, a);
-    r.armR.rotation.x = lerp(r.armR.rotation.x, -1.05, a);
-    r.armL.rotation.z = lerp(r.armL.rotation.z, 0.3, a);
-    r.armR.rotation.z = lerp(r.armR.rotation.z, -0.3, a);
-    r.elbowL.rotation.x = -1.35 * a + Math.sin(t * 23) * 0.04 * a;
-    r.elbowR.rotation.x = -1.35 * a + Math.sin(t * 19 + 1) * 0.04 * a;
-    r.body.rotation.x += 0.14 * a;
-    r.gameboy.position.y = lerp(0.7, 1.0, a);
-    r.gameboy.rotation.x = 0.5; // screen towards his face
-    r.gameboyScreen.color.setHex(Math.sin(t * 9) > 0.85 ? 0x8bac0f : 0x9bbc0f);
-  }
 
   /** Eating chips: the left hand holds the bag (see `poseCup`), the right hand fetches a chip and takes it to the mouth now and then. */
   private poseSnack(w: Person, r: Person['rig']): void {

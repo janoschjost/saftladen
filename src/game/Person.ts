@@ -210,6 +210,8 @@ export class Person extends Walker {
   gameboyOn = false;
   /** 0..1 eased: both hands hold a handheld console in front of the chest */
   gameboy = 0;
+  /** playing on the WC: seated, the console is held up clear of the lap (stays set until it is put away) */
+  gameboyOnWc = false;
   /** the player (walk mode) is talking to this person: they stop and face `at` until `t` runs out */
   playerChat: { t: number; total: number; at: Vec2 } | null = null;
   /** stroking a pet (reuses the stop-and-turn of `playerChat`, but without the talking gestures) */
@@ -725,7 +727,10 @@ export class Person extends Walker {
 
   override update(dt: number, nav: NavGrid, others: readonly Walker[] = []): void {
     this.gameboy += ((this.gameboyOn && this.presence === 'in' ? 1 : 0) - this.gameboy) * Math.min(1, dt * 10);
-    if (this.gameboy < 0.005) this.gameboy = 0;
+    if (this.gameboy < 0.005) {
+      this.gameboy = 0;
+      if (!this.gameboyOn) this.gameboyOnWc = false;
+    }
     this.updatePhone(dt);
     if (this.cupHeld && ((this.cupLeft -= dt) <= 0 || this.presence !== 'in' || this.meetJob || this.held)) this.cupHeld = false;
     this.updateSnack(dt);
