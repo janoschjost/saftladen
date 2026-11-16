@@ -391,6 +391,7 @@ describe('dev events on the Sim', () => {
     expect(run(sim, 20, () => dj.sit > 0.9 && boss.sit > 0.9)).toBe(true);
     expect(sim.events.trigger('boombox')).toBe(`${first(dj)} packt die Boombox aus`);
     expect(sim.boombox.stage).toBe('play');
+    expect(sim.boombox.timer).toBeGreaterThanOrEqual(300); // the gag by itself only after its gap
     expect(dj.task).toBeNull(); // up from his desk
     expect(dj.boomPose).toBe('play');
     expect(boss.working).toBe(true); // she notices only after a few seconds

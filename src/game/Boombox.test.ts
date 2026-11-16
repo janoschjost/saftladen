@@ -169,6 +169,7 @@ describe('play.boombox', () => {
     expect(t0 + noticed).toBeGreaterThan(NOTICE - 0.1);
     expect(t0 + noticed).toBeLessThan(NOTICE + 0.2);
     expect(box.bubble).toEqual({ who: boss, text: '❗' });
+    expect(boss.boomPose).toBe('look'); // stares, no talking gestures
     expect(boss.task).toBeNull();
     expect(desk.occupant).not.toBe(boss);
     run(sim, 0.5);

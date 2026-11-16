@@ -160,6 +160,7 @@ export class Boombox {
     this.beat = 0;
     this.noteIn = 0;
     this.hold(dj, 'shoulder');
+    this.timer = between(GAP); // the next one only after the gap, however this one started
     return true;
   }
 
@@ -181,7 +182,7 @@ export class Boombox {
     if (this.scene || this.taken) return;
     if ((this.timer -= dt) > 0) return;
     const pair = this.find(people, nav);
-    this.timer = pair && this.start(...pair) ? between(GAP) : RETRY;
+    if (!pair || !this.start(...pair)) this.timer = RETRY;
   }
 
   /** One step of the scene. */
@@ -244,6 +245,7 @@ export class Boombox {
     boss.interrupt(); // out of the chair, the stand-up plays while she stares
     if (!boss.talkTo({ x: dj.pos.x, z: dj.pos.z }, LOOK + 1, false)) return this.end();
     boss.speaking = false;
+    boss.boomPose = 'look'; // stares, without the talking gestures
     s.stage = 'look';
     s.t = 0;
   }
@@ -266,6 +268,11 @@ export class Boombox {
   /** She takes it out of his hand: the music stops; she yells, he cowers. */
   private grab(s: Scene): void {
     const { dj, boss } = s;
+    // right beside him before her spot: she stops where she is
+    if (!s.pin?.arrived) {
+      boss.pinTo({ at: { ...boss.pos }, yaw: Math.atan2(dj.pos.x - boss.pos.x, dj.pos.z - boss.pos.z) });
+      s.pin = boss.scripted;
+    }
     boss.rush = false;
     boss.boomPose = 'scold';
     boss.boomCarry = true;
@@ -289,7 +296,7 @@ export class Boombox {
     let desk = s.desk && !s.desk.occupant && !s.desk.pending ? s.desk : null;
     if (desk) desk.occupant = boss;
     else desk = boss.office?.claim(boss) ?? null;
-    s.desk = desk ?? s.desk;
+    s.desk = desk;
     s.stage = 'carry';
     s.t = 0;
     if (desk) boss.headForDesk(desk, nav);

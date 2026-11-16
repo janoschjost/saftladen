@@ -249,10 +249,10 @@ export class Person extends Walker {
   nerfKick = 0;
   nerfClock = 0;
   /**
-   * Boombox scene (see Boombox.ts): what this person does in it (plays it on the shoulder, yells at the one who
-   * played it, cowers under the yelling), whether the boombox hangs from their hand, and the eased pose
+   * Boombox scene (see Boombox.ts): what this person does in it (plays it on the shoulder, stares at the one who plays
+   * it, yells at him, cowers under the yelling), whether the boombox hangs from their hand, and the eased pose
    */
-  boomPose: 'play' | 'scold' | 'cower' | null = null;
+  boomPose: 'play' | 'look' | 'scold' | 'cower' | null = null;
   boomCarry = false;
   boomAmt = 0;
   boomClock = 0;
