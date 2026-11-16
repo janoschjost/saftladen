@@ -327,7 +327,7 @@ export abstract class Walker {
     }
     if (this.blockedTime > REPLAN && !this.replanned && this.path.length) {
       this.replanned = true;
-      this.goTo(nav, this.path[this.path.length - 1], 12);
+      this.goTo(nav, this.target, 12);
       if (this.path.length) return;
     }
     if (this.blockedTime > GIVE_UP) {
@@ -343,13 +343,12 @@ export abstract class Walker {
       this.stuckClock = 0;
       this.stuckFrom = { ...this.pos };
       if (moved < this.speed * 0.25 && this.blockedTime === 0) {
-        const goal = this.path[this.path.length - 1];
-        if (++this.stuckCount >= 2 || !goal) {
+        if (++this.stuckCount >= 2 || !this.path.length) {
           this.stuckCount = 0;
           this.halt(0.2 + random() * 0.5);
           return;
         }
-        this.goTo(nav, goal, 12);
+        this.goTo(nav, this.target, 12);
         return;
       }
       this.stuckCount = 0;
