@@ -35,6 +35,11 @@ import { Weather } from './Weather';
 import { Welcome } from './Welcome';
 import { random } from './rng';
 
+/** `a` is a pet that `b` strokes right now (the two of one stroke still keep apart). */
+function strokes(a: Walker, b: Walker): boolean {
+  return a instanceof Dog && a.petted?.by === b;
+}
+
 export interface SimOptions {
   /** the scene the office and everybody in it are built into; a view draws it, a test ignores it */
   scene?: THREE.Scene;
@@ -351,7 +356,7 @@ export class Sim {
         // who gives way: the walker the player drags never, then whoever holds their ground (a stroke); equals part evenly
         const ra = a.held ? 2 : a.steady ? 1 : 0;
         const rb = b.held ? 2 : b.steady ? 1 : 0;
-        if (ra === 1 && rb === 1) continue; // two strokes side by side: neither leaves the spot
+        if (ra === 1 && rb === 1 && !strokes(a, b) && !strokes(b, a)) continue; // two strokes side by side: neither leaves the spot
         const wa = ra > rb ? 0 : ra < rb ? 2 : 1;
         const wb = rb > ra ? 0 : rb < ra ? 2 : 1;
         a.pos.x -= dx * push * wa;
