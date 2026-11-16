@@ -351,6 +351,7 @@ export class Sim {
         // who gives way: the walker the player drags never, then whoever holds their ground (a stroke); equals part evenly
         const ra = a.held ? 2 : a.steady ? 1 : 0;
         const rb = b.held ? 2 : b.steady ? 1 : 0;
+        if (ra === 1 && rb === 1) continue; // two strokes side by side: neither leaves the spot
         const wa = ra > rb ? 0 : ra < rb ? 2 : 1;
         const wb = rb > ra ? 0 : rb < ra ? 2 : 1;
         a.pos.x -= dx * push * wa;
