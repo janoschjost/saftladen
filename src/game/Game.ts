@@ -44,7 +44,7 @@ import { setTvMode } from '../render/screens';
 import { Person } from './Person';
 import { strings } from '../i18n/strings';
 import { RoomEditor } from './RoomEditor';
-import { HIP_HEIGHT, LEG_ORDER, petPose, poseFrame, smooth } from './petPose';
+import { HIP_HEIGHT, LEG_ORDER, petPose, poseFrame, SIT_POSE, smooth } from './petPose';
 import { applySky, type SkyRig } from './TimeOfDay';
 import { MAX_FRAME, type Drawer, type FrameTime } from './seams';
 import { Sim } from './Sim';
@@ -1356,13 +1356,13 @@ export class Game {
       // reset, the two halves, the pet pose between them and the hip hinge: `poseFrame` (petPose.ts) keeps each frame off the last one's pose
       poseFrame(w, r, this.clock, () => {
         // standing: walk cycle (knees bend while a leg swings forward); sitting: thighs flat, shins down
-        r.legL.rotation.x = swing * (1 - sit) - 1.5 * sit;
-        r.legR.rotation.x = -swing * (1 - sit) - 1.5 * sit;
+        r.legL.rotation.x = swing * (1 - sit) + SIT_POSE.leg * sit;
+        r.legR.rotation.x = -swing * (1 - sit) + SIT_POSE.leg * sit;
         // knee bends while the leg swings forward through the middle of the step (foot lifts off), not at the extremes
         const cph = Math.cos(ph);
         const kneeSwing = 1.1 * w.moving;
-        r.kneeL.rotation.x = Math.max(0, -cph) * kneeSwing * (1 - sit) + 0.06 * w.moving * (1 - sit) + 1.5 * sit;
-        r.kneeR.rotation.x = Math.max(0, cph) * kneeSwing * (1 - sit) + 0.06 * w.moving * (1 - sit) + 1.5 * sit;
+        r.kneeL.rotation.x = Math.max(0, -cph) * kneeSwing * (1 - sit) + 0.06 * w.moving * (1 - sit) + SIT_POSE.knee * sit;
+        r.kneeR.rotation.x = Math.max(0, cph) * kneeSwing * (1 - sit) + 0.06 * w.moving * (1 - sit) + SIT_POSE.knee * sit;
         // pelvis rides on the planted foot: lowest when the legs are spread, highest when they pass, so the feet touch the ground
         let hip = HIP_HEIGHT;
         if (sit < 0.01 && w.lift < 0.02 && w.moving > 0.01) {
@@ -1385,8 +1385,8 @@ export class Game {
           r.body.position.y += dw.bob;
           r.body.rotation.x += dw.lean;
         } else if (sit > 0.01) {
-          r.armL.rotation.x += -1.2 * sit;
-          r.armR.rotation.x += -1.2 * sit;
+          r.armL.rotation.x += SIT_POSE.arm * sit;
+          r.armR.rotation.x += SIT_POSE.arm * sit;
         }
         if (w.foosAmt > 0) {
           // foosball: both hands on the rods, quick sideways pushes and spins
@@ -1613,7 +1613,6 @@ export class Game {
     r.cup.quaternion.copy(r.armL.quaternion).invert();
     r.cup.rotateX(-0.7 * sip);
   }
-
 
   /** Eating chips: the left hand holds the bag (see `poseCup`), the right hand fetches a chip and takes it to the mouth now and then. */
   private poseSnack(w: Person, r: Person['rig']): void {

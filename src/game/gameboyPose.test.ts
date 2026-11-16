@@ -5,33 +5,33 @@ import { installHeadlessDom } from '../test/headlessDom';
 import { GROUP, office, run, STEP } from '../test/office';
 import { poseGameboy } from './gameboyPose';
 import type { Person } from './Person';
-import { HIP_HEIGHT, poseFrame } from './petPose';
+import { HIP_HEIGHT, poseFrame, SIT_POSE } from './petPose';
 
 installHeadlessDom();
 
 /**
- * Poses `p`'s rig the way `Game.pose` does each frame for what matters here: the sitting legs and lowered body
- * (a stand-in for the walk/sit block of `Game.pose`), then the console on top, then the hip hinge (`poseFrame`).
+ * Poses `p`'s rig the way `Game.pose` does each frame for what matters here: the sitting legs, arms and lowered body
+ * (`SIT_POSE`, the sit part of `Game.pose`), then the console on top, then the hip hinge (`poseFrame`).
  */
 function pose(p: Person, now: number): void {
   const r = p.rig;
   poseFrame(p, r, now, () => {
     const sit = p.sit;
-    r.legL.rotation.x = r.legR.rotation.x = -1.5 * sit;
-    r.kneeL.rotation.x = r.kneeR.rotation.x = 1.5 * sit;
+    r.legL.rotation.x = r.legR.rotation.x = SIT_POSE.leg * sit;
+    r.kneeL.rotation.x = r.kneeR.rotation.x = SIT_POSE.knee * sit;
     r.legL.position.y = r.legR.position.y = HIP_HEIGHT - SIT_DROP * sit;
     r.body.position.y = -SIT_DROP * sit;
-    r.armL.rotation.x += -1.2 * sit;
-    r.armR.rotation.x += -1.2 * sit;
+    r.armL.rotation.x += SIT_POSE.arm * sit;
+    r.armR.rotation.x += SIT_POSE.arm * sit;
   }, () => poseGameboy(r, p.gameboy, p.gameboyOnWc ? p.sit : 0, now));
-  r.root.position.set(0, 0, 0); // measured in the person's own frame: same for every cabin
-  r.root.rotation.set(0, 0, 0);
-  r.root.updateMatrixWorld(true);
 }
 
 /** What the test looks at on a posed rig, in the person's own frame (rig units × height). */
 function measure(p: Person) {
   const r = p.rig;
+  r.root.position.set(0, 0, 0); // measured in the person's own frame: same for every cabin
+  r.root.rotation.set(0, 0, 0);
+  r.root.updateMatrixWorld(true);
   const fist = (elbow: THREE.Object3D) => elbow.localToWorld(new THREE.Vector3(0, -0.26, 0)); // forearm ends 0.3 below the elbow
   // the thighs as boxes in the legs' own frame, so a bent leg is not one big axis-aligned box
   const inThigh = (leg: THREE.Object3D, point: THREE.Vector3) => {
@@ -50,8 +50,8 @@ function measure(p: Person) {
   };
 }
 
-/** Two people go to the WC (one per cabin); each frame of their visit is posed and handed to `each`. */
-function visit(each: (p: Person, m: ReturnType<typeof measure>) => void): Person[] {
+/** Two people go to the WC (one per cabin); each frame of their visit is posed, and `each` gets the frames with the console out (`m` measures it). */
+function visit(each: (p: Person, m: () => ReturnType<typeof measure>) => void): Person[] {
   const sim = office();
   sim.scenario.clear('wc');
   const two = GROUP.slice(0, 2).map((id) => {
@@ -69,7 +69,7 @@ function visit(each: (p: Person, m: ReturnType<typeof measure>) => void): Person
       for (const p of two) {
         if (p.gameboy >= 1 - 1e-3) seated.add(p);
         pose(p, now);
-        if (p.rig.gameboy.visible) each(p, measure(p));
+        if (p.rig.gameboy.visible) each(p, () => measure(p));
       }
     }),
   ).toBe(true);
@@ -79,8 +79,9 @@ function visit(each: (p: Person, m: ReturnType<typeof measure>) => void): Person
 describe('gameboyPose', () => {
   it('place.toilet: seated on the WC the console is in both hands in front of the chest, above the knees, screen up to the face (both cabins)', () => {
     const held: Person[] = [];
-    visit((p, m) => {
+    visit((p, measured) => {
       if (p.gameboy < 1 - 1e-3 || p.sit < 1) return;
+      const m = measured();
       if (!held.includes(p)) held.push(p);
       const h = p.rig.root.scale.y;
       expect(m.box.min.y).toBeGreaterThan(m.kneeTop + 0.08 * h); // clear above the knees, not in the lap
@@ -98,8 +99,9 @@ describe('gameboyPose', () => {
 
   it('place.toilet: sitting down and standing up, the console never passes through the legs or the floor', () => {
     const seen = new Set<Person>();
-    visit((p, m) => {
+    visit((p, measured) => {
       seen.add(p);
+      const m = measured();
       expect(m.inLegs).toBe(false);
       expect(m.box.min.y).toBeGreaterThan(0.1);
     });

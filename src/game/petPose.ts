@@ -11,6 +11,8 @@ export const CROUCH_SECONDS = 0.4;
 const BOTH_KNEES_BELOW = 0.4;
 /** Hip pivots of the character rig (rig units above the floor): the upper body bends here. */
 export const HIP_HEIGHT = 0.8;
+/** Seated on a chair or the WC (`Game.pose`, scaled by `sit`): thighs forward, shins down, forearms on the lap or desk (added to the arms). */
+export const SIT_POSE = { leg: -1.5, knee: 1.5, arm: -1.2 };
 const SEG = 0.4; // thigh and shin length of the rig (hip pivot at HIP_HEIGHT, sole at 0)
 export const KNEE_PAD = 0.1; // half the shin's thickness: how high the knee pivot sits when the knee rests on the floor
 
