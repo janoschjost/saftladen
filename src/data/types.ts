@@ -99,6 +99,8 @@ export interface TeamMember {
   hatesCoffee?: boolean;
   /** now and then walks to the kitchen for a bag of chips and eats it while strolling around the office */
   snacker?: boolean;
+  /** smokes: steps out onto the porch in front of the entrance for a cigarette now and then (see src/game/Smoke.ts); vapers (`look.vape`) stay inside */
+  smoke?: boolean;
   /** their home office room (can be changed per browser in the character view); without one they get a free room */
   homeRoom?: HomeRoom;
   /** usual home office breaks this person never takes */

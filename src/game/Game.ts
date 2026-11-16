@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { team } from '../data/team';
 import shippedSeats from '../data/seats.json';
 import { HOME_LABELS, HomeOffice, ROOM_COUNT, heldPoses, type ArmPose } from '../render/homeOffice';
+import { MOUTH, posePuffs, smokeArmPose, smokePoses } from '../render/smokeProps';
 import { kurtPortrait, kurtWave } from '../render/kurtBuilder';
 import { PoofFx } from '../render/poofFx';
 import { petPortrait } from '../render/petPortrait';
@@ -1456,6 +1457,8 @@ export class Game {
         poseGameboy(r, w.gameboy, w.gameboyOnWc ? sit : 0, this.clock + w.phase);
         poseCamera(r, w.camera, w.flash, this.clock + w.phase);
         poseRepair(r, w.repair, w.repairHit, this.clock + w.phase);
+        this.poseSmoke(w, r);
+        this.poseUmbrella(w, r);
         if (r.tail) {
           // Kurt's tail sways from side to side with the steps, and rests still otherwise
           r.tail.rotation.y = Math.sin(ph) * 0.35 * w.moving;
@@ -1865,18 +1868,51 @@ export class Game {
       v.elbow.rotation.x = 0;
     }
     v.led.color.set(w.vapeDraw ? 0xff7a2a : 0x3a1a10);
-    const t = w.puffT;
-    v.puffs.forEach((m, i) => {
-      const k = t - i * 0.18; // each puff leaves a little later
-      const on = t >= 0 && k >= 0 && k < 1.8;
-      m.visible = on;
-      if (!on) return;
-      const u = k / 1.8;
-      const s = 0.08 + u * 0.22;
-      m.scale.set(s, s * 0.8, s);
-      m.position.set(0.12 + Math.sin(i * 2.3 + u * 3) * 0.08 * u, 1.5 + u * 0.55, 0.25 + u * 0.3 + i * 0.03);
-      (m.material as THREE.MeshBasicMaterial).opacity = 0.7 * (1 - u) * Math.min(1, k * 6);
-    });
+    posePuffs(v.puffs, w.puffT);
+  }
+
+  /**
+   * Smoke break on the porch (#169): the cigarette in the right hand all along, a drag every 15–20 s (up to the lips,
+   * the tip glows, a little lower, hold, exhale the puffs). The poses are solved per build (smokeProps.ts), so hand
+   * and mouth meet for everybody.
+   */
+  private poseSmoke(w: Person, r: Person['rig']): void {
+    const c = r.cigarette;
+    if (!c) return;
+    const lit = w.smokeLit && !w.away;
+    c.stick.visible = lit;
+    posePuffs(c.puffs, lit ? w.smokePuffT : -1, MOUTH.x);
+    if (!lit) return;
+    const p = smokeArmPose(smokePoses(r), w.smokeArm);
+    const side = Math.sign(r.armR.position.x) || 1;
+    r.armR.rotation.x = p.x;
+    r.armR.rotation.z = p.z * side;
+    r.elbowR.rotation.x = p.e;
+    r.elbowR.rotation.z = p.ez * side;
+    c.ember.color.setHex(w.smokeDraw ? 0xffb347 : 0xc0401a);
+  }
+
+  /** Outdoors in the rain the umbrella goes up in the left hand and opens; at the door it folds shut and is gone. */
+  private poseUmbrella(w: Person, r: Person['rig']): void {
+    const u = r.umbrella;
+    if (!u) return;
+    w.umbrellaAmt += ((w.umbrella && !w.away ? 1 : 0) - w.umbrellaAmt) * 0.15;
+    if (w.umbrellaAmt < 0.02) w.umbrellaAmt = 0;
+    const a = w.umbrellaAmt;
+    u.root.visible = a > 0;
+    if (!a) return;
+    const p = smokePoses(r).umbrella;
+    const lift = Math.min(1, a * 2); // the arm comes up first, then it opens
+    const lerp = THREE.MathUtils.lerp;
+    const side = Math.sign(r.armL.position.x) || -1;
+    r.armL.rotation.x = lerp(r.armL.rotation.x, p.x, lift);
+    r.armL.rotation.z = lerp(r.armL.rotation.z, p.z * side, lift);
+    r.elbowL.rotation.x = lerp(r.elbowL.rotation.x, p.e, lift);
+    r.elbowL.rotation.z = lerp(r.elbowL.rotation.z, p.ez * side, lift);
+    // the shaft stays upright whatever the arm does
+    u.root.quaternion.copy(r.armL.quaternion).multiply(r.elbowL.quaternion).invert();
+    const open = Math.max(0, a * 2 - 1);
+    u.canopy.scale.set(lerp(0.12, 1, open), lerp(1.6, 1, open), lerp(0.12, 1, open));
   }
 
   private pick(ndc: THREE.Vector2): Walker | null {
@@ -1981,6 +2017,7 @@ export class Game {
           .map((d) => say(`pet-${d.id}`, d.barkT > 0 ? (d.isCat ? 'Miau!' : 'Wuff!') : '♥', d)),
         ...(meet?.phase === 'session' ? [say(meet.speaker.id, meet.text, meet.speaker)] : []),
         ...(this.sim.serverRack.current?.text && !this.sim.serverRack.current.person.away ? [say(`rack-${this.sim.serverRack.current.person.id}`, this.sim.serverRack.current.text, this.sim.serverRack.current.person)] : []),
+        ...(this.sim.smoke.chat ? [say(`porch-${this.sim.smoke.chat.speaker.id}`, this.sim.smoke.chat.text, this.sim.smoke.chat.speaker)] : []),
         ...this.sim.toilets.cabins.flatMap((c) => (c.session?.text && !c.session.person.away ? [say(`wc-${c.session.person.id}`, c.session.text, c.session.person)] : [])),
       ],
       this.views.camera,
@@ -1996,14 +2033,16 @@ export class Game {
       const working = this.sim.people.filter((p) => p.working).length;
       const absent = this.sim.presence.away;
       const home = absent.filter((p) => p.awayKind === 'home').length;
+      const smoking = absent.filter((p) => p.onSmokeBreak).length;
       const inside = this.sim.people.filter((p) => p.presence === 'in').length;
       const pets = this.sim.walkers.filter((w) => w instanceof Dog && !w.away).length;
       const meta = [strings.presence.count.inOffice(inside)];
       if (this.sim.weather.rain > 0.3) meta.push('Regen');
       if (this.sim.presence.lunch) meta.push('Mittagspause');
       if (absent.length) {
-        if (absent.length - home > 0) meta.push(strings.presence.count.errand(absent.length - home));
+        if (absent.length - home - smoking > 0) meta.push(strings.presence.count.errand(absent.length - home - smoking));
         if (home > 0) meta.push(strings.presence.count.home(home));
+        if (smoking > 0) meta.push(strings.presence.count.smoke(smoking));
       }
       if (pets > 0) meta.push(`${pets} Tiere`);
       if (working) meta.push(`${working} arbeiten`);
@@ -2021,7 +2060,7 @@ export class Game {
             id: p.id,
             name: p.displayName,
             portrait: this.portraitOf(p),
-            kind: p.awayKind === 'home' ? ('home' as const) : ('errand' as const),
+            kind: p.awayKind === 'home' || p.awayKind === 'smoke' ? p.awayKind : ('errand' as const),
             phase: p.presence === 'leaving' ? ('leave' as const) : p.presence === 'returning' ? ('return' as const) : ('out' as const),
             left: p.awayLeft,
           }))

@@ -8,7 +8,7 @@ export interface AwayEntry {
   id: string;
   name: string;
   portrait: string | null;
-  kind: 'errand' | 'home';
+  kind: 'errand' | 'home' | 'smoke';
   /** on the way out, gone, or on the way back in */
   phase: AwayPhase;
   /** seconds until they are back */

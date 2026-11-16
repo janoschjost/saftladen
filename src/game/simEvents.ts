@@ -242,6 +242,25 @@ export function registerSimEvents(sim: Sim): void {
   };
   habit('vape', (name) => `${name} dampft`, (p) => p.startVape(2));
   habit('phone', (name) => `${name} telefoniert`, (p) => p.startPhone(nav));
+  /** A smoker steps out for a cigarette now (#169). Out of the office (errand, home office) they are called back first, the next try sends them. */
+  for (const p of people.filter((o) => o.member.smoke)) {
+    events.register({
+      id: `smoke-${p.id}`,
+      group: 'Aktionen',
+      label: `${first(p)} geht rauchen`,
+      run: () => {
+        if (p.presence === 'out' && p.awayKind !== 'smoke') {
+          presence.callBack(p);
+          return null;
+        }
+        if (!isFree(p) || tiedUp(p) || !sim.smoke.freeSpot()) return null;
+        drop(p);
+        if (sim.smoke.start(p, nav) !== 'ok') return null;
+        sim.point(p);
+        return `${first(p)} geht rauchen`;
+      },
+    });
+  }
   events.register({
     id: 'phone-booth',
     group: 'Aktionen',

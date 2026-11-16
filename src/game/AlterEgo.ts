@@ -16,9 +16,9 @@ export const KURT = {
   screen: { from: 8.5, to: 17 },
 };
 
-/** Only going home (end of day, home office) turns an alter ego on: not errands or lunch, nor somebody sent out by hand. */
+/** Only going home (end of day, home office) turns an alter ego on: not errands, lunch or a smoke break, nor somebody sent out by hand. */
 export function transformsOnLeave(member: Pick<TeamMember, 'alterEgo'>, kind: AwayKind, manual = false): boolean {
-  return !!member.alterEgo && kind !== 'errand' && !manual;
+  return !!member.alterEgo && (kind === 'home' || kind === 'off') && !manual;
 }
 
 /** Kurt's own dice: same seed, same Kurt spells, without shifting the simulation's numbers. */
@@ -33,7 +33,7 @@ export function rollHomeAlter(member: Pick<TeamMember, 'alterEgo'>, rnd: Rng = d
  * Kurt on Marco's office monitor: while Marco is out of the office and not in the home office, nobody sits at the
  * desk, and the clock is within block times. Otherwise the screen behaves as usual.
  */
-export function kurtOnScreen(s: { hour: number; presence: 'in' | 'leaving' | 'out' | 'returning'; awayKind: 'errand' | 'home' | 'off' | null; deskUsed: boolean }): boolean {
+export function kurtOnScreen(s: { hour: number; presence: 'in' | 'leaving' | 'out' | 'returning'; awayKind: AwayKind | null; deskUsed: boolean }): boolean {
   const h = s.hour % 24;
   return s.presence === 'out' && s.awayKind !== 'home' && !s.deskUsed && h >= KURT.screen.from && h < KURT.screen.to;
 }

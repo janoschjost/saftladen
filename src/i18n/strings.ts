@@ -3,8 +3,8 @@
  * UI and game code read their labels from here: no presence string is spelled out anywhere else.
  */
 
-/** Where an absent person is: popped out for a while, or working from home. */
-export type AwayKindLabel = 'errand' | 'home';
+/** Where an absent person is: popped out for a while, working from home, or smoking on the porch. */
+export type AwayKindLabel = 'errand' | 'home' | 'smoke';
 /** What an absent person is doing right now: on the way out, gone, or on the way back in. */
 export type AwayPhase = 'leave' | 'out' | 'return';
 
@@ -35,7 +35,7 @@ export const strings = {
     },
     /** what a person is doing, one key per action */
     action: {
-      leave: { errand: 'Geht raus', home: 'Geht ins Homeoffice' },
+      leave: { errand: 'Geht raus', home: 'Geht ins Homeoffice', smoke: 'Geht rauchen' },
       return: 'Kommt zurück',
     },
     /** where a person is while away */
@@ -44,11 +44,15 @@ export const strings = {
       /** out with no return in sight (a scene holds them out) */
       held: 'Weg',
       home: 'Homeoffice',
+      smoke: (seconds: number) => `Rauchpause · ${clock(seconds)}`,
+      /** on the porch with no end in sight (a scene holds them there) */
+      smoking: 'Rauchpause',
     },
     /** tooltip of a row in the list */
     hint: {
       errand: 'Kurz weg, gleich zurück',
       home: 'Arbeitet im Homeoffice: klicken für Livebild',
+      smoke: 'Rauchpause vor der Tür',
     },
     /** buttons on the card of the selected person */
     command: {
@@ -61,6 +65,7 @@ export const strings = {
       inOffice: (n: number) => `${n} im Büro`,
       errand: (n: number) => `${n} weg`,
       home: (n: number) => `${n} im Homeoffice`,
+      smoke: (n: number) => `${n} in der Rauchpause`,
     },
     /** owner tooltip: the pets they brought along today */
     pets: {
@@ -94,5 +99,6 @@ export function awayStatus(kind: AwayKindLabel, phase: AwayPhase, secondsLeft: n
   if (phase === 'leave') return p.action.leave[kind];
   if (phase === 'return') return p.action.return;
   if (kind === 'home') return p.state.home;
+  if (kind === 'smoke') return Number.isFinite(secondsLeft) ? p.state.smoke(Math.max(0, secondsLeft)) : p.state.smoking;
   return Number.isFinite(secondsLeft) ? p.state.errand(secondsLeft) : p.state.held;
 }

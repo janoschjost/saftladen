@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 /** Real seconds for one full 24 h cycle. */
-const CYCLE_SECONDS = 600;
+export const CYCLE_SECONDS = 600;
 /** Cycle position at the start of the game (10:00). */
 const START = 0.308;
 /**
