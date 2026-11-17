@@ -88,7 +88,7 @@ export class Meeting implements Talk {
         this.previous = this.speaker;
         this.speaker = next;
         this.speakerTimer = 1.5 + random() * 2.8;
-        this.chat ??= new Chat();
+        this.chat ??= new Chat(this.screen === 'kart' ? 'play' : 'meeting');
         this.text = this.chat.next(this.speaker, this.members, this.kind);
         for (const m of this.members) m.speaking = m === this.speaker;
       }

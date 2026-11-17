@@ -78,7 +78,7 @@ export class CoffeeBreak implements Talk {
         this.previous = this.speaker;
         this.speaker = next;
         this.speakerTimer = 2 + random() * 3;
-        this.chat ??= new Chat();
+        this.chat ??= new Chat('coffee');
         this.text = this.chat.next(this.speaker, this.members, this.kind);
         for (const m of this.members) m.speaking = m === this.speaker;
       }

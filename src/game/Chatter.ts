@@ -1,5 +1,7 @@
+import type { Topic } from '../data/chatBlocks';
 import type { Person } from './Person';
-import { random } from './rng';
+import { random, stream } from './rng';
+import { bubbleLine, speak } from './voice';
 
 /** A body-language beat: how somebody reacts while others talk (played by the game's `poseReaction`). */
 export type Reaction = 'laugh' | 'point' | 'shrug' | 'surprise' | 'nod' | 'think' | 'wave' | 'cheer';
@@ -60,15 +62,25 @@ export function playBeat(speaker: Person, listeners: readonly Person[], speakerR
   for (const l of listeners) if (l !== speaker && random() < 0.55) l.react(listenerReaction, 0.15 + random() * 0.5);
 }
 
-/** One thread of wordless talk: every turn is a bubble symbol plus matching body language for the speaker and the listeners. */
+/** share of talk turns whose bubble shows words (in the speaker's voice, `voice.ts`) instead of the beat's symbol */
+export const TEXT_SHARE = 0.6;
+/** the words are rolled on a side stream: the simulation's dice stay as they were before bubbles had words */
+const words = stream(0x7e47);
+
+/**
+ * One thread of talk: every turn is a bubble plus matching body language for the speaker and the listeners. The
+ * bubble shows a short line about `topic` in the speaker's voice (`TEXT_SHARE` of the turns), else the beat's symbol.
+ */
 export class Chat {
   turns = 0;
+
+  constructor(readonly topic: Topic = 'random') {}
 
   /** The next bubble for `speaker`; also starts the animations. */
   next(speaker: Person, members: readonly Person[], kind: 'chat' | 'discussion'): string {
     const beat = weighted(kind);
     this.turns++;
     playBeat(speaker, members, beat.speaker, beat.listeners);
-    return beat.symbol;
+    return words() < TEXT_SHARE ? bubbleLine(speak(speaker, this.topic, words)) : beat.symbol;
   }
 }

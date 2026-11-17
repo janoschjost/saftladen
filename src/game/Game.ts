@@ -24,6 +24,7 @@ import { Roster } from '../ui/Roster';
 import { Seats } from '../ui/Seats';
 import { DevPanel } from '../ui/DevPanel';
 import { registerDevSection } from '../ui/devSections';
+import { bubbleLine } from './voice';
 import { castSection } from '../ui/devCast';
 import { overlaySection } from '../ui/devOverlays';
 import { DebugOverlays } from './DebugOverlays';
@@ -1967,8 +1968,11 @@ export class Game {
     const say = (id: string, text: string, who: Walker) => ({ id, text, head: this.headTop(who) });
     const bubbleDt = this.clock - this.bubbleClock;
     this.bubbleClock = this.clock;
+    // a fresh crew chat message shows over its writer's head (before their talk's bubble: the first with an id wins)
+    const shouting = new Set([this.sim.serverRack.current?.person, ...this.sim.toilets.cabins.map((c) => c.session?.person)]);
     this.bubbles.update(
       [
+        ...this.sim.chat.speaking.filter((c) => !shouting.has(c.who)).map((c) => say(c.who.id, c.text.length <= 60 ? c.text : bubbleLine(c.text, 60), c.who)),
         ...(this.easter.angry && !this.easter.angry.who.away ? [say(`angry-${this.easter.angry.who.id}`, this.easter.angry.text, this.easter.angry.who)] : []),
         ...(call && !call.who.away ? [say(`welcome-${call.who.id}`, call.text, call.who)] : []),
         ...this.sim.boombox.bubbles.map((b) => say(`boombox-${b.who.id}`, b.text, b.who)),

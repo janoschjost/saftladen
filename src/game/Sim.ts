@@ -10,6 +10,7 @@ import { CoatRacks } from './CoatRacks';
 import { buildOffice, CORRIDOR_POINT, type OfficeModel } from '../render/officeModel';
 import { NAV_CELL, WORLD } from '../render/World';
 import { Kitchen } from './Coffee';
+import { CrewChat } from './CrewChat';
 import { makePossible } from './makePossible';
 import { WALL_CLEARANCE } from './Avoidance';
 import { DevEvents } from './DevEvents';
@@ -113,6 +114,8 @@ export class Sim {
   private doorsSee: () => Array<{ x: number; z: number }>;
   /** coats on the stands follow who is in the office */
   readonly coatRacks: CoatRacks;
+  /** the crew chat: people write about what happens (`CrewChat.ts`) */
+  readonly chat: CrewChat;
 
   constructor({ scene = new THREE.Scene(), cycle, seats = {}, homes = false, portrait = () => null, stands = () => false, doorsSee = () => [], point = () => {}, prepare }: SimOptions = {}) {
     this.scene = scene;
@@ -158,6 +161,7 @@ export class Sim {
     this.coatRacks.update();
     this.events.forcer = (run) => makePossible(this, run);
     registerSimEvents(this);
+    this.chat = new CrewChat(this);
   }
 
   /** Walls and furniture as they stand now become what nobody can walk through. */
@@ -363,6 +367,7 @@ export class Sim {
     this.separate();
     // appearing at and vanishing from the door takes time, and arriving waits for it: the view only adds the sparkle
     for (const w of this.walkers) w.stepFx(dt);
+    this.chat.update(dt);
   }
 
   /** Soft collision: push overlapping walkers apart and keep them on the floor. */
