@@ -26,6 +26,7 @@ try {
   const game = new Game(document.getElementById('stage') as HTMLElement, {
     time: test && !query.has('live') ? stillTime : wallTime(),
     drawer: test && !query.has('draw') ? blindDrawer() : screenDrawer(),
+    paced: !test, // under ?test every refresh runs a frame: time stands still there anyway
   });
   if (dev) void import('./game/debugParams').then((m) => m.applyDebugParams(game));
   if (dev) void import('./game/DevForce').then((m) => m.installForceState(game));
