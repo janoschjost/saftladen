@@ -52,6 +52,7 @@ Description: `$ARGUMENTS`. Empty → ask the dev for it first.
    ## Acceptance criteria
    - [ ] Each one observable and checkable in the running app, with the URL where it shows
    - [ ] Edge cases from the interview
+   - [ ] Dev event `<id>` follows `actions.force`: returns `null` when it cannot run (the game clears the way); `asIs` if it ends or reads something; a new place or scene that keeps people busy is cleared by `makePossible.ts`
    - [ ] Aktionen card `<label>` for the dev event `<id>` (`src/data/actions.ts`, `actions.preview`), if it makes something happen at a place
    - [ ] Tests: Vitest for <logic>, Playwright for <interaction> (named after the `FEATURES.md` id)
    - [ ] `FEATURES.md` line(s) added or changed, each with a `url:`
