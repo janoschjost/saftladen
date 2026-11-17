@@ -2094,6 +2094,11 @@
             display: none;
         }
 
+        /* while it slides out, the office under it takes clicks and the wheel again */
+        &:not(.is-open) {
+            pointer-events: none;
+        }
+
         &__scrim {
             position: absolute;
             inset: 0;
