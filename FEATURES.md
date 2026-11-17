@@ -49,10 +49,11 @@ Rules:
 - `keys.guard` Keys are ignored while typing in inputs; held keys are released on blur — `src/game/Game.ts`
 
 ## Selection and dragging
-- `select.click` Clicking a person or pet selects and follows it; clicking again deselects; a drag isn't a click — `src/game/Game.ts`
+- `select.click` Clicking a person or pet selects and follows it; a press that moves up to 8 px is still a click (trackpad and mouse); each body has a generous invisible hit volume (an upright cylinder, the one nearest to the camera wins), and a click that hits nobody takes whoever is within 20 px on screen; clicking the selected person again keeps them selected (the floor, `Esc` or somebody else ends it); a drag isn't a click — `src/game/Game.ts`, `src/game/pick.ts`, test: `src/game/pick.test.ts`, e2e: `e2e/select.spec.ts`, url: `/?seed=1&time=11` (#210)
+- `select.hover` Hovering a person or pet shows a hand cursor and a thin ring on the floor around them (iso, orbit and plan view; not in walk or day mode, nor in the room editor); off them both go back — `src/game/Game.ts`, `src/scss/main.scss`, e2e: `e2e/select.spec.ts`, url: `/?seed=1&time=11#iso` (#210)
 - `select.tooltip` Hover/click tooltip with name, role, portrait — `src/ui/Overlay.ts`
-- `select.actions` Person card above the Aktionen button: follow, steer, send home (disabled with "Alle Homeoffices sind besetzt"), send out — `src/ui/Actions.ts`, e2e: `e2e/office.spec.ts`, url: `/?seed=1&time=8` (#34, #98)
-- `drag.person` People can be dragged; dropping inside a wall/desk moves them to the nearest free floor — `src/game/Game.ts`
+- `select.actions` Person card above the Aktionen button: slides in (again for each newly selected person; no slide with reduced motion) with the person's name in large type, follow, steer, send home (disabled with "Alle Homeoffices sind besetzt"), send out — `src/ui/Actions.ts`, `src/scss/main.scss`, e2e: `e2e/office.spec.ts`, `e2e/select.spec.ts`, url: `/?seed=1&time=8` (#34, #98, #210)
+- `drag.person` People can be dragged; pressing on somebody does nothing visible, only once the pointer moves past 8 px are they lifted and carried (a press just beside them still moves the camera); dropping inside a wall/desk moves them to the nearest free floor — `src/game/Game.ts`, e2e: `e2e/select.spec.ts`, url: `/?seed=1&time=11#iso` (#210)
 - `drag.chair` Dragging near a free chair snaps them on; they stay seated when dropped — `src/game/Game.ts`
 - `drag.meeting-chat` Dropping someone in the meeting room next to a person, or 2+ people on meeting chairs, starts a chat — `src/game/Meeting.ts`
 - `drag.booth` Dropping someone on the phone-booth stool makes them sit and take a call — `src/game/PhoneBooth.ts`

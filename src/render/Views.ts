@@ -7,6 +7,9 @@ import { IsoCamera } from './IsoCamera';
 import { ax, az } from './officeModel';
 import { WORLD } from './World';
 
+/** Pixels a press may move and still count as a click (trackpad and mouse jitter); past it, it is a drag. */
+export const CLICK_SLOP = 8;
+
 /** `third` is the behind-the-shoulder camera of the day-in-the-life mode; it has no segment in the settings popover. */
 export type ViewMode = 'iso' | 'orbit' | 'plan' | 'walk' | 'third';
 
@@ -272,7 +275,7 @@ export class Views {
 
   /** true when the last pointer gesture moved more than a click's worth */
   get wasDrag(): boolean {
-    return this.moved > 5;
+    return this.moved > CLICK_SLOP;
   }
 
   /** `keepCamera`: the orbit camera stays where `restore` put it instead of jumping back to the default spot. */

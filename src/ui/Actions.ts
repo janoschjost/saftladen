@@ -25,7 +25,13 @@ export class Actions {
   show(name: string | null, homeFull: boolean, steering = false, following = false): void {
     this.root.hidden = !name;
     if (!name) return;
-    if (this.name.textContent !== name) this.name.textContent = name;
+    if (this.name.textContent !== name) {
+      // a new person: the card slides in again (shown from hidden, the animation runs by itself)
+      this.root.classList.add('is-new');
+      void this.root.offsetWidth;
+      this.root.classList.remove('is-new');
+      this.name.textContent = name;
+    }
     this.follow.setAttribute('aria-pressed', String(following));
     this.follow.textContent = following ? 'Folgen beenden (F)' : 'Folgen (F)';
     this.steer.setAttribute('aria-pressed', String(steering));
