@@ -31,7 +31,7 @@ Description: `$ARGUMENTS`. Empty → ask the dev for it first.
    - **Behavior details:** exact numbers, timings, keys, texts, visuals; what happens at the edges (nobody in the room, steered person, home office, night, day mode, touch input).
    - **Scope:** what is explicitly not part of it. Too broad for one PR → propose a split into concrete issues and ask the dev to confirm.
    - **Interactions** with existing `FEATURES.md` lines that must keep working.
-   - **How to see it:** the `url:` for the new or changed `FEATURES.md` line (`?seed=…&time=…`, `?event=<dev event id>`, hash view).
+   - **How to see it:** the `url:` for the new or changed `FEATURES.md` line (`?seed=…&time=…`, `?event=<dev event id>`, hash view). A new dev event that makes something happen at a place also gets a card in the Aktionen sheet (`AGENTS.md`, "Done means"): put it in the criteria, with the card's label and who.
    - **Tests:** which logic needs Vitest, which interaction needs Playwright, what is only checked visually (see `AGENTS.md`, "Done means").
    - **Dependencies:** other issues or PRs that must land first. If one is open, block the new issue after creating it: on an issue `scripts/issue.sh block N "<reason>" M` (native "blocked by #M" link), on a PR `scripts/issue.sh block N "<reason, naming #M>"` (label `blocked`).
 5. **Estimate the complexity** from what you read, not from the description alone, and pick the model label:
@@ -52,6 +52,8 @@ Description: `$ARGUMENTS`. Empty → ask the dev for it first.
    ## Acceptance criteria
    - [ ] Each one observable and checkable in the running app, with the URL where it shows
    - [ ] Edge cases from the interview
+   - [ ] Dev event `<id>` follows `actions.force`: returns `null` when it cannot run (the game clears the way); `asIs` if it ends or reads something; a new place or scene that keeps people busy is cleared by `makePossible.ts`
+   - [ ] Aktionen card `<label>` for the dev event `<id>` (`src/data/actions.ts`, `actions.preview`), if it makes something happen at a place
    - [ ] Tests: Vitest for <logic>, Playwright for <interaction> (named after the `FEATURES.md` id)
    - [ ] `FEATURES.md` line(s) added or changed, each with a `url:`
 
