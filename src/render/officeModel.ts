@@ -87,6 +87,8 @@ export interface OfficeModel {
   coatRacks: CoatRackRig[];
   /** footprints (game space) that block walking, for the nav grid: architecture + the items where they stand right now */
   blockers(): THREE.Box3[];
+  /** the part of `blockers` that never moves: walls, windows, built-in fittings (WC cabins, annex) */
+  walls: THREE.Box3[];
   /** ceiling, beams, clerestory, bunting, string lights (hidden by default) */
   roof: THREE.Group;
   /** the two wings of the front door, each hinged at its outer jamb and swinging on its own: rotation.y = 0 is closed, negative (left) / positive (right) swings it outwards */
@@ -2112,7 +2114,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     g.position.set(wallX + 0.55 + w / 2, 0, az(CORR) + 0.06 + 1.1 + 0.25);
     g.rotation.y = POD_ROT;
     world.add(g);
-    box(w, 0.04, d, 0, 0, 0, mat.ply, 0, g); // thin floor, people sit / walk on the office floor
+    box(w, 0.04, d, 0, 0, 0, mat.ply, 0, g).userData.inside = eave + rise; // thin floor, people sit / walk on the office floor; no other piece goes in, up to the ridge
     for (const s of [-1, 1]) {
       box(0.1, eave, d, s * (w / 2 - 0.05), 0, 0, mat.black, 0, g);
       box(0.03, eave, d - 0.1, s * (w / 2 - 0.12), 0.1, 0, mat.ply, 0, g);
@@ -2552,6 +2554,26 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   };
   // architecture and everything else that never moves
   const blockers = collectBlockers(world);
+  /**
+   * The room inside hollow pieces: a mesh's footprint, `userData.inside` high from its bottom. Cut into strips, so a turned
+   * piece (the Holzhaus stands at 10°) reaches little past its walls with the strips' axis-aligned boxes.
+   */
+  const collectInside = (root: THREE.Object3D): THREE.Box3[] => {
+    const out: THREE.Box3[] = [];
+    root.traverse((o) => {
+      if (!(o instanceof THREE.Mesh) || !o.userData.inside) return;
+      o.geometry.computeBoundingBox();
+      const g = o.geometry.boundingBox!;
+      const n = 4;
+      const step = (g.max.x - g.min.x) / n;
+      for (let i = 0; i < n; i++) {
+        const strip = new THREE.Box3(new THREE.Vector3(g.min.x + i * step, g.min.y, g.min.z), new THREE.Vector3(g.min.x + (i + 1) * step, g.max.y, g.max.z)).applyMatrix4(o.matrixWorld);
+        strip.max.y = strip.min.y + o.userData.inside;
+        out.push(strip);
+      }
+    });
+    return out;
+  };
 
   // movable furniture: one merged scene object per item, placed at its pivot (centre of the footprint)
   const items: RoomItem[] = [];
@@ -2563,7 +2585,9 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     const bounds = new THREE.Box3().setFromObject(inner);
     if (bounds.isEmpty()) continue;
     const pivot = new THREE.Vector3((bounds.min.x + bounds.max.x) / 2, 0, (bounds.min.z + bounds.max.z) / 2);
-    const local = collectBlockers(inner).map((b) => b.translate(pivot.clone().negate()));
+    const toPivot = pivot.clone().negate();
+    const local = collectBlockers(inner).map((b) => b.translate(toPivot));
+    const inside = collectInside(inner).map((b) => b.translate(toPivot));
     const outer = new THREE.Group();
     outer.add(inner);
     inner.position.copy(pivot).negate();
@@ -2576,7 +2600,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     scene.add(holder);
     if (rack && pegs) coatRacks.push({ root: holder, pegs });
     const hasSeat = d.anchors.length > 0;
-    items.push(new RoomItem(d.id, d.kind, d.label, holder, { x: pivot.x, z: pivot.z, yaw: 0 }, local, bounds.translate(pivot.clone().negate()), d.anchors, !hasSeat));
+    items.push(new RoomItem(d.id, d.kind, d.label, holder, { x: pivot.x, z: pivot.z, yaw: 0 }, local, bounds.translate(toPivot), d.anchors, !hasSeat, inside));
   }
 
   const desks: DeskPlacement[] = [];
@@ -2587,6 +2611,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     root.position.set(s.x, 0, s.z);
     root.rotation.y = s.rot;
     const screen = new THREE.Mesh(screenGeo, screenOffMaterial());
+    screen.userData.liveMaterial = true; // the office swaps its picture (`Desk.show`)
     screen.position.set(0, 1.03, -0.22 + 0.0165);
     root.add(screen);
     // a little plant in a back corner next to the monitor: seeded per desk so it is stable but varied
@@ -2766,7 +2791,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     }
   };
   setRoofVisible(false); // the roof starts hidden
-  return { desks, items, pendantCords: [...pendantCords.values()], setRoofVisible, coatRacks, blockers: allBlockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter, machine: kitchenMachine, stands: kitchenStands, table: tableSeats }, phoneBooth: { seat: boothSeat, doorPos: { x: ax(23.75), z: az(CZ) } }, toilets: { cabins: toiletCabins, wait: [{ x: ax(3.35), z: az(-3.3) }, { x: ax(0.7), z: az(-3.2) }] }, photoStudio: { stand: studioStand, product: studioProduct, seat: studioSeat, screens: studioScreens, flash: studioFlash }, serverRack: { stand: rackStand, spark: rackSpark, leds: rackLeds } };
+  return { desks, items, pendantCords: [...pendantCords.values()], setRoofVisible, coatRacks, blockers: allBlockers, walls: blockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter, machine: kitchenMachine, stands: kitchenStands, table: tableSeats }, phoneBooth: { seat: boothSeat, doorPos: { x: ax(23.75), z: az(CZ) } }, toilets: { cabins: toiletCabins, wait: [{ x: ax(3.35), z: az(-3.3) }, { x: ax(0.7), z: az(-3.2) }] }, photoStudio: { stand: studioStand, product: studioProduct, seat: studioSeat, screens: studioScreens, flash: studioFlash }, serverRack: { stand: rackStand, spark: rackSpark, leds: rackLeds } };
 }
 
 /**

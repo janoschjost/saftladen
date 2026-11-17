@@ -47,6 +47,8 @@ export class RoomItem {
     anchors: ItemAnchor[],
     /** false for things the simulation needs (desks, seats, foosball, printer) */
     readonly removable: boolean,
+    /** the room inside a hollow piece (the Holzhaus), relative to the pivot: people walk in, no other piece may stand there */
+    private localInside: THREE.Box3[] = [],
   ) {
     this.anchors = anchors.map((target) => ({ target, lx: target.x - base.x, lz: target.z - base.z, yaw: target.yaw }));
     holder.userData.roomItem = this;
@@ -101,9 +103,24 @@ export class RoomItem {
     this.onApply?.();
   }
 
+  /** True when `p` is one of the points that move with this item (its own seat or standing spot). */
+  owns(p: ItemAnchor): boolean {
+    return this.anchors.some((a) => a.target === p);
+  }
+
   /** Footprints that block walking (game coordinates); none while hidden. */
   blockers(): THREE.Box3[] {
     return this.hidden ? [] : this.localBlockers.map((b) => this.place(b));
+  }
+
+  /**
+   * What no other piece may stand in (game coordinates; none while hidden): the walking blockers and the room inside
+   * it. A piece without either (a lamp, a plant up on a cabinet) by its bounding box.
+   */
+  solids(): THREE.Box3[] {
+    if (this.hidden) return [];
+    const local = [...this.localBlockers, ...this.localInside];
+    return (local.length ? local : [this.localBounds]).map((b) => this.place(b));
   }
 
   /** Bounding box in game coordinates. */

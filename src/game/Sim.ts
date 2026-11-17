@@ -22,6 +22,7 @@ import { Person } from './Person';
 import { PetCare } from './PetCare';
 import { Nerf } from './Nerf';
 import { PhoneBooth } from './PhoneBooth';
+import { blockages, type Blockage } from './placement';
 import { Pod } from './Pod';
 import { Presence } from './Presence';
 import { Scenario } from './Scenario';
@@ -159,7 +160,7 @@ export class Sim {
   blockNav(): void {
     this.nav.clear();
     const blockers = this.model.blockers();
-    for (const b of blockers) this.nav.blockWorld(b.min.x, b.min.z, b.max.x, b.max.z);
+    this.nav.blockBoxes(blockers);
     this.walkColliders.boxes = blockers;
     this.nav.sealUnreachable(CORRIDOR_POINT);
     this.traffic.rebuild();
@@ -176,6 +177,14 @@ export class Sim {
     this.toilets.relayout(this.nav);
     this.photoStudio.relayout(this.nav);
     this.serverRack.relayout(this.nav);
+  }
+
+  /** scratch grid for `blocked` */
+  private scratch: NavGrid | null = null;
+
+  /** What the furniture where it stands now cuts off (seats, places, doors; see `placement.ts`); empty when nothing. */
+  blocked(): Blockage[] {
+    return blockages(this, (this.scratch ??= new NavGrid(this.nav.cols, this.nav.rows, this.nav.cell)));
   }
 
   /** Dev: ids of the people and pets that are out of the sim right now. */
