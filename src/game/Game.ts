@@ -63,6 +63,7 @@ import { savedStateIgnored, storage } from './storage';
 
 const STEP = 1 / 60; // fixed simulation step
 const NEAR_PX = 20; // a click that hits nobody still picks whoever is this close on screen
+const OFF_SCREEN = Object.freeze({ x: -9999, y: -9999 }); // `projectPoint` of a point outside the camera's depth range
 const TALK_REACH = 2.6; // metres: how far the player can be from somebody to talk to them
 const ANSWERS = ['Hoi!', 'Na, alles klar?', 'Gerade viel los…', 'Kaffee später?', 'Schönen Tag!', 'Ha, du hier?', 'Moment, bin gleich bei dir.', 'Hast du das Meeting gesehen?', 'Mir fehlt Kaffee.', 'Läuft!'];
 const BUSY_ANSWERS = ['Grad keine Zeit!', 'Später…', 'Bin im Fokus.', 'Psst, Call!', 'Mhm.'];
@@ -434,7 +435,6 @@ export class Game {
         // nothing happens yet: a press is a click until it moves (pointermove lifts them)
         this.pressed = hit;
         this.dragStart = { x: e.clientX, y: e.clientY };
-        this.dragOffset.set(hit.pos.x - g.x, hit.pos.z - g.z);
         this.stage.setPointerCapture(e.pointerId);
       },
       true,
@@ -443,15 +443,20 @@ export class Game {
       this.pointerInside = true;
       this.toNdc(e, this.pointer);
       if (this.editor.active && this.views.mode !== 'walk' && this.views.mode !== 'third') this.editor.pointerMove(this.raycaster, this.groundAt(this.pointer), e.altKey);
-      if (!this.pressed || !e.buttons) return; // released: the press is over
+      // the press is over once the stage lets go of the pointer (a press that started on a panel is not ours)
+      if (!this.pressed || !this.stage.hasPointerCapture(e.pointerId)) return;
       const g = this.groundAt(this.pointer);
       if (!g) return;
       // a few pixels of hand jitter still count as a click, not a drag
       if (!this.dragMoved && Math.hypot(e.clientX - this.dragStart.x, e.clientY - this.dragStart.y) <= CLICK_SLOP) return;
       if (!this.dragMoved) {
+        // they may have walked on since the press: grab them where they are now, relative to the pressed point
+        const start = this.groundAt(this.toNdc({ clientX: this.dragStart.x, clientY: this.dragStart.y }));
+        if (!start) return;
         this.dragMoved = true;
         this.dragged = this.pressed;
         this.dragged.held = true;
+        this.dragOffset.set(this.dragged.pos.x - start.x, this.dragged.pos.z - start.z);
       }
       const w = this.pressed;
       w.pos.x = THREE.MathUtils.clamp(g.x + this.dragOffset.x, 0.4, WORLD.width - 0.4);
@@ -555,8 +560,9 @@ export class Game {
       if (hit) {
         this.easter.click(hit);
         this.handBack(); // selecting by hand: the selection's follow takes over
+        if (hit === this.selected) return; // clicking them again keeps them, and follow as it is
       }
-      this.selected = hit; // clicking the selected person again keeps them; the floor, Esc or somebody else ends it
+      this.selected = hit; // the floor, Esc or somebody else ends a selection
       this.followed = this.selected && !this.selected.away ? this.selected : null; // selecting starts follow mode right away
     });
     window.addEventListener('keydown', (e) => {
@@ -2011,13 +2017,15 @@ export class Game {
     const side = this.fwd.setFromMatrixColumn(this.views.camera.matrixWorld, 0); // screen right, in the world
     const bodies = columns.map((c) => {
       const feet = this.projectPoint(c.x, c.y0, c.z);
+      const head = this.projectPoint(c.x, c.y1, c.z);
       const edge = this.projectPoint(c.x + side.x * c.r, c.y0, c.z + side.z * c.r);
-      return { feet, head: this.projectPoint(c.x, c.y1, c.z), r: Math.hypot(edge.x - feet.x, edge.y - feet.y) };
+      if (feet === OFF_SCREEN || head === OFF_SCREEN || edge === OFF_SCREEN) return { feet: OFF_SCREEN, head: OFF_SCREEN, r: 0 }; // partly behind the camera: not by screen distance
+      return { feet, head, r: Math.hypot(edge.x - feet.x, edge.y - feet.y) };
     });
     return here[nearestOnScreen(pointer, bodies, NEAR_PX)] ?? null;
   }
 
-  private toNdc(e: PointerEvent, out = new THREE.Vector2()): THREE.Vector2 {
+  private toNdc(e: { clientX: number; clientY: number }, out = new THREE.Vector2()): THREE.Vector2 {
     return out.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
   }
 
@@ -2038,7 +2046,7 @@ export class Game {
 
   private projectPoint(x: number, y: number, z: number): { x: number; y: number } {
     const v = this.scratch.set(x, y, z).project(this.views.camera);
-    if (v.z > 1 || v.z < -1) return { x: -9999, y: -9999 };
+    if (v.z > 1 || v.z < -1) return OFF_SCREEN;
     return { x: (v.x * 0.5 + 0.5) * window.innerWidth, y: (-v.y * 0.5 + 0.5) * window.innerHeight };
   }
 
