@@ -445,20 +445,21 @@ export class Game {
       if (this.editor.active && this.views.mode !== 'walk' && this.views.mode !== 'third') this.editor.pointerMove(this.raycaster, this.groundAt(this.pointer), e.altKey);
       // the press is over once the stage lets go of the pointer (a press that started on a panel is not ours)
       if (!this.pressed || !this.stage.hasPointerCapture(e.pointerId)) return;
-      const g = this.groundAt(this.pointer);
-      if (!g) return;
       // a few pixels of hand jitter still count as a click, not a drag
       if (!this.dragMoved && Math.hypot(e.clientX - this.dragStart.x, e.clientY - this.dragStart.y) <= CLICK_SLOP) return;
-      if (!this.dragMoved) {
+      this.dragMoved = true; // from here on no click, even if nobody gets lifted
+      if (!this.dragged) {
+        if (this.pressed.away) return; // went out of the door during the press
         // they may have walked on since the press: grab them where they are now, relative to the pressed point
         const start = this.groundAt(this.toNdc({ clientX: this.dragStart.x, clientY: this.dragStart.y }));
         if (!start) return;
-        this.dragMoved = true;
         this.dragged = this.pressed;
         this.dragged.held = true;
         this.dragOffset.set(this.dragged.pos.x - start.x, this.dragged.pos.z - start.z);
       }
-      const w = this.pressed;
+      const g = this.groundAt(this.pointer);
+      if (!g) return;
+      const w = this.dragged;
       w.pos.x = THREE.MathUtils.clamp(g.x + this.dragOffset.x, 0.4, WORLD.width - 0.4);
       w.pos.z = THREE.MathUtils.clamp(g.z + this.dragOffset.y, 0.4, WORLD.depth - 0.4);
       // near a free chair: snap onto it (the person sits while carried)
@@ -541,6 +542,7 @@ export class Game {
     };
     this.stage.addEventListener('pointerup', drop);
     this.stage.addEventListener('pointercancel', drop);
+    this.stage.addEventListener('lostpointercapture', drop); // moves no longer reach the stage: put them down
     this.stage.addEventListener('pointerleave', () => {
       this.pointerInside = false;
       this.hovered = null;
@@ -2012,9 +2014,10 @@ export class Game {
       return { x: p.x, z: p.z, r: w instanceof Person ? 0.4 : Math.max(0.3, w.headHeight * 0.6), y0: p.y, y1: p.y + w.headHeight + 0.15 };
     });
     const i = nearestHit(this.raycaster.ray, columns);
-    if (i >= 0 || !near) return here[i] ?? null;
+    if (i >= 0) return here[i];
+    if (!near) return null;
     const pointer = { x: ((ndc.x + 1) / 2) * window.innerWidth, y: ((1 - ndc.y) / 2) * window.innerHeight };
-    const side = this.fwd.setFromMatrixColumn(this.views.camera.matrixWorld, 0); // screen right, in the world
+    const side = new THREE.Vector3().setFromMatrixColumn(this.views.camera.matrixWorld, 0); // screen right, in the world
     const bodies = columns.map((c) => {
       const feet = this.projectPoint(c.x, c.y0, c.z);
       const head = this.projectPoint(c.x, c.y1, c.z);
@@ -2022,7 +2025,8 @@ export class Game {
       if (feet === OFF_SCREEN || head === OFF_SCREEN || edge === OFF_SCREEN) return { feet: OFF_SCREEN, head: OFF_SCREEN, r: 0 }; // partly behind the camera: not by screen distance
       return { feet, head, r: Math.hypot(edge.x - feet.x, edge.y - feet.y) };
     });
-    return here[nearestOnScreen(pointer, bodies, NEAR_PX)] ?? null;
+    const j = nearestOnScreen(pointer, bodies, NEAR_PX);
+    return j >= 0 ? here[j] : null;
   }
 
   private toNdc(e: { clientX: number; clientY: number }, out = new THREE.Vector2()): THREE.Vector2 {
