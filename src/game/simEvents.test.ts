@@ -300,6 +300,33 @@ describe('dev events on the Sim', () => {
     const five = office();
     only(five, GROUP);
     refused(five, 'crowd');
+    run(five, 4);
+    refused(five, 'crowd'); // past the quiet start nobody held out is brought in
+  });
+
+  it('actions.force (talk-join, crowd): without a talk, or in the quiet start, they are refused and a running meeting keeps going; crowd with too few free clears the meeting, talk-join never', () => {
+    const sim = office();
+    only(sim, [...GROUP, PHONE], 'free');
+    expect(sim.events.trigger('meeting-room')).toMatch(/^Besprechung mit 5: /);
+    const meeting = sim.meetingRoom.current;
+    refused(sim, 'talk-join'); // clearing places cannot start a talk
+    refused(sim, 'crowd'); // nor end the quiet start
+    expect(sim.meetingRoom.current).toBe(meeting);
+    // past the quiet start too few are free: that is cleared as for any action, the meeting ends
+    run(sim, 4);
+    expect(sim.events.trigger('crowd')).toMatch(/^Gedränge: /);
+    expect(sim.meetingRoom.current).toBeNull();
+
+    // a talk runs and everybody else sits in the meeting: still refused, clearing would end the talk too
+    const busy = office();
+    only(busy, [...GROUP, PHONE, KURT], 'free');
+    expect(busy.events.trigger('meeting-room')).toMatch(/^Besprechung mit 5: /);
+    expect(run(busy, 90, () => busy.meetingRoom.occupants(busy.people) === 5)).toBe(true); // seated: tied up
+    expect(busy.events.trigger('meeting-chat')).toMatch(/^Meeting mit 2: /);
+    const [talk, room] = [busy.social.active[0], busy.meetingRoom.current];
+    refused(busy, 'talk-join');
+    expect(busy.social.active[0]).toBe(talk);
+    expect(busy.meetingRoom.current).toBe(room);
   });
 
   it('dev.events (break-talks): every running talk ends', () => {
