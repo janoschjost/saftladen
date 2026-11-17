@@ -1454,6 +1454,7 @@ export class Game {
       }, () => {
         this.poseNerf(w, r);
         this.poseBoombox(w, r);
+        this.poseMail(w, r);
         this.poseCup(w, r);
         this.poseSnack(w, r);
         this.poseEmote(w, r);
@@ -1673,6 +1674,33 @@ export class Game {
       r.elbowR.rotation.x = lerp(r.elbowR.rotation.x, -0.05, a);
       r.body.rotation.x += 0.12 * a;
       r.body.position.y += Math.abs(Math.sin(now * 7)) * 0.02 * a;
+    }
+  }
+
+  /**
+   * Carrying the post (see Mail.ts): a letter in the right hand (the arm bent forward), a parcel in both arms in front of
+   * the chest. Eases in and out like the other poses; the mesh sits on the rig (see `Mail.take`).
+   */
+  private poseMail(w: Person, r: Person['rig']): void {
+    const now = this.clock;
+    const dt = Math.max(0, now - w.mailClock);
+    w.mailClock = now;
+    const on = !!w.mailCarry && !w.held && w.sit < 0.05;
+    w.mailAmt = Math.min(1, Math.max(0, w.mailAmt + (on ? 1 : -1) * (dt / 0.3)));
+    if (w.mailAmt <= 0) return;
+    const a = smooth(w.mailAmt);
+    const lerp = THREE.MathUtils.lerp;
+    if (w.mailCarry === 'parcel') {
+      // both forearms forward under the parcel
+      for (const [arm, elbow, side] of [[r.armL, r.elbowL, -1], [r.armR, r.elbowR, 1]] as const) {
+        arm.rotation.x = lerp(arm.rotation.x, -0.45, a);
+        arm.rotation.z = lerp(arm.rotation.z, side * 0.02, a);
+        elbow.rotation.x = lerp(elbow.rotation.x, -1.2, a);
+      }
+    } else {
+      r.armR.rotation.x = lerp(r.armR.rotation.x, -0.5, a);
+      r.armR.rotation.z = lerp(r.armR.rotation.z, 0.06, a);
+      r.elbowR.rotation.x = lerp(r.elbowR.rotation.x, -1.3, a);
     }
   }
 
@@ -2010,6 +2038,7 @@ export class Game {
         ...(this.easter.angry && !this.easter.angry.who.away ? [say(`angry-${this.easter.angry.who.id}`, this.easter.angry.text, this.easter.angry.who)] : []),
         ...(call && !call.who.away ? [say(`welcome-${call.who.id}`, call.text, call.who)] : []),
         ...this.sim.boombox.bubbles.map((b) => say(`boombox-${b.who.id}`, b.text, b.who)),
+        ...this.sim.mail.bubbles.map((b) => say(`mail-${b.who.id}`, b.text, b.who)),
         ...(rep && !rep.who.away ? [say(`reply-${rep.who.id}`, rep.text, rep.who)] : []),
         ...this.sim.social.active.filter((c) => c.phase !== 'gather' && c.text).map((c) => say(c.speaker.id, c.text, c.speaker)),
         ...(coffee?.phase === 'chat' ? [say(coffee.speaker.id, coffee.text, coffee.speaker)] : []),

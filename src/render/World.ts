@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { buildMailboxes } from './mailProps';
 import { ANNEX_D, ANNEX_W, OFFICE_D, OFFICE_W, PORCH } from './officeModel';
 
 export const WORLD = {
@@ -95,6 +96,7 @@ export function buildWorld(scene: THREE.Scene): { sun: THREE.DirectionalLight; h
   porch.position.set(PORCH.x + PORCH.w / 2, -slab / 2, PORCH.z + PORCH.d / 2);
   porch.receiveShadow = true;
   scene.add(porch);
+  scene.add(buildMailboxes());
 
   const hemi = new THREE.HemisphereLight('#ffffff', '#c9b8a4', 1.3);
   scene.add(hemi);

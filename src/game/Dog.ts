@@ -168,7 +168,7 @@ export class Dog extends Walker {
 
   /** Where the owner is, as far as the pet cares: a smoke break on the porch is short, the pet stays inside (in the office). */
   private get ownerPresence(): Person['presence'] {
-    return this.owner.onSmokeBreak ? 'in' : this.owner.presence;
+    return this.owner.onPorch ? 'in' : this.owner.presence;
   }
 
   /** Pets leave through the door with their owner and come back after them. */
@@ -320,7 +320,7 @@ export class Dog extends Walker {
 
   protected decide(nav: NavGrid): void {
     const o = this.owner;
-    if (o.onSmokeBreak) {
+    if (o.onPorch) {
       // the owner smokes outside: wait where we are (the porch is no place for a pet, nor the doorway)
       this.timer = 0.5;
       return;
