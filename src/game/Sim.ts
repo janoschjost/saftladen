@@ -3,6 +3,7 @@ import { team } from '../data/team';
 import { buildCat } from '../render/catBuilder';
 import { buildCharacter } from '../render/characterBuilder';
 import { addKurt } from '../render/kurtBuilder';
+import { addCigarette, addUmbrella } from '../render/smokeProps';
 import { buildDog, type DogRig } from '../render/dogBuilder';
 import { HOME_COUNT } from '../render/homeOffice';
 import { Boombox } from './Boombox';
@@ -27,6 +28,7 @@ import { blockages, type Blockage } from './placement';
 import { Pod } from './Pod';
 import { Presence } from './Presence';
 import { Scenario } from './Scenario';
+import { SmokeBreaks } from './Smoke';
 import { registerSimEvents } from './simEvents';
 import { Social } from './Social';
 import { TimeOfDay } from './TimeOfDay';
@@ -94,6 +96,8 @@ export class Sim {
   readonly social = new Social();
   readonly traffic = new Traffic(this.nav);
   readonly presence: Presence;
+  /** smokers stepping out onto the porch for a cigarette */
+  readonly smoke: SmokeBreaks;
   readonly tod = new TimeOfDay();
   readonly weather = new Weather();
   readonly petCare = new PetCare();
@@ -154,6 +158,7 @@ export class Sim {
     this.coatRacks = new CoatRacks(model.coatRacks, this.people);
     this.presence = new Presence(this.people, this.tod, this.weather);
     this.presence.seed(homes);
+    this.smoke = new SmokeBreaks(this.people, this.presence, this.weather);
     for (const pet of this.pets) if (pet.owner.presence === 'out' || !pet.comesToday) pet.sendAway(); // pets of people who start away, and pets that stay home today
     this.coatRacks.update();
     this.events.forcer = (run) => makePossible(this, run);
@@ -234,6 +239,8 @@ export class Sim {
     for (const [index, m] of team.entries()) {
       const rig = buildCharacter(m.look);
       if (m.alterEgo) addKurt(rig);
+      if (m.smoke) addCigarette(rig);
+      addUmbrella(rig, m.id);
       const person = new Person(m, rig, free());
       person.office = this.office;
       person.kitchen = this.kitchen;
@@ -335,6 +342,7 @@ export class Sim {
   /** One simulation step: everybody decides and moves, the rooms follow, nobody ends up inside somebody else or a wall. */
   step(dt: number): void {
     this.presence.update(dt, this.nav);
+    this.smoke.update(dt, this.nav);
     this.traffic.update(dt, this.walkers);
     for (const w of this.walkers) {
       w.traffic ??= this.traffic;
@@ -358,6 +366,8 @@ export class Sim {
     this.serverRack.update(dt, this.people, this.nav);
     this.doors.update(dt, [...this.walkers.filter((w) => !w.away).map((w) => ({ x: w.pos.x, z: w.pos.z, path: w.doorPath ?? undefined })), ...this.doorsSee()]);
     this.coatRacks.update();
+    // everybody outdoors holds an umbrella in the rain; it is shut before the doorframe
+    for (const p of this.people) p.updateUmbrella(dt, this.weather.raining);
     this.separate();
     this.separate();
     this.separate();

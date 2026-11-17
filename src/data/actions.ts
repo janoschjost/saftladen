@@ -166,6 +166,17 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
     caption: 'Sandro packt die Boombox aus',
     who: 'Sandro (und Donata)',
   },
+  {
+    id: 'smoke',
+    label: 'Rauchpause',
+    icon: 'M2 15h14v3H2zM18 15v3M21 15v3M18 12c0-1.5 2-1.5 2-3s-2-1.5-2-3M21 12c0-1.5 1-2 1-3',
+    eventId: 'smoke',
+    place: { name: 'Vordach am Eingang', x: 6.25, z: 16.2 },
+    angle: 25,
+    zoom: 3,
+    caption: 'Rauchpause vor der Tür',
+    who: 'Ein Raucher',
+  },
 ];
 
 /** Problems of an action list: duplicate ids, unknown dev events, bad numbers. Empty when the list is fine. */

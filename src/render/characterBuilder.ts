@@ -23,6 +23,10 @@ export interface CharacterRig {
   setMood?: (happy: boolean) => void;
   /** only on `vape` looks: the bendable forearm of the right arm, the glowing tip and the vapour puffs */
   vape?: { elbow: THREE.Object3D; device: THREE.Object3D; led: THREE.MeshBasicMaterial; puffs: THREE.Mesh[] };
+  /** only on smokers (`addCigarette`, smokeProps.ts): the cigarette in the right hand (shown while lit), its glowing tip and the exhaled puffs */
+  cigarette?: { stick: THREE.Object3D; ember: THREE.MeshBasicMaterial; puffs: THREE.Mesh[] };
+  /** the person's own umbrella (`addUmbrella`, smokeProps.ts): in the left hand, open while outdoors in the rain; `canopy` folds shut */
+  umbrella?: { root: THREE.Object3D; canopy: THREE.Object3D };
   /** only on `phone` looks: the bendable forearm of the right arm and the phone in its hand (shown during calls) */
   phone?: { elbow: THREE.Object3D; device: THREE.Object3D };
   /** only on `nerf` looks: the foam dart gun in the right fist (shown while aiming; held forward it points along the forearm) */

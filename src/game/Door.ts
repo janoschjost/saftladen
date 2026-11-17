@@ -15,6 +15,11 @@ export const DOOR = {
   z: OFFICE_D,
 };
 
+/** Half the width of the entrance: two 1 m wings and the frame around them. */
+const DOORWAY_HALF = 1.05;
+/** How far (m) the point `x`, `z` is from the front doorframe: 0 in the doorway (or inside, in front of it). */
+export const fromDoorway = (x: number, z: number): number => Math.hypot(Math.max(0, Math.abs(x - DOOR.x) - DOORWAY_HALF), Math.max(0, z - DOOR.z));
+
 /** One of the two wings of the double door: its own walking lane through the doorway. */
 export interface DoorLane {
   /** which wing opens for this lane */

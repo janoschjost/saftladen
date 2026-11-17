@@ -166,25 +166,31 @@ export class Dog extends Walker {
     this.startScript(owner.lane.in, this.speed * 0.9);
   }
 
+  /** Where the owner is, as far as the pet cares: a smoke break on the porch is short, the pet stays inside (in the office). */
+  private get ownerPresence(): Person['presence'] {
+    return this.owner.onSmokeBreak ? 'in' : this.owner.presence;
+  }
+
   /** Pets leave through the door with their owner and come back after them. */
   protected override control(dt: number, nav: NavGrid): boolean {
     const o = this.owner;
+    const presence = this.ownerPresence;
     if (this.removed) {
       this.petted = null;
       this.sendAway();
       return true;
     }
-    if (o.presence === 'out' && !this.away) {
+    if (presence === 'out' && !this.away) {
       // owner is gone: keep running to the door and leave too (give up after a while)
       this.outWait += dt;
       if (this.outWait > 8 && !this.script) this.sendAway();
-    } else if (o.presence === 'in') {
+    } else if (presence === 'in') {
       this.outWait = 0;
       this.headingOut = false;
     }
     if (this.away) {
       // normally the pet appears together with the owner (`arriveWith`); this is only the fallback when the owner is in again
-      if (o.presence !== 'in' || !this.comesToday) return true;
+      if (o.presence !== 'in' || !this.comesToday) return true; // not while the owner smokes outside either: they come in together
       this.doorWait -= dt;
       if (this.doorWait > 0) return true;
       this.arriveWith(o);
@@ -198,14 +204,14 @@ export class Dog extends Walker {
       this.runScript(dt);
       return true;
     }
-    if (this.onPorch && o.presence !== 'in') {
+    if (this.onPorch && presence !== 'in') {
       // sits on the porch until the owner is out; they make us vanish together
       this.moving += (0 - this.moving) * Math.min(1, dt * 8);
       return true;
     }
     const pet = this.petted;
     if (pet) {
-      if (o.presence !== 'in' || pet.by.presence !== 'in' || !pet.by.petting || this.held) {
+      if (presence !== 'in' || pet.by.presence !== 'in' || !pet.by.petting || this.held) {
         this.petted = null;
       } else {
         pet.t -= dt;
@@ -218,7 +224,7 @@ export class Dog extends Walker {
         }
       }
     }
-    if (o.presence === 'leaving' || o.presence === 'out') {
+    if (presence === 'leaving' || presence === 'out') {
       if (!this.headingOut) {
         // drop whatever we were doing and run for the door
         this.headingOut = true;
@@ -275,7 +281,7 @@ export class Dog extends Walker {
    * passages (we do not lie there again for a while). Without such a spot the usual shuffling aside (`stepAside`) does it.
    */
   private giveWay(nav: NavGrid, others: readonly Walker[]): void {
-    if (this.state !== 'idle' || this.away || this.script || this.petted || this.held || this.owner.presence !== 'in') return;
+    if (this.state !== 'idle' || this.away || this.script || this.petted || this.held || this.ownerPresence !== 'in') return;
     const w = others.find(
       (o) =>
         o !== this &&
@@ -314,6 +320,11 @@ export class Dog extends Walker {
 
   protected decide(nav: NavGrid): void {
     const o = this.owner;
+    if (o.onSmokeBreak) {
+      // the owner smokes outside: wait where we are (the porch is no place for a pet, nor the doorway)
+      this.timer = 0.5;
+      return;
+    }
     const dx = o.pos.x - this.pos.x;
     const dz = o.pos.z - this.pos.z;
     if (o.sit > 0.5 && o.presence === 'in') {

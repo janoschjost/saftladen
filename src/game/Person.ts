@@ -6,7 +6,7 @@ import type { CharacterRig } from '../render/characterBuilder';
 import { SIT_DROP } from '../render/officeBuilder';
 import { screenVariants, type ScreenKind } from '../render/screens';
 import { CORRIDOR_POINT } from '../render/officeModel';
-import { DOOR_LANES, pickDoorLane, type DoorLane } from './Door';
+import { DOOR, DOOR_LANES, fromDoorway, pickDoorLane, type DoorLane } from './Door';
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { MeetSeat } from './Meeting';
 import type { CoffeeSpot, Kitchen, MachineSpot } from './Coffee';
@@ -17,6 +17,7 @@ import { DeskWork, type DeskActivity } from './DeskWork';
 import { Walker } from './Walker';
 import { KURT, rollHomeAlter, transformsOnLeave } from './AlterEgo';
 import { random } from './rng';
+import { DRAG_CYCLE, SMOKE, UMBRELLA_CLEAR, UMBRELLA_FOLD, dragAt, nextDragCycle, type PorchSpot } from './Smoke';
 
 const WORK_CHANCE = 0.75; // chance per decision to go sit down instead of wandering
 const WORK_TIME = { min: 90, max: 240 }; // seconds a person stays at the desk
@@ -74,8 +75,8 @@ type Phase = 'approach' | 'enter' | 'work' | 'leave';
 /** in = in the office, leaving = on the way out, out = gone (errand or home office), returning = coming back through the door */
 export type Presence = 'in' | 'leaving' | 'out' | 'returning';
 /** errand = popped out for a while, home = working from home (live feed available) */
-/** errand / home office, or `off`: finished for the day (night), not listed anywhere */
-export type AwayKind = 'errand' | 'home' | 'off';
+/** errand / home office, `off`: finished for the day (night), not listed anywhere; `smoke`: a cigarette on the porch, in sight */
+export type AwayKind = 'errand' | 'home' | 'off' | 'smoke';
 
 interface DeskTask {
   desk: Desk;
@@ -285,6 +286,22 @@ export class Person extends Walker {
   preferredHome = 0;
   /** taking a drag on the vape */
   vapeJob: VapeJob | null = null;
+  /** smoke break: the spot on the porch they head for and stand at (reserved from the moment they set off), see Smoke.ts */
+  porchSpot: PorchSpot | null = null;
+  /** the cigarette is lit: from the porch until it is stubbed out */
+  smokeLit = false;
+  /** seconds into the current drag, and how long this one lasts until the next */
+  private smokeT = 0;
+  private smokeCycle = DRAG_CYCLE[0];
+  /** coming back from the porch: the walk to the door first, then in through it */
+  private porchLeg = false;
+  /** rain, outdoors and clear of the doorframe: the umbrella is up, or going up (see `updateUmbrella`) */
+  umbrella = false;
+  /** 0 down and folded .. 0.5 up, still folded .. 1 open */
+  umbrellaAmt = 0;
+  /** where they stood at the last umbrella update (how fast they head for the door) */
+  private umbrellaFromX = 0;
+  private umbrellaFromZ = 0;
   /** on a phone call, walking around with the phone at the ear */
   phoneJob: PhoneJob | null = null;
   /** seconds the player's person still holds a picked-up phone to the ear (see `takeCall`) */
@@ -508,6 +525,7 @@ export class Person extends Walker {
   /** Start the game already outside. */
   startAway(kind: AwayKind, seconds: number): void {
     this.cancelTask();
+    this.endSmoke();
     this.sit = 0;
     this.presence = 'out';
     this.awayKind = kind;
@@ -519,6 +537,9 @@ export class Person extends Walker {
 
   /** In the office at `at` right now, without the walk through the door (a scene puts them there). */
   arriveNow(at: Vec2): void {
+    this.endSmoke();
+    this.umbrella = false;
+    this.umbrellaAmt = 0;
     this.spin = 0;
     this.setAlter(false);
     this.script = null;
@@ -541,12 +562,18 @@ export class Person extends Walker {
     for (const d of this.pets) d.arriveWith(this);
   }
 
+  /** Still inside on the way out (a leave can be called off without stranding them on the porch). */
+  get beforeDoor(): boolean {
+    return this.presence === 'leaving' && !this.script && this.pos.z < DOOR.z;
+  }
+
   /** Called back before they got out of the door. */
   cancelLeave(): void {
     if (this.presence === 'leaving') this.abortLeaving();
   }
 
   private abortLeaving(): void {
+    this.endSmoke();
     if (this.alter || this.spin > 0) this.poof = true; // back to themselves
     this.spin = 0;
     this.setAlter(false);
@@ -585,6 +612,18 @@ export class Person extends Walker {
         if (this.script) {
           if (this.runScript(dt)) return true;
           this.presence = 'out';
+          if (this.kind === 'smoke') {
+            // a smoke break stays in sight: on to their spot beside the door, lighting up on the way
+            if (!this.porchSpot) {
+              this.backFromPorch(); // the spot went (rain): straight back in
+              return true;
+            }
+            this.smokeLit = true;
+            this.smokeCycle = nextDragCycle();
+            this.smokeT = this.smokeCycle - 1.5; // the first drag right after lighting it
+            this.startScript(this.porchSpot);
+            return true;
+          }
           this.setAway(true); // still Kurt while he fades out of the doorway, Marco again once gone (see 'out')
           for (const d of this.pets) d.sendAway(); // pets vanish with the owner, wherever they are
           return true;
@@ -604,6 +643,7 @@ export class Person extends Walker {
         return true;
       }
       case 'out':
+        if (this.kind === 'smoke') return this.controlPorch(dt);
         if (this.alter && this.fx === 0) this.setAlter(false); // through the door and gone: Marco again
         this.awayLeft -= dt;
         // pets still around (not yet despawned) hold up the arrival: both appear together
@@ -623,6 +663,12 @@ export class Person extends Walker {
           return true;
         }
         if (this.runScript(dt)) return true;
+        if (this.porchLeg) {
+          // from the porch spot to the door, now through it
+          this.porchLeg = false;
+          this.startScript(this.lane.in, this.speed * 0.9);
+          return true;
+        }
         this.presence = 'in';
         this.awayKind = null;
         this.state = 'idle';
@@ -634,6 +680,123 @@ export class Person extends Walker {
       default:
         return false;
     }
+  }
+
+  /** Standing on the porch for a cigarette: faces the chat (or the street), drags now and then, stubs it out at the end and walks back in. */
+  private controlPorch(dt: number): boolean {
+    if (this.held) {
+      this.abortLeaving(); // picked up: the break is over
+      return false;
+    }
+    if (this.smokeLit) {
+      this.smokeT += dt;
+      if (this.smokeT >= this.smokeCycle) {
+        this.smokeT = 0;
+        this.smokeCycle = nextDragCycle();
+      }
+    }
+    if (!this.porchSpot) {
+      if (!this.umbrellaAmt) this.backFromPorch(); // the spot went (rain): back in now, even on the way to it, the umbrella shut first
+      else this.moving += (0 - this.moving) * Math.min(1, dt * 8);
+      return true;
+    }
+    if (this.script) {
+      this.runScript(dt);
+      return true;
+    }
+    this.moving += (0 - this.moving) * Math.min(1, dt * 8);
+    const t = this.talk;
+    const at = t ? (t.speaker && t.speaker !== this ? t.speaker.pos : t.center) : { x: this.pos.x, z: this.pos.z + 1 };
+    this.turnTo(Math.atan2(at.x - this.pos.x, at.z - this.pos.z), dt);
+    this.awayLeft -= dt;
+    if (this.awayLeft <= SMOKE.stub) this.smokeLit = false; // stubbed out
+    if (this.awayLeft <= 0 && !this.umbrellaAmt) this.backFromPorch(); // the umbrella is shut first: the spot is close to the door
+    return true;
+  }
+
+  /** The break is over: to the door (the nearer wing) and in. The spot is free from now on. */
+  private backFromPorch(): void {
+    this.smokeLit = false;
+    this.porchSpot = null;
+    this.presence = 'returning';
+    this.lane = DOOR_LANES.reduce((a, b) => (Math.abs(b.out.x - this.pos.x) < Math.abs(a.out.x - this.pos.x) ? b : a));
+    this.porchLeg = true;
+    this.startScript(this.lane.out, this.speed * 0.9);
+  }
+
+  /** Rain moved the smoke break to another spot: walk over (still smoking) if already out there. */
+  movePorchSpot(spot: PorchSpot): void {
+    this.porchSpot = spot;
+    if (this.presence === 'out' && this.kind === 'smoke') this.startScript(spot);
+  }
+
+  /** Ends a smoke break on the spot (sent away, put somewhere by a scene, picked up): no cigarette, no spot. */
+  private endSmoke(): void {
+    this.porchSpot = null;
+    this.smokeLit = false;
+    this.porchLeg = false;
+  }
+
+  /** Standing at their spot on the porch (not walking to it or away). */
+  get atPorchSpot(): boolean {
+    return this.presence === 'out' && this.kind === 'smoke' && !this.script && !!this.porchSpot;
+  }
+
+  /** Out on the porch for a cigarette, or on the way there or back. */
+  get onSmokeBreak(): boolean {
+    return this.kind === 'smoke' && this.presence !== 'in';
+  }
+
+  /** Outside the building: out of the door (on the porch, or away), or on the way through it past the wall (the annex room in front of the wall is indoors). */
+  get outdoors(): boolean {
+    return this.presence === 'out' || (this.presence !== 'in' && this.pos.z > DOOR.z);
+  }
+
+  /**
+   * In the rain the umbrella is up and open outdoors, but only clear of the front doorframe: on the way out it opens
+   * once they are past it, on the way in it is folded shut before they get there (also where they will be by the time
+   * it is shut counts). Indoors it is gone at once; who appears on the porch has it open already.
+   */
+  updateUmbrella(dt: number, raining: boolean): void {
+    const { x, z } = this.pos;
+    const fx = this.umbrellaFromX;
+    const fz = this.umbrellaFromZ;
+    this.umbrellaFromX = x;
+    this.umbrellaFromZ = z;
+    if (!raining || this.away || !this.outdoors) {
+      // dry, or indoors: no umbrella; away on the street it is up, so they appear with it open
+      this.umbrella = raining && this.away && this.outdoors;
+      this.umbrellaAmt = this.umbrella ? 1 : 0;
+      return;
+    }
+    let vx = dt > 0 ? (x - fx) / dt : 0;
+    let vz = dt > 0 ? (z - fz) / dt : 0;
+    let speed = Math.hypot(vx, vz);
+    if (speed > 4) vx = vz = speed = 0; // put somewhere, not walking
+    // where they will be by the time it is shut; a walk to a spot ends there
+    let t = UMBRELLA_FOLD * 1.2;
+    const to = this.script?.to;
+    if (to && speed) t = Math.min(t, Math.hypot(to.x - x, to.z - z) / speed);
+    // done smoking, or the spot went (rain): folds it where they stand, then walks in
+    const goingIn = this.porchLeg || (this.presence === 'out' && this.kind === 'smoke' && (!this.porchSpot || (!this.script && this.awayLeft <= UMBRELLA_FOLD)));
+    this.umbrella = !goingIn && Math.min(fromDoorway(x, z), fromDoorway(x + vx * t, z + vz * t)) >= UMBRELLA_CLEAR;
+    const step = dt / UMBRELLA_FOLD;
+    this.umbrellaAmt = Math.min(1, Math.max(0, this.umbrellaAmt + (this.umbrella ? step : -step)));
+  }
+
+  /** 0 = cigarette a little below the mouth .. 1 = at the lips */
+  get smokeArm(): number {
+    return this.smokeLit ? dragAt(this.smokeT).arm : 0;
+  }
+
+  /** True while drawing on the cigarette (the tip glows brighter). */
+  get smokeDraw(): boolean {
+    return this.smokeLit && dragAt(this.smokeT).draw;
+  }
+
+  /** Seconds since the exhale began, -1 when not exhaling. */
+  get smokePuffT(): number {
+    return this.smokeLit ? dragAt(this.smokeT).puff : -1;
   }
 
   /** 0 = hand down .. 1 = vape at the mouth */

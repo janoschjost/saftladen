@@ -242,6 +242,51 @@ export function registerSimEvents(sim: Sim): void {
   };
   habit('vape', (name) => `${name} dampft`, (p) => p.startVape(2));
   habit('phone', (name) => `${name} telefoniert`, (p) => p.startPhone(nav));
+  /**
+   * A smoker steps out for a cigarette now (#169), whatever the time of day: `smoke` sends any free one (the Rauchpause
+   * card), `smoke-<id>` that one. Out of the office (errand, home office) they are called back first; already out for
+   * one, they stay there. Null (the game clears the way) while nobody fits, the porch is full or the door is busy.
+   */
+  const smokers = people.filter((o) => o.member.smoke);
+  const smokeNow = (p: Person): string | null => {
+    if (!isFree(p) || tiedUp(p) || !sim.smoke.freeSpot()) return null;
+    drop(p);
+    if (sim.smoke.start(p, nav, true) !== 'ok') return null;
+    sim.point(p);
+    return `${first(p)} geht rauchen`;
+  };
+  events.register({
+    id: 'smoke',
+    group: 'Aktionen',
+    label: 'Rauchpause',
+    run: () => {
+      const [p] = sim.smoke.freeSpot() ? pickFree(1, (o) => !!o.member.smoke && !tiedUp(o) && !presence.isKept(o)) : []; // a full porch rolls no dice
+      if (p) return smokeNow(p);
+      // every smoker who could go is out there already: that is the Rauchpause, nobody's is ended for it
+      const out = smokers.find((o) => o.onSmokeBreak && o.presence !== 'returning');
+      if (!out) return null;
+      sim.point(out);
+      return `${first(out)} raucht schon`;
+    },
+  });
+  for (const p of smokers) {
+    events.register({
+      id: `smoke-${p.id}`,
+      group: 'Aktionen',
+      label: `${first(p)} geht rauchen`,
+      run: () => {
+        if (p.onSmokeBreak && p.presence !== 'returning') {
+          sim.point(p);
+          return `${first(p)} raucht schon`;
+        }
+        if (p.presence === 'out') {
+          presence.callBack(p);
+          return null;
+        }
+        return smokeNow(p);
+      },
+    });
+  }
   events.register({
     id: 'phone-booth',
     group: 'Aktionen',

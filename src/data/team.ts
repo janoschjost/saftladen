@@ -133,6 +133,9 @@ const coffeeHaters = new Set(['janosch-jost']);
 // grab chips from the kitchen and eat them while walking around
 const snackers = new Set(['jan-hasler']);
 
+// step out onto the porch for a cigarette now and then (#169)
+const smokers = new Set(['jannik-stibi', 'sandro-hagen', 'ramon-lenherr', 'delya-kohler', 'jeerapat-wang']);
+
 // in the home office a lot, never out on errands
 const homebodies = new Set(['marco-hefti']);
 
@@ -203,6 +206,7 @@ export const team: TeamMember[] = raw.map((p) => ({
   skipBreaks: skipBreaks[p.id],
   hatesCoffee: coffeeHaters.has(p.id),
   snacker: snackers.has(p.id),
+  smoke: smokers.has(p.id),
   swimLook: swimLooks[p.id],
   dog: dogs[p.id],
   dogName: dogNames[p.id],

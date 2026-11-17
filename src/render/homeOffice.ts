@@ -1139,13 +1139,13 @@ export interface HeldPoses {
 }
 
 const HEAD = { x: 0.2, y0: 1.38, y1: 1.8, z: 0.2 };
-const inHead = (p: THREE.Vector3, pad = 0) => Math.max(0, Math.min(HEAD.x + pad - Math.abs(p.x), p.y - (HEAD.y0 - pad), HEAD.y1 + pad - p.y, HEAD.z + pad - Math.abs(p.z)));
+export const inHead = (p: THREE.Vector3, pad = 0) => Math.max(0, Math.min(HEAD.x + pad - Math.abs(p.x), p.y - (HEAD.y0 - pad), HEAD.y1 + pad - p.y, HEAD.z + pad - Math.abs(p.z)));
 const _e = new THREE.Euler();
 const _q = new THREE.Quaternion();
 const _v = new THREE.Vector3();
 
 /** Where `local` (a point in the forearm frame: elbow pivot, hand 0.3 below) ends up, and the elbow and hand on the way. */
-function armFK(shoulder: THREE.Vector3, rx: number, rz: number, e: number, ez: number, local: THREE.Vector3) {
+export function armFK(shoulder: THREE.Vector3, rx: number, rz: number, e: number, ez: number, local: THREE.Vector3) {
   const qa = _q.setFromEuler(_e.set(rx, 0, rz)).clone();
   const qe = new THREE.Quaternion().setFromEuler(_e.set(e, 0, ez));
   const elbow = new THREE.Vector3(0, -0.3, 0).applyQuaternion(qa).add(shoulder);
@@ -1158,7 +1158,7 @@ function armFK(shoulder: THREE.Vector3, rx: number, rz: number, e: number, ez: n
  * sideways) that bring `local` closest to `target` without the arm going through the head. Returns the pose in
  * ArmPose terms (z / ez positive = away from the body, whichever side).
  */
-function solveArm(shoulder: THREE.Vector3, local: THREE.Vector3, target: THREE.Vector3, sideways = false): ArmPose {
+export function solveArm(shoulder: THREE.Vector3, local: THREE.Vector3, target: THREE.Vector3, sideways = false, sideRange: [number, number] = [0, 1.8]): ArmPose {
   const side = Math.sign(shoulder.x) || 1;
   const cost = (x: number, z: number, e: number, ez: number) => {
     const k = armFK(shoulder, x, z * side, e, ez * side, local);
@@ -1170,7 +1170,7 @@ function solveArm(shoulder: THREE.Vector3, local: THREE.Vector3, target: THREE.V
     const [x0, x1] = r(c0?.x ?? 0, -3, 0.3);
     const [z0, z1] = r(c0?.z ?? 0, -1.6, 3);
     const [e0, e1] = r(c0?.e ?? 0, -2.8, 0);
-    const [w0, w1] = sideways ? r(c0?.ez ?? 0, 0, 1.8) : [0, 0];
+    const [w0, w1] = sideways ? r(c0?.ez ?? 0, ...sideRange) : [0, 0];
     for (let x = x0; x <= x1; x += step)
       for (let z = z0; z <= z1; z += step)
         for (let e = e0; e <= e1; e += step)
