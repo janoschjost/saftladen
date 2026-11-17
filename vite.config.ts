@@ -37,6 +37,12 @@ const inWorktree = statSync(fileURLToPath(new URL('.git', import.meta.url)), { t
 export default defineConfig({
   base: './',
   plugins: [saveJson('save-layout', '/__save-layout', './src/data/layout.json'), saveJson('save-seats', '/__save-seats', './src/data/seats.json')],
+  build: {
+    // Three.js gets its own file: it only changes on an upgrade, so browsers keep it cached across our deploys
+    rolldownOptions: { output: { codeSplitting: { groups: [{ name: 'three', test: /node_modules[\\/]three[\\/]/ }] } } },
+    // Three.js alone is ~615 kB minified, over Vite's 500 kB default; the warning still fires when our own chunk passes 700 kB
+    chunkSizeWarningLimit: 700,
+  },
   // Main checkout: served at https://saftladen.test through a Herd proxy (herd proxy saftladen http://127.0.0.1:5173 --secure),
   // so it must get exactly 5173. Worktrees (parallel agent sessions) start at 5174 and take the next free port.
   // unit tests only; the browser tests in e2e/ run with Playwright (npm run test:e2e)
