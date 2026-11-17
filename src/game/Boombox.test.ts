@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { installHeadlessDom } from '../test/headlessDom';
 import { GROUP, office, run, STEP } from '../test/office';
-import { BOB_RANGE, BOSS, DJ, NOTICE, REACH, YELL, YELLS } from './Boombox';
+import { BOB_RANGE, BOSS, CRY, DJ, NOTICE, REACH, SAD, YELL, YELLS } from './Boombox';
+import { makePossible } from './makePossible';
 import type { Desk } from './Office';
 import type { Person } from './Person';
 import type { Sim } from './Sim';
@@ -168,7 +169,7 @@ describe('play.boombox', () => {
     expect(run(sim, 5, () => box.stage === 'look', () => (noticed += STEP))).toBe(true);
     expect(t0 + noticed).toBeGreaterThan(NOTICE - 0.1);
     expect(t0 + noticed).toBeLessThan(NOTICE + 0.2);
-    expect(box.bubble).toEqual({ who: boss, text: '❗' });
+    expect(box.bubbles).toEqual([{ who: boss, text: '❗' }]);
     expect(boss.boomPose).toBe('look'); // stares, no talking gestures
     expect(boss.task).toBeNull();
     expect(desk.occupant).not.toBe(boss);
@@ -192,7 +193,10 @@ describe('play.boombox', () => {
     expect(boss.boomCarry).toBe(true);
     expect(boss.rush).toBe(false);
     expect(boss.boomPose).toBe('scold');
-    expect(dj.boomPose).toBe('cower');
+    // he is sad: 😢, head and shoulders hang
+    expect(dj.boomPose).toBe('sad');
+    expect(dj.boomSad).toBeGreaterThan(YELL + SAD - 0.5);
+    expect(box.bubbles).toContainEqual({ who: dj, text: CRY });
     expect(box.taken).toBe(true);
 
     // she yells for ~3 s, several bubbles in a row, he stands there
@@ -200,19 +204,33 @@ describe('play.boombox', () => {
     let yelled = 0;
     run(sim, YELL + 1, () => box.stage !== 'yell', () => {
       yelled += STEP;
-      if (box.bubble) said.add(box.bubble.text);
-      if (box.stage === 'yell') expect(dj.playerChat).not.toBeNull();
+      for (const b of box.bubbles) if (b.who === boss) said.add(b.text);
+      if (box.stage === 'yell') {
+        expect(dj.playerChat).not.toBeNull();
+        expect(box.bubbles).toContainEqual({ who: dj, text: CRY });
+      }
     });
     expect([...said]).toEqual(YELLS);
     expect(yelled).toBeGreaterThan(YELL - 0.1);
     expect(yelled).toBeLessThan(YELL + 0.2);
 
-    // he walks on, she carries it to her desk
+    // he walks off slowly and slumped for ~10 s, then he is back to normal; she carries it to her desk
     expect(box.stage).toBe('carry');
     expect(dj.boomPose).toBeNull();
+    expect(box.bubbles).toEqual([]);
     expect(boss.boomCarry).toBe(true);
     expect(boss.task?.desk).toBe(desk);
-    expect(run(sim, 60, () => !box.active, () => box.active && expect(box.mesh.parent).toBe(boss.rig.elbowR))).toBe(true);
+    expect(dj.boomSad).toBeGreaterThan(SAD - 0.5);
+    const slumped = dj.speed;
+    let sad = 0;
+    run(sim, SAD + 1, () => dj.boomSad <= 0, () => {
+      sad += STEP;
+      if (box.active) expect(box.mesh.parent).toBe(boss.rig.elbowR);
+    });
+    expect(sad).toBeGreaterThan(SAD - 0.5);
+    expect(sad).toBeLessThan(SAD + 0.5);
+    expect(dj.speed).toBeGreaterThan(slumped * 1.5);
+    expect(run(sim, 60, () => !box.active)).toBe(true);
     expect(dj.playerChat).toBeNull();
     expect(box.onDesk).toBe(desk);
     expect(box.mesh.parent).toBe(desk.root);
@@ -314,6 +332,62 @@ describe('play.boombox', () => {
     expect(meeting.sim.boombox.mesh.visible).toBe(false);
     expect(meeting.sim.boombox.active).toBe(false);
     expect(meeting.dj.boomPose).toBeNull();
+  });
+
+  it('play.boombox: picked up, steered, called into a meeting or gone, Sandro is not sad any more', () => {
+    const cases: Array<[string, (s: Stage) => void]> = [
+      ['picked up', (s) => (s.dj.held = true)],
+      ['steered', (s) => (s.dj.controlled = true)],
+      ['meeting', (s) => {
+        s.sim.pull(s.dj);
+        expect(s.sim.meetingRoom.start([s.dj, s.sim.person(GROUP[0])], s.sim.nav)).not.toBeNull();
+      }],
+      ['leaves', (s) => s.sim.scenario.put(DJ, 'errand')],
+    ];
+    for (const [what, take] of cases) {
+      const s = stage();
+      s.sim.scenario.put(GROUP[0], 'desk', 'stay');
+      s.sim.boombox.start(s.dj, s.boss);
+      expect(until(s, 'carry', 30), what).toBe(true);
+      expect(s.dj.boomSad, what).toBeGreaterThan(0);
+      take(s);
+      s.sim.step(STEP);
+      expect(s.dj.boomSad, what).toBe(0);
+      expect(s.dj.boomPose, what).toBeNull();
+      s.dj.held = s.dj.controlled = false;
+    }
+    // during the yell too: no 😢 left on him
+    const s = stage();
+    s.sim.boombox.start(s.dj, s.boss);
+    expect(until(s, 'yell', 30)).toBe(true);
+    s.dj.held = true;
+    s.sim.step(STEP);
+    expect(s.dj.boomSad).toBe(0);
+    expect(s.dj.boomPose).toBeNull();
+    expect(s.sim.boombox.bubbles.map((b) => b.who)).toEqual([s.boss]);
+  });
+
+  it('play.boombox + actions.force: an action that needs Sandro clears the running scene (abort), and the photo shoot can take him out of it', () => {
+    for (const at of ['play', 'yell', 'carry'] as const) {
+      const s = stage();
+      s.sim.boombox.start(s.dj, s.boss);
+      expect(until(s, at, 30), at).toBe(true);
+      // an action that cannot run while the scene holds him: the way is cleared, then it runs
+      expect(makePossible(s.sim, () => (s.sim.boombox.active ? null : 'los')), at).toBe('los');
+      released(s);
+      expect(s.dj.boomSad, at).toBe(0);
+      expect(s.sim.boombox.mesh.visible, at).toBe(at !== 'play'); // taken: on her desk; still his: put away
+      if (at !== 'play') expect(s.sim.boombox.onDesk, at).toBe(s.desk);
+    }
+    // the two alone in the office, the music plays: the photo shoot takes one of them, the scene ends cleanly
+    const s = stage();
+    s.sim.boombox.start(s.dj, s.boss);
+    run(s.sim, 1);
+    expect(s.sim.events.trigger('photo-shoot')).toMatch(/ fotografiert im Studio$/);
+    expect(run(s.sim, NOTICE + 1, () => !s.sim.boombox.active)).toBe(true); // whichever of the two it took
+    expect(s.dj.boomPose).toBeNull();
+    expect(s.boss.boomPose).toBeNull();
+    expect(s.sim.boombox.mesh.visible).toBe(false);
   });
 
   it('play.boombox: Donata is picked up on her run or leaves while carrying it: the scene ends cleanly, a boombox she took lands on her desk', () => {

@@ -1611,8 +1611,9 @@ export class Game {
 
   /**
    * Boombox scene: on the shoulder (right arm up holding it, bobbing to the beat), scolding (left index finger wagging
-   * at him, the boombox hanging from the right hand), cowering (shrug, leaning back). Whoever stands near the music
-   * bobs along; she carries it with a stiff right arm. Eases in and out like the Nerf poses.
+   * at him, the boombox hanging from the right hand). Taken away, he is sad: head and shoulders hang and the arms dangle,
+   * standing while she yells and walking off afterwards. Whoever stands near the music bobs along; she carries it with a
+   * stiff right arm. Eases in and out like the Nerf poses.
    */
   private poseBoombox(w: Person, r: Person['rig']): void {
     const box = this.sim.boombox;
@@ -1621,7 +1622,23 @@ export class Game {
     w.boomClock = now;
     const on = !!w.boomPose && w.moving < 0.2 && !w.held && w.sit < 0.05;
     w.boomAmt = Math.min(1, Math.max(0, w.boomAmt + (on ? 1 : -1) * (dt / 0.25)));
+    const sad = w.boomSad > 0 && !w.held && w.sit < 0.05;
+    w.boomSadAmt = Math.min(1, Math.max(0, w.boomSadAmt + (sad ? 1 : -1) * (dt / 0.5)));
     const lerp = THREE.MathUtils.lerp;
+    if (w.boomSadAmt > 0) {
+      // slumped: leans forward and sinks (the head hangs), the arms hang straight down with a weak swing
+      const s = smooth(w.boomSadAmt);
+      const lean = 0.3;
+      r.body.rotation.x += lean * s;
+      r.body.position.y -= 0.05 * s;
+      // the arms hang only when they are free (not holding a phone or a vape, not gesturing in a talk)
+      const busy = w.phoneAmt > 0.05 || !!w.vapeJob || w.talkAmt > 0.1;
+      for (const [arm, elbow, side] of busy ? [] : ([[r.armL, r.elbowL, -1], [r.armR, r.elbowR, 1]] as const)) {
+        arm.rotation.x = lerp(arm.rotation.x, arm.rotation.x * 0.35 - lean, s);
+        arm.rotation.z = lerp(arm.rotation.z, side * 0.04, s);
+        elbow.rotation.x = lerp(elbow.rotation.x, -0.05, s);
+      }
+    }
     if (box.dancers.has(w)) {
       // two bobs a second, a little nod with each
       const b = Math.abs(Math.sin(box.beat * Math.PI * 2));
@@ -1649,14 +1666,6 @@ export class Game {
       r.elbowR.rotation.x = lerp(r.elbowR.rotation.x, -0.05, a);
       r.body.rotation.x += 0.12 * a;
       r.body.position.y += Math.abs(Math.sin(now * 7)) * 0.02 * a;
-    } else if (w.boomPose === 'cower') {
-      for (const [arm, elbow, side] of [[r.armL, r.elbowL, -1], [r.armR, r.elbowR, 1]] as const) {
-        arm.rotation.x = lerp(arm.rotation.x, -0.5, a);
-        arm.rotation.z = lerp(arm.rotation.z, side * 0.5, a);
-        elbow.rotation.x = lerp(elbow.rotation.x, -1.3, a);
-      }
-      r.body.rotation.x += -0.14 * a;
-      r.body.position.y -= 0.05 * a;
     }
   }
 
@@ -1955,7 +1964,6 @@ export class Game {
     const coffee = this.sim.kitchen.current;
     const rep = this.reply;
     const call = this.sim.welcome.call;
-    const boom = this.sim.boombox.bubble;
     const say = (id: string, text: string, who: Walker) => ({ id, text, head: this.headTop(who) });
     const bubbleDt = this.clock - this.bubbleClock;
     this.bubbleClock = this.clock;
@@ -1963,7 +1971,7 @@ export class Game {
       [
         ...(this.easter.angry && !this.easter.angry.who.away ? [say(`angry-${this.easter.angry.who.id}`, this.easter.angry.text, this.easter.angry.who)] : []),
         ...(call && !call.who.away ? [say(`welcome-${call.who.id}`, call.text, call.who)] : []),
-        ...(boom ? [say(`boombox-${boom.who.id}`, boom.text, boom.who)] : []),
+        ...this.sim.boombox.bubbles.map((b) => say(`boombox-${b.who.id}`, b.text, b.who)),
         ...(rep && !rep.who.away ? [say(`reply-${rep.who.id}`, rep.text, rep.who)] : []),
         ...this.sim.social.active.filter((c) => c.phase !== 'gather' && c.text).map((c) => say(c.speaker.id, c.text, c.speaker)),
         ...(coffee?.phase === 'chat' ? [say(coffee.speaker.id, coffee.text, coffee.speaker)] : []),

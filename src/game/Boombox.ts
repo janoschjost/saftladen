@@ -15,6 +15,7 @@ const SIGHT_SKIP = 0.8; // metres in front of her not checked for sight: the cha
 export const NOTICE = 3; // seconds of music before she notices
 const LOOK = 1; // seconds she stares at him (❗) before she runs
 export const YELL = 3; // seconds she yells at him
+export const SAD = 10; // seconds he walks off slowly and slumped after she yelled
 export const BOB_RANGE = 3; // metres around the boombox within which people standing there bob along
 const GAP = { min: 300, max: 600 }; // seconds between two tries of the gag
 const RETRY = 5; // seconds before looking again when the two were not there
@@ -24,6 +25,7 @@ const GRAB = 0.8; // metres from him where she stops to take it
 const NOTE_GAP = 0.3; // seconds between two notes
 const NOTE_LIFE = 1.8; // seconds a note rises before it is gone
 export const YELLS = ['😠', '!', '!?', '😠!!'];
+export const CRY = '😢'; // his bubble while she yells
 
 const between = ({ min, max }: { min: number; max: number }) => min + random() * (max - min);
 
@@ -35,6 +37,9 @@ export function free(p: Person): boolean {
   if (tied(p)) return false;
   return p.task ? p.task.phase === 'work' : onBreak(p);
 }
+
+/** Picked up, steered, gone, or busy with something else (a meeting, a call, a talk, a scene): the slump after the scene ends at once. */
+const slumpEnds = (p: Person): boolean => tied(p, false);
 
 /** Out, in somebody's hands, or in a meeting, call, toilet or talk: does not take part in the scene. `stopped`: a stop (a word with the player, a stroke, a Nerf stand-off) counts too. */
 function tied(p: Person, stopped = true): boolean {
@@ -103,6 +108,8 @@ export class Boombox {
   /** the desk the boombox stands on (taken away today), null while it is not on a desk */
   onDesk: Desk | null = null;
   private scene: Scene | null = null;
+  /** who hangs his head after it was taken (`Person.boomSad`) */
+  private sad: Person | null = null;
   /** the working day it was taken away on: no more music that day */
   private takenOn = -1;
   private noteIn = 0;
@@ -133,12 +140,13 @@ export class Boombox {
     return this.takenOn === this.days;
   }
 
-  /** What one of the two says now (her ❗ and her yelling), for the speech bubbles. */
-  get bubble(): { who: Person; text: string } | null {
+  /** What the two say now (her ❗, her yelling and his 😢), for the speech bubbles. */
+  get bubbles(): Array<{ who: Person; text: string }> {
     const s = this.scene;
-    if (s?.stage === 'look') return { who: s.boss, text: '❗' };
-    if (s?.stage === 'yell') return { who: s.boss, text: YELLS[Math.min(YELLS.length - 1, Math.floor((s.t / YELL) * YELLS.length))] };
-    return null;
+    if (s?.stage === 'look') return [{ who: s.boss, text: '❗' }];
+    if (s?.stage !== 'yell') return [];
+    const yell = { who: s.boss, text: YELLS[Math.min(YELLS.length - 1, Math.floor((s.t / YELL) * YELLS.length))] };
+    return s.dj.boomPose === 'sad' ? [yell, { who: s.dj, text: CRY }] : [yell];
   }
 
   /** Sandro and Donata, when he is on a break and she is free within reach and sight; null otherwise. */
@@ -154,6 +162,7 @@ export class Boombox {
   start(dj: Person, boss: Person): boolean {
     if (this.scene || dj === boss) return false;
     if (!dj.talkTo({ x: boss.pos.x, z: boss.pos.z }, NOTICE + 1, false)) return false;
+    this.cheerUp();
     dj.speaking = false;
     dj.boomPose = 'play';
     this.scene = { dj, boss, stage: 'play', t: 0, pin: null, desk: null };
@@ -164,9 +173,18 @@ export class Boombox {
     return true;
   }
 
+  /**
+   * Ends a running scene at once (an action needs one of the two, see `makePossible`): nobody keeps a pose, the run or
+   * her pin, he is not sad any more. Taken already, the boombox lands on her desk; still in his hand, it is put away.
+   */
+  abort(): void {
+    this.end();
+    this.cheerUp();
+  }
+
   /** The boombox is gone from her desk (a new day, or the dev event wants the scene again). */
   reset(): void {
-    if (this.scene) this.end();
+    this.abort();
     this.takenOn = -1;
     if (this.onDesk) this.hold(null);
   }
@@ -177,6 +195,7 @@ export class Boombox {
       if (!this.scene && this.onDesk) this.hold(null); // a new working day: gone from her desk
     }
     if (this.scene) this.advance(this.scene, dt, nav);
+    if (this.sad && ((this.sad.boomSad -= dt) <= 0 || slumpEnds(this.sad))) this.cheerUp();
     this.stepNotes(dt);
     this.dance(people);
     if (this.scene || this.taken) return;
@@ -223,6 +242,15 @@ export class Boombox {
     }
   }
 
+  /** He is over it (or was taken away): no more slump. */
+  private cheerUp(): void {
+    const p = this.sad;
+    this.sad = null;
+    if (!p) return;
+    p.boomSad = 0;
+    if (p.boomPose === 'sad') p.boomPose = null;
+  }
+
   /** Keeps `p` standing where they are, facing `at`. */
   private stay(p: Person, at: Vec2): void {
     const chat = p.playerChat;
@@ -261,7 +289,7 @@ export class Boombox {
     s.t = 0;
   }
 
-  /** She takes it out of his hand: the music stops; she yells, he cowers. */
+  /** She takes it out of his hand: the music stops; she yells, he is sad (😢, head and shoulders hang). */
   private grab(s: Scene): void {
     const { dj, boss } = s;
     // right beside him before her spot: she stops where she is
@@ -272,7 +300,9 @@ export class Boombox {
     boss.rush = false;
     boss.boomPose = 'scold';
     boss.boomCarry = true;
-    dj.boomPose = 'cower';
+    dj.boomPose = 'sad';
+    dj.boomSad = YELL + SAD; // hangs his head while she yells, then walks off slumped
+    this.sad = dj;
     this.hold(boss, 'hand');
     this.clearNotes();
     this.takenOn = this.days;
@@ -285,6 +315,7 @@ export class Boombox {
     const { dj, boss } = s;
     dj.boomPose = null;
     if (dj.playerChat) dj.playerChat.t = Math.min(dj.playerChat.t, 0.3);
+    if (dj.boomSad > 0) dj.moveOn(); // walks off, slumped
     boss.boomPose = null;
     boss.unpin();
     s.pin = null;
@@ -308,6 +339,7 @@ export class Boombox {
     if (!s) return;
     this.scene = null;
     const { dj, boss } = s;
+    if (s.stage === 'yell' && dj.boomSad > 0) dj.moveOn(); // she was called away mid-yell: he walks off all the same, sad
     for (const p of [dj, boss]) {
       p.boomPose = null;
       p.boomCarry = false;

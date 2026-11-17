@@ -25,6 +25,7 @@ const PRINT_TIME = { min: 4, max: 9 }; // seconds spent at the printer
 const STEER_WALK = 2.2; // m/s while steered with the keyboard
 const STEER_RUN = 5.4;
 const RUSH = 2; // running is this much faster than walking
+const SLUMP = 0.55; // walking slumped (sad, see Boombox.ts) is this much slower
 const VAPE_CHANCE = 0.15; // chance per decision (vapers only) to take a drag instead
 const VAPE_RAISE = 0.6; // timeline of one drag, seconds: raise the hand, inhale, hold, exhale (arm drops during it)
 const VAPE_DRAW = 2.0;
@@ -188,7 +189,7 @@ export class Person extends Walker {
   /** running after somebody (see Boombox.ts): faster than walking */
   rush = false;
   get speed(): number {
-    return this.pace * (this.rush ? RUSH : 1);
+    return this.pace * (this.rush ? RUSH : this.boomSad > 0 ? SLUMP : 1);
   }
   set speed(v: number) {
     this.pace = v;
@@ -250,11 +251,14 @@ export class Person extends Walker {
   nerfClock = 0;
   /**
    * Boombox scene (see Boombox.ts): what this person does in it (plays it on the shoulder, stares at the one who plays
-   * it, yells at him, cowers under the yelling), whether the boombox hangs from their hand, and the eased pose
+   * it, yells at him, stands there sad while she yells), whether the boombox hangs from their hand, and the eased pose
    */
-  boomPose: 'play' | 'look' | 'scold' | 'cower' | null = null;
+  boomPose: 'play' | 'look' | 'scold' | 'sad' | null = null;
   boomCarry = false;
   boomAmt = 0;
+  /** seconds left that he hangs his head and shoulders and walks slowly (the boombox was taken away), and the eased slump */
+  boomSad = 0;
+  boomSadAmt = 0;
   boomClock = 0;
   /** back height (m) of the pet being stroked: sets how deep the crouch goes */
   petHeight = 0.4;
@@ -1194,6 +1198,11 @@ export class Person extends Walker {
       return;
     }
     this.wanderTo(nav);
+  }
+
+  /** The next decision walks off (to a desk, else a stroll), instead of standing and looking around. */
+  moveOn(): void {
+    this.displaced = true;
   }
 
   /** Walks to a claimed `desk`, sits down and works there. */
