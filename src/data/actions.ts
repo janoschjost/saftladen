@@ -73,7 +73,7 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
     icon: 'M3 6h18v12H3zM12 6v12M7 9v6M17 9v6',
     eventId: 'foosball',
     place: { name: 'Lounge, Töggelikasten', x: 9.35, z: 13.2 },
-    angle: 0,
+    angle: 180,
     zoom: 3.2,
     caption: 'Eine Runde Kicker',
     who: 'Zwei Leute',

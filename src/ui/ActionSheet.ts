@@ -10,14 +10,9 @@ export interface SheetPick {
 
 export interface ActionSheetHooks {
   onPick: (pick: SheetPick) => void;
-  /** Draw one preview per card into its canvas. Called once, when the sheet opens for the first time. */
-  onPreviews: (items: Array<{ action: OfficeAction; canvas: HTMLCanvasElement }>) => void;
   /** the sheet opened or closed */
   onToggle?: (open: boolean) => void;
 }
-
-/** preview bitmap size (16:9) */
-export const PREVIEW = { width: 480, height: 270 } as const;
 
 const SLIDE_MS = 300;
 const svg = (d: string) =>
@@ -39,8 +34,7 @@ export class ActionSheet {
   private moreHead = document.getElementById('action-more-head') as HTMLElement;
   private emptyEl = document.getElementById('action-empty') as HTMLElement;
   private search = document.getElementById('action-search') as HTMLInputElement;
-  private cards: Array<{ action: OfficeAction; li: HTMLLIElement; button: HTMLButtonElement; key: HTMLElement; canvas: HTMLCanvasElement }> = [];
-  private previewsDone = false;
+  private cards: Array<{ action: OfficeAction; li: HTMLLIElement; button: HTMLButtonElement; key: HTMLElement }> = [];
   private closing = 0;
 
   constructor(
@@ -58,21 +52,24 @@ export class ActionSheet {
       const button = el('button', 'm-card');
       button.type = 'button';
       button.dataset.action = action.id;
-      const canvas = el('canvas', 'm-card__preview');
-      canvas.width = PREVIEW.width;
-      canvas.height = PREVIEW.height;
-      canvas.setAttribute('aria-hidden', 'true');
+      // a still of the people doing it, taken in the running game: public/actions/<id>.webp
+      const preview = el('img', 'm-card__preview');
+      preview.src = `${import.meta.env.BASE_URL}actions/${action.id}.webp`;
+      preview.alt = '';
+      preview.width = 800;
+      preview.height = 450;
+      preview.loading = 'lazy';
       const key = el('kbd', 'm-card__key');
       const label = el('span', 'm-card__label');
       label.innerHTML = svg(action.icon);
       label.append(action.label);
       const place = el('small', 'm-card__place', action.place.name);
       const who = el('small', 'm-card__who', action.who);
-      button.append(canvas, key, label, place, who);
+      button.append(preview, key, label, place, who);
       button.addEventListener('click', () => this.pick({ eventId: action.eventId, label: action.label, action }));
       li.append(button);
       this.cardsEl.append(li);
-      this.cards.push({ action, li, button, key, canvas });
+      this.cards.push({ action, li, button, key });
     }
     this.button.addEventListener('click', () => this.toggle());
     document.getElementById('action-sheet-close')!.addEventListener('click', () => this.close(true));
@@ -119,10 +116,6 @@ export class ActionSheet {
     this.root.classList.add('is-open');
     this.button.setAttribute('aria-expanded', 'true');
     document.body.classList.add('has-open-sheet');
-    if (!this.previewsDone) {
-      this.previewsDone = true;
-      this.hooks.onPreviews(this.cards.map((c) => ({ action: c.action, canvas: c.canvas })));
-    }
     (this.visibleCards()[0]?.button ?? this.search).focus({ preventScroll: true });
     this.hooks.onToggle?.(true);
   }

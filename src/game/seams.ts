@@ -26,11 +26,11 @@ export const stillTime: FrameTime = { since: () => 0 };
 
 /** What puts a frame on the screen. */
 export interface Drawer {
-  /** Its canvas takes the input; the Aktionen previews are rendered with it in every build. */
+  /** Its canvas takes the input. */
   readonly renderer: THREE.WebGLRenderer;
   /** whether the office reaches the screen */
   readonly draws: boolean;
-  /** One frame of the office. `look` is what reads the scene on the way: picking, labels, bubbles, previews. */
+  /** One frame of the office. `look` is what reads the scene on the way: picking, labels, bubbles. */
   frame(scene: THREE.Scene, camera: THREE.Camera, look: () => void): void;
   /** The home office rooms behind the feed tiles: `paint` draws them with the renderer. */
   feeds(paint: (r: THREE.WebGLRenderer) => void): void;

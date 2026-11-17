@@ -146,20 +146,10 @@ test('actions.sheet + actions.search: A toggles the sheet, previews, number keys
   await expect(page.locator('#action-cards .m-card__key').first()).toHaveText('1');
   // every other dev event is listed without typing anything
   await expect(page.locator('#action-more [data-event="rain"]')).toBeVisible();
-  // the previews are drawn once, in the next frame after the first open: the canvas is no longer empty
+  // every card has its still: the image of the people doing the action loaded
   await expect
-    .poll(
-      () =>
-        page.evaluate(() => {
-          const c = document.querySelector<HTMLCanvasElement>('#action-cards canvas')!;
-          const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
-          let lit = 0;
-          for (let i = 3; i < d.length; i += 4 * 97) if (d[i] > 0) lit++;
-          return lit;
-        }),
-      { timeout: 30_000 },
-    )
-    .toBeGreaterThan(10);
+    .poll(() => page.evaluate(() => [...document.querySelectorAll<HTMLImageElement>('#action-cards img')].filter((i) => i.complete && i.naturalWidth > 0).length), { timeout: 30_000 })
+    .toBe(16);
   // Esc closes the sheet and does nothing else
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
