@@ -123,9 +123,9 @@ export class SmokeBreaks {
     this.due.set(p, 0);
   }
 
-  /** Out for a cigarette now, if they may and the porch has room. */
-  start(p: Person, nav: NavGrid): 'ok' | 'busy' | 'full' {
-    if (!p.member.smoke || !this.presence.maySmoke(p)) return 'busy';
+  /** Out for a cigarette now, if they may and the porch has room. `asked`: a dev event sends them, whatever the time of day or their plan (they only have to be free). */
+  start(p: Person, nav: NavGrid, asked = false): 'ok' | 'busy' | 'full' {
+    if (!p.member.smoke || !(asked ? this.presence.free(p) : this.presence.maySmoke(p))) return 'busy';
     const spot = this.freeSpot();
     if (!spot) return 'full';
     if (!this.presence.smokeBreak(p, nav, between(SMOKE.length))) return 'busy';
@@ -145,6 +145,24 @@ export class SmokeBreaks {
     }
     if (this.weather.raining) this.makeRoomForUmbrellas();
     this.updateChat(dt);
+  }
+
+  /** Somebody is on a smoke break: on the way out, on the porch or on the way back in. */
+  get active(): boolean {
+    return this.smokers.some((p) => p.onSmokeBreak && !this.presence.isKept(p));
+  }
+
+  /**
+   * Ends every smoke break at once (an action needs a smoker, see `makePossible`): the chat stops, the cigarette goes
+   * out, the umbrella is folded, and who is past the door is back in the office at `inside(p)` right away.
+   */
+  abort(inside: (p: Person) => Vec2): void {
+    this.endChat();
+    for (const p of this.smokers) {
+      if (!p.onSmokeBreak || this.presence.isKept(p)) continue; // who a scene holds stays where they are
+      if (p.beforeDoor) p.cancelLeave();
+      else p.arriveNow(inside(p));
+    }
   }
 
   /** Rain: whoever stands (or is heading) on a dry-only spot moves to a free rain spot, or finishes up and comes in. */
@@ -168,17 +186,9 @@ export class SmokeBreaks {
   /** Two or more smokers standing out there chat; who goes in drops out of it. */
   private updateChat(dt: number): void {
     const standing = this.smokers.filter((p) => p.atPorchSpot);
-    const chat = this.chat;
-    // who went in (or everybody, once fewer than two are left) drops out of it
-    for (const m of chat?.members ?? []) {
-      if (standing.length >= 2 && standing.includes(m)) continue;
-      if (m.talk === chat) m.talk = null;
-      m.speaking = false;
-    }
-    if (standing.length < 2) {
-      this.chat = null;
-      return;
-    }
+    if (standing.length < 2) return this.endChat();
+    // who went in drops out of it
+    for (const m of this.chat?.members ?? []) if (!standing.includes(m)) this.leaveChat(m);
     const c = (this.chat ??= new CasualChat(standing, { x: 0, z: 0 }));
     c.members = standing;
     for (const m of standing) m.talk = c;
@@ -187,4 +197,13 @@ export class SmokeBreaks {
     c.update(dt);
   }
 
+  private leaveChat(m: Person): void {
+    if (m.talk === this.chat) m.talk = null;
+    m.speaking = false;
+  }
+
+  private endChat(): void {
+    for (const m of this.chat?.members ?? []) this.leaveChat(m);
+    this.chat = null;
+  }
 }

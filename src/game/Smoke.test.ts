@@ -6,6 +6,7 @@ import { DOOR, DOOR_LANES, fromDoorway } from './Door';
 import type { Person } from './Person';
 import type { Sim } from './Sim';
 import { DRY_GAP, PORCH_SPOTS, UMBRELLA_CLEAR, UMBRELLA_DIAMETER } from './Smoke';
+import { first } from './simEvents';
 import { cycleOf } from './TimeOfDay';
 
 installHeadlessDom();
@@ -164,6 +165,54 @@ describe('presence.smoke: smoke breaks on the porch', () => {
     expect([...through.in]).toEqual(expect.arrayContaining([smoker, walker]));
     // every rain spot keeps the open umbrella off the frame
     for (const s of PORCH_SPOTS.filter((s) => s.rain)) expect(fromDoorway(s.x, s.z)).toBeGreaterThanOrEqual(UMBRELLA_CLEAR);
+  });
+});
+
+describe('actions.force: smoke breaks', () => {
+  it('actions.force: an action that needs a smoker on a break ends it: cigarette out, umbrella folded, back in, and the action runs', () => {
+    const sim = office();
+    sim.scenario.clear('printer', 'coffee', 'kitchen', 'meeting', 'wc');
+    for (const p of sim.people) if (p.id !== SANDRO) sim.scenario.put(p.id, 'errand'); // held out there: only Sandro can print
+    sim.scenario.put(SANDRO, 'desk', 'free');
+    const p = sim.person(SANDRO);
+    sim.weather.set(true);
+    urge(sim, p);
+    expect(run(sim, 60, () => p.atPorchSpot && p.umbrellaAmt === 1 && p.smokeArm > 0.5)).toBe(true);
+    expect(sim.smoke.active).toBe(true);
+    expect(sim.events.trigger('printer')).toBe(`${first(p)} druckt`);
+    expect(p.presence).toBe('in');
+    expect(p.onSmokeBreak).toBe(false);
+    expect(sim.smoke.active).toBe(false);
+    expect(p.porchSpot).toBeNull();
+    expect(p.smokeLit).toBe(false);
+    expect(p.smokeArm).toBe(0); // no arm left at the mouth
+    expect(p.umbrellaAmt).toBe(0);
+    expect(p.talk).toBeNull();
+    expect(p.pos.z).toBeLessThan(DOOR.z);
+    expect(p.printJob).toBeTruthy();
+    expect(sim.people.filter((o) => o !== p).every((o) => o.presence === 'out')).toBe(true); // the break was enough
+  });
+
+  it('presence.smoke (smoke, smoke-<id>): the Rauchpause event sends a free smoker out; one already out stays there, also when everybody is out; a dev sends them at night too', () => {
+    const sim = office();
+    for (const p of sim.people) if (p.id !== SANDRO && p.id !== JANNIK) sim.scenario.put(p.id, 'errand');
+    const smokers = atDesks(sim, [SANDRO, JANNIK]);
+    expect(sim.events.trigger('smoke')).toMatch(new RegExp(`^(${smokers.map(first).join('|')}) geht rauchen$`));
+    expect(smokers.filter((p) => p.onSmokeBreak)).toHaveLength(1);
+    // the per-person event: already out there, nothing to do
+    const out = smokers.find((p) => p.onSmokeBreak)!;
+    expect(sim.events.trigger(`smoke-${out.id}`)).toBe(`${first(out)} raucht schon`);
+    // the other one goes too; with both out there the card ends nobody's break
+    expect(run(sim, 60, () => out.atPorchSpot)).toBe(true);
+    expect(sim.events.trigger('smoke')).toMatch(/ geht rauchen$/);
+    expect(run(sim, 60, () => smokers.every((p) => p.atPorchSpot))).toBe(true);
+    expect(sim.events.trigger('smoke')).toMatch(/ raucht schon$/);
+    expect(smokers.every((p) => p.atPorchSpot && p.smokeLit)).toBe(true);
+    // at night (off the schedule) a dev still sends them
+    const night = office({ cycle: cycleOf(22) });
+    const [q] = atDesks(night, [SANDRO]);
+    expect(night.events.trigger(`smoke-${SANDRO}`)).toBe(`${first(q)} geht rauchen`);
+    expect(q.onSmokeBreak).toBe(true);
   });
 });
 

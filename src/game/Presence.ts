@@ -540,6 +540,11 @@ export class Presence {
     return this.removed.has(p);
   }
 
+  /** A scene holds this person where they are (`keep`). */
+  isKept(p: Person): boolean {
+    return this.kept.has(p);
+  }
+
   /** Bring somebody back to the office (by hand): they come and stay, even into a full office (see `overfull`). */
   callBack(p: Person): void {
     if (this.kept.has(p) || this.removed.has(p)) return;
