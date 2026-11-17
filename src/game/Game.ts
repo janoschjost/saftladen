@@ -49,6 +49,7 @@ import { RoomEditor } from './RoomEditor';
 import { HIP_HEIGHT, LEG_ORDER, petPose, poseFrame, SIT_POSE, smooth } from './petPose';
 import { applySky, type SkyRig } from './TimeOfDay';
 import { MAX_FRAME, type Drawer, type FrameTime } from './seams';
+import { FramePacer, type FrameState } from './framePacer';
 import { Sim } from './Sim';
 import { first } from './simEvents';
 import { Walker } from './Walker';
@@ -173,6 +174,17 @@ export class Game {
   private steppers = new Set<(dt: number) => void>();
   private time: FrameTime;
   private drawer: Drawer;
+  /** which display refreshes draw a frame (#212) */
+  private pacer = new FramePacer();
+  /** false: every refresh draws (`?test`, where time stands still anyway); the pacer still says what it would do */
+  private paced: boolean;
+  private focused = document.hasFocus();
+  private paceState: FrameState = { timeScale: 0, viewMoved: true, keysHeld: false, focused: true };
+  /** the camera moved on the last frame drawn */
+  private viewMoved = true;
+  private lastCamera: THREE.Camera | null = null;
+  private lastView = new THREE.Matrix4();
+  private lastProjection = new THREE.Matrix4();
 
   /**
    * `time` says how much time a frame adds, `drawer` puts it on the screen (`seams.ts`): the wall clock and WebGL for
@@ -180,10 +192,11 @@ export class Game {
    */
   constructor(
     private stage: HTMLElement,
-    { time, drawer }: { time: FrameTime; drawer: Drawer },
+    { time, drawer, paced = true }: { time: FrameTime; drawer: Drawer; paced?: boolean },
   ) {
     this.time = time;
     this.drawer = drawer;
+    this.paced = paced;
     stage.appendChild(this.drawer.renderer.domElement);
 
     const stageColor = getComputedStyle(document.documentElement).getPropertyValue('--color-scene').trim();
@@ -575,10 +588,23 @@ export class Game {
     window.addEventListener('blur', () => {
       this.keys.clear();
       this.shift = false;
+      this.focused = false;
     });
+    window.addEventListener('focus', () => {
+      this.focused = true;
+      this.pacer.wake(performance.now());
+    });
+    // any input brings the full frame rate back at once (the pacer drops it while nothing moves);
     // every mouse event carries the modifier state too: Shift is still noticed when its key event got lost (focus change, pointer lock)
-    for (const type of ['pointermove', 'pointerdown', 'mousemove', 'wheel'] as const) {
-      window.addEventListener(type, (e) => (this.shift = e.shiftKey), { passive: true, capture: true });
+    for (const type of ['pointerdown', 'pointermove', 'mousemove', 'wheel', 'keydown', 'keyup', 'touchstart'] as const) {
+      window.addEventListener(
+        type,
+        (e) => {
+          this.pacer.wake(e.timeStamp);
+          if (e instanceof MouseEvent) this.shift = e.shiftKey;
+        },
+        { passive: true, capture: true },
+      );
     }
   }
 
@@ -593,11 +619,22 @@ export class Game {
   paused = false;
 
   private frame(now: number): void {
+    if (this.paced && !this.pacer.due(now, this.frameState())) return;
     this.frames++;
     // pause stops the whole game; 10x / 25x run the whole office faster
     this.step(this.time.since(now), this.timeScale());
     this.render(this.acc / STEP);
     this.renderFeeds();
+  }
+
+  /** What the pacer decides on: whether anything on screen can change, and whether the window is in front. */
+  private frameState(): FrameState {
+    const s = this.paceState; // one object, filled in on every refresh
+    s.timeScale = this.timeScale();
+    s.viewMoved = this.viewMoved;
+    s.keysHeld = this.keys.size > 0;
+    s.focused = this.focused;
+    return s;
   }
 
   /** Game seconds per real second the player picked: 0 while paused (or while the welcome card holds the game), else 1x / 10x / 25x. */
@@ -672,6 +709,10 @@ export class Game {
       /** frames run so far */
       get frames() {
         return g.frames;
+      },
+      /** frame pacing (#212): the rate the loop would draw at now, whether the window has focus, when input last woke it (ms) */
+      get pace() {
+        return { fps: g.pacer.rate(performance.now(), g.frameState()), focused: g.focused, woke: g.pacer.woke };
       },
       /** whether the office reaches the screen (not under `?test` without `&draw`) */
       get draws() {
@@ -1313,6 +1354,16 @@ export class Game {
       this.updateOverlay();
       if (import.meta.env.DEV || import.meta.env.MODE === 'e2e') this.debug?.update(this.clock, this.sim.walkers, this.sim.nav, this.views.camera);
     });
+    this.trackCamera();
+  }
+
+  /** Notes whether the camera moved since the last frame (another camera, a move or a zoom): the pacer keeps full rate while it does. */
+  private trackCamera(): void {
+    const c = this.views.camera;
+    this.viewMoved = c !== this.lastCamera || !nearly(c.matrixWorld, this.lastView) || !nearly(c.projectionMatrix, this.lastProjection);
+    this.lastCamera = c;
+    this.lastView.copy(c.matrixWorld);
+    this.lastProjection.copy(c.projectionMatrix);
   }
 
   /** Interpolated transform + procedural walk cycle. */
@@ -2129,4 +2180,10 @@ declare global {
     /** the test hook, set when a dev param is in the URL (`debugParams.ts`) */
     __game?: TestHook;
   }
+}
+
+/** Two matrices equal but for rounding: an orbit camera's damping eases on in ever smaller steps that nobody sees. */
+function nearly(a: THREE.Matrix4, b: THREE.Matrix4): boolean {
+  for (let i = 0; i < 16; i++) if (Math.abs(a.elements[i] - b.elements[i]) > 1e-5) return false;
+  return true;
 }
