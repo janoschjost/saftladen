@@ -13,7 +13,6 @@ import { NAV_CELL, WORLD } from '../render/World';
 import { Kitchen } from './Coffee';
 import { Mail } from './Mail';
 import { makePossible } from './makePossible';
-import { WALL_CLEARANCE } from './Avoidance';
 import { DevEvents } from './DevEvents';
 import { Dog } from './Dog';
 import { resetDoorLanes } from './Door';
