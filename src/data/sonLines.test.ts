@@ -25,7 +25,7 @@ describe('home.son', () => {
     for (const line of SON_LINES) {
       const t = sonTimeline(line);
       expect(t.sonEnd).toBeGreaterThanOrEqual(3);
-      expect(t.dadStart - t.sonEnd).toBeGreaterThanOrEqual(SON_GAP);
+      expect(t.dadStart - t.sonEnd).toBeGreaterThanOrEqual(SON_GAP - 1e-9);
       expect(t.dadEnd - t.dadStart).toBeGreaterThanOrEqual(3 - 1e-9);
       expect(t.talk - t.dadEnd).toBeGreaterThanOrEqual(SON_BYE);
     }
