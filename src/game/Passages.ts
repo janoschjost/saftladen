@@ -177,17 +177,19 @@ export class Passages {
       }
       const v = this.heading(w, path, next, i);
       const p = this.list[next];
-      if (!force && this.opposed(w, next, v.x, v.z, waited)) {
-        p.waits.set(w, { dx: v.x, dz: v.z, waited, stamp: this.clock, since: this.clock, checked: 0, entered: false });
+      // whoever got the passage after waiting keeps that wait, even when somebody coming out still holds it up
+      const mine = p.holds.get(w);
+      const credit = mine && this.clock - mine.stamp <= STALE ? Math.max(waited, mine.waited) : waited;
+      if (!force && this.opposed(w, next, v.x, v.z, credit)) {
+        p.waits.set(w, { dx: v.x, dz: v.z, waited: credit, stamp: this.clock, since: this.clock, checked: 0, entered: false });
         // the lane leads from the last step on open floor into the passage
         const lx = q.x - px;
         const lz = q.z - pz;
         const l = Math.hypot(lx, lz) || 1;
         return { passage: next, mouth: q, dx: lx / l, dz: lz / l };
       }
-      const before = p.waits.get(w)?.waited ?? 0;
       p.waits.delete(w);
-      this.hold(w, next, v.x, v.z, before);
+      this.hold(w, next, v.x, v.z, credit);
       break;
     }
     return null;
@@ -285,11 +287,9 @@ export class Passages {
       // one at a time through the entrance: whoever got there first goes in, then the next follows
       else if (h.since < since && !h.entered && this.at(o.pos) !== passage) return true;
     }
-    // whoever got the passage after waiting keeps that wait, even when somebody coming out still holds it up
-    const mine = Math.max(waited, p.holds.get(w)?.waited ?? 0);
     for (const [o, h] of p.waits) {
       if (this.clock - h.stamp > STALE || o.away) p.waits.delete(o);
-      else if (o !== w && !w.ignores(o) && h.dx * dx + h.dz * dz < OPPOSITE && h.waited > mine + TURN) return true;
+      else if (o !== w && !w.ignores(o) && h.dx * dx + h.dz * dz < OPPOSITE && h.waited > waited + TURN) return true;
     }
     return false;
   }
