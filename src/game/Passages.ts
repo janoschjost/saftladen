@@ -50,7 +50,8 @@ export interface Gate {
  * A passage is a run of cells too narrow for two bodies side by side. It carries traffic in one direction at a time:
  * whoever is inside (or got there first) goes on, followers in the same direction queue up behind,
  * everybody heading the other way waits in front of the entrance until it is empty. The two sides take turns:
- * nobody new joins the flow while somebody on the other side has been waiting for longer.
+ * nobody new joins the flow while somebody on the other side has been waiting for longer (whoever already has the
+ * passage for its way in keeps it, even when somebody coming out holds it up).
  * Somebody standing around inside plugs the passage for both sides until they have moved on.
  * Reservations lapse on their own as soon as the holder stops walking, so nothing can stay locked.
  */
@@ -286,6 +287,9 @@ export class Passages {
       // one at a time through the entrance: whoever got there first goes in, then the next follows
       else if (h.since < since && !h.entered && this.at(o.pos) !== passage) return true;
     }
+    // already ours for this way in (somebody coming out may still hold us up): taking turns only stops newcomers
+    const mine = p.holds.get(w);
+    if (mine && !mine.entered && mine.dx * dx + mine.dz * dz > 0) return false;
     for (const [o, h] of p.waits) {
       if (this.clock - h.stamp > STALE || o.away) p.waits.delete(o);
       else if (o !== w && !w.ignores(o) && h.dx * dx + h.dz * dz < OPPOSITE && h.waited > waited + TURN) return true;
