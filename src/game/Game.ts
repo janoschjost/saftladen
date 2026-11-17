@@ -1693,14 +1693,14 @@ export class Game {
     if (w.mailCarry === 'parcel') {
       // both forearms forward under the parcel
       for (const [arm, elbow, side] of [[r.armL, r.elbowL, -1], [r.armR, r.elbowR, 1]] as const) {
-        arm.rotation.x = lerp(arm.rotation.x, -1.15, a);
-        arm.rotation.z = lerp(arm.rotation.z, side * 0.12, a);
-        elbow.rotation.x = lerp(elbow.rotation.x, -0.45, a);
+        arm.rotation.x = lerp(arm.rotation.x, -0.45, a);
+        arm.rotation.z = lerp(arm.rotation.z, side * 0.02, a);
+        elbow.rotation.x = lerp(elbow.rotation.x, -1.2, a);
       }
     } else {
-      r.armR.rotation.x = lerp(r.armR.rotation.x, -0.55, a);
-      r.armR.rotation.z = lerp(r.armR.rotation.z, 0.1, a);
-      r.elbowR.rotation.x = lerp(r.elbowR.rotation.x, -0.7, a);
+      r.armR.rotation.x = lerp(r.armR.rotation.x, -0.5, a);
+      r.armR.rotation.z = lerp(r.armR.rotation.z, 0.06, a);
+      r.elbowR.rotation.x = lerp(r.elbowR.rotation.x, -1.3, a);
     }
   }
 

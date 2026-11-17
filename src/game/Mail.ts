@@ -292,12 +292,13 @@ export class Mail {
     m.rotation.set(0, 0, 0);
     m.scale.setScalar(1);
     if (j.kind === 'letter') {
+      // held flat in the right hand, the forearm level in front of the belt (see `Game.poseMail`): the hand is 0.3 below the elbow
       p.rig.elbowR.add(m);
-      m.position.set(0, -0.58, 0.03);
-      m.rotation.set(0, Math.PI / 2, 0);
+      m.position.set(0, -0.3 - sizeOf(m).h * 0.35, 0);
     } else {
       p.rig.body.add(m);
-      m.position.set(0, 1.05, 0.22 + sizeOf(m).d / 2);
+      // resting on both forearms, hugged to the chest
+      m.position.set(0, 1.17 + sizeOf(m).h / 2, 0.16 + sizeOf(m).d / 2);
     }
     j.stage = 'back';
     j.t = 0;
@@ -381,6 +382,7 @@ export class Mail {
     }
     let yaw = Math.PI / 2;
     let rate = 0;
+    let perched = 0; // wings folded on the back
     root.rotation.x = 0;
     if (t < DOVE.land) {
       const u = easeOut(t / DOVE.land);
@@ -389,8 +391,10 @@ export class Mail {
       // heads for the box, then turns along the lid for the landing
       yaw = lerp(Math.atan2(land.x - from.x, land.z - from.z), Math.PI / 2, easeIn(part(t, DOVE.land - 1.2, DOVE.land)));
       rate = 5 * (1 - part(t, DOVE.land - 0.4, DOVE.land));
+      perched = part(t, DOVE.land - 0.3, DOVE.land);
     } else if (t < DOVE.off) {
       root.position.set(land.x, land.y, land.z);
+      perched = 1;
       // bows its head when it lets go
       if (t > DOVE.drop - 0.6 && t < DOVE.drop + 0.3) root.rotation.x = 0.35;
     } else {
@@ -398,9 +402,10 @@ export class Mail {
       root.position.set(lerp(land.x, to.x, u), lerp(land.y, to.y, u) + Math.sin(u * 3) * 0.3, lerp(land.z, to.z, u));
       yaw = lerp(Math.PI / 2, Math.atan2(to.x - land.x, to.z - land.z), ease(part(t, DOVE.off, DOVE.off + 0.8)));
       rate = 6;
+      perched = 1 - part(t, DOVE.off, DOVE.off + 0.3);
     }
     root.rotation.y = yaw;
-    flap(d, t, rate);
+    flap(d, t, rate, perched);
   }
 
   private flyDrone(j: Job, d: Drone): void {

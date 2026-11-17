@@ -126,15 +126,31 @@ export interface Dove {
 export const DOVE_SCALE = 1.8;
 export function buildDove(): Dove {
   const root = new THREE.Group();
+  const grey = '#8d9298';
+  const pale = '#b3b8bd';
+  const dark = '#737880';
   const body = new THREE.Mesh(
     merge([
-      box(0.12, 0.1, 0.26, 0, 0, 0, '#8d9298'), // body
-      box(0.08, 0.08, 0.08, 0, 0.07, 0.15, '#9aa0a6'), // head
-      box(0.03, 0.025, 0.04, 0, 0.065, 0.2, '#3a3d42'), // beak
-      box(0.02, 0.02, 0.01, 0.036, 0.085, 0.19, '#16171b'), // eyes
-      box(0.02, 0.02, 0.01, -0.036, 0.085, 0.19, '#16171b'),
-      box(0.08, 0.02, 0.12, 0, 0.02, -0.19, '#737880', 0.15), // tail
-      box(0.1, 0.03, 0.06, 0, -0.02, 0.08, '#b3b8bd'), // breast
+      box(0.12, 0.09, 0.2, 0, 0.0, -0.02, grey), // back and flanks
+      box(0.1, 0.07, 0.12, 0, -0.025, 0.07, pale), // plump breast
+      box(0.08, 0.06, 0.07, 0, 0.045, 0.1, grey), // shoulders
+      box(0.07, 0.03, 0.05, 0, 0.065, 0.135, '#7da396'), // iridescent neck patch
+      box(0.07, 0.07, 0.07, 0, 0.1, 0.16, '#9aa0a6'), // head
+      box(0.075, 0.02, 0.05, 0, 0.075, 0.16, pale), // cheeks
+      box(0.03, 0.02, 0.03, 0, 0.1, 0.215, '#c9ccd0'), // cere
+      box(0.022, 0.016, 0.035, 0, 0.092, 0.24, '#3a3d42'), // beak
+      box(0.016, 0.022, 0.012, 0.037, 0.11, 0.195, '#d9822b'), // eyes: orange ring, black pupil
+      box(0.016, 0.022, 0.012, -0.037, 0.11, 0.195, '#d9822b'),
+      box(0.01, 0.014, 0.014, 0.041, 0.11, 0.2, '#16171b'),
+      box(0.01, 0.014, 0.014, -0.041, 0.11, 0.2, '#16171b'),
+      box(0.07, 0.025, 0.1, 0, 0.015, -0.16, dark, 0.12), // tail: three feathers
+      box(0.035, 0.02, 0.1, 0.035, 0.012, -0.17, '#6a6f76', 0.12),
+      box(0.035, 0.02, 0.1, -0.035, 0.012, -0.17, '#6a6f76', 0.12),
+      box(0.07, 0.012, 0.03, 0, 0.0, -0.225, '#e6e8ea'), // pale tail tip
+      box(0.012, 0.045, 0.012, 0.03, -0.075, 0.03, '#c4586b'), // legs and feet
+      box(0.012, 0.045, 0.012, -0.03, -0.075, 0.03, '#c4586b'),
+      box(0.03, 0.01, 0.045, 0.03, -0.1, 0.045, '#c4586b'),
+      box(0.03, 0.01, 0.045, -0.03, -0.1, 0.045, '#c4586b'),
     ]),
     propMaterial,
   );
@@ -142,8 +158,17 @@ export function buildDove(): Dove {
   root.add(body);
   const wings = [-1, 1].map((side) => {
     const pivot = new THREE.Group();
-    pivot.position.set(side * 0.06, 0.05, 0.01);
-    const wing = new THREE.Mesh(merge([box(0.16, 0.014, 0.15, side * 0.08, 0, -0.01, '#7b8086'), box(0.1, 0.014, 0.12, side * 0.21, 0, -0.03, '#a2a7ad')]), propMaterial);
+    pivot.position.set(side * 0.06, 0.05, 0.03);
+    // coverts near the body, then the long primaries with pale tips
+    const wing = new THREE.Mesh(
+      merge([
+        box(0.1, 0.014, 0.14, side * 0.05, 0.004, -0.03, '#80858b'),
+        box(0.12, 0.012, 0.16, side * 0.14, 0, -0.05, '#7b8086'),
+        box(0.1, 0.012, 0.15, side * 0.24, -0.002, -0.07, '#6f747a'),
+        box(0.05, 0.012, 0.12, side * 0.31, -0.004, -0.08, '#a2a7ad'),
+      ]),
+      propMaterial,
+    );
     pivot.add(wing);
     root.add(pivot);
     return pivot;
@@ -152,11 +177,13 @@ export function buildDove(): Dove {
   return { root, wings };
 }
 
-/** Flaps the wings: `t` seconds, `rate` flaps a second (0 = folded up on the back). */
-export function flap(d: Dove, t: number, rate: number): void {
-  const a = rate > 0 ? Math.sin(t * rate * Math.PI * 2) * 0.7 : 0.15;
-  d.wings[0].rotation.z = a;
-  d.wings[1].rotation.z = -a;
+/** Flaps the wings: `t` seconds, `rate` flaps a second; `fold` 0..1 lays them back along the body (perched). */
+export function flap(d: Dove, t: number, rate: number, fold = 0): void {
+  const a = rate > 0 ? Math.sin(t * rate * Math.PI * 2) * 0.7 : 0;
+  d.wings.forEach((w, i) => {
+    const side = i === 0 ? -1 : 1;
+    w.rotation.set(0, side * 1.45 * fold, side * a * (1 - fold) * -1);
+  });
 }
 
 /** The delivery drone: a dark body with four arms and rotors, ropes to hang a parcel from. */
