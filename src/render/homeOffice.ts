@@ -7,7 +7,7 @@ import { buildDog, type DogRig } from './dogBuilder';
 import { ball, box, cyl, merge, propMaterial } from './geo';
 import { SIT_DROP } from './officeBuilder';
 import { fxRandom, seeded } from '../game/rng';
-import { SON_BYE, SON_LINES, sonTimeline, type SonLine } from '../data/sonLines';
+import { SON_BYE, SON_LINES, sonTimeline } from '../data/sonLines';
 import { LAUNDRY, LAUNDRY_PICKS, RACK_SLOTS, laundryHung, laundryTime, laundryTrip } from './laundry';
 
 /**
@@ -1478,7 +1478,7 @@ export class HomeOffice {
       this.sonNext -= dt;
       if (this.sonNext > 0 || this.activity !== 'type' || this.style.lapCam) return;
       this.sonT = 0;
-      const line: SonLine = SON_LINES[Math.floor(fxRandom() * SON_LINES.length)];
+      const line = SON_LINES[Math.floor(fxRandom() * SON_LINES.length)];
       this.sonPlan = sonTimeline(line);
       drawBubble(son.bubble, line.son);
       drawBubble(son.reply, line.dad);
@@ -1496,6 +1496,7 @@ export class HomeOffice {
     const t = this.clock;
     const plan = this.sonPlan;
     const outAt = SON.walkIn + plan.talk;
+    const u = T - SON.walkIn; // seconds since he stands next to Papa
     const walking = T < SON.walkIn || T >= outAt;
     if (walking) {
       const k = T < SON.walkIn ? T / SON.walkIn : 1 - (T - outAt) / SON.walkOut;
@@ -1512,7 +1513,6 @@ export class HomeOffice {
       r.body.position.y = Math.abs(Math.sin(t * 12)) * 0.025;
       r.body.rotation.set(0, 0, 0);
     } else {
-      const u = T - SON.walkIn;
       r.root.position.copy(this.sonAt);
       r.root.rotation.set(0, SON_FACE, 0);
       r.legL.rotation.x = r.legR.rotation.x = 0;
@@ -1527,9 +1527,8 @@ export class HomeOffice {
       r.body.rotation.set(0.05 + Math.sin(t * 3) * 0.03, 0, 0);
     }
     // the boy speaks first, Papa answers once his bubble is gone, then the boy waves
-    const said = T - SON.walkIn;
-    son.bubble.visible = !walking && said < plan.sonEnd;
-    son.reply.visible = !walking && said >= plan.dadStart && said < plan.dadEnd;
+    son.bubble.visible = !walking && u < plan.sonEnd;
+    son.reply.visible = !walking && u >= plan.dadStart && u < plan.dadEnd;
   }
 
   /** Whether this room and occupant have what a signature move or extra break needs. */
