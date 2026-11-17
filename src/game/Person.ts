@@ -507,7 +507,7 @@ export class Person extends Walker {
    * desk still counts as a break: the desk can wait.
    */
   get freeToChat(): boolean {
-    return this.inOffice && !this.held && !this.controlled && !this.talk && !this.playerChat && !this.meetJob && (!this.task || this.task.phase === 'approach') && !this.run && !this.printJob && !this.foosJob && !this.vapeJob && !this.snackLeft && !this.phoneJob && this.socialCooldown <= 0;
+    return this.inOffice && !this.held && !this.controlled && !this.talk && !this.playerChat && !this.meetJob && !this.pendingMeet && !this.coffeeJob && (!this.task || this.task.phase === 'approach') && !this.run && !this.printJob && !this.foosJob && !this.vapeJob && !this.snackLeft && !this.phoneJob && this.socialCooldown <= 0;
   }
 
   /** the wing of the entrance door this person uses on the current trip */
@@ -1251,9 +1251,9 @@ export class Person extends Walker {
     this.goTo(nav, desk.approach);
   }
 
-  /** Somebody else on a break (or at the coffee machine) within `r` metres. */
+  /** Somebody else within `r` metres who stays a moment too: standing about on a break (not on the way to a desk) or at the coffee machine. */
   private companyNear(r: number): boolean {
-    return !!this.office?.people.some((o) => o !== this && Math.hypot(o.pos.x - this.pos.x, o.pos.z - this.pos.z) < r && (o.freeToChat || (!!o.run && o.inOffice)));
+    return !!this.office?.people.some((o) => o !== this && Math.hypot(o.pos.x - this.pos.x, o.pos.z - this.pos.z) < r && ((o.freeToChat && !o.task) || (!!o.run && o.inOffice)));
   }
 
   /** Gives up the coffee run where they stand (the desk is free again). */

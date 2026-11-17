@@ -31,7 +31,7 @@ const GATHER_TIMEOUT = 6;
 
 /**
  * Chance per check that a meeting turns into a conversation, by group size.
- * Two people passing each other rarely stop; bigger groups almost always start talking.
+ * Two people passing each other stop now and then (friends much more readily); bigger groups almost always start talking.
  */
 const START_CHANCE = [0, 0, 0.15, 0.18, 0.35, 0.5, 0.6];
 const JOIN_CHANCE = 0.15;
@@ -339,7 +339,8 @@ export class Social {
 
     // while somebody comes in through the door nobody starts a chat or walks over to somebody: the hallway stays clear (rush hours)
     this.rush = people.some((p) => p.presence === 'returning');
-    const free = people.filter((p) => this.available(p));
+    // somebody on the way to a walk-over (or waiting for one) is spoken for: `arrive` starts their talk
+    const free = people.filter((p) => this.available(p) && !this.engaged(p));
 
     // others may join a running conversation
     for (const c of this.active) {
@@ -380,7 +381,7 @@ export class Social {
     }
 
     if (traffic) {
-      this.arrive(free, nav, traffic);
+      this.arrive(nav, traffic);
       this.seekCompany(free, nav, traffic);
     }
   }
@@ -401,13 +402,14 @@ export class Social {
   }
 
   /** Who went over to somebody: once there the two start talking; somebody who got busy on the way (or took too long) calls it off. */
-  private arrive(free: readonly Person[], nav: NavGrid, traffic: Traffic): void {
+  private arrive(nav: NavGrid, traffic: Traffic): void {
     for (const [p, s] of this.seeking) {
       const o = s.to;
-      if (!free.includes(p) || !free.includes(o) || s.until < this.clock) {
+      if (!p.freeToChat || !o.freeToChat || s.until < this.clock) {
         this.seeking.delete(p);
         continue;
       }
+      if (this.rush) continue; // they wait until the hallway is clear
       if (Math.hypot(o.pos.x - p.pos.x, o.pos.z - p.pos.z) < SEEK_REACH) {
         this.seeking.delete(p);
         this.begin([p, o], nav, traffic);
@@ -419,9 +421,9 @@ export class Social {
   }
 
   /**
-   * Now and then somebody on a break walks over to somebody else who is free (at the coffee machine, in the kitchen,
-   * strolling about) for a chat; good friends are picked much more often. Busy people (desk, meeting, call, toilet,
-   * held, steered) are never in `free`, so nobody goes to them.
+   * Now and then somebody on a break walks over to somebody else who is free (standing about with a coffee, in the
+   * kitchen, on the way back to the desk) for a chat; good friends are picked much more often. Busy people (desk,
+   * meeting, call, toilet, held, steered, brewing at the machine) are never in `free`, so nobody goes to them.
    */
   private seekCompany(free: readonly Person[], nav: NavGrid, traffic: Traffic): void {
     for (const p of free) if (!p.talk && !this.engaged(p) && (this.seekUntil.get(p) ?? 0) <= this.clock && random() < SEEK_CHANCE) this.walkOver(p, free, nav, traffic);
@@ -441,6 +443,7 @@ export class Social {
 
   /** `p` walks over to somebody else on a break (of `people`) for a chat, now; whom, or null when nobody is free nearby. */
   walkOver(p: Person, people: readonly Person[], nav: NavGrid, traffic: Traffic): Person | null {
+    if (!this.available(p) || this.engaged(p)) return null;
     const near = people.filter((o) => {
       if (o === p || !this.available(o) || this.engaged(o)) return false;
       const d = Math.hypot(o.pos.x - p.pos.x, o.pos.z - p.pos.z);

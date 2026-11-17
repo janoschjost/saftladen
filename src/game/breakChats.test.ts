@@ -24,48 +24,65 @@ function walkOvers(sim: Sim, going: Map<Person, Person>): Array<[Person, Person]
 
 describe('social.start', () => {
   const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-  const talks: number[] = [];
-  const atDesk: number[] = [];
-  const talking: number[] = [];
+
+  interface Day {
+    /** talks started by themselves */
+    talks: number;
+    /** share of the office at (or on the way to) a desk, and in a corridor talk, sampled every second */
+    atDesk: number;
+    talking: number;
+    /** walk-overs that went to somebody busy */
+    toBusy: string[];
+  }
+
+  /** 20 game minutes from 11:00 on a weekday, run once per seed, whichever test asks first */
+  const days = new Map<number, Day>();
+  function day(seed: number): Day {
+    const known = days.get(seed);
+    if (known) return known;
+    const sim = office({}, seed);
+    const seen = new Set<Conversation>();
+    const going = new Map<Person, Person>();
+    const toBusy: string[] = [];
+    let frame = 0;
+    let inOffice = 0;
+    let desk = 0;
+    let chat = 0;
+    run(
+      sim,
+      20 * 60,
+      () => false,
+      () => {
+        for (const c of sim.social.active) seen.add(c);
+        for (const [p, to] of walkOvers(sim, going)) if (busy(to)) toBusy.push(`${p.id} -> ${to.id}`);
+        if (++frame % 60) return;
+        const inside = sim.people.filter((p) => p.inOffice);
+        inOffice += inside.length;
+        desk += inside.filter((p) => p.task).length;
+        chat += sim.social.chattingCount;
+      },
+    );
+    const result = { talks: seen.size, atDesk: desk / inOffice, talking: chat / inOffice, toBusy };
+    days.set(seed, result);
+    return result;
+  }
 
   for (const seed of SEEDS) {
     it(`social.start: on a weekday at 11:00 talks start by themselves, never with somebody busy (seed ${seed}, 20 game minutes)`, () => {
-      const sim = office({}, seed);
-      const seen = new Set<Conversation>();
-      const going = new Map<Person, Person>();
-      let frame = 0;
-      let inOffice = 0;
-      let desk = 0;
-      let chat = 0;
-      run(
-        sim,
-        20 * 60,
-        () => false,
-        () => {
-          for (const c of sim.social.active) seen.add(c);
-          for (const [p, to] of walkOvers(sim, going)) expect(busy(to), `${p.id} walks over to busy ${to.id}`).toBe(false);
-          if (++frame % 60) return;
-          const inside = sim.people.filter((p) => p.inOffice);
-          inOffice += inside.length;
-          desk += inside.filter((p) => p.task).length;
-          chat += sim.social.chattingCount;
-        },
-      );
-      talks.push(seen.size);
-      atDesk.push(desk / inOffice);
-      talking.push(chat / inOffice);
-      expect(seen.size).toBeGreaterThan(0);
+      const { talks, toBusy } = day(seed);
+      expect(toBusy).toEqual([]);
+      expect(talks).toBeGreaterThan(0);
     });
   }
 
   it('social.start: about 2–3 talks per 10 game minutes over seeds 1–10, and work still dominates', () => {
-    expect(talks).toHaveLength(SEEDS.length);
-    const mean = (xs: number[]): number => xs.reduce((t, x) => t + x, 0) / xs.length;
-    expect(mean(talks)).toBeGreaterThanOrEqual(4);
-    expect(mean(talks)).toBeLessThanOrEqual(6);
+    const all = SEEDS.map(day);
+    const mean = (pick: (d: Day) => number): number => all.reduce((t, d) => t + pick(d), 0) / all.length;
+    expect(mean((d) => d.talks)).toBeGreaterThanOrEqual(4);
+    expect(mean((d) => d.talks)).toBeLessThanOrEqual(6);
     // not a chatroom: nearly half the office is at (or on the way to) a desk, hardly anybody in a corridor talk
-    expect(mean(atDesk)).toBeGreaterThan(0.4);
-    expect(mean(talking)).toBeLessThan(0.05);
+    expect(mean((d) => d.atDesk)).toBeGreaterThan(0.4);
+    expect(mean((d) => d.talking)).toBeLessThan(0.05);
   });
 
   /** a and b stand about on a break, c works at the desk next to a, d (a stranger to a) is free too; everybody else is out */
