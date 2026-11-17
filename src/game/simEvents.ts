@@ -8,6 +8,7 @@ import type { Vec2 } from './NavGrid';
 import type { Person } from './Person';
 import { PET_HEIGHT } from './petPose';
 import { random } from './rng';
+import { CROWD_LIMIT, CROWD_RADIUS, MAX_GROUP } from './Social';
 import type { Sim } from './Sim';
 
 export const first = (p: Person): string => p.member.name.split(' ')[0];
@@ -22,7 +23,8 @@ const firsts = (group: Person[], sep = ', '): string => group.map(first).join(se
  * to be in the office for it (`phone-booth`, `pet-dog`, `pet-cat`, `pet-errand`, `kurt-walkout`): the next try finds them there.
  * The registry does not leave it at that: a null makes `makePossible` clear the way (people in, occupants out) and run
  * the event again. Only the events marked `asIs` (they end or read something) stay refused when there is nothing to do;
- * `passage-meeting` is `asIs` too and forces only the search for two free people (no clearing makes a passage).
+ * `passage-meeting` and `crowd` are `asIs` too and force only the search for free people (no clearing makes a passage
+ * or ends the quiet start); `talk-join` is never forced (clearing would end the talk to join).
  */
 export function registerSimEvents(sim: Sim): void {
   const { events, people, pets, nav, presence } = sim;
@@ -270,6 +272,44 @@ export function registerSimEvents(sim: Sim): void {
   gather('meeting-chat', 'Gespräch (2)', 2, ...inCorridor);
   gather('meeting-small', 'Meeting (4)', 4, ...inCorridor);
   gather('meeting-big', 'Meeting (6)', 6, ...inCorridor);
+  events.register({
+    id: 'talk-join',
+    // never forced: clearing the way ends running talks, the one to join with them
+    asIs: true,
+    group: 'Meetings',
+    label: 'Jemand stösst dazu',
+    run: () => {
+      // somebody free walks over to a running talk with room (not winding up, not in a crowd) and joins it, greeting first
+      const talk = sim.social.active.find((c) => c.phase !== 'bye' && c.members.length < MAX_GROUP && sim.traffic.bodiesNear(c.center, CROWD_RADIUS) <= CROWD_LIMIT);
+      if (!talk) return null;
+      const [p] = pickFree(1, (o) => !o.talk && !tiedUp(o));
+      if (!p) return null;
+      drop(p);
+      talk.join(p, nav);
+      return `${first(p)} stösst dazu`;
+    },
+  });
+  // six stand packed on one spot of the corridor at once: too many for a talk, they clear out
+  // nobody from a talk (leaving it sets them a cooldown)
+  const crowd = () => {
+    const n = CROWD_LIMIT + 1;
+    const group = pickFree(n, (o) => !o.talk && !tiedUp(o));
+    if (group.length < n) return null;
+    group.forEach((p, i) => {
+      const a = (i * Math.PI * 2) / n;
+      sim.scenario.put(p.id, { x: CORRIDOR_POINT.x + Math.cos(a) * 0.5, z: CORRIDOR_POINT.z + Math.sin(a) * 0.5 }, 'free');
+    });
+    return `Gedränge: ${firsts(group)}`;
+  };
+  events.register({
+    id: 'crowd',
+    asIs: true,
+    group: 'Meetings',
+    label: 'Gedränge (6)',
+    // not before the social checks run, else nobody notices the crowd: clearing cannot end that quiet start, so only
+    // too few free is cleared for
+    run: () => (sim.social.checking ? events.force(crowd) : null),
+  });
   events.register({
     id: 'break-talks',
     group: 'Meetings',

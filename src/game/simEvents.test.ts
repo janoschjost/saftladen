@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { strings } from '../i18n/strings';
+import { CORRIDOR_POINT } from '../render/officeModel';
 import { installHeadlessDom } from '../test/headlessDom';
 import { GROUP, office, run } from '../test/office';
+import { SIGNALS } from './Chatter';
 import type { Person } from './Person';
 import { PET_HEIGHT } from './petPose';
 import type { Sim } from './Sim';
+import { CROWD_LIMIT, CROWD_RADIUS } from './Social';
 import { first } from './simEvents';
 import type { Walker } from './Walker';
 
@@ -269,6 +272,62 @@ describe('dev events on the Sim', () => {
       refused(alone, id);
     });
   }
+
+  it('social.join (talk-join): somebody free joins the running talk and greets first; refused without a talk', () => {
+    const sim = office();
+    const crew = only(sim, GROUP.slice(0, 3));
+    refused(sim, 'talk-join');
+    sim.events.trigger('meeting-chat');
+    const conv = sim.social.active[0];
+    const [c] = crew.filter((p) => !conv.members.includes(p));
+    expect(sim.events.trigger('talk-join')).toBe(`${first(c)} stösst dazu`);
+    expect(ids(conv.members)).toEqual(ids(crew));
+    expect(c.task?.phase).not.toBe('work');
+    expect(run(sim, 30, () => conv.speaker === c && !!conv.text)).toBe(true);
+    expect(conv.text).toBe(SIGNALS.join.symbol);
+  });
+
+  it('social.crowd (crowd): six stand packed in the corridor at once, start no talk and are sent off; refused with five in the office', () => {
+    const sim = office();
+    const crowd = only(sim, [...GROUP, PHONE]);
+    refused(sim, 'crowd'); // in the quiet start nobody would notice the crowd
+    run(sim, 4);
+    expect(sim.events.trigger('crowd')).toMatch(/^Gedränge: /);
+    expect(sim.traffic.bodiesNear(CORRIDOR_POINT, CROWD_RADIUS)).toBe(CROWD_LIMIT + 1);
+    expect(run(sim, 1, () => sim.social.active.length > 0)).toBe(false);
+    expect(crowd.every((p) => p.socialCooldown > 0)).toBe(true);
+
+    const five = office();
+    only(five, GROUP);
+    refused(five, 'crowd');
+    run(five, 4);
+    refused(five, 'crowd'); // past the quiet start nobody held out is brought in
+  });
+
+  it('actions.force (talk-join, crowd): without a talk, or in the quiet start, they are refused and a running meeting keeps going; crowd with too few free clears the meeting, talk-join never', () => {
+    const sim = office();
+    only(sim, [...GROUP, PHONE], 'free');
+    expect(sim.events.trigger('meeting-room')).toMatch(/^Besprechung mit 5: /);
+    const meeting = sim.meetingRoom.current;
+    refused(sim, 'talk-join'); // clearing places cannot start a talk
+    refused(sim, 'crowd'); // nor end the quiet start
+    expect(sim.meetingRoom.current).toBe(meeting);
+    // past the quiet start too few are free: that is cleared as for any action, the meeting ends
+    run(sim, 4);
+    expect(sim.events.trigger('crowd')).toMatch(/^Gedränge: /);
+    expect(sim.meetingRoom.current).toBeNull();
+
+    // a talk runs and everybody else sits in the meeting: still refused, clearing would end the talk too
+    const busy = office();
+    only(busy, [...GROUP, PHONE, KURT], 'free');
+    expect(busy.events.trigger('meeting-room')).toMatch(/^Besprechung mit 5: /);
+    expect(run(busy, 90, () => busy.meetingRoom.occupants(busy.people) === 5)).toBe(true); // seated: tied up
+    expect(busy.events.trigger('meeting-chat')).toMatch(/^Meeting mit 2: /);
+    const [talk, room] = [busy.social.active[0], busy.meetingRoom.current];
+    refused(busy, 'talk-join');
+    expect(busy.social.active[0]).toBe(talk);
+    expect(busy.meetingRoom.current).toBe(room);
+  });
 
   it('dev.events (break-talks): every running talk ends', () => {
     const sim = office();

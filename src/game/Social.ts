@@ -24,8 +24,9 @@ export function nextSpeaker(members: readonly Person[], current: Person, previou
 }
 
 const LINK_DISTANCE = 1.7; // people closer than this count as "meeting"
-const MAX_GROUP = 6;
+export const MAX_GROUP = 6;
 const CHECK_INTERVAL = 0.5; // seconds between social checks
+const GRACE = 3; // seconds after spawn before the first check
 const GATHER_TIMEOUT = 6;
 
 /**
@@ -34,8 +35,8 @@ const GATHER_TIMEOUT = 6;
  */
 const START_CHANCE = [0, 0, 0.04, 0.18, 0.35, 0.5, 0.6];
 const JOIN_CHANCE = 0.15;
-const CROWD_RADIUS = 2.2; // a talk is only started or joined if no more than CROWD_LIMIT bodies stand this close
-const CROWD_LIMIT = 5;
+export const CROWD_RADIUS = 2.2; // a talk is only started or joined if no more than CROWD_LIMIT bodies stand this close
+export const CROWD_LIMIT = 5;
 const CLEAR_DISTANCE = 4; // how far people walk off when they make room instead of talking
 const MIN_GROUP_SPACING = 3.2; // new conversations keep this far from running ones (no blobs of 10+ people)
 
@@ -267,7 +268,7 @@ export class Conversation {
 export class Social {
   active: Conversation[] = [];
   readonly affinity = new Affinity();
-  private checkTimer = 3; // grace period after spawn
+  private checkTimer = GRACE;
   private clock = 0;
   private seekUntil = new Map<Person, number>();
 
@@ -281,6 +282,11 @@ export class Social {
       m.socialCooldown = 6 + random() * 6;
       m.walkTo(nav, traffic.wanderSpot(m, 10, CLEAR_DISTANCE));
     }
+  }
+
+  /** Past the quiet start after spawn, in which nobody starts, joins or clears out of a talk. */
+  get checking(): boolean {
+    return this.clock >= GRACE;
   }
 
   get chattingCount(): number {

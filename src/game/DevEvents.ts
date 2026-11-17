@@ -13,7 +13,8 @@ export interface DevEvent {
   run: () => string | void | null;
   /**
    * The event ends or reads something and null just means "nothing to do": it is not forced (see `DevEvents.forcer`).
-   * Also for an event that forces only the part clearing the office can help with (`DevEvents.force`).
+   * Also for an event that forces only the part clearing the office can help with (`DevEvents.force`), or that
+   * clearing cannot help at all (`talk-join`: it would end the talk to join).
    */
   asIs?: true;
 }
