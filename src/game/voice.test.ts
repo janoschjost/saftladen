@@ -68,6 +68,7 @@ describe('voice', () => {
     // a short signature word leads, anything else closes the line
     const sig = many(40, () => styled('Kaffee?', plain({}, { signature: ['jo'] }), 'coffee', rng));
     expect(sig).toContain('jo, kaffee?');
+    expect(many(40, () => styled('Kaffee?', plain({ punctuation: 'none' }, { signature: ['jo'] }), 'coffee', rng))).toContain('jo kaffee?');
     expect(sig).toContain('Kaffee?');
     expect(many(40, () => styled('Kaffee?', plain({}, { signature: ['Liebe Grüsse'] }), 'coffee', rng))).toContain('Kaffee? Liebe Grüsse');
     // a signature emoji is theirs: it stays even at an emoji rate of 0
@@ -101,7 +102,7 @@ describe('voice', () => {
     expect(long.length).toBeLessThanOrEqual(41);
     expect(long.endsWith('…')).toBe(true);
     // cut by code points: an emoji at the edge stays whole
-    const emoji = bubbleLine(`${'x'.repeat(39)}😄 und noch viel mehr Text`);
-    expect(emoji).toBe(`${'x'.repeat(39)}😄…`);
+    expect(bubbleLine(`${'x'.repeat(19)}😄${'y'.repeat(30)}`)).toBe(`${'x'.repeat(19)}😄…`);
+    expect(bubbleLine(`${'x'.repeat(39)}😄`)).toBe(`${'x'.repeat(39)}😄`);
   });
 });

@@ -149,7 +149,7 @@ export class CasualChat implements Talk {
     const others = this.members.filter((m) => m !== this.speaker);
     this.speaker = others[Math.floor(random() * others.length)] ?? this.speaker;
     this.speakerTimer = 1.5 + random() * 2.8;
-    this.chat ??= new Chat('meeting');
+    this.chat ??= new Chat();
     this.text = this.chat.next(this.speaker, this.members, this.kind);
     for (const m of this.members) m.speaking = m === this.speaker;
   }

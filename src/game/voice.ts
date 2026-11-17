@@ -116,7 +116,7 @@ export function styled(text: string, voice: Voice, topic: Topic, rng: Rng): stri
   if (voice.signature.length && rng() < 0.3) {
     const sig = pickFrom(voice.signature, rng);
     // a short word leads ("jo, ..."), anything else (an emoji, "Liebe Grüsse") closes the line
-    t = /^\p{L}{1,6}$/u.test(sig) ? `${sig}, ${t.charAt(0).toLowerCase()}${t.slice(1)}` : `${t} ${sig}`;
+    t = /^\p{L}{1,6}$/u.test(sig) ? `${sig}${s.punctuation === 'none' ? '' : ','} ${t.charAt(0).toLowerCase()}${t.slice(1)}` : `${t} ${sig}`;
   }
   if (s.case === 'lower') t = t.toLowerCase();
   return t.replace(/\s{2,}/g, ' ').trim();
@@ -124,11 +124,12 @@ export function styled(text: string, voice: Voice, topic: Topic, rng: Rng): stri
 
 /** A line short enough for a speech bubble: as it is up to `max` characters, else the first sentence, cut at a word with … past `max`. */
 export function bubbleLine(text: string, max = 40): string {
-  if (text.length <= max) return text;
+  // counted and cut by code points, so an emoji counts once and is never cut in half
+  const length = (s: string) => [...s].length;
+  if (length(text) <= max) return text;
   const first = firstSentence(text);
-  if (first.length <= max) return first;
-  // by code points, so an emoji is never cut in half
-  const cut = [...first].slice(0, max).join('');
+  if (length(first) <= max) return first;
+  const cut = [...first].slice(0, max);
   const space = cut.lastIndexOf(' ');
-  return `${space > max / 2 ? cut.slice(0, space) : cut}`.trimEnd() + '…';
+  return `${cut.slice(0, Math.max(space, max / 2)).join('').trimEnd()}…`;
 }

@@ -94,7 +94,7 @@ export class ChatPanel {
     if (this.list.children.length <= SHOWN) return;
     while (this.list.children.length > SHOWN) this.list.firstElementChild!.remove();
     const top = () => this.list.firstElementChild as HTMLElement | null;
-    while (top()?.classList.contains('m-chat__message--more') || top()?.nextElementSibling?.classList.contains('m-chat__day')) top()!.remove();
+    while (top()?.classList.contains('m-chat__message--more') || (top()?.classList.contains('m-chat__day') && top()?.nextElementSibling?.classList.contains('m-chat__day'))) top()!.remove();
     if (top() && !top()!.classList.contains('m-chat__day')) this.list.prepend(this.dayDivider(Number(top()!.dataset.weekday)));
   }
 
