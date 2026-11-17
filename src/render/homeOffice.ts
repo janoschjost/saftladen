@@ -7,6 +7,7 @@ import { buildDog, type DogRig } from './dogBuilder';
 import { ball, box, cyl, merge, propMaterial } from './geo';
 import { SIT_DROP } from './officeBuilder';
 import { fxRandom, seeded } from '../game/rng';
+import { SON_BYE, SON_LINES, sonTimeline } from '../data/sonLines';
 import { LAUNDRY, LAUNDRY_PICKS, RACK_SLOTS, laundryHung, laundryTime, laundryTrip } from './laundry';
 
 /**
@@ -766,11 +767,11 @@ const SPIT = { sip: 0.7, spit: 1.3, away: 2.0, grab: 2.7, drink: 3.3, done: 5.4 
 /** a signature move gets this many tickets in the break draw (out of ~12 normal ones): it happens only now and then */
 const SIGNATURE_PICKS = 1;
 /**
- * The little son's visit (seconds): walks in from the left, stands next to the chair and talks, then leaves again.
+ * The little son's visit (seconds): walks in from the left, stands next to the chair and talks, Papa answers, then
+ * the boy waves and leaves again. The talk lasts as long as the two bubbles need (`sonTimeline`).
  * He comes by every `gap` seconds.
  */
-const SON = { walkIn: 1.6, talk: 6.2, walkOut: 1.6, gap: [25, 70] as [number, number] };
-const SON_TOTAL = SON.walkIn + SON.talk + SON.walkOut;
+const SON = { walkIn: 1.6, walkOut: 1.6, gap: [25, 70] as [number, number] };
 /** which way Papa turns to look at the boy, which way the boy faces (mostly to Papa, a little to the webcam) */
 const SON_TURN = -1.2;
 const SON_FACE = 1.4;
@@ -782,11 +783,12 @@ const SON_FACE = 1.4;
 const SON_SPOT = { z: -0.25, frame: 0.6, clear: 0.7, head: 1.05, frameTop: 0.94, roll: 0.3 };
 /** Papa's hands while he listens: off the keyboard, resting on the edge of the desk / in the lap */
 const SON_LISTEN: ArmPose = { x: -0.45, z: 0.12, e: -1.0, ez: 0 };
+/** where Papa's reply bubble's tail tip sits (x, world): above his head, which the swivel hardly moves */
+const SON_REPLY = { x: 0.05 };
 /** the bubble's canvas (px) and where its tail tip sits on it */
 const BUBBLE_PX = { w: 512, h: 160, tipX: 54, tipY: 152 };
 /** the son's bubble is this share of the frame's width */
 const SON_BUBBLE_WIDTH = 0.42;
-const SON_LINES = ['Papa, spielst du mit mir?', 'Papa, ich habe Hunger!', 'Schau mal, ein Bagger!', 'Papaaa, wann bist du fertig?', 'Darf ich auch mal tippen?', 'Papa, ich muss mal!'];
 
 /** a speech bubble as a sprite (text is redrawn per line) */
 function bubbleSprite(): THREE.Sprite {
@@ -951,7 +953,7 @@ interface Occupant {
   /** the same person in swimwear, swapped in out of sight for a swim */
   swimRig?: CharacterRig;
   /** a little child that now and then walks into the picture (TeamMember.son) */
-  son?: { rig: CharacterRig; bubble: THREE.Sprite };
+  son?: { rig: CharacterRig; bubble: THREE.Sprite; reply: THREE.Sprite };
   /** prop-holding arm poses solved for this person's shoulders */
   held: HeldPoses;
 }
@@ -1084,7 +1086,7 @@ function occupantOf(member: TeamMember, fresh = false): Occupant {
   if (member.son) {
     const sonRig = buildCharacter(member.son);
     sonRig.root.visible = false;
-    o.son = { rig: sonRig, bubble: bubbleSprite() };
+    o.son = { rig: sonRig, bubble: bubbleSprite(), reply: bubbleSprite() };
   }
   rig.elbowL.add(o.mug);
   rig.body.add(o.gamepad, o.yawn, o.bundle);
@@ -1290,6 +1292,7 @@ export class HomeOffice {
   private roundSize = 0;
   /** seconds into the son's visit (negative: not here) and until the next one */
   private sonT = -1;
+  private sonPlan = sonTimeline(SON_LINES[0]);
   private sonNext = rand(SON.gap);
   /** where the boy comes in (off the left edge of the frame) and stops, where his bubble sits and how big it is */
   private sonOff = new THREE.Vector3();
@@ -1335,9 +1338,19 @@ export class HomeOffice {
     this.scene.add(screen);
   }
 
+  private get sonTotal(): number {
+    return SON.walkIn + this.sonPlan.talk + SON.walkOut;
+  }
+
   /** Whether the son is in the picture right now. */
   get sonHere(): boolean {
     return this.sonT >= 0;
+  }
+
+  /** Which speech bubbles of the son's visit are up right now (the boy's and Papa's reply; never both). */
+  get sonBubbles(): { son: boolean; dad: boolean } {
+    const son = this.occupant?.son;
+    return { son: !!son?.bubble.visible, dad: !!son?.reply.visible };
   }
 
   /** Calls the son in at the next quiet moment. False when this room has no son. */
@@ -1376,8 +1389,8 @@ export class HomeOffice {
       if (this.occupant.swimRig) this.scene.remove(this.occupant.swimRig.root);
       if (this.occupant.son) {
         // the occupant is cached per person: a visit cut short must not come back with the next stay
-        this.occupant.son.rig.root.visible = this.occupant.son.bubble.visible = false;
-        this.scene.remove(this.occupant.son.rig.root, this.occupant.son.bubble);
+        this.occupant.son.rig.root.visible = this.occupant.son.bubble.visible = this.occupant.son.reply.visible = false;
+        this.scene.remove(this.occupant.son.rig.root, this.occupant.son.bubble, this.occupant.son.reply);
       }
       for (const p of this.occupant.pets) this.scene.remove(p.rig.root);
       if (this.occupant.headset) this.occupant.rig.body.remove(this.occupant.headset);
@@ -1413,7 +1426,7 @@ export class HomeOffice {
       this.occupant.headset ??= headset();
       rig.body.add(this.occupant.headset);
     }
-    if (this.occupant.son) this.scene.add(this.occupant.son.rig.root, this.occupant.son.bubble);
+    if (this.occupant.son) this.scene.add(this.occupant.son.rig.root, this.occupant.son.bubble, this.occupant.son.reply);
     for (const p of pets) {
       p.rig.root.position.copy(p.spot);
       if (p.onDesk) p.rig.root.position.y = this.desk ?? p.spot.y; // on this room's desk top
@@ -1427,10 +1440,11 @@ export class HomeOffice {
   }
 
   /**
-   * The boy's spot and bubble from this room's webcam as it draws right now (rooms place it at different distances,
-   * feed tiles and the enlarged feed differ in shape): the webcams look along -z from in front of the desk.
+   * The boy's spot and his bubble, and Papa's bubble, from this room's webcam as it draws right now (rooms place it at
+   * different distances, feed tiles and the enlarged feed differ in shape): the webcams look along -z from in front of
+   * the desk.
    */
-  private placeSon(bubble: THREE.Sprite): void {
+  private placeSon(son: NonNullable<Occupant['son']>): void {
     const cam = this.camera;
     cam.updateProjectionMatrix();
     cam.updateMatrixWorld();
@@ -1438,11 +1452,19 @@ export class HomeOffice {
     const x = -Math.max(SON_SPOT.clear, (view.x / 2) * SON_SPOT.frame);
     this.sonAt.set(x, 0, SON_SPOT.z);
     this.sonOff.set(-view.x / 2 - 0.6, 0, SON_SPOT.z);
+    this.placeBubble(son.bubble, x, SON_SPOT.head, view);
+    // Papa answers from his chair, the tail on his head
+    this.placeBubble(son.reply, SON_REPLY.x, this.occupant!.rig.headHeight - SIT_DROP, view);
+  }
+
+  /** A speech bubble with its tail tip just above a head at (x, head). */
+  private placeBubble(bubble: THREE.Sprite, x: number, head: number, view: THREE.Vector2): void {
+    const cam = this.camera;
     const w = view.x * SON_BUBBLE_WIDTH;
     const h = (w * BUBBLE_PX.h) / BUBBLE_PX.w;
-    // tail tip just above his head ...
+    // tail tip just above the head ...
     bubble.scale.set(w, h, 1);
-    bubble.position.set(x + (0.5 - BUBBLE_PX.tipX / BUBBLE_PX.w) * w, SON_SPOT.head + 0.04 + (BUBBLE_PX.tipY / BUBBLE_PX.h - 0.5) * h, SON_SPOT.z);
+    bubble.position.set(x + (0.5 - BUBBLE_PX.tipX / BUBBLE_PX.w) * w, head + 0.04 + (BUBBLE_PX.tipY / BUBBLE_PX.h - 0.5) * h, SON_SPOT.z);
     // ... unless that pushes the bubble out of the top of the frame (the webcam looks down a little)
     const top = this.sonTop.set(bubble.position.x, bubble.position.y + h / 2, SON_SPOT.z).project(cam).y;
     if (top > SON_SPOT.frameTop) bubble.position.y -= ((top - SON_SPOT.frameTop) * view.y) / 2;
@@ -1456,20 +1478,25 @@ export class HomeOffice {
       this.sonNext -= dt;
       if (this.sonNext > 0 || this.activity !== 'type' || this.style.lapCam) return;
       this.sonT = 0;
-      drawBubble(son.bubble, SON_LINES[Math.floor(fxRandom() * SON_LINES.length)]);
+      const line = SON_LINES[Math.floor(fxRandom() * SON_LINES.length)];
+      this.sonPlan = sonTimeline(line);
+      drawBubble(son.bubble, line.son);
+      drawBubble(son.reply, line.dad);
       son.rig.root.visible = true;
-    } else if ((this.sonT += dt) >= SON_TOTAL) {
+    } else if ((this.sonT += dt) >= this.sonTotal) {
       this.sonT = -1;
       this.sonNext = rand(SON.gap);
       son.rig.root.visible = false;
-      son.bubble.visible = false;
+      son.bubble.visible = son.reply.visible = false;
       return;
     }
-    this.placeSon(son.bubble);
+    this.placeSon(son);
     const r = son.rig;
     const T = this.sonT;
     const t = this.clock;
-    const outAt = SON.walkIn + SON.talk;
+    const plan = this.sonPlan;
+    const outAt = SON.walkIn + plan.talk;
+    const u = T - SON.walkIn; // seconds since he stands next to Papa
     const walking = T < SON.walkIn || T >= outAt;
     if (walking) {
       const k = T < SON.walkIn ? T / SON.walkIn : 1 - (T - outAt) / SON.walkOut;
@@ -1486,13 +1513,12 @@ export class HomeOffice {
       r.body.position.y = Math.abs(Math.sin(t * 12)) * 0.025;
       r.body.rotation.set(0, 0, 0);
     } else {
-      const u = T - SON.walkIn;
       r.root.position.copy(this.sonAt);
       r.root.rotation.set(0, SON_FACE, 0);
       r.legL.rotation.x = r.legR.rotation.x = 0;
       r.kneeL.rotation.x = r.kneeR.rotation.x = 0.05;
       // talks with a hand up towards Papa (tugging at his sleeve), then waves goodbye
-      const bye = u > SON.talk - 1.2;
+      const bye = u > plan.talk - SON_BYE;
       r.armR.rotation.set(bye ? -0.3 : -1.1 + Math.sin(t * 7) * 0.18, 0, bye ? 1.2 : 0.15);
       r.elbowR.rotation.set(bye ? 0 : -0.3, 0, bye ? 1.5 + Math.sin(t * 10) * 0.35 : 0);
       r.armL.rotation.set(0, 0, -0.08);
@@ -1500,7 +1526,9 @@ export class HomeOffice {
       r.body.position.y = Math.abs(Math.sin(t * 5)) * 0.012;
       r.body.rotation.set(0.05 + Math.sin(t * 3) * 0.03, 0, 0);
     }
-    son.bubble.visible = !walking;
+    // the boy speaks first, Papa answers once his bubble is gone, then the boy waves
+    son.bubble.visible = !walking && u < plan.sonEnd;
+    son.reply.visible = !walking && u >= plan.dadStart && u < plan.dadEnd;
   }
 
   /** Whether this room and occupant have what a signature move or extra break needs. */
@@ -1822,7 +1850,7 @@ export class HomeOffice {
     for (const [i, m] of this.pieces.entries()) m.visible = i < this.hung;
     if (this.sonT >= 0) {
       // turns to the boy while he stands there, nods along
-      const near = Math.min(1, this.sonT / SON.walkIn, (SON_TOTAL - this.sonT) / SON.walkOut);
+      const near = Math.min(1, this.sonT / SON.walkIn, (this.sonTotal - this.sonT) / SON.walkOut);
       if (this.chair && !recl && !stand) {
         // rolls back from the desk and swivels round to him
         chairTurn = SON_TURN * near;
