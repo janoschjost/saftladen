@@ -70,6 +70,8 @@ describe('voice', () => {
     expect(sig).toContain('jo, kaffee?');
     expect(sig).toContain('Kaffee?');
     expect(many(40, () => styled('Kaffee?', plain({}, { signature: ['Liebe Grüsse'] }), 'coffee', rng))).toContain('Kaffee? Liebe Grüsse');
+    // a signature emoji is theirs: it stays even at an emoji rate of 0
+    expect(many(40, () => styled('Kaffee?', plain({ emoji: 0 }, { signature: ['✨'] }), 'coffee', rng))).toContain('Kaffee? ✨');
   });
 
   it('chat.voice: the emoji rate is the share of messages with an emoji', () => {
@@ -98,5 +100,8 @@ describe('voice', () => {
     const long = bubbleLine('Ich lauf kurz zum Take-away und hole für alle etwas Feines zum Mittag');
     expect(long.length).toBeLessThanOrEqual(41);
     expect(long.endsWith('…')).toBe(true);
+    // cut by code points: an emoji at the edge stays whole
+    const emoji = bubbleLine(`${'x'.repeat(39)}😄 und noch viel mehr Text`);
+    expect(emoji).toBe(`${'x'.repeat(39)}😄…`);
   });
 });

@@ -104,8 +104,8 @@ export const chatBlocks: Record<Topic, Block> = {
   // presence.remotegreet (Zlatko / remote visit)
   greeting: {
     ask: ['Morgen zusammen!', 'Hallo Crew.', 'Guten Morgen, wer ist heute alles da?'],
-    reply: ['Moin!', 'Guten Morgen!', 'Hey!'],
-    during: ['Bin da.', '{who} ist im Haus! 🎉'],
+    reply: ['Moin!', 'Guten Morgen!', 'Hey!', '{who} ist im Haus! 🎉'],
+    during: ['Bin da.'],
     after: ['Schönen Feierabend!', 'Bin dann mal weg. Bis morgen.', 'Tschüss zusammen!'],
   },
 

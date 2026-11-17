@@ -1,4 +1,5 @@
 import type { ChatMessage } from '../game/CrewChat';
+import { DAY_NAMES } from './TimeControl';
 
 /** Who can write: what the panel shows of them. */
 export interface ChatMember {
@@ -12,7 +13,6 @@ const SHOWN = 120;
 /** two messages of one writer this close (game seconds) form one block: name and time only once */
 const BLOCK = 90;
 const PHONE = '(max-width: 840px)';
-const DAYS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
 
 /**
  * The crew chat panel (#195), bottom left above the key hints: one read-only group space "Crew-Chat" in the look of a
@@ -55,15 +55,13 @@ export class ChatPanel {
     if (!member) return;
     const atBottom = this.list.scrollHeight - this.list.scrollTop - this.list.clientHeight < 40;
     if (!this.last || this.last.weekday !== m.weekday) {
-      const day = document.createElement('li');
-      day.className = 'm-chat__day';
-      day.textContent = DAYS[m.weekday] ?? '';
-      this.list.append(day);
+      this.list.append(this.dayDivider(m.weekday));
     }
     const sameBlock = this.last?.by === m.by && this.last.weekday === m.weekday && m.at - this.last.at < BLOCK;
     const li = document.createElement('li');
     li.className = sameBlock ? 'm-chat__message m-chat__message--more' : 'm-chat__message';
     li.dataset.by = m.by;
+    li.dataset.weekday = String(m.weekday);
     if (!sameBlock) {
       li.append(avatar(member));
       const head = document.createElement('p');
@@ -82,13 +80,29 @@ export class ChatPanel {
     text.textContent = m.text;
     li.append(text);
     this.list.append(li);
-    while (this.list.children.length > SHOWN) this.list.firstElementChild!.remove();
+    this.trim();
     this.last = m;
     if (this.isOpen) {
       if (atBottom) this.list.scrollTop = this.list.scrollHeight;
     } else {
       this.setUnread(this.unread + 1);
     }
+  }
+
+  /** Drops the oldest entries past `SHOWN`; the top stays a day divider followed by a message with its writer. */
+  private trim(): void {
+    if (this.list.children.length <= SHOWN) return;
+    while (this.list.children.length > SHOWN) this.list.firstElementChild!.remove();
+    const top = () => this.list.firstElementChild as HTMLElement | null;
+    while (top()?.classList.contains('m-chat__message--more') || top()?.nextElementSibling?.classList.contains('m-chat__day')) top()!.remove();
+    if (top() && !top()!.classList.contains('m-chat__day')) this.list.prepend(this.dayDivider(Number(top()!.dataset.weekday)));
+  }
+
+  private dayDivider(weekday: number): HTMLLIElement {
+    const day = document.createElement('li');
+    day.className = 'm-chat__day';
+    day.textContent = DAY_NAMES[weekday] ?? '';
+    return day;
   }
 
   private show(open: boolean): void {

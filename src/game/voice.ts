@@ -104,11 +104,6 @@ export function styled(text: string, voice: Voice, topic: Topic, rng: Rng): stri
   let t = text;
   if (s.length === 'short') t = firstSentence(t);
   else if (s.length === 'long' && rng() < 0.5) t = `${t} ${pickFrom(TAILS, rng)}`;
-  if (voice.signature.length && rng() < 0.3) {
-    const sig = pickFrom(voice.signature, rng);
-    // a short word leads ("jo, ..."), anything else (an emoji, "Liebe Grüsse") closes the line
-    t = /^\p{L}{1,6}$/u.test(sig) ? `${sig}, ${t.charAt(0).toLowerCase()}${t.slice(1)}` : `${t} ${sig}`;
-  }
   if (s.punctuation === 'none') t = t.replace(/[.,](?=\s|$)/g, '');
   else if (s.punctuation === 'many') t = t.replace(/\.(?=\s*$)/, '!').replace(/([!?])(?=\s|$)/g, '$1$1');
   if (rng() < s.typo) t = typo(t, rng);
@@ -116,6 +111,12 @@ export function styled(text: string, voice: Voice, topic: Topic, rng: Rng): stri
     if (!HAS_EMOJI.test(t)) t = `${t} ${pickFrom(TOPIC_EMOJI[topic], rng)}`;
   } else {
     t = t.replace(EMOJI, '');
+  }
+  // after the emoji rule: a signature emoji (✨) is theirs and stays
+  if (voice.signature.length && rng() < 0.3) {
+    const sig = pickFrom(voice.signature, rng);
+    // a short word leads ("jo, ..."), anything else (an emoji, "Liebe Grüsse") closes the line
+    t = /^\p{L}{1,6}$/u.test(sig) ? `${sig}, ${t.charAt(0).toLowerCase()}${t.slice(1)}` : `${t} ${sig}`;
   }
   if (s.case === 'lower') t = t.toLowerCase();
   return t.replace(/\s{2,}/g, ' ').trim();
@@ -126,6 +127,8 @@ export function bubbleLine(text: string, max = 40): string {
   if (text.length <= max) return text;
   const first = firstSentence(text);
   if (first.length <= max) return first;
-  const cut = first.slice(0, max);
-  return `${cut.slice(0, Math.max(cut.lastIndexOf(' '), max / 2)).trimEnd()}…`;
+  // by code points, so an emoji is never cut in half
+  const cut = [...first].slice(0, max).join('');
+  const space = cut.lastIndexOf(' ');
+  return `${space > max / 2 ? cut.slice(0, space) : cut}`.trimEnd() + '…';
 }

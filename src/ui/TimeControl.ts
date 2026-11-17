@@ -3,7 +3,7 @@ import { dialAngle, dialHour, dialPoint, dialSlice, stepHour } from './clockDial
 
 const KEY = 'saftladen.time.auto';
 const SPEED_KEY = 'saftladen.time.speed';
-const DAY_NAMES = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+export const DAY_NAMES = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
 /** the dark slice on the dial */
 const NIGHT = [21, 5] as const;
 /** Hours shown under the slider. */

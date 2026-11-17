@@ -46,6 +46,9 @@ export class CrewChat {
   private time = 0;
   private idleIn = this.between(IDLE);
   private lastGreeting = -Infinity;
+  /** the lunch lines said today (ask, after): the crowd that counts as the break comes and goes */
+  private lunchSaid = new Set<Phase>();
+  private lunchDay = -1;
   private pending: Array<{ at: number; p: Person; topic: Topic; phase: Phase; who?: string }> = [];
   private listeners: Array<(m: ChatMessage) => void> = [];
   /** what the watched places held at the last step (null: not looked yet) */
@@ -128,11 +131,17 @@ export class CrewChat {
     if (call && now.call !== seen.call) {
       const visitor = sim.presence.remoteWorker;
       if (visitor?.inOffice) this.post(visitor, 'greeting', 'ask');
-      this.later(call.who, 'greeting', 'during', visitor ? first(visitor) : undefined);
+      this.later(call.who, 'greeting', 'reply', visitor ? first(visitor) : undefined);
     }
 
-    // lunch break and rain: somebody in the office says something
-    if (now.lunch !== seen.lunch) {
+    // lunch break (once a day each way) and rain: somebody in the office says something
+    if (this.lunchDay !== sim.tod.weekday) {
+      this.lunchDay = sim.tod.weekday;
+      this.lunchSaid.clear();
+    }
+    const lunchPhase = now.lunch ? 'ask' : 'after';
+    if (now.lunch !== seen.lunch && !this.lunchSaid.has(lunchPhase)) {
+      this.lunchSaid.add(lunchPhase);
       const p = this.pickFrom(this.writers());
       if (p) this.post(p, 'lunch', now.lunch ? 'ask' : 'after');
       const other = now.lunch ? this.pickFrom(this.writers().filter((o) => o !== p)) : undefined;
