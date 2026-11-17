@@ -36,6 +36,7 @@ function* obstacles(sim: Sim): Generator<() => boolean> {
   yield () => !!sim.photoStudio.current && (sim.photoStudio.abort(), true);
   yield () => !sim.serverRack.free && (sim.serverRack.abort(), true);
   yield () => sim.boombox.active && (sim.boombox.abort(), true);
+  yield () => sim.mail.active && (sim.mail.abort((p) => inside(sim, p)), true);
   yield () => sim.smoke.active && (sim.smoke.abort((p) => inside(sim, p)), true);
   yield () => {
     const talks = sim.social.active.slice();

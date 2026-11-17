@@ -11,6 +11,7 @@ import { CoatRacks } from './CoatRacks';
 import { buildOffice, CORRIDOR_POINT, type OfficeModel } from '../render/officeModel';
 import { NAV_CELL, WORLD } from '../render/World';
 import { Kitchen } from './Coffee';
+import { Mail } from './Mail';
 import { makePossible } from './makePossible';
 import { WALL_CLEARANCE } from './Avoidance';
 import { DevEvents } from './DevEvents';
@@ -98,6 +99,8 @@ export class Sim {
   readonly presence: Presence;
   /** smokers stepping out onto the porch for a cigarette */
   readonly smoke: SmokeBreaks;
+  /** the post: a dove or a drone brings it to the mailboxes, an apprentice carries it to a desk */
+  readonly mail: Mail;
   readonly tod = new TimeOfDay();
   readonly weather = new Weather();
   readonly petCare = new PetCare();
@@ -159,6 +162,7 @@ export class Sim {
     this.presence = new Presence(this.people, this.tod, this.weather);
     this.presence.seed(homes);
     this.smoke = new SmokeBreaks(this.people, this.presence, this.weather);
+    this.mail = new Mail(scene, this.people, this.presence, this.weather, (p) => this.deskFor(p));
     for (const pet of this.pets) if (pet.owner.presence === 'out' || !pet.comesToday) pet.sendAway(); // pets of people who start away, and pets that stay home today
     this.coatRacks.update();
     this.events.forcer = (run) => makePossible(this, run);
@@ -357,6 +361,7 @@ export class Sim {
     this.petCare.update(dt, this.people, this.pets, this.nav);
     this.nerf.update(dt, this.people, this.nav);
     this.boombox.update(dt, this.people, this.nav, this.presence.days);
+    this.mail.update(dt, this.nav, this.presence.days);
     this.meetingRoom.update(dt, this.people, this.nav, this.tod.hour);
     this.pod.update(dt, this.people, this.nav);
     this.kitchen.update(dt, this.people, this.nav);

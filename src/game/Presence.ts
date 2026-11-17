@@ -333,7 +333,7 @@ export class Presence {
 
   /** People in the office or on their way back in; a smoker on the porch counts too (just outside the door, back any minute). */
   private get present(): number {
-    return this.people.filter((p) => p.presence === 'in' || p.presence === 'returning' || p.onSmokeBreak).length;
+    return this.people.filter((p) => p.presence === 'in' || p.presence === 'returning' || p.onPorch).length;
   }
 
   /** Somebody who is not tied up right now (talk, meeting, printer, ...) nor held by a scene, and so free to walk out. */
@@ -366,6 +366,14 @@ export class Presence {
     return true;
   }
 
+  /** Out of the door for the mailboxes on the porch, `seconds` there. False when the door is busy right now (try again in a moment). */
+  mailRun(p: Person, nav: NavGrid, seconds: number): boolean {
+    if (!this.exitFree) return false;
+    this.exit(p);
+    p.leaveOffice(nav, 'mail', seconds);
+    return true;
+  }
+
   /** A smoker on the porch has somewhere to be (lunch, home): finishes up now and comes in (through the door as usual). */
   private stubOut(p: Person): void {
     if (p.presence === 'out') p.awayLeft = Math.min(p.awayLeft, 1);
@@ -383,7 +391,7 @@ export class Presence {
     const present = this.present;
     if (present < MAX_OFFICE) return false;
     // nobody walks back in while the office is full, except who was called back: they do (one after the other, see clearDoor)
-    for (const p of this.people) if (p.presence === 'out' && p.awayKind !== 'off' && !p.onSmokeBreak && p.awayLeft > 0 && p.awayLeft < 5 && !this.calledBack.has(p)) p.awayLeft = 5 + random() * 15;
+    for (const p of this.people) if (p.presence === 'out' && p.awayKind !== 'off' && !p.onPorch && p.awayLeft > 0 && p.awayLeft < 5 && !this.calledBack.has(p)) p.awayLeft = 5 + random() * 15;
     if (present === MAX_OFFICE || this.overfull) return false;
     if (this.people.some((p) => p.presence === 'leaving')) return false;
     const candidates = this.people.filter((p) => this.sendable(p));
@@ -523,7 +531,7 @@ export class Presence {
     this.waiting.delete(p);
     this.exits.delete(p);
     this.calledBack.delete(p);
-    if (p.presence === 'out' && !p.onSmokeBreak) {
+    if (p.presence === 'out' && !p.onPorch) {
       p.awayKind = 'off';
       p.awayLeft = OFF;
     } else {
@@ -646,7 +654,7 @@ export class Presence {
 
   /** Off duty (or night shift at home): out of the door and away until the plan says otherwise. */
   private sendOff(p: Person, kind: 'off' | 'home', nav: NavGrid): void {
-    if (p.onSmokeBreak) return this.stubOut(p); // on the porch: comes back in first, then goes
+    if (p.onPorch) return this.stubOut(p); // on the porch: comes back in first, then goes
 
     // a regular remote day needs a room: somebody makes room, he comes in as soon as it is free
     if (kind === 'home' && p.awayKind !== 'home' && this.homeCount >= MAX_HOME && this.planOf(p).remote) {
@@ -695,7 +703,7 @@ export class Presence {
   private lunchBreak(p: Person, plan: DayPlan, hour: number, nav: NavGrid): void {
     if (hour < plan.lunch) plan.lunched = false; // clock moved back
     if (plan.lunched || hour < plan.lunch) return;
-    if (p.onSmokeBreak) return this.stubOut(p); // lunch time: the cigarette goes out, they come in and then go
+    if (p.onPorch) return this.stubOut(p); // lunch time: the cigarette goes out, they come in and then go
     if (p.presence !== 'in' || hour > plan.lunch + LUNCH.window || hour > plan.leave - ERRANDS.beforeLeave) {
       plan.lunched = true; // ate at home / on the way / not at all
       return;
@@ -790,7 +798,7 @@ export class Presence {
     const leaving = this.people.filter((p) => p.presence === 'leaving').length;
     // enough people out already; a full office still lets somebody go, so that those waiting outside get their turn
     // smokers on the porch are back any minute: they take nobody's turn for an errand
-    const out = this.away.filter((p) => !p.onSmokeBreak).length;
+    const out = this.away.filter((p) => !p.onPorch).length;
     if ((out >= this.target && this.present < MAX_OFFICE) || leaving >= 2) return;
     const candidates = this.people.filter((p) => {
       if (!this.sendable(p) || this.leftAlone(p)) return false;

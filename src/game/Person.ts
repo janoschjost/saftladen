@@ -76,7 +76,7 @@ type Phase = 'approach' | 'enter' | 'work' | 'leave';
 export type Presence = 'in' | 'leaving' | 'out' | 'returning';
 /** errand = popped out for a while, home = working from home (live feed available) */
 /** errand / home office, `off`: finished for the day (night), not listed anywhere; `smoke`: a cigarette on the porch, in sight */
-export type AwayKind = 'errand' | 'home' | 'off' | 'smoke';
+export type AwayKind = 'errand' | 'home' | 'off' | 'smoke' | 'mail';
 
 interface DeskTask {
   desk: Desk;
@@ -261,6 +261,10 @@ export class Person extends Walker {
   boomSad = 0;
   boomSadAmt = 0;
   boomClock = 0;
+  /** what they carry from the mailboxes to a desk (see Mail.ts), the eased pose, and the last frame time of the pose */
+  mailCarry: 'letter' | 'parcel' | null = null;
+  mailAmt = 0;
+  mailClock = 0;
   /** back height (m) of the pet being stroked: sets how deep the crouch goes */
   petHeight = 0.4;
   /** last frame time of the pet pose (s), to ease it in real time */
@@ -612,15 +616,17 @@ export class Person extends Walker {
         if (this.script) {
           if (this.runScript(dt)) return true;
           this.presence = 'out';
-          if (this.kind === 'smoke') {
-            // a smoke break stays in sight: on to their spot beside the door, lighting up on the way
+          if (this.onPorchKind) {
+            // a smoke break or a mail run stays in sight: on to their spot on the porch (lighting up on the way)
             if (!this.porchSpot) {
               this.backFromPorch(); // the spot went (rain): straight back in
               return true;
             }
-            this.smokeLit = true;
-            this.smokeCycle = nextDragCycle();
-            this.smokeT = this.smokeCycle - 1.5; // the first drag right after lighting it
+            if (this.kind === 'smoke') {
+              this.smokeLit = true;
+              this.smokeCycle = nextDragCycle();
+              this.smokeT = this.smokeCycle - 1.5; // the first drag right after lighting it
+            }
             this.startScript(this.porchSpot);
             return true;
           }
@@ -643,7 +649,7 @@ export class Person extends Walker {
         return true;
       }
       case 'out':
-        if (this.kind === 'smoke') return this.controlPorch(dt);
+        if (this.onPorchKind) return this.controlPorch(dt);
         if (this.alter && this.fx === 0) this.setAlter(false); // through the door and gone: Marco again
         this.awayLeft -= dt;
         // pets still around (not yet despawned) hold up the arrival: both appear together
@@ -727,7 +733,7 @@ export class Person extends Walker {
   /** Rain moved the smoke break to another spot: walk over (still smoking) if already out there. */
   movePorchSpot(spot: PorchSpot): void {
     this.porchSpot = spot;
-    if (this.presence === 'out' && this.kind === 'smoke') this.startScript(spot);
+    if (this.presence === 'out' && this.onPorchKind) this.startScript(spot);
   }
 
   /** Ends a smoke break on the spot (sent away, put somewhere by a scene, picked up): no cigarette, no spot. */
@@ -739,12 +745,27 @@ export class Person extends Walker {
 
   /** Standing at their spot on the porch (not walking to it or away). */
   get atPorchSpot(): boolean {
-    return this.presence === 'out' && this.kind === 'smoke' && !this.script && !!this.porchSpot;
+    return this.kind === 'smoke' && this.atPorchStop;
+  }
+
+  /** Standing at their spot on the porch for a smoke break or at the mailboxes (not walking to it or away). */
+  get atPorchStop(): boolean {
+    return this.presence === 'out' && this.onPorchKind && !this.script && !!this.porchSpot;
   }
 
   /** Out on the porch for a cigarette, or on the way there or back. */
   get onSmokeBreak(): boolean {
     return this.kind === 'smoke' && this.presence !== 'in';
+  }
+
+  /** A smoke break or a mail run: out on the porch, or on the way there or back (never past the porch, the pets stay in). */
+  get onPorch(): boolean {
+    return this.onPorchKind && this.presence !== 'in';
+  }
+
+  /** Away for a stay on the porch: a smoke break, or a mail run to the mailboxes (see Mail.ts). */
+  private get onPorchKind(): boolean {
+    return this.kind === 'smoke' || this.kind === 'mail';
   }
 
   /** Outside the building: out of the door (on the porch, or away), or on the way through it past the wall (the annex room in front of the wall is indoors). */
@@ -778,7 +799,7 @@ export class Person extends Walker {
     const to = this.script?.to;
     if (to && speed) t = Math.min(t, Math.hypot(to.x - x, to.z - z) / speed);
     // done smoking, or the spot went (rain): folds it where they stand, then walks in
-    const goingIn = this.porchLeg || (this.presence === 'out' && this.kind === 'smoke' && (!this.porchSpot || (!this.script && this.awayLeft <= UMBRELLA_FOLD)));
+    const goingIn = this.porchLeg || (this.presence === 'out' && this.onPorchKind && (!this.porchSpot || (!this.script && this.awayLeft <= UMBRELLA_FOLD)));
     this.umbrella = !goingIn && Math.min(fromDoorway(x, z), fromDoorway(x + vx * t, z + vz * t)) >= UMBRELLA_CLEAR;
     const step = dt / UMBRELLA_FOLD;
     this.umbrellaAmt = Math.min(1, Math.max(0, this.umbrellaAmt + (this.umbrella ? step : -step)));

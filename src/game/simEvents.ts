@@ -2,6 +2,7 @@ import { strings } from '../i18n/strings';
 import { CORRIDOR_POINT } from '../render/officeModel';
 import { BOSS, DJ, free as freeForBoombox } from './Boombox';
 import { bringIn } from './makePossible';
+import { isCourier } from './Mail';
 import type { Dog } from './Dog';
 import type { Person } from './Person';
 import { PET_HEIGHT } from './petPose';
@@ -462,6 +463,24 @@ export function registerSimEvents(sim: Sim): void {
       return `${first(dj)} packt die Boombox aus`;
     },
   });
+  // the post (#202): a dove brings a letter, a drone a parcel; an apprentice carries it to the desk it is addressed to
+  for (const kind of ['letter', 'parcel'] as const) {
+    events.register({
+      id: `mail-${kind}`,
+      group: 'Aktionen',
+      label: kind === 'letter' ? 'Post: Taube bringt einen Brief' : 'Post: Drohne bringt ein Paket',
+      run: () => {
+        // an apprentice has to be there to fetch it: one who is away is called back (the next try finds them)
+        if (!sim.mail.couriers(true).length) {
+          const away = people.find((o) => isCourier(o) && o.presence === 'out');
+          if (away) presence.callBack(away);
+          return null;
+        }
+        if (!sim.mail.start(kind, true)) return null;
+        return kind === 'letter' ? `Eine Taube bringt einen Brief für ${first(sim.mail.to!)}` : `Eine Drohne bringt ein Paket für ${first(sim.mail.to!)}`;
+      },
+    });
+  }
   events.register({
     id: 'door-lettering',
     group: 'Aktionen',
