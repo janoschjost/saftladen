@@ -72,12 +72,13 @@ export const ENVELOPES: readonly Variant[] = [
   { name: 'kraft', w: 0.3, h: 0.22, d: 0.01, color: '#c79a62', trim: '#a87c48' },
 ];
 
+/** Big enough to carry in both hands, resting on the forearms (the arms are about 0.5 m apart inside). */
 export const PARCELS: readonly Variant[] = [
-  { name: 'small', w: 0.2, h: 0.12, d: 0.15, color: '#b98a55', trim: '#e8d9b5' },
-  { name: 'medium', w: 0.32, h: 0.2, d: 0.24, color: '#c49560', trim: '#e8d9b5' },
-  { name: 'large', w: 0.46, h: 0.3, d: 0.34, color: '#a97b47', trim: '#e8d9b5' },
-  { name: 'blue', w: 0.3, h: 0.16, d: 0.22, color: '#e6edf6', trim: '#3b6fb6' },
-  { name: 'gift', w: 0.26, h: 0.26, d: 0.26, color: '#c8453f', trim: '#e3b341' },
+  { name: 'small', w: 0.34, h: 0.2, d: 0.26, color: '#b98a55', trim: '#e8d9b5' },
+  { name: 'medium', w: 0.44, h: 0.26, d: 0.32, color: '#c49560', trim: '#e8d9b5' },
+  { name: 'large', w: 0.54, h: 0.34, d: 0.38, color: '#a97b47', trim: '#e8d9b5' },
+  { name: 'blue', w: 0.42, h: 0.22, d: 0.3, color: '#e6edf6', trim: '#3b6fb6' },
+  { name: 'gift', w: 0.36, h: 0.34, d: 0.36, color: '#c8453f', trim: '#e3b341' },
 ];
 
 /** An envelope standing upright (its front towards +z, origin at the centre); `size` is what it measures. */
