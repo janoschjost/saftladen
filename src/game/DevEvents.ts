@@ -11,7 +11,10 @@ export interface DevEvent {
   group: string;
   /** Runs the event. Return a short status message (shown in the panel) or nothing. Return false-y message `null` to say "could not run". */
   run: () => string | void | null;
-  /** The event ends or reads something and null just means "nothing to do": it is not forced (see `DevEvents.forcer`). */
+  /**
+   * The event ends or reads something and null just means "nothing to do": it is not forced (see `DevEvents.forcer`).
+   * Also for an event that calls the forcer itself, only for the part that clearing the office can help with.
+   */
   asIs?: true;
 }
 

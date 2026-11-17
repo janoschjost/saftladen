@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { strings } from '../i18n/strings';
 import { installHeadlessDom } from '../test/headlessDom';
 import { GROUP, office, run } from '../test/office';
@@ -552,5 +552,17 @@ describe('dev events on the Sim', () => {
     expect(waited).toBe(true);
     for (const p of sim.people) if (p.inOffice) sim.scenario.put(p.id, 'errand');
     refused(sim, 'passage-meeting');
+  });
+
+  it('move.passages (passage-meeting): with nobody in the office it brings two in and runs (actions.force); on a floor without a passage it is refused and clears nothing', () => {
+    const sim = office();
+    for (const p of sim.people) sim.scenario.put(p.id, 'errand', 'free'); // out, but free to be brought in
+    expect(sim.events.trigger('passage-meeting')).toMatch(/ begegnen sich im Durchgang$/);
+    expect(sim.people.filter((p) => p.inOffice).length).toBeGreaterThanOrEqual(2);
+
+    const empty = office();
+    for (const p of empty.people) empty.scenario.put(p.id, 'errand', 'free');
+    vi.spyOn(empty.traffic.passages, 'atIndex').mockReturnValue(-1); // nothing narrow anywhere
+    refused(empty, 'passage-meeting');
   });
 });

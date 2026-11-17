@@ -21,7 +21,8 @@ const firsts = (group: Person[], sep = ', '): string => group.map(first).join(se
  * An event that cannot run returns null and leaves everybody as they were. The exceptions call somebody back who has
  * to be in the office for it (`phone-booth`, `pet-dog`, `pet-cat`, `pet-errand`, `kurt-walkout`): the next try finds them there.
  * The registry does not leave it at that: a null makes `makePossible` clear the way (people in, occupants out) and run
- * the event again. Only the events marked `asIs` (they end or read something) stay refused when there is nothing to do.
+ * the event again. Only the events marked `asIs` (they end or read something) stay refused when there is nothing to do;
+ * `passage-meeting` is `asIs` too and forces only the search for two free people (no clearing makes a passage).
  */
 export function registerSimEvents(sim: Sim): void {
   const { events, people, pets, nav, presence } = sim;
@@ -205,20 +206,26 @@ export function registerSimEvents(sim: Sim): void {
     id: 'passage-meeting',
     group: 'Aktionen',
     label: 'Zwei begegnen sich im Durchgang',
+    // forced by hand below: clearing the office brings people in, but it cannot make a passage
+    asIs: true,
     run: () => {
       // two people walk at a narrow passage from both ends at once: one waits beside the entrance, the other comes through
-      const pair = pickFree(2, (p) => !tiedUp(p));
-      if (pair.length < 2) return null;
       const ends = passageEnds();
       if (!ends || [0, 1].some((i) => !nav.findPath(ends.from[i], ends.to[i]).length)) return null;
-      pair.forEach((p, i) => {
-        sim.pull(p);
-        p.placeAt(ends.from[i]);
-        p.sit = 0;
-        p.walkTo(nav, ends.to[i]);
-      });
-      sim.point(pair[0]);
-      return `${firsts(pair, ' und ')} begegnen sich im Durchgang`;
+      const meet = () => {
+        const pair = pickFree(2, (p) => !tiedUp(p));
+        if (pair.length < 2) return null;
+        pair.forEach((p, i) => {
+          sim.pull(p);
+          p.placeAt(ends.from[i]);
+          p.sit = 0;
+          p.walkTo(nav, ends.to[i]);
+        });
+        sim.point(pair[0]);
+        return `${firsts(pair, ' und ')} begegnen sich im Durchgang`;
+      };
+      const r = meet();
+      return r === null && events.forcer ? events.forcer(meet) : r;
     },
   });
   gather(
