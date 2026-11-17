@@ -31,6 +31,7 @@ describe('actions.list', () => {
       ['Nerf-Gefecht', 'nerf'],
       ['Fotoshooting', 'photo-shoot'],
       ['Serverschrank', 'server-rack'],
+      ['Boombox', 'boombox'],
     ]);
   });
 

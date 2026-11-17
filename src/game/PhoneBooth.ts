@@ -143,7 +143,7 @@ export class PhoneBooth {
     this.timer -= dt;
     if (this.timer > 0) return;
     this.timer = 10;
-    const free = people.filter((p) => p.member.look.phone && p.inOffice && !p.held && !p.controlled && !p.talk && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob && !p.snackLeft && !p.phoneJob && !p.run);
+    const free = people.filter((p) => p.member.look.phone && p.inOffice && !p.held && !p.controlled && !p.talk && !p.playerChat && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob && !p.snackLeft && !p.phoneJob && !p.run);
     if (!free.length) return;
     if (this.start(free[Math.floor(random() * free.length)], nav)) this.timer = 0;
   }

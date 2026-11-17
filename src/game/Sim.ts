@@ -5,6 +5,7 @@ import { buildCharacter } from '../render/characterBuilder';
 import { addKurt } from '../render/kurtBuilder';
 import { buildDog, type DogRig } from '../render/dogBuilder';
 import { HOME_COUNT } from '../render/homeOffice';
+import { Boombox } from './Boombox';
 import { CoatRacks } from './CoatRacks';
 import { buildOffice, CORRIDOR_POINT, type OfficeModel } from '../render/officeModel';
 import { NAV_CELL, WORLD } from '../render/World';
@@ -106,6 +107,8 @@ export class Sim {
   readonly point: (w: Walker) => void;
   /** Nerf skirmishes: devs shoot foam darts at people on a break */
   readonly nerf: Nerf;
+  /** Sandro's boombox, and Donata who takes it away */
+  readonly boombox: Boombox;
   private stands: (w: Walker) => boolean;
   private doorsSee: () => Array<{ x: number; z: number }>;
   /** coats on the stands follow who is in the office */
@@ -115,6 +118,7 @@ export class Sim {
     this.scene = scene;
     this.point = point;
     this.nerf = new Nerf(scene);
+    this.boombox = new Boombox(scene);
     this.stands = stands;
     this.doorsSee = doorsSee;
     resetDoorLanes();
@@ -344,6 +348,7 @@ export class Sim {
     this.welcome.update(dt, this.people, this.presence, this.social);
     this.petCare.update(dt, this.people, this.pets, this.nav);
     this.nerf.update(dt, this.people, this.nav);
+    this.boombox.update(dt, this.people, this.nav, this.presence.days);
     this.meetingRoom.update(dt, this.people, this.nav, this.tod.hour);
     this.pod.update(dt, this.people, this.nav);
     this.kitchen.update(dt, this.people, this.nav);

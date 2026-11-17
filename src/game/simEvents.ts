@@ -1,5 +1,7 @@
 import { strings } from '../i18n/strings';
 import { CORRIDOR_POINT } from '../render/officeModel';
+import { BOSS, DJ, free as freeForBoombox } from './Boombox';
+import { bringIn } from './makePossible';
 import type { Dog } from './Dog';
 import type { Person } from './Person';
 import { PET_HEIGHT } from './petPose';
@@ -393,6 +395,26 @@ export function registerSimEvents(sim: Sim): void {
       if (!sim.nerf.start(shooter, target)) return null;
       sim.point(shooter);
       return `${first(shooter)} schiesst auf ${first(target)}`;
+    },
+  });
+  events.register({
+    id: 'boombox',
+    group: 'Aktionen',
+    label: 'Sandros Boombox',
+    run: () => {
+      const pair = [sim.person(DJ), sim.person(BOSS)];
+      if (pair.some((p) => p.held || p.controlled)) return null; // held: nobody is brought in for nothing
+      // both have to be in: away, they appear at their desks at once
+      for (const p of pair) if (!p.inOffice) bringIn(sim, p);
+      if (pair.some((p) => !isFree(p))) return null;
+      const [dj, boss] = pair;
+      sim.boombox.reset(); // a running scene ends, and it is gone from her desk: he has it again
+      // out of whatever they do: meeting, WC, talk, call; she may stay at her desk
+      sim.pull(dj);
+      if (!freeForBoombox(boss)) sim.pull(boss);
+      if (!sim.boombox.start(dj, boss)) return null;
+      sim.point(dj);
+      return `${first(dj)} packt die Boombox aus`;
     },
   });
   events.register({
