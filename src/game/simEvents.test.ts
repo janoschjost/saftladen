@@ -320,8 +320,9 @@ describe('dev events on the Sim', () => {
 
   it('actions.force (printer): every card of the Aktionen sheet happens at the start of seeds 1 to 5', () => {
     for (let seed = 1; seed <= 5; seed++) {
+      // one office per seed: a card that is refused after another one ran would still be a card the force cannot clear the way for
+      const sim = office({}, seed);
       for (const a of OFFICE_ACTIONS) {
-        const sim = office({}, seed);
         expect(sim.events.trigger(a.eventId), `seed ${seed}, ${a.id}`).not.toMatch(/: nicht möglich$/);
       }
     }
