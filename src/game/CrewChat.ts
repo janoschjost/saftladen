@@ -2,7 +2,8 @@ import { TOPICS, type Phase, type Topic } from '../data/chatBlocks';
 import type { Person } from './Person';
 import { stream } from './rng';
 import type { Sim } from './Sim';
-import { speak } from './voice';
+import { first } from './simEvents';
+import { pickFrom, speak } from './voice';
 
 /** One message in the crew chat. */
 export interface ChatMessage {
@@ -30,8 +31,6 @@ const REPLY = { min: 2, max: 5 };
 /** at most one hello / goodbye every this many seconds (mornings would flood the chat otherwise) */
 const GREETING_GAP = 20;
 
-const first = (p: Person) => p.member.name.split(' ')[0];
-
 /**
  * The crew chat (#195): people write German messages in their own voice (`voice.ts`) when something happens in the
  * office (coffee break, meeting, server rack, rain, a remote visit, arrivals and goodbyes, lunch, ...) and now and then
@@ -47,22 +46,12 @@ export class CrewChat {
   private time = 0;
   private idleIn = this.between(IDLE);
   private lastGreeting = -Infinity;
-  private pending: Array<{ at: number; p: Person; topic: Topic; phase: Phase; who?: string; free?: boolean }> = [];
+  private pending: Array<{ at: number; p: Person; topic: Topic; phase: Phase; who?: string }> = [];
   private listeners: Array<(m: ChatMessage) => void> = [];
-  /** what the watched places held at the last step (undefined: not looked yet) */
-  private seen: {
-    coffee: Group | null;
-    meeting: (Group & { screen: string }) | null;
-    pod: Group | null;
-    rack: unknown;
-    rackPhase: string | undefined;
-    call: unknown;
-    lunch: boolean;
-    rain: boolean;
-    presence: Map<Person, Person['presence']>;
-    kind: Map<Person, Person['awayKind']>;
-    jobs: Map<Person, string>;
-  } | null = null;
+  /** what the watched places held at the last step (null: not looked yet) */
+  private seen: ReturnType<CrewChat['places']> | null = null;
+  /** what each person was and did at the last step, updated in place */
+  private was = new Map<Person, { presence: Person['presence']; kind: Person['awayKind']; job: Job | undefined }>();
 
   constructor(private sim: Sim) {
     for (const topic of TOPICS) {
@@ -95,6 +84,8 @@ export class CrewChat {
 
   /** People who wrote in the last `CHAT_BUBBLE` seconds and are in the office: their latest line (the speech bubble). */
   get speaking(): Array<{ who: Person; text: string }> {
+    const last = this.messages.at(-1);
+    if (!last || this.time - last.at >= CHAT_BUBBLE) return [];
     const out = new Map<Person, string>();
     for (let i = this.messages.length - 1; i >= 0 && this.time - this.messages[i].at < CHAT_BUBBLE; i--) {
       const p = this.sim.people.find((o) => o.id === this.messages[i].by);
@@ -107,9 +98,13 @@ export class CrewChat {
     this.time += dt;
     const sim = this.sim;
     const seen = this.seen;
-    const now = this.snapshot();
+    const now = this.places();
     this.seen = now;
-    if (!seen) return; // the first look only takes stock: whatever runs at the start was not just started
+    if (!seen) {
+      // the first look only takes stock: whatever runs at the start was not just started
+      for (const p of sim.people) this.was.set(p, { presence: p.presence, kind: p.awayKind, job: this.jobOf(p) });
+      return;
+    }
 
     // coffee break / meeting / pod: one asks, another answers, one sums up when it is over
     this.group(seen.coffee, now.coffee, 'coffee');
@@ -150,21 +145,26 @@ export class CrewChat {
 
     // arrivals and goodbyes (not from the home office: that is a day at home, the chat hears of them when they come in)
     for (const p of sim.people) {
-      const was = seen.presence.get(p);
-      const kind = seen.kind.get(p);
-      const arrived = p.presence === 'in' && was !== 'in' && kind === 'off';
-      const leaves = p.presence === 'leaving' && was === 'in' && p.awayKind === 'off';
+      const was = this.was.get(p)!;
+      const job = this.jobOf(p);
+      const arrived = p.presence === 'in' && was.presence !== 'in' && was.kind === 'off';
+      const leaves = p.presence === 'leaving' && was.presence === 'in' && p.awayKind === 'off';
       if ((arrived || leaves) && this.time - this.lastGreeting > GREETING_GAP && this.rng() < 0.5) {
         this.lastGreeting = this.time;
         this.post(p, 'greeting', arrived ? 'ask' : 'after');
       }
       // what somebody just started: printer, kicker, the WC, a pet
-      const job = now.jobs.get(p);
-      if (job && job !== seen.jobs.get(p) && this.rng() < JOB_CHANCE[job as Job]) this.post(p, JOB_TOPIC[job as Job], job === 'foosball' ? 'ask' : 'during');
+      if (job && job !== was.job && this.rng() < JOB_CHANCE[job]) this.post(p, JOB_TOPIC[job], job === 'foosball' ? 'ask' : 'during');
+      was.presence = p.presence;
+      was.kind = p.awayKind;
+      was.job = job;
     }
 
-    for (const r of this.pending.filter((x) => x.at <= this.time)) if (r.free || this.canWrite(r.p)) this.post(r.p, r.topic, r.phase, r.who);
-    this.pending = this.pending.filter((x) => x.at > this.time);
+    if (this.pending.length) {
+      const due = this.pending.filter((x) => x.at <= this.time);
+      this.pending = this.pending.filter((x) => x.at > this.time);
+      for (const r of due) if (this.canWrite(r.p)) this.post(r.p, r.topic, r.phase, r.who);
+    }
 
     if ((this.idleIn -= dt) <= 0) {
       this.idleIn = this.between(IDLE);
@@ -191,13 +191,15 @@ export class CrewChat {
     this.pending.push({ at: this.time + this.between(REPLY), p, topic, phase, who });
   }
 
-  private snapshot(): NonNullable<CrewChat['seen']> {
+  private jobOf(p: Person): Job | undefined {
+    if (p.printJob) return 'printer';
+    if (p.foosJob) return 'foosball';
+    if (p.petting) return 'pet';
+    return this.sim.toilets.cabins.some((c) => c.session?.person === p) ? 'toilet' : undefined;
+  }
+
+  private places() {
     const s = this.sim;
-    const jobs = new Map<Person, string>();
-    for (const p of s.people) {
-      const job = p.printJob ? 'printer' : p.foosJob ? 'foosball' : s.toilets.cabins.some((c) => c.session?.person === p) ? 'toilet' : p.petting ? 'pet' : '';
-      if (job) jobs.set(p, job);
-    }
     return {
       coffee: s.kitchen.current,
       meeting: s.meetingRoom.current,
@@ -207,9 +209,6 @@ export class CrewChat {
       call: s.welcome.call,
       lunch: s.presence.lunch,
       rain: s.weather.raining,
-      presence: new Map(s.people.map((p) => [p, p.presence])),
-      kind: new Map(s.people.map((p) => [p, p.awayKind])),
-      jobs,
     };
   }
 
@@ -223,7 +222,7 @@ export class CrewChat {
   }
 
   private pickFrom<T>(list: readonly T[]): T | undefined {
-    return list.length ? list[Math.floor(this.rng() * list.length)] : undefined;
+    return list.length ? pickFrom(list, this.rng) : undefined;
   }
 
   private between({ min, max }: { min: number; max: number }): number {

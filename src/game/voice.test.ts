@@ -93,7 +93,8 @@ describe('voice', () => {
   });
 
   it('chat.voice: bubble lines are one short sentence', () => {
-    expect(bubbleLine('Kaffee? Ich geh jetzt.')).toBe('Kaffee?');
+    expect(bubbleLine('Kaffee? Ich geh jetzt.')).toBe('Kaffee? Ich geh jetzt.');
+    expect(bubbleLine('Kaffee? Ich geh jetzt, wer kommt mit in die Küche?')).toBe('Kaffee?');
     const long = bubbleLine('Ich lauf kurz zum Take-away und hole für alle etwas Feines zum Mittag');
     expect(long.length).toBeLessThanOrEqual(41);
     expect(long.endsWith('…')).toBe(true);

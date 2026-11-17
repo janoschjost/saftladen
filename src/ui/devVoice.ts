@@ -1,5 +1,5 @@
 import { TOPICS, type Topic } from '../data/chatBlocks';
-import { parseVoice, voiceFiles, type Voice } from '../data/voices';
+import { CASES, LENGTHS, parseVoice, PUNCTUATIONS, voiceFiles } from '../data/voices';
 import { setVoice, voiceOf } from '../game/voice';
 
 /** localStorage key of the dev's voice edits: `{ [personId]: Voice }`, until they are pasted into `src/data/voices/<id>.json`. */
@@ -81,9 +81,9 @@ export const voiceSection = (hooks: DevVoiceHooks) => (root: HTMLElement, status
 
   const person = select('person', []);
   for (const p of hooks.people) person.add(new Option(p.name, p.id));
-  const kase = select('case', ['normal', 'lower']);
-  const punctuation = select('punctuation', ['normal', 'none', 'many']);
-  const length = select('length', ['short', 'normal', 'long']);
+  const kase = select('case', CASES);
+  const punctuation = select('punctuation', PUNCTUATIONS);
+  const length = select('length', LENGTHS);
   const emoji = number('emoji');
   const typo = number('typo');
   const signature = document.createElement('input');
@@ -116,7 +116,6 @@ export const voiceSection = (hooks: DevVoiceHooks) => (root: HTMLElement, status
     lines.setCustomValidity('');
     out.hidden = true;
   };
-  const fileOf = (v: Voice) => JSON.stringify({ style: v.style, signature: v.signature, lines: v.lines }, null, 2);
   const save = () => {
     let parsed: unknown;
     try {
@@ -158,7 +157,7 @@ export const voiceSection = (hooks: DevVoiceHooks) => (root: HTMLElement, status
     status.textContent = `Chat: ${hooks.post(picked, topic.value as Topic)}`;
   });
   button('JSON exportieren', 'export', () => {
-    out.value = fileOf(voiceOf(picked));
+    out.value = JSON.stringify(voiceOf(picked), null, 2);
     out.hidden = false;
     out.select();
     void navigator.clipboard?.writeText(out.value).catch(() => {});

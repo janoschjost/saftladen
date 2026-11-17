@@ -36,7 +36,10 @@ export interface SpeakOptions {
   voice?: Voice;
 }
 
-const pickFrom = <T>(list: readonly T[], rng: Rng): T => list[Math.floor(rng() * list.length)];
+/** One of `list` (not empty), rolled with `rng`. */
+export const pickFrom = <T>(list: readonly T[], rng: Rng): T => list[Math.floor(rng() * list.length)];
+
+const firstSentence = (text: string): string => text.split(/(?<=[.!?…])\s+/)[0];
 
 /** The person's own lines for the topic (and phase), empty when they have none. */
 function ownLines(voice: Voice, topic: Topic, phase?: Phase): readonly string[] {
@@ -99,7 +102,7 @@ function typo(text: string, rng: Rng): string {
 export function styled(text: string, voice: Voice, topic: Topic, rng: Rng): string {
   const s = voice.style;
   let t = text;
-  if (s.length === 'short') t = t.split(/(?<=[.!?…])\s+/)[0];
+  if (s.length === 'short') t = firstSentence(t);
   else if (s.length === 'long' && rng() < 0.5) t = `${t} ${pickFrom(TAILS, rng)}`;
   if (voice.signature.length && rng() < 0.3) {
     const sig = pickFrom(voice.signature, rng);
@@ -118,9 +121,10 @@ export function styled(text: string, voice: Voice, topic: Topic, rng: Rng): stri
   return t.replace(/\s{2,}/g, ' ').trim();
 }
 
-/** A line short enough for a speech bubble: the first sentence, cut at a word with … past `max` characters. */
+/** A line short enough for a speech bubble: as it is up to `max` characters, else the first sentence, cut at a word with … past `max`. */
 export function bubbleLine(text: string, max = 40): string {
-  const first = text.split(/(?<=[.!?…])\s+/)[0];
+  if (text.length <= max) return text;
+  const first = firstSentence(text);
   if (first.length <= max) return first;
   const cut = first.slice(0, max);
   return `${cut.slice(0, Math.max(cut.lastIndexOf(' '), max / 2)).trimEnd()}…`;

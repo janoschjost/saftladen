@@ -556,11 +556,6 @@ export class Game {
           this.settings.setOpen(!this.settings.isOpen);
           return;
         }
-        // C: the crew chat, unless it steers the selected person
-        if (e.key.toLowerCase() === 'c' && !(this.selected instanceof Person) && !this.steered) {
-          this.chatPanel.toggle();
-          return;
-        }
         // A steers left while a person is steered, and ends the Konami code
         if (e.key.toLowerCase() === 'a' && !this.steered && !konami && !this.editor.active) {
           this.sheet.toggle();
@@ -575,7 +570,11 @@ export class Game {
       this.keys.add(e.code);
       this.shift = e.shiftKey;
       if (this.steered && STEER_KEYS.includes(e.code)) e.preventDefault();
-      if (e.key.toLowerCase() === 'c' && this.selected instanceof Person) this.toggleSteer(this.selected);
+      // C steers the selected person; with nobody selected it toggles the crew chat
+      if (e.key.toLowerCase() === 'c') {
+        if (this.selected instanceof Person) this.toggleSteer(this.selected);
+        else if (this.hudKeys && !this.steered && !e.repeat && !e.altKey && !e.ctrlKey && !e.metaKey) this.chatPanel.toggle();
+      }
       if (e.key.toLowerCase() === 'e' && this.views.mode === 'walk') this.interact();
       if (e.key.toLowerCase() === 'f') this.toggleFollow();
       if (e.key.toLowerCase() === 'n') this.overlay.toggleNames();
@@ -1991,10 +1990,11 @@ export class Game {
     const bubbleDt = this.clock - this.bubbleClock;
     this.bubbleClock = this.clock;
     // a fresh crew chat message shows over its writer's head (before their talk's bubble: the first with an id wins)
-    const shouting = new Set([this.sim.serverRack.current?.person, ...this.sim.toilets.cabins.map((c) => c.session?.person)]);
+    // (not over the dev at the rack or somebody in a WC cabin: their own lines run there)
+    const shouting = (p: Person) => p === this.sim.serverRack.current?.person || this.sim.toilets.cabins.some((c) => c.session?.person === p);
     this.bubbles.update(
       [
-        ...this.sim.chat.speaking.filter((c) => !shouting.has(c.who)).map((c) => say(c.who.id, c.text.length <= 60 ? c.text : bubbleLine(c.text, 60), c.who)),
+        ...this.sim.chat.speaking.filter((c) => !shouting(c.who)).map((c) => say(c.who.id, bubbleLine(c.text, 60), c.who)),
         ...(this.easter.angry && !this.easter.angry.who.away ? [say(`angry-${this.easter.angry.who.id}`, this.easter.angry.text, this.easter.angry.who)] : []),
         ...(call && !call.who.away ? [say(`welcome-${call.who.id}`, call.text, call.who)] : []),
         ...this.sim.boombox.bubbles.map((b) => say(`boombox-${b.who.id}`, b.text, b.who)),

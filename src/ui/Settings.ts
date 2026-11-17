@@ -112,13 +112,13 @@ export class Settings {
 
   private apply(): void {
     this.state = {
+      ...this.state, // what the form does not show (the crew chat's open state) stays
       tables: this.tables.checked,
       seats: this.seats.checked,
       rooms: this.rooms.checked,
       weather: this.getWeather(),
       xmas: this.xmas.checked,
       follow: this.follow.checked,
-      chat: this.state.chat,
     };
     this.save();
     this.hooks.onChange(this.state);

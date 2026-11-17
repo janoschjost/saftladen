@@ -1,17 +1,21 @@
 import { PHASES, TOPICS, type Phase, type Topic } from './chatBlocks';
 
+export const CASES = ['normal', 'lower'] as const;
+export const PUNCTUATIONS = ['normal', 'none', 'many'] as const;
+export const LENGTHS = ['short', 'normal', 'long'] as const;
+
 /** How somebody writes in the crew chat. Shared fallback lines are passed through it (`voice.ts`); own lines are kept as written. */
 export interface VoiceStyle {
   /** 'lower': everything in small letters */
-  case: 'normal' | 'lower';
+  case: (typeof CASES)[number];
   /** share of messages (0..1) with an emoji; the others lose the emoji a shared line brings */
   emoji: number;
   /** 'none': no full stops or commas; 'many': !! and ?? */
-  punctuation: 'normal' | 'none' | 'many';
+  punctuation: (typeof PUNCTUATIONS)[number];
   /** share of messages (0..1) with one typo (two letters swapped) */
   typo: number;
   /** 'short': only the first sentence; 'long': now and then a sentence more */
-  length: 'short' | 'normal' | 'long';
+  length: (typeof LENGTHS)[number];
 }
 
 /** Own lines per topic: one list for every phase, or a list per phase (`{ "ask": [...], "after": [...] }`). */
@@ -40,20 +44,24 @@ export function parseVoice(raw: unknown): Voice {
   for (const topic of TOPICS) {
     const v = l[topic];
     if (Array.isArray(v)) {
-      if (strings(v).length) lines[topic] = strings(v);
+      const list = strings(v);
+      if (list.length) lines[topic] = list;
     } else if (v && typeof v === 'object') {
       const byPhase: Partial<Record<Phase, string[]>> = {};
-      for (const phase of PHASES) if (strings((v as Record<string, unknown>)[phase]).length) byPhase[phase] = strings((v as Record<string, unknown>)[phase]);
+      for (const phase of PHASES) {
+        const list = strings((v as Record<string, unknown>)[phase]);
+        if (list.length) byPhase[phase] = list;
+      }
       if (Object.keys(byPhase).length) lines[topic] = byPhase;
     }
   }
   return {
     style: {
-      case: oneOf(s.case, ['normal', 'lower'], DEFAULT_STYLE.case),
+      case: oneOf(s.case, CASES, DEFAULT_STYLE.case),
       emoji: rate(s.emoji, DEFAULT_STYLE.emoji),
-      punctuation: oneOf(s.punctuation, ['normal', 'none', 'many'], DEFAULT_STYLE.punctuation),
+      punctuation: oneOf(s.punctuation, PUNCTUATIONS, DEFAULT_STYLE.punctuation),
       typo: rate(s.typo, DEFAULT_STYLE.typo),
-      length: oneOf(s.length, ['short', 'normal', 'long'], DEFAULT_STYLE.length),
+      length: oneOf(s.length, LENGTHS, DEFAULT_STYLE.length),
     },
     signature: strings(o.signature),
     lines,
