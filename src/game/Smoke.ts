@@ -34,6 +34,10 @@ export const DRAG_CYCLE = [15, 20];
 export const UMBRELLA_DIAMETER = 1.0;
 /** Closest two smokers stand when dry: shoulder to shoulder, near enough to chat. */
 export const DRY_GAP = 0.8;
+/** Seconds an umbrella takes to go up and open, or to fold shut and come down. */
+export const UMBRELLA_FOLD = 0.5;
+/** How far (m) from the front doorframe an umbrella may be open: the canopy stays off the frame. */
+export const UMBRELLA_CLEAR = 0.6;
 
 /** Smoke dice: a stream of their own, so smoke breaks do not shift the rest of the simulation's numbers. */
 const smokeDice = stream(0x736d6f6b);

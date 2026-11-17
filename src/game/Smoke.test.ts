@@ -2,10 +2,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { team } from '../data/team';
 import { installHeadlessDom } from '../test/headlessDom';
 import { GROUP, office, run } from '../test/office';
-import { DOOR, DOOR_LANES } from './Door';
+import { DOOR, DOOR_LANES, fromDoorway } from './Door';
 import type { Person } from './Person';
 import type { Sim } from './Sim';
-import { DRY_GAP, PORCH_SPOTS, UMBRELLA_DIAMETER } from './Smoke';
+import { DRY_GAP, PORCH_SPOTS, UMBRELLA_CLEAR, UMBRELLA_DIAMETER } from './Smoke';
 import { cycleOf } from './TimeOfDay';
 
 installHeadlessDom();
@@ -120,7 +120,7 @@ describe('presence.smoke: smoke breaks on the porch', () => {
       () => smoker.atPorchSpot && walker.presence === 'out',
       () => {
         for (const p of sim.people) {
-          if (p.presence === 'out' || (!p.away && p.pos.z > DOOR.z + 0.05)) {
+          if (p.presence === 'out' || (!p.away && p.outdoors && fromDoorway(p.pos.x, p.pos.z) > 1.5)) {
             expect(p.umbrella).toBe(true);
             if (!p.away) seenOut++;
           } else if (p.pos.z < DOOR.z - 0.05) expect(p.umbrella).toBe(false);
@@ -138,6 +138,32 @@ describe('presence.smoke: smoke breaks on the porch', () => {
     sim.weather.set(false);
     run(sim, 0.1);
     expect(sim.people.some((p) => p.umbrella)).toBe(false);
+  });
+
+  it('weather.umbrella: in the rain nobody passes the doorframe with an open umbrella: it opens clear of the frame on the way out and is shut before it on the way in', () => {
+    const sim = office();
+    const [smoker, walker] = atDesks(sim, [SANDRO, GROUP[0]]);
+    sim.weather.set(true);
+    urge(sim, smoker);
+    expect(sim.presence.send(walker, 'errand', sim.nav)).toBe(true);
+    const through = { out: new Set<Person>(), in: new Set<Person>() };
+    const check = () => {
+      for (const p of sim.people) {
+        if (p.away || fromDoorway(p.pos.x, p.pos.z) >= UMBRELLA_CLEAR) continue;
+        expect(p.umbrellaAmt, `${p.id} (${p.presence}) at z ${p.pos.z.toFixed(2)}`).toBe(0);
+        if (p.presence === 'leaving' && p.pos.z > DOOR.z - 0.5) through.out.add(p);
+        if (p.presence === 'returning') through.in.add(p);
+      }
+    };
+    // out: the smoker to the porch (umbrella open there), the other one away
+    expect(run(sim, 60, () => smoker.atPorchSpot && smoker.umbrellaAmt === 1 && walker.away, check)).toBe(true);
+    // in: the smoker after the break, the other one called back
+    sim.presence.callBack(walker);
+    expect(run(sim, 90, () => smoker.presence === 'in' && walker.presence === 'in', check)).toBe(true);
+    expect([...through.out]).toEqual(expect.arrayContaining([smoker, walker]));
+    expect([...through.in]).toEqual(expect.arrayContaining([smoker, walker]));
+    // every rain spot keeps the open umbrella off the frame
+    for (const s of PORCH_SPOTS.filter((s) => s.rain)) expect(fromDoorway(s.x, s.z)).toBeGreaterThanOrEqual(UMBRELLA_CLEAR);
   });
 });
 

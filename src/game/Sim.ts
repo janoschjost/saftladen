@@ -366,8 +366,8 @@ export class Sim {
     this.serverRack.update(dt, this.people, this.nav);
     this.doors.update(dt, [...this.walkers.filter((w) => !w.away).map((w) => ({ x: w.pos.x, z: w.pos.z, path: w.doorPath ?? undefined })), ...this.doorsSee()]);
     this.coatRacks.update();
-    // everybody outdoors holds an umbrella in the rain; it closes at the door
-    for (const p of this.people) p.umbrella = this.weather.raining && p.outdoors;
+    // everybody outdoors holds an umbrella in the rain; it is shut before the doorframe
+    for (const p of this.people) p.updateUmbrella(dt, this.weather.raining);
     this.separate();
     this.separate();
     this.separate();

@@ -1892,13 +1892,11 @@ export class Game {
     c.ember.color.setHex(w.smokeDraw ? 0xffb347 : 0xc0401a);
   }
 
-  /** Outdoors in the rain the umbrella goes up in the left hand and opens; at the door it folds shut and is gone. */
+  /** Outdoors in the rain the umbrella goes up in the left hand and opens; before the doorframe it folds shut and is gone (`Person.updateUmbrella`). */
   private poseUmbrella(w: Person, r: Person['rig']): void {
     const u = r.umbrella;
     if (!u) return;
-    w.umbrellaAmt += ((w.umbrella && !w.away ? 1 : 0) - w.umbrellaAmt) * 0.15;
-    if (w.umbrellaAmt < 0.02) w.umbrellaAmt = 0;
-    const a = w.umbrellaAmt;
+    const a = w.away ? 0 : w.umbrellaAmt;
     u.root.visible = a > 0;
     if (!a) return;
     const p = smokePoses(r).umbrella;
