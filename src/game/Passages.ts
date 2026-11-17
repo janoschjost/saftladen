@@ -177,9 +177,11 @@ export class Passages {
       }
       const v = this.heading(w, path, next, i);
       const p = this.list[next];
-      // whoever got the passage after waiting keeps that wait, even when somebody coming out still holds it up
-      const mine = p.holds.get(w);
-      const credit = mine && this.clock - mine.stamp <= STALE ? Math.max(waited, mine.waited) : waited;
+      // the wait already had at this entrance, this way in (in front of it, or holding it): see the class doc
+      let credit = waited;
+      for (const h of [p.holds.get(w), p.waits.get(w)]) {
+        if (h && this.clock - h.stamp <= STALE && h.dx * v.x + h.dz * v.z > 0) credit = Math.max(credit, h.waited);
+      }
       if (!force && this.opposed(w, next, v.x, v.z, credit)) {
         p.waits.set(w, { dx: v.x, dz: v.z, waited: credit, stamp: this.clock, since: this.clock, checked: 0, entered: false });
         // the lane leads from the last step on open floor into the passage
