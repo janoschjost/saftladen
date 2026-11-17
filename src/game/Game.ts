@@ -601,6 +601,7 @@ export class Game {
         type,
         (e) => {
           this.pacer.wake(e.timeStamp);
+          this.focused = document.hasFocus(); // input without a focus event (the page loaded in the background, then got hovered)
           if (e instanceof MouseEvent) this.shift = e.shiftKey;
         },
         { passive: true, capture: true },
@@ -613,6 +614,7 @@ export class Game {
     const h = window.innerHeight;
     this.drawer.renderer.setSize(w, h);
     this.views.resize(w, h);
+    this.pacer.redraw(); // the canvas was cleared: draw it again at once, also while idle
   }
 
   /** held while a full-screen card (welcome) is up: no game time passes, the scene still renders */
@@ -631,7 +633,7 @@ export class Game {
   private frameState(): FrameState {
     const s = this.paceState; // one object, filled in on every refresh
     s.timeScale = this.timeScale();
-    s.viewMoved = this.viewMoved;
+    s.viewMoved = this.viewMoved || this.views.flying; // a flight started without input: full rate from its first frame
     s.keysHeld = this.keys.size > 0;
     s.focused = this.focused;
     return s;

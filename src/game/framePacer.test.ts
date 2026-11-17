@@ -58,6 +58,24 @@ describe('perf.idle', () => {
     }
   });
 
+  it('perf.idle: back in focus, or moving again without input, the next refresh draws at once', () => {
+    const p = new FramePacer();
+    const blurred = { ...running, focused: false };
+    let t = 10_000;
+    for (; t < 11_000; t += 1000 / 120) p.due(t, blurred);
+    expect(p.due(t, running)).toBe(true);
+    expect(p.due(t + 1000 / 120, running)).toBe(false); // then 60 again
+    for (t += 2000; t < 14_000; t += 1000 / 120) p.due(t, still);
+    expect(p.due(t, { ...still, viewMoved: true })).toBe(true); // a flight a dev event started
+  });
+
+  it('perf.idle: a resize draws at once', () => {
+    const p = new FramePacer();
+    expect(p.due(10_000, still)).toBe(true);
+    p.redraw();
+    expect(p.due(10_008, still)).toBe(true);
+  });
+
   it('perf.idle: input brings the full rate back at once and holds it a moment', () => {
     const p = new FramePacer();
     expect(p.due(10_000, still)).toBe(true);

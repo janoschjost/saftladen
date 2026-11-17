@@ -31,10 +31,14 @@ export class FramePacer {
   /** when input last came */
   woke = -Infinity;
 
-  /** Input, focus: full rate; out of idle the next refresh draws at once. */
+  /** Input, focus: full rate for a while (the next refresh draws at once, as the rate goes up). */
   wake(now: number): void {
     this.woke = now;
-    if (this.fps === IDLE_FPS) this.last = -Infinity; // only then: a stream of pointer moves must not draw past the cap
+  }
+
+  /** The next refresh draws, whatever the rate (the canvas was resized and cleared). */
+  redraw(): void {
+    this.last = -Infinity;
   }
 
   /** Frames per second the game needs at `now`. */
@@ -46,12 +50,14 @@ export class FramePacer {
 
   /** Whether the refresh at `now` draws a frame. */
   due(now: number, s: FrameState): boolean {
-    this.fps = this.rate(now, s);
-    const interval = 1000 / this.fps;
+    const fps = this.rate(now, s);
+    const rose = fps > this.fps; // out of idle or back in focus: draw at once
+    this.fps = fps;
+    const interval = 1000 / fps;
     const elapsed = now - this.last;
-    if (elapsed < interval * 0.75) return false; // a quarter early still counts: refreshes jitter, and 90 or 144 Hz don't divide evenly
-    // keep the beat (a refresh a little early does not push the next one late), unless the loop fell behind
-    this.last = elapsed > 2 * interval ? now : this.last + interval;
+    if (!rose && elapsed < interval * 0.75) return false; // a quarter early still counts: refreshes jitter, and 90 or 144 Hz don't divide evenly
+    // keep the beat (a refresh a little early does not push the next one late), unless the loop fell behind or the rate went up
+    this.last = rose || elapsed > 2 * interval ? now : this.last + interval;
     return true;
   }
 }
