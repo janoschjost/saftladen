@@ -1,0 +1,13 @@
+{
+  "style": {
+    "case": "lower",
+    "emoji": 0.05,
+    "punctuation": "none",
+    "typo": 0.1,
+    "length": "short"
+  },
+  "signature": [
+    "hmm"
+  ],
+  "lines": {}
+}
