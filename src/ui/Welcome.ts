@@ -1,3 +1,4 @@
+import { browserStorage } from '../game/storage';
 import { team } from '../data/team';
 import { fxRandom } from '../game/rng';
 import { strings } from '../i18n/strings';
@@ -8,7 +9,7 @@ const t = strings.welcome;
 
 const wasSeen = (): boolean => {
   try {
-    return localStorage.getItem(KEY) === '1';
+    return browserStorage.getItem(KEY) === '1'; // even with ?seed: a dismissed card stays dismissed
   } catch {
     return false;
   }
@@ -16,7 +17,7 @@ const wasSeen = (): boolean => {
 
 const markSeen = (): void => {
   try {
-    localStorage.setItem(KEY, '1');
+    browserStorage.setItem(KEY, '1'); // the one key ?seed writes: a card dismissed on a feature URL stays dismissed
   } catch {
     /* storage may be unavailable */
   }

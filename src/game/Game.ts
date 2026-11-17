@@ -57,6 +57,7 @@ import { random } from './rng';
 import { poseGameboy } from './gameboyPose';
 import { poseCamera } from './cameraPose';
 import { poseRepair } from './repairPose';
+import { savedStateIgnored, storage } from './storage';
 
 const STEP = 1 / 60; // fixed simulation step
 const TALK_REACH = 2.6; // metres: how far the player can be from somebody to talk to them
@@ -340,7 +341,7 @@ export class Game {
   private restoreSeats(): void {
     let local: Record<string, number> | null = null;
     try {
-      const raw = localStorage.getItem(SEATS_KEY);
+      const raw = storage.getItem(SEATS_KEY);
       if (raw) local = JSON.parse(raw);
     } catch {
       /* storage may be unavailable or corrupt */
@@ -352,10 +353,11 @@ export class Game {
 
   /** Dev server only: writes the seat assignment to src/data/seats.json and drops the localStorage copy. */
   private async writeSeats(out: Record<string, number>): Promise<void> {
+    if (savedStateIgnored) return; // ?seed: the assignment lasts for the session
     try {
       const res = await fetch('/__save-seats', { method: 'POST', body: JSON.stringify(out) });
       if (!res.ok) throw new Error(String(res.status));
-      localStorage.removeItem(SEATS_KEY);
+      storage.removeItem(SEATS_KEY);
     } catch {
       /* no dev server: localStorage stays */
     }
@@ -369,7 +371,7 @@ export class Game {
     const out: Record<string, number> = {};
     for (const q of this.sim.people) if (q.homeDesk) out[q.id] = q.homeDesk.number;
     try {
-      localStorage.setItem(SEATS_KEY, JSON.stringify(out));
+      storage.setItem(SEATS_KEY, JSON.stringify(out));
     } catch {
       /* ignore */
     }
@@ -1100,8 +1102,8 @@ export class Game {
     const key = `saftladen.day.best.${d.person.id}`;
     let best = Infinity;
     try {
-      best = Number(localStorage.getItem(key)) || Infinity;
-      if (d.time < best) localStorage.setItem(key, String(d.time));
+      best = Number(storage.getItem(key)) || Infinity;
+      if (d.time < best) storage.setItem(key, String(d.time));
     } catch {
       /* storage blocked: no best time */
     }

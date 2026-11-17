@@ -1,3 +1,4 @@
+import { storage } from '../game/storage';
 import { cycleOf, SPEEDS, WEEKDAYS, type Speed, type TimeOfDay } from '../game/TimeOfDay';
 import { dialAngle, dialHour, dialPoint, dialSlice, stepHour } from './clockDial';
 
@@ -13,7 +14,7 @@ const SKY = { dawn: 5, morning: 8, evening: 18, night: 21 };
 
 const store = (key: string, value: string) => {
   try {
-    localStorage.setItem(key, value);
+    storage.setItem(key, value);
   } catch {
     /* storage may be unavailable */
   }
@@ -45,8 +46,8 @@ export class TimeControl {
 
   constructor(private tod: TimeOfDay) {
     try {
-      this.auto.checked = localStorage.getItem(KEY) !== '0';
-      const speed = Number(localStorage.getItem(SPEED_KEY));
+      this.auto.checked = storage.getItem(KEY) !== '0';
+      const speed = Number(storage.getItem(SPEED_KEY));
       if ((SPEEDS as readonly number[]).includes(speed)) tod.speed = speed as Speed;
     } catch {
       /* storage may be unavailable */

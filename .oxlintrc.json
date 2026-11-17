@@ -20,7 +20,14 @@
       }
     ],
     "unicorn/no-useless-spread": "off",
-    "typescript/no-misused-spread": "off"
+    "typescript/no-misused-spread": "off",
+    "no-restricted-globals": [
+      "error",
+      {
+        "name": "localStorage",
+        "message": "Use storage from src/game/storage.ts: a ?seed page must not read or write saved state."
+      }
+    ]
   },
   "overrides": [
     {
@@ -29,6 +36,15 @@
       ],
       "rules": {
         "no-restricted-properties": "off"
+      }
+    },
+    {
+      "files": [
+        "src/game/storage.ts",
+        "e2e/**"
+      ],
+      "rules": {
+        "no-restricted-globals": "off"
       }
     },
     {

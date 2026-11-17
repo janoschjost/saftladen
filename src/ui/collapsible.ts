@@ -1,3 +1,5 @@
+import { storage } from '../game/storage';
+
 const groups = new Map<string, Array<(collapsed: boolean, animate?: boolean) => void>>();
 
 /** Adds a chevron button to a panel title that folds the panel's content away. The state is remembered. */
@@ -32,14 +34,14 @@ export function makeCollapsible(root: HTMLElement, title: HTMLElement, key: stri
     btn.setAttribute('aria-expanded', String(!collapsed));
     btn.setAttribute('aria-label', collapsed ? 'Aufklappen' : 'Zuklappen');
     try {
-      localStorage.setItem(key, collapsed ? '1' : '0');
+      storage.setItem(key, collapsed ? '1' : '0');
     } catch {
       /* storage may be unavailable */
     }
   };
   let start = folded;
   try {
-    const stored = localStorage.getItem(key);
+    const stored = storage.getItem(key);
     if (stored !== null) start = stored === '1';
   } catch {
     /* ignore */
