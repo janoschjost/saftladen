@@ -9,6 +9,7 @@ import {
   flap,
   HANG,
   MAIL_SPOT,
+  MAILBOX_TOP,
   MAILBOXES,
   PARCEL_SPOT,
   PARCELS,
@@ -364,7 +365,7 @@ export class Mail {
     const t = j.flight;
     const m = MAILBOXES[j.box];
     // sits on the lid, looking along it, its beak over the slot
-    const land = { x: m.x - 0.12, y: slotAt(j.box).y + 0.1, z: m.z + 0.13 };
+    const land = { x: m.x - 0.1, y: MAILBOX_TOP + 0.13, z: m.z + 0.14 };
     const from = { x: m.x + 9, y: 7, z: m.z + 11 };
     const to = { x: m.x - 10, y: 8, z: m.z + 14 };
     const root = d.root;
@@ -374,8 +375,8 @@ export class Mail {
       const s = slotAt(j.box);
       j.item.removeFromParent();
       j.item.scale.setScalar(1);
-      j.item.position.set(s.x, s.y + sizeOf(j.item).h / 2 - 0.04, s.z);
-      j.item.rotation.set(0, 0, (mailDice() - 0.5) * 0.2);
+      j.item.position.set(s.x, s.y, s.z + sizeOf(j.item).h / 2 - 0.04); // lies in the slot, half of it out
+      j.item.rotation.set(-Math.PI / 2 + 0.25, 0, (mailDice() - 0.5) * 0.3);
       this.world.add(j.item);
     }
     let yaw = Math.PI / 2;

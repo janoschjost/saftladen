@@ -10,41 +10,47 @@ import { ball, box, merge, propMaterial } from './geo';
 
 /** Outer face of the front wall (game metres); the porch starts here. */
 const WALL = OFFICE_D + 0.15;
-const BOX = { w: 0.34, h: 0.4, d: 0.2, y: 1.2 };
-const COLORS = ['#f2c200', '#d94a38', '#3b6fb6'];
+/** A Swiss steel mailbox: wide, grey, letter compartment with the slot above, a door with a handle below. */
+const BOX = { w: 0.42, h: 0.32, d: 0.28, y: 1.2 };
+const SHADES = ['#b4b9bf', '#aab0b7', '#bcc0c5'];
 
 /** The mailboxes on the front wall, east of the door and clear of its swing: where each one is (centre of its front, game metres). */
-export const MAILBOXES: ReadonlyArray<{ x: number; z: number }> = [0, 1, 2].map((i) => ({ x: ax(-3.3) + 1.4 + i * 0.45, z: WALL }));
+export const MAILBOXES: ReadonlyArray<{ x: number; z: number }> = [0, 1, 2].map((i) => ({ x: ax(-3.3) + 1.4 + i * 0.5, z: WALL }));
 /** Top of a mailbox (m above the porch). */
-const TOP = BOX.y + BOX.h / 2;
+export const MAILBOX_TOP = BOX.y + BOX.h / 2;
 /** Where whoever fetches the post stands: in front of the middle mailbox. */
-export const MAIL_SPOT = { x: MAILBOXES[1].x, z: WALL + 0.75, rain: true };
+export const MAIL_SPOT = { x: MAILBOXES[1].x, z: WALL + 1.3, rain: true };
 /** Where a delivered parcel is put down: on the porch in front of the mailboxes. */
-export const PARCEL_SPOT = { x: MAILBOXES[1].x, z: WALL + 0.35 };
+export const PARCEL_SPOT = { x: MAILBOXES[1].x, z: WALL + 0.8 }; // the drone's rotors (0.55 m out) stay off the wall
 
-/** The three wall-mounted mailboxes, each in its own colour, with a slot in the lid and a name plate. */
+/** The three wall-mounted steel mailboxes: a letter flap with a slot and a lock on top, a door with a handle and a name plate below. */
 export function buildMailboxes(): THREE.Group {
   const g = new THREE.Group();
+  const { w, h, d } = BOX;
   MAILBOXES.forEach((m, i) => {
+    const front = d / 2;
     const parts = [
-      box(BOX.w, BOX.h, BOX.d, 0, 0, 0, COLORS[i]),
-      box(BOX.w + 0.03, 0.03, BOX.d + 0.03, 0, BOX.h / 2 + 0.015, 0, COLORS[i]), // lid
-      box(BOX.w * 0.6, 0.012, 0.02, 0, BOX.h / 2 + 0.032, 0.03, '#1b1b1f'), // slot
-      box(0.2, 0.07, 0.01, 0, -0.05, BOX.d / 2 + 0.003, '#f4f1e8'), // name plate
-      box(0.16, 0.012, 0.012, 0, -0.05, BOX.d / 2 + 0.01, '#8a8a90'),
-      box(0.06, 0.06, 0.008, 0, 0.1, BOX.d / 2 + 0.003, '#2a2a30'), // lock
+      box(w, h, d, 0, 0, 0, SHADES[i]),
+      box(w + 0.016, 0.014, d + 0.016, 0, h / 2 + 0.007, 0, '#a2a8ae'), // lid rim
+      box(w - 0.04, h * 0.36, 0.012, 0, h * 0.27, front + 0.006, '#c6cacf'), // letter flap
+      box(w - 0.14, 0.012, 0.016, -0.02, h * 0.27 + 0.025, front + 0.012, '#1b1d21'), // slot
+      box(0.026, 0.026, 0.01, -(w / 2 - 0.06), h * 0.27 - 0.03, front + 0.014, '#dfe2e6'), // lock
+      box(0.006, 0.014, 0.012, -(w / 2 - 0.06), h * 0.27 - 0.03, front + 0.016, '#1b1d21'),
+      box(w - 0.04, h * 0.5, 0.012, 0, -h * 0.2, front + 0.006, '#c0c4c9'), // door
+      box(0.055, 0.024, 0.022, -(w / 2 - 0.09), -h * 0.2 + 0.05, front + 0.02, '#e3e6ea'), // handle
+      box(0.12, 0.04, 0.004, 0.07, -h * 0.2 - 0.04, front + 0.014, '#f4f1e8'), // name plate
     ];
     const mesh = new THREE.Mesh(merge(parts), propMaterial);
     mesh.castShadow = true;
-    mesh.position.set(m.x, BOX.y, m.z + BOX.d / 2);
+    mesh.position.set(m.x, BOX.y, m.z + d / 2);
     g.add(mesh);
   });
   return g;
 }
 
-/** Where the letter of mailbox `i` sticks out of its slot (game coordinates; the envelope stands upright, half inside). */
+/** Where the letter of mailbox `i` sticks out of its slot (game coordinates; the envelope lies flat, half inside). */
 export function slotAt(i: number): { x: number; y: number; z: number } {
-  return { x: MAILBOXES[i].x, y: TOP + 0.035, z: MAILBOXES[i].z + BOX.d / 2 + 0.03 };
+  return { x: MAILBOXES[i].x - 0.02, y: BOX.y + BOX.h * 0.27 + 0.025, z: MAILBOXES[i].z + BOX.d + 0.014 };
 }
 
 /** What an item looks like: size (m) and colours. */
@@ -121,15 +127,23 @@ export const DOVE_SCALE = 1.8;
 export function buildDove(): Dove {
   const root = new THREE.Group();
   const body = new THREE.Mesh(
-    merge([ball(0.07, 0, 0, 0, '#f4f4f0', 0.85).scale(1, 1, 1.6), ball(0.045, 0, 0.07, 0.13, '#f4f4f0'), box(0.025, 0.02, 0.05, 0, 0.065, 0.19, '#e9a23b'), box(0.06, 0.012, 0.11, 0, 0.01, -0.2, '#e4e4df', 0.2), ball(0.01, 0.025, 0.085, 0.165, '#1b1b1f'), ball(0.01, -0.025, 0.085, 0.165, '#1b1b1f')]),
+    merge([
+      box(0.12, 0.1, 0.26, 0, 0, 0, '#8d9298'), // body
+      box(0.08, 0.08, 0.08, 0, 0.07, 0.15, '#9aa0a6'), // head
+      box(0.03, 0.025, 0.04, 0, 0.065, 0.2, '#3a3d42'), // beak
+      box(0.02, 0.02, 0.01, 0.036, 0.085, 0.19, '#16171b'), // eyes
+      box(0.02, 0.02, 0.01, -0.036, 0.085, 0.19, '#16171b'),
+      box(0.08, 0.02, 0.12, 0, 0.02, -0.19, '#737880', 0.15), // tail
+      box(0.1, 0.03, 0.06, 0, -0.02, 0.08, '#b3b8bd'), // breast
+    ]),
     propMaterial,
   );
   body.castShadow = true;
   root.add(body);
   const wings = [-1, 1].map((side) => {
     const pivot = new THREE.Group();
-    pivot.position.set(side * 0.05, 0.04, 0.01);
-    const wing = new THREE.Mesh(merge([box(0.2, 0.012, 0.13, side * 0.1, 0, -0.01, '#fbfbf8'), box(0.08, 0.012, 0.1, side * 0.22, 0, -0.04, '#e4e4df')]), propMaterial);
+    pivot.position.set(side * 0.06, 0.05, 0.01);
+    const wing = new THREE.Mesh(merge([box(0.16, 0.014, 0.15, side * 0.08, 0, -0.01, '#7b8086'), box(0.1, 0.014, 0.12, side * 0.21, 0, -0.03, '#a2a7ad')]), propMaterial);
     pivot.add(wing);
     root.add(pivot);
     return pivot;
@@ -176,7 +190,6 @@ export function buildDrone(): Drone {
   const ropeParts = [-1, 1].flatMap((sx) => [-1, 1].map((sz) => box(0.01, HANG, 0.01, sx * 0.1, -HANG / 2 - 0.04, sz * 0.1, '#222226')));
   const ropes = new THREE.Mesh(merge(ropeParts), propMaterial);
   root.add(ropes);
-  root.scale.setScalar(1.3);
   return { root, rotors, ropes };
 }
 
