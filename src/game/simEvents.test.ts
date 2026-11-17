@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { strings } from '../i18n/strings';
+import { OFFICE_ACTIONS } from '../data/actions';
 import { CORRIDOR_POINT } from '../render/officeModel';
 import { installHeadlessDom } from '../test/headlessDom';
 import { GROUP, office, run } from '../test/office';
@@ -304,6 +305,28 @@ describe('dev events on the Sim', () => {
     refused(five, 'crowd'); // past the quiet start nobody held out is brought in
   });
 
+  it('actions.force (printer): with somebody at the printer, the event stops that job (paper gone, free again) and somebody else prints', () => {
+    const sim = office();
+    const [busy] = only(sim, [...GROUP], 'free');
+    sim.scenario.clear('printer');
+    expect(busy.startPrint(sim.nav)).toBe(true);
+    expect(run(sim, 60, () => sim.office.printer!.occupant === busy && busy.printJob?.phase === 'print')).toBe(true);
+    expect(sim.events.trigger('printer')).toMatch(/ druckt$/);
+    const user = sim.office.printer!.occupant;
+    expect(user).toBeTruthy();
+    expect(sim.people.filter((o) => o.printJob)).toEqual([user]); // one job, the old one is not left behind
+    if (user !== busy) expect(busy.printJob).toBeNull();
+  });
+
+  it('actions.force (printer): every card of the Aktionen sheet happens at the start of seeds 1 to 5', () => {
+    for (let seed = 1; seed <= 5; seed++) {
+      for (const a of OFFICE_ACTIONS) {
+        const sim = office({}, seed);
+        expect(sim.events.trigger(a.eventId), `seed ${seed}, ${a.id}`).not.toMatch(/: nicht möglich$/);
+      }
+    }
+  });
+
   it('actions.force (talk-join, crowd): without a talk, or in the quiet start, they are refused and a running meeting keeps going; crowd with too few free clears the meeting, talk-join never', () => {
     const sim = office();
     only(sim, [...GROUP, PHONE], 'free');
@@ -401,7 +424,7 @@ describe('dev events on the Sim', () => {
     expect(run(sim, 60, () => sim.toilets.cabins.every((c) => !c.session))).toBe(true);
   });
 
-  it('place.printer (printer): somebody leaves the desk to print; refused while the printer is taken', () => {
+  it('place.printer (printer): somebody leaves the desk to print; while the printer is taken the job is cleared (actions.force) and a new one starts', () => {
     const sim = office();
     const [p] = only(sim, [GROUP[0]]);
     sim.scenario.clear('printer');
@@ -409,7 +432,8 @@ describe('dev events on the Sim', () => {
     expect(sim.office.printer!.occupant).toBe(p);
     expect(p.printJob).toBeTruthy();
     expect(p.task?.phase).not.toBe('work');
-    refused(sim, 'printer');
+    expect(sim.events.trigger('printer')).toBe('Oscar druckt'); // the only one free: his old job ends, a new one starts
+    expect(sim.people.filter((o) => o.printJob)).toEqual([p]);
   });
 
   it('place.foosball (foosball): two leave their desks for the table; refused while it is taken or with one person in', () => {
