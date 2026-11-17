@@ -225,6 +225,19 @@ test('actions.camera + actions.handback: Drucken flies to Orbit and follows the 
   await until(page, (g) => !g.views.flying && Math.abs(g.views.orbitShot.dist - g.views.overviewShot().dist) < 0.5, undefined, 60_000);
 });
 
+test('actions.handback: a wheel right after picking a card reaches the office, not the sheet sliding away (#209)', async ({ page }) => {
+  await openGame(page);
+  await scene(page, (s) => s.clear('printer', 'coffee', 'kitchen'));
+  await page.keyboard.press('a');
+  await page.locator('#action-cards .m-card[data-action="printer"]').click();
+  // the sheet is still sliding out (300 ms): the office under it gets the pointer, not the sheet
+  expect(await page.evaluate(() => !!document.elementFromPoint(700, 450)?.closest('#action-sheet'))).toBe(false);
+  await page.mouse.move(700, 450);
+  await page.mouse.wheel(0, 200);
+  expect(await read(page, (g) => g.action?.owned)).toBe(false);
+  await expect(page.locator('#now-follow')).toHaveAttribute('aria-pressed', 'false');
+});
+
 test('actions.fail: an action that cannot run (everybody held by a scene) says so and leaves the camera alone', async ({ page }) => {
   await openGame(page, 'iso');
   const everybody = await read(page, (g) => g.sim.people.map((p) => p.id));
