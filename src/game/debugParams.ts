@@ -1,6 +1,7 @@
 import { OVERLAY_KINDS, type OverlayKind } from './DebugOverlays';
 import type { Game } from './Game';
 import { getSeed, setSeed } from './rng';
+import { savedStateIgnored } from './storage';
 import { cycleOf } from './TimeOfDay';
 
 /**
@@ -10,6 +11,7 @@ import { cycleOf } from './TimeOfDay';
  *   &follow           camera follows the person (orbit view)
  *   ?day              starts "Ein Tag im Leben" as Jan Hasler; ?day=<person-id> for somebody else
  *   ?seed=<n>         seeds the random numbers (see rng.ts): same seed, same start. The console logs every page's seed.
+ *                     Starts like a fresh browser profile: nothing saved is read or written (storage.ts), except under ?test.
  *   ?event=<id>       runs a dev-panel event right at start (`dev.list()` shows the ids), e.g. ?event=meeting-room;
  *                     repeat it for several (?event=rain&event=coffee). FEATURES.md links each feature to such a URL.
  *   ?action=<id>      starts an Aktionen card (`src/data/actions.ts`, e.g. ?action=printer) or any dev event like the
@@ -29,6 +31,7 @@ export function applySeedParam(): void {
   const n = Number(raw);
   if (raw && Number.isFinite(n)) setSeed(n);
   console.info(`[debug] seed ${getSeed()}, replay with ?seed=${getSeed()}`);
+  if (savedStateIgnored) console.info('[debug] ?seed: saved state ignored, nothing is saved this session');
 }
 
 export function applyDebugParams(game: Game): void {

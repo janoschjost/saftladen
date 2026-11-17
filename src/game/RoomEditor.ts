@@ -4,6 +4,7 @@ import type { RoomItem } from '../render/roomItem';
 import { tint } from '../render/tint';
 import { newBlockages, type Blockage } from './placement';
 import { EditorPanel } from '../ui/EditorPanel';
+import { savedStateIgnored, storage } from './storage';
 
 const KEY = 'saftladen.layout';
 /** Dragging snaps the offset to this grid (metres); Alt while dragging = free. */
@@ -298,6 +299,7 @@ export class RoomEditor {
 
   /** Dev server only: writes the current layout to src/data/layout.json (the new shipped default). */
   private async saveToRepo(): Promise<string> {
+    if (savedStateIgnored) return 'Mit ?seed wird nichts gespeichert, Änderungen gelten nur bis zum Neuladen. Als JSON exportieren, ohne ?seed öffnen und importieren.';
     const out: Layout = {};
     for (const it of this.items) {
       const cur = it.override ?? {};
@@ -310,7 +312,7 @@ export class RoomEditor {
       return 'Speichern fehlgeschlagen – nur mit dem Dev-Server (npm run dev) möglich.';
     }
     try {
-      localStorage.removeItem(KEY); // the file is the layout now
+      storage.removeItem(KEY); // the file is the layout now
     } catch {
       /* ignore */
     }
@@ -352,7 +354,7 @@ export class RoomEditor {
 
   private stored(): Layout {
     try {
-      const saved = JSON.parse(localStorage.getItem(KEY) ?? '{}');
+      const saved = JSON.parse(storage.getItem(KEY) ?? '{}');
       return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
     } catch {
       return {}; // storage may be unavailable or corrupt
@@ -367,8 +369,8 @@ export class RoomEditor {
       if (!sameOverride(cur, DEFAULT_LAYOUT[it.id] ?? {})) out[it.id] = cur;
     }
     try {
-      if (Object.keys(out).length) localStorage.setItem(KEY, JSON.stringify(out));
-      else localStorage.removeItem(KEY);
+      if (Object.keys(out).length) storage.setItem(KEY, JSON.stringify(out));
+      else storage.removeItem(KEY);
     } catch {
       /* ignore */
     }

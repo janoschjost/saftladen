@@ -1,3 +1,4 @@
+import { storage } from '../game/storage';
 import { HOME_COUNT } from '../render/homeOffice';
 import { team } from './team';
 import { HOME_ROOMS } from './types';
@@ -16,7 +17,7 @@ for (const m of team) if (m.homeRoom) defaults[m.id] = HOME_ROOMS.indexOf(m.home
 
 let overrides: Record<string, number> = {};
 try {
-  const raw = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Record<string, number>;
+  const raw = JSON.parse(storage.getItem(KEY) ?? '{}') as Record<string, number>;
   for (const [id, v] of Object.entries(raw)) if (Number.isInteger(v) && v >= AUTO && v < HOME_COUNT) overrides[id] = v;
 } catch {
   /* storage may be unavailable or corrupt */
@@ -63,7 +64,7 @@ export function assignHomeRoom(id: string, room: number | null): void {
   for (const [o, v] of Object.entries(overrides)) if (o === id || (room !== null && v === room)) delete overrides[o];
   overrides[id] = room ?? AUTO;
   try {
-    localStorage.setItem(KEY, JSON.stringify(overrides));
+    storage.setItem(KEY, JSON.stringify(overrides));
   } catch {
     /* ignore */
   }

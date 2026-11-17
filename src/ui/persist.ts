@@ -1,3 +1,4 @@
+import { storage } from '../game/storage';
 import type { ViewSnapshot } from '../render/Views';
 
 const KEY = 'saftladen.state';
@@ -13,7 +14,7 @@ export interface SavedState {
 
 export function loadState(): SavedState {
   try {
-    const v = JSON.parse(localStorage.getItem(KEY) ?? '{}');
+    const v = JSON.parse(storage.getItem(KEY) ?? '{}');
     return v && typeof v === 'object' ? v : {};
   } catch {
     return {};
@@ -22,7 +23,7 @@ export function loadState(): SavedState {
 
 export function saveState(state: SavedState): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify(state));
+    storage.setItem(KEY, JSON.stringify(state));
   } catch {
     /* storage may be unavailable */
   }

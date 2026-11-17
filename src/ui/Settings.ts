@@ -1,3 +1,4 @@
+import { storage } from '../game/storage';
 import type { WeatherMode } from '../game/Weather';
 import type { ViewMode } from '../render/Views';
 import { Popover } from './Popover';
@@ -37,7 +38,7 @@ export class Settings {
   constructor(private hooks: SettingsHooks) {
     let raw: string | null = null;
     try {
-      raw = localStorage.getItem(SETTINGS_KEY);
+      raw = storage.getItem(SETTINGS_KEY);
     } catch {
       /* storage may be unavailable */
     }
@@ -120,7 +121,7 @@ export class Settings {
       follow: this.follow.checked,
     };
     try {
-      localStorage.setItem(SETTINGS_KEY, serializeSettings(this.state));
+      storage.setItem(SETTINGS_KEY, serializeSettings(this.state));
     } catch {
       /* ignore */
     }
