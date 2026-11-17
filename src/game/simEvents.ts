@@ -206,13 +206,12 @@ export function registerSimEvents(sim: Sim): void {
     id: 'passage-meeting',
     group: 'Aktionen',
     label: 'Zwei begegnen sich im Durchgang',
-    // forced by hand below: clearing the office brings people in, but it cannot make a passage
-    asIs: true,
+    asIs: true, // only finding two free people is forced: clearing the office cannot make a passage
     run: () => {
       // two people walk at a narrow passage from both ends at once: one waits beside the entrance, the other comes through
       const ends = passageEnds();
       if (!ends || [0, 1].some((i) => !nav.findPath(ends.from[i], ends.to[i]).length)) return null;
-      const meet = () => {
+      return events.force(() => {
         const pair = pickFree(2, (p) => !tiedUp(p));
         if (pair.length < 2) return null;
         pair.forEach((p, i) => {
@@ -223,9 +222,7 @@ export function registerSimEvents(sim: Sim): void {
         });
         sim.point(pair[0]);
         return `${firsts(pair, ' und ')} begegnen sich im Durchgang`;
-      };
-      const r = meet();
-      return r === null && events.forcer ? events.forcer(meet) : r;
+      });
     },
   });
   gather(

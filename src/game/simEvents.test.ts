@@ -555,13 +555,14 @@ describe('dev events on the Sim', () => {
   });
 
   it('move.passages (passage-meeting): with nobody in the office it brings two in and runs (actions.force); on a floor without a passage it is refused and clears nothing', () => {
+    const allOut = (s: Sim) => s.people.forEach((p) => s.scenario.put(p.id, 'errand', 'free')); // out, but free to be brought in
     const sim = office();
-    for (const p of sim.people) sim.scenario.put(p.id, 'errand', 'free'); // out, but free to be brought in
+    allOut(sim);
     expect(sim.events.trigger('passage-meeting')).toMatch(/ begegnen sich im Durchgang$/);
     expect(sim.people.filter((p) => p.inOffice).length).toBeGreaterThanOrEqual(2);
 
     const empty = office();
-    for (const p of empty.people) empty.scenario.put(p.id, 'errand', 'free');
+    allOut(empty);
     vi.spyOn(empty.traffic.passages, 'atIndex').mockReturnValue(-1); // nothing narrow anywhere
     refused(empty, 'passage-meeting');
   });
