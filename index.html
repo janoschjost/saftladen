@@ -567,6 +567,19 @@
         <button class="m-button" id="day-result-exit" type="button">Beenden</button>
       </div>
     </section>
+    <section class="m-chat" id="chat" aria-labelledby="chat-title" hidden>
+      <header class="m-chat__head">
+        <span class="m-chat__space" aria-hidden="true">CC</span>
+        <div class="m-chat__heading">
+          <h2 class="m-chat__title" id="chat-title">Crew-Chat</h2>
+          <p class="m-chat__members" id="chat-members"></p>
+        </div>
+        <button class="m-chat__close" id="chat-close" type="button" aria-label="Chat schliessen"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </header>
+      <ol class="m-chat__list" id="chat-list" aria-live="polite"></ol>
+      <p class="m-chat__foot">Nur lesen: hier schreibt die Crew.</p>
+    </section>
+    <button class="m-chat-launcher" id="open-chat" type="button" aria-expanded="false" aria-controls="chat"><svg class="m-chat-launcher__icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg><span class="m-chat-launcher__label">Chat</span><span class="m-chat-launcher__badge" id="chat-badge" hidden></span><kbd class="m-chat-launcher__key">C</kbd></button>
     <aside class="m-help" id="help" aria-label="Steuerung">
       <h2 class="m-help__title"><span class="m-help__line"><span><kbd class="m-help__key">A</kbd> Aktionen</span><span><kbd class="m-help__key">,</kbd> Einstellungen</span><span><kbd class="m-help__key">Esc</kbd> Zurück</span></span></h2>
       <ul class="m-help__list" id="hint"></ul>

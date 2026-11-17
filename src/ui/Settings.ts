@@ -118,12 +118,28 @@ export class Settings {
       weather: this.getWeather(),
       xmas: this.xmas.checked,
       follow: this.follow.checked,
+      chat: this.state.chat,
     };
+    this.save();
+    this.hooks.onChange(this.state);
+  }
+
+  /** Whether the crew chat was left open; undefined until the player toggled it. */
+  get chatOpen(): boolean | undefined {
+    return this.state.chat;
+  }
+
+  /** Remembers the crew chat open or closed (`saftladen.settings`). */
+  setChatOpen(open: boolean): void {
+    this.state = { ...this.state, chat: open };
+    this.save();
+  }
+
+  private save(): void {
     try {
       localStorage.setItem(SETTINGS_KEY, serializeSettings(this.state));
     } catch {
       /* ignore */
     }
-    this.hooks.onChange(this.state);
   }
 }

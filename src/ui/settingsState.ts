@@ -14,6 +14,8 @@ export interface SettingsState {
   xmas: boolean;
   /** "Kamera folgt bei Aktionen": the camera trails the lead person of an action */
   follow: boolean;
+  /** the crew chat panel was left open (true) or closed; unset until the player toggles it (open on desktop, closed on phone) */
+  chat?: boolean;
 }
 
 export const WEATHER_MODES: readonly WeatherMode[] = ['auto', 'sun', 'rain'];
@@ -41,9 +43,10 @@ export function parseSettings(raw: string | null, now = new Date()): SettingsSta
     weather: WEATHER_MODES.includes(saved.weather as WeatherMode) ? (saved.weather as WeatherMode) : d.weather,
     xmas: bool('xmas', d.xmas),
     follow: bool('follow', d.follow),
+    ...(typeof saved.chat === 'boolean' ? { chat: saved.chat } : {}),
   };
 }
 
 export function serializeSettings(s: SettingsState): string {
-  return JSON.stringify({ tables: s.tables, seats: s.seats, rooms: s.rooms, weather: s.weather, xmas: s.xmas, follow: s.follow });
+  return JSON.stringify({ tables: s.tables, seats: s.seats, rooms: s.rooms, weather: s.weather, xmas: s.xmas, follow: s.follow, chat: s.chat });
 }

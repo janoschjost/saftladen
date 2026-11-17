@@ -33,4 +33,11 @@ describe('hud.settings', () => {
     const s = { tables: false, seats: false, rooms: true, weather: 'sun' as const, xmas: false, follow: false };
     expect(parseSettings(serializeSettings(s), june)).toEqual(s);
   });
+
+  it('chat.panel: keeps the crew chat open or closed once toggled, unset before', () => {
+    expect(parseSettings('{}', june).chat).toBeUndefined();
+    expect(parseSettings('{"chat":false}', june).chat).toBe(false);
+    expect(parseSettings('{"chat":"yes"}', june).chat).toBeUndefined();
+    expect(JSON.parse(serializeSettings({ ...defaultSettings(june), chat: true })).chat).toBe(true);
+  });
 });

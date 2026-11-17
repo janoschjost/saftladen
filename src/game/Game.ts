@@ -25,6 +25,7 @@ import { Seats } from '../ui/Seats';
 import { DevPanel } from '../ui/DevPanel';
 import { registerDevSection } from '../ui/devSections';
 import { bubbleLine } from './voice';
+import { ChatPanel } from '../ui/ChatPanel';
 import { castSection } from '../ui/devCast';
 import { overlaySection } from '../ui/devOverlays';
 import { DebugOverlays } from './DebugOverlays';
@@ -93,6 +94,7 @@ export class Game {
   private sheet!: ActionSheet;
   private now!: NowChip;
   private peoplePanel!: People;
+  private chatPanel!: ChatPanel;
   /**
    * The action started from the Aktionen sheet: `lead` is the person it moved first (`keys`: which of their
    * `leadState` values it set), `owned` while the camera is the action's (the player has not grabbed it),
@@ -280,6 +282,9 @@ export class Game {
     });
     this.settings.setView(this.views.mode);
     this.peoplePanel = new People();
+    this.chatPanel = new ChatPanel(new Map(team.map((m) => [m.id, { id: m.id, name: m.name, portrait: m.portrait }])), this.settings.chatOpen, (open) => this.settings.setChatOpen(open));
+    for (const m of this.sim.chat.messages) this.chatPanel.add(m);
+    this.sim.chat.onMessage((m) => this.chatPanel.add(m));
 
     this.ring = new THREE.Mesh(
       new THREE.RingGeometry(0.5, 0.65, 32).rotateX(-Math.PI / 2),
@@ -543,6 +548,11 @@ export class Game {
           this.settings.setOpen(!this.settings.isOpen);
           return;
         }
+        // C: the crew chat, unless it steers the selected person
+        if (e.key.toLowerCase() === 'c' && !(this.selected instanceof Person) && !this.steered) {
+          this.chatPanel.toggle();
+          return;
+        }
         // A steers left while a person is steered, and ends the Konami code
         if (e.key.toLowerCase() === 'a' && !this.steered && !konami && !this.editor.active) {
           this.sheet.toggle();
@@ -655,6 +665,10 @@ export class Game {
       },
       get bubbles() {
         return g.bubbles;
+      },
+      /** the crew chat panel (bottom left) */
+      get chatPanel() {
+        return g.chatPanel;
       },
       get meetingLight() {
         return g.meetingLight;
