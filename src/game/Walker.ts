@@ -246,6 +246,16 @@ export abstract class Walker {
     return this.state === 'walk' && this.gateWait > 0.1;
   }
 
+  /** Gave way at a passage (dropped its route after waiting too long) and has not got through one since. */
+  get gaveWay(): boolean {
+    return this.gateGaveWay;
+  }
+
+  /** Pushing through passages regardless of reservations, after giving way did not help (deadlock fallback). */
+  get forcing(): boolean {
+    return this.gateForce > 0;
+  }
+
   ignores(o: Walker): boolean {
     return this.companion === o || o.companion === this;
   }

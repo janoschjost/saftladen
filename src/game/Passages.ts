@@ -21,10 +21,7 @@ interface Hold {
   checked: number;
   /** the holder has been inside (it is not just about to go in) */
   entered: boolean;
-}
-
-interface Wait extends Hold {
-  /** seconds the walker has been waiting in front of the passage */
+  /** seconds the walker has been waiting in front of the passage (a holder: before it got the passage) */
   waited: number;
 }
 
@@ -32,7 +29,7 @@ interface Passage {
   /** walkers inside or just about to enter */
   holds: Map<Walker, Hold>;
   /** walkers standing in front of it until the oncoming traffic is through */
-  waits: Map<Walker, Wait>;
+  waits: Map<Walker, Hold>;
   /** bodies standing around inside (not walking, not pinned to a seat): they plug it for everybody */
   standing: Walker[];
 }
@@ -50,7 +47,8 @@ export interface Gate {
  * A passage is a run of cells too narrow for two bodies side by side. It carries traffic in one direction at a time:
  * whoever is inside (or got there first) goes on, followers in the same direction queue up behind,
  * everybody heading the other way waits in front of the entrance until it is empty. The two sides take turns:
- * nobody new joins the flow while somebody on the other side has been waiting for longer.
+ * nobody new joins the flow while somebody on the other side has been waiting for longer. Whoever got the passage after
+ * waiting keeps that wait, even when somebody coming out still holds it up.
  * Somebody standing around inside plugs the passage for both sides until they have moved on.
  * Reservations lapse on their own as soon as the holder stops walking, so nothing can stay locked.
  */
@@ -179,8 +177,13 @@ export class Passages {
       }
       const v = this.heading(w, path, next, i);
       const p = this.list[next];
-      if (!force && this.opposed(w, next, v.x, v.z, waited)) {
-        p.waits.set(w, { dx: v.x, dz: v.z, waited, stamp: this.clock, since: this.clock, checked: 0, entered: false });
+      // the wait already had at this entrance, this way in (in front of it, or holding it): see the class doc
+      let credit = waited;
+      for (const h of [p.holds.get(w), p.waits.get(w)]) {
+        if (h && this.clock - h.stamp <= STALE && h.dx * v.x + h.dz * v.z > 0) credit = Math.max(credit, h.waited);
+      }
+      if (!force && this.opposed(w, next, v.x, v.z, credit)) {
+        p.waits.set(w, { dx: v.x, dz: v.z, waited: credit, stamp: this.clock, since: this.clock, checked: 0, entered: false });
         // the lane leads from the last step on open floor into the passage
         const lx = q.x - px;
         const lz = q.z - pz;
@@ -188,7 +191,7 @@ export class Passages {
         return { passage: next, mouth: q, dx: lx / l, dz: lz / l };
       }
       p.waits.delete(w);
-      this.hold(w, next, v.x, v.z);
+      this.hold(w, next, v.x, v.z, credit);
       break;
     }
     return null;
@@ -293,12 +296,13 @@ export class Passages {
     return false;
   }
 
-  private hold(w: Walker, passage: number, dx: number, dz: number): void {
+  private hold(w: Walker, passage: number, dx: number, dz: number, waited = 0): void {
     const holds = this.list[passage].holds;
     const h = holds.get(w);
     const inside = this.at(w.pos) === passage;
-    if (!h) holds.set(w, { dx, dz, stamp: this.clock, since: this.clock, checked: 0, entered: inside });
+    if (!h) holds.set(w, { dx, dz, stamp: this.clock, since: this.clock, checked: 0, entered: inside, waited });
     else {
+      h.waited = Math.max(h.waited, waited);
       h.entered ||= inside;
       // close to the way out the direction gets vague: keep the one it came in with
       if (dx || dz) {

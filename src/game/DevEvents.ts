@@ -11,7 +11,10 @@ export interface DevEvent {
   group: string;
   /** Runs the event. Return a short status message (shown in the panel) or nothing. Return false-y message `null` to say "could not run". */
   run: () => string | void | null;
-  /** The event ends or reads something and null just means "nothing to do": it is not forced (see `DevEvents.forcer`). */
+  /**
+   * The event ends or reads something and null just means "nothing to do": it is not forced (see `DevEvents.forcer`).
+   * Also for an event that forces only the part clearing the office can help with (`DevEvents.force`).
+   */
   asIs?: true;
 }
 
@@ -28,9 +31,15 @@ export class DevEvents {
 
   register(ev: DevEvent): void {
     const run = ev.run;
-    if (!ev.asIs) ev = { ...ev, run: () => { const r = run(); return r === null && this.forcer ? this.forcer(run) : r; } };
+    if (!ev.asIs) ev = { ...ev, run: () => this.force(run) };
     this.events.set(ev.id, ev);
     this.listeners.forEach((l) => l());
+  }
+
+  /** Runs `run`; when it cannot run, clears the way and runs it again (`forcer`). */
+  force(run: () => string | void | null): string | void | null {
+    const r = run();
+    return r === null && this.forcer ? this.forcer(run) : r;
   }
 
   list(): DevEvent[] {

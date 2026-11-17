@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { strings } from '../i18n/strings';
 import { installHeadlessDom } from '../test/headlessDom';
 import { GROUP, office, run } from '../test/office';
@@ -530,5 +530,40 @@ describe('dev events on the Sim', () => {
     expect(out.every((p) => p.awayLeft > 0)).toBe(true);
     expect(sim.events.trigger('all-back')).toBe(ev.allReturn);
     expect(out.every((p) => p.awayLeft === 0)).toBe(true);
+  });
+
+  it('move.passages (passage-meeting): two people walk at a narrow passage from both ends: one waits beside it while the other comes through, then both are through; with nobody free it is refused', () => {
+    const sim = office();
+    const pair = only(sim, GROUP.slice(0, 2));
+    expect(sim.events.trigger('passage-meeting')).toMatch(/ begegnen sich im Durchgang$/);
+    const passages = sim.traffic.passages;
+    expect(pair.every((p) => p.state === 'walk' && p.path.length > 0)).toBe(true);
+    const goal = pair.map((p) => p.path.at(-1)!);
+    const through = (p: Person, i: number) => Math.hypot(p.pos.x - goal[i].x, p.pos.z - goal[i].z) < 0.5;
+    const done = pair.map(() => false);
+    let waited = false; // one stood waiting while the other was in the passage
+    run(sim, 40, () => done.every(Boolean), () => {
+      pair.forEach((p, i) => (done[i] ||= through(p, i)));
+      const inside = pair.map((p) => passages.at(p.pos));
+      if (pair.some((p, i) => p.yielding && inside[1 - i] >= 0)) waited = true;
+      expect(inside[0] >= 0 && inside[0] === inside[1]).toBe(false); // never both in the same passage
+    });
+    expect(done).toEqual([true, true]);
+    expect(waited).toBe(true);
+    for (const p of sim.people) if (p.inOffice) sim.scenario.put(p.id, 'errand');
+    refused(sim, 'passage-meeting');
+  });
+
+  it('move.passages (passage-meeting): with nobody in the office it brings two in and runs (actions.force); on a floor without a passage it is refused and clears nothing', () => {
+    const allOut = (s: Sim) => s.people.forEach((p) => s.scenario.put(p.id, 'errand', 'free')); // out, but free to be brought in
+    const sim = office();
+    allOut(sim);
+    expect(sim.events.trigger('passage-meeting')).toMatch(/ begegnen sich im Durchgang$/);
+    expect(sim.people.filter((p) => p.inOffice).length).toBeGreaterThanOrEqual(2);
+
+    const empty = office();
+    allOut(empty);
+    vi.spyOn(empty.traffic.passages, 'atIndex').mockReturnValue(-1); // nothing narrow anywhere
+    refused(empty, 'passage-meeting');
   });
 });

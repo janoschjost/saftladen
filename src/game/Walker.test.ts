@@ -1,59 +1,25 @@
-import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { NavGrid, type Vec2 } from './NavGrid';
+import { Goer } from '../test/goer';
+import { STEP } from '../test/office';
+import { NavGrid } from './NavGrid';
 import { setSeed } from './rng';
+import { separate } from './separate';
 import { Traffic } from './Traffic';
-import { Walker } from './Walker';
-
-/** A walker that keeps heading for its goal: whenever it stands idle it sets off again (like a person on the way to a job). */
-class Goer extends Walker {
-  speed = 1.2;
-  radius = 0.4;
-  root = new THREE.Object3D();
-  headHeight = 1.7;
-  constructor(
-    readonly id: string,
-    start: Vec2,
-    readonly goal: Vec2,
-  ) {
-    super(start);
-    this.timer = 0;
-  }
-  protected decide(nav: NavGrid): void {
-    this.walkTo(nav, this.goal);
-  }
-  get arrived(): boolean {
-    return Math.hypot(this.pos.x - this.goal.x, this.pos.z - this.goal.z) < 0.3;
-  }
-}
 
 /** Steps two walkers like the game does: traffic (passages), update, then keep the bodies apart and out of the walls. */
 function run(nav: NavGrid, [a, b]: [Goer, Goer], seconds: number): void {
-  const dt = 1 / 60;
   const traffic = new Traffic(nav);
   a.traffic = b.traffic = traffic;
-  for (let t = 0; t < seconds && !(a.arrived && b.arrived); t += dt) {
-    traffic.update(dt, [a, b]);
-    a.update(dt, nav, [a, b]);
-    b.update(dt, nav, [a, b]);
-    const dx = b.pos.x - a.pos.x;
-    const dz = b.pos.z - a.pos.z;
-    const d = Math.hypot(dx, dz);
-    const min = (a.radius + b.radius) * 1.1;
-    if (d < min && d > 1e-6) {
-      const push = ((min - d) / d) * 0.5;
-      a.pos.x -= dx * push;
-      a.pos.z -= dz * push;
-      b.pos.x += dx * push;
-      b.pos.z += dz * push;
-    }
-    nav.resolve(a.pos, 0.2);
-    nav.resolve(b.pos, 0.2);
+  for (let t = 0; t < seconds && !(a.arrived && b.arrived); t += STEP) {
+    traffic.update(STEP, [a, b]);
+    a.update(STEP, nav, [a, b]);
+    b.update(STEP, nav, [a, b]);
+    separate([a, b], nav);
   }
 }
 
 describe('move.passing', () => {
-  it('two walkers coming from opposite ends of a corridor to the same side door both get through (#39)', () => {
+  it('move.passing: two walkers coming from opposite ends of a corridor to the same side door both get through (#39)', () => {
     // 2 m wide corridor running north-south (0.5 m cells, like the office), a doorway halfway down its east wall.
     // They meet nose to nose at the doorway; before #39 both backed off and stood there for good in about a third of the starts
     const stuck: string[] = [];
