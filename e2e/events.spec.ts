@@ -75,9 +75,19 @@ test('home.laundry (?event=home-laundry#homes)', async ({ page }) => {
 });
 
 // all eight home offices taken by hand: Zlatko still gets one (somebody gives theirs up) and the son comes
+// The boy speaks first, Papa answers once the boy's bubble is gone, and Papa's bubble is gone before the boy leaves
 test('home.son (?event=remote-son#homes)', async ({ page }) => {
   const errors = await openGame(page, 'homes', undefined, 'event=remote-son');
-  await until(page, (g) => g.homes.some((h) => h?.sonHere), undefined, 120_000);
+  const { room } = await until(page, (g) => {
+    const i = g.homes.findIndex((h) => h?.sonHere);
+    return i >= 0 ? { room: i } : null;
+  }, undefined, 120_000);
+  await until(page, (g, i) => g.homes[i]!.sonBubbles.son, room, 10_000);
+  expect(await read(page, (g, i) => g.homes[i]!.sonBubbles, room)).toEqual({ son: true, dad: false });
+  await until(page, (g, i) => g.homes[i]!.sonBubbles.dad, room, 15_000);
+  expect(await read(page, (g, i) => g.homes[i]!.sonBubbles, room)).toEqual({ son: false, dad: true });
+  await until(page, (g, i) => !g.homes[i]!.sonHere, room, 15_000);
+  expect(await read(page, (g, i) => g.homes[i]!.sonBubbles, room)).toEqual({ son: false, dad: false });
   expect(errors).toEqual([]);
 });
 
