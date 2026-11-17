@@ -1,0 +1,152 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 340" width="800" height="340" role="img" aria-label="Animated isometric office: people walk between desks, a dove flies over, a smoke puff rises from the porch">
+  <title>Saftladen</title>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fdf3d0"/>
+      <stop offset="1" stop-color="#f7d9a8"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="340" rx="16" fill="url(#sky)"/>
+
+  <!-- sun -->
+  <circle cx="680" cy="64" r="26" fill="#f6b73c">
+    <animate attributeName="r" values="26;29;26" dur="4s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- floor slab -->
+  <polygon points="400,110 700,190 400,270 100,190" fill="#c98f5a"/>
+  <polygon points="100,190 400,270 400,292 100,212" fill="#a46f40"/>
+  <polygon points="400,270 700,190 700,212 400,292" fill="#8a5a31"/>
+  <!-- parquet lines -->
+  <g stroke="#b57a47" stroke-width="1" opacity=".7">
+    <line x1="175" y1="170" x2="475" y2="250"/>
+    <line x1="250" y1="150" x2="550" y2="230"/>
+    <line x1="325" y1="130" x2="625" y2="210"/>
+    <line x1="325" y1="250" x2="625" y2="170"/>
+    <line x1="250" y1="230" x2="550" y2="150"/>
+    <line x1="175" y1="210" x2="475" y2="130"/>
+  </g>
+
+  <!-- back walls -->
+  <polygon points="100,190 400,110 400,70 100,150" fill="#f2ece0"/>
+  <polygon points="400,110 700,190 700,150 400,70" fill="#e4dccb"/>
+  <polygon points="100,190 400,110 400,114 100,194" fill="#d4c9b2"/>
+  <!-- windows -->
+  <polygon points="150,165 230,144 230,114 150,135" fill="#9fd3ea"/>
+  <polygon points="290,127 370,106 370,76 290,97" fill="#9fd3ea"/>
+  <polygon points="430,76 510,97 510,127 430,106" fill="#9fd3ea"/>
+  <polygon points="570,113 650,134 650,164 570,143" fill="#9fd3ea"/>
+
+  <!-- desks -->
+  <g>
+    <polygon points="230,185 290,169 330,180 270,196" fill="#fff"/>
+    <polygon points="270,196 330,180 330,190 270,206" fill="#d9d9d9"/>
+    <polygon points="236,181 252,177 262,180 246,184" fill="#2c3e50"/>
+  </g>
+  <g>
+    <polygon points="470,185 530,169 570,180 510,196" fill="#fff"/>
+    <polygon points="510,196 570,180 570,190 510,206" fill="#d9d9d9"/>
+    <polygon points="476,181 492,177 502,180 486,184" fill="#2c3e50"/>
+  </g>
+  <g>
+    <polygon points="350,215 410,199 450,210 390,226" fill="#fff"/>
+    <polygon points="390,226 450,210 450,220 390,236" fill="#d9d9d9"/>
+    <polygon points="356,211 372,207 382,210 366,214" fill="#2c3e50"/>
+  </g>
+
+  <!-- monitor glow -->
+  <g fill="#8fe3a6">
+    <polygon points="236,181 252,177 262,180 246,184">
+      <animate attributeName="fill" values="#2c3e50;#8fe3a6;#2c3e50" dur="3s" repeatCount="indefinite"/>
+    </polygon>
+    <polygon points="476,181 492,177 502,180 486,184">
+      <animate attributeName="fill" values="#8fe3a6;#2c3e50;#8fe3a6" dur="4s" repeatCount="indefinite"/>
+    </polygon>
+  </g>
+
+  <!-- coffee machine -->
+  <polygon points="615,170 635,175 635,150 615,145" fill="#6b4a3a"/>
+  <circle cx="625" cy="158" r="3" fill="#ff7a59">
+    <animate attributeName="opacity" values="1;.2;1" dur="1.6s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- porch smoke puffs -->
+  <g fill="#fff" opacity="0">
+    <circle cx="690" cy="205" r="5">
+      <animate attributeName="cy" values="205;165" dur="3s" repeatCount="indefinite"/>
+      <animate attributeName="r" values="3;9" dur="3s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;.8;0" dur="3s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="694" cy="205" r="5">
+      <animate attributeName="cy" values="205;165" dur="3s" begin="1.5s" repeatCount="indefinite"/>
+      <animate attributeName="r" values="3;9" dur="3s" begin="1.5s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;.8;0" dur="3s" begin="1.5s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  <!-- smoker -->
+  <g transform="translate(686 214)">
+    <ellipse cx="0" cy="2" rx="7" ry="3" fill="#000" opacity=".15"/>
+    <rect x="-4" y="-18" width="8" height="16" rx="3" fill="#3d6fb6"/>
+    <circle cx="0" cy="-23" r="5" fill="#f1c9a5"/>
+  </g>
+
+  <!-- walkers (bob while walking along iso paths) -->
+  <g>
+    <g>
+      <ellipse cx="0" cy="2" rx="7" ry="3" fill="#000" opacity=".15"/>
+      <g>
+        <animateTransform attributeName="transform" type="translate" values="0 0;0 -2;0 0" dur=".5s" repeatCount="indefinite"/>
+        <rect x="-4" y="-18" width="8" height="16" rx="3" fill="#e0533d"/>
+        <circle cx="0" cy="-23" r="5" fill="#f1c9a5"/>
+        <path d="M-5 -25 q5 -7 10 0" fill="#4b2e1e"/>
+      </g>
+      <animateMotion dur="10s" repeatCount="indefinite" path="M200 205 L360 247 L520 205 L360 163 Z" rotate="0"/>
+    </g>
+    <g>
+      <ellipse cx="0" cy="2" rx="7" ry="3" fill="#000" opacity=".15"/>
+      <g>
+        <animateTransform attributeName="transform" type="translate" values="0 0;0 -2;0 0" dur=".45s" repeatCount="indefinite"/>
+        <rect x="-4" y="-18" width="8" height="16" rx="3" fill="#7a4fb0"/>
+        <circle cx="0" cy="-23" r="5" fill="#d9a77c"/>
+        <path d="M-5 -24 q5 -8 10 0 v3 h-10 z" fill="#222"/>
+      </g>
+      <animateMotion dur="13s" repeatCount="indefinite" path="M600 200 L470 166 L330 203 L460 237 Z" rotate="0"/>
+    </g>
+    <g>
+      <ellipse cx="0" cy="2" rx="7" ry="3" fill="#000" opacity=".15"/>
+      <g>
+        <animateTransform attributeName="transform" type="translate" values="0 0;0 -2;0 0" dur=".55s" repeatCount="indefinite"/>
+        <rect x="-4" y="-18" width="8" height="16" rx="3" fill="#2e9e6b"/>
+        <circle cx="0" cy="-23" r="5" fill="#f1c9a5"/>
+        <path d="M-5 -25 q5 -7 10 0" fill="#d9b44a"/>
+      </g>
+      <animateMotion dur="16s" repeatCount="indefinite" path="M160 190 L300 227 L440 190 L300 153 Z" rotate="0"/>
+    </g>
+  </g>
+
+  <!-- dog -->
+  <g>
+    <ellipse cx="0" cy="2" rx="8" ry="3" fill="#000" opacity=".15"/>
+    <ellipse cx="0" cy="-5" rx="8" ry="5" fill="#b9854f"/>
+    <circle cx="8" cy="-9" r="4" fill="#b9854f"/>
+    <path d="M-8 -7 q-5 -4 -3 -9" stroke="#b9854f" stroke-width="2" fill="none">
+      <animate attributeName="d" values="M-8 -7 q-5 -4 -3 -9;M-8 -7 q-6 -1 -6 -8;M-8 -7 q-5 -4 -3 -9" dur=".35s" repeatCount="indefinite"/>
+    </path>
+    <animateMotion dur="9s" repeatCount="indefinite" path="M260 230 L420 270 L580 230 L420 190 Z" rotate="0"/>
+  </g>
+
+  <!-- dove with letter -->
+  <g>
+    <ellipse cx="0" cy="0" rx="9" ry="4" fill="#fff"/>
+    <circle cx="8" cy="-2" r="3" fill="#fff"/>
+    <polygon points="11,-2 15,-1 11,0" fill="#f6b73c"/>
+    <path d="M-2 -2 q-4 -10 -10 -8 q4 3 6 8" fill="#eee">
+      <animate attributeName="d" values="M-2 -2 q-4 -10 -10 -8 q4 3 6 8;M-2 0 q-4 8 -10 8 q4 -3 6 -8;M-2 -2 q-4 -10 -10 -8 q4 3 6 8" dur=".4s" repeatCount="indefinite"/>
+    </path>
+    <rect x="-4" y="3" width="8" height="6" fill="#fffbe8" stroke="#c9a" stroke-width=".5"/>
+    <animateMotion dur="14s" repeatCount="indefinite" path="M-30 60 C 200 10, 500 120, 830 40"/>
+  </g>
+
+  <!-- title -->
+  <text x="400" y="326" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="22" font-weight="700" fill="#5a3b1e" letter-spacing="4">SAFTLADEN</text>
+</svg>
