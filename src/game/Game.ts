@@ -14,11 +14,11 @@ import { DAY_STORIES } from '../data/dayStories';
 import { formatTime, type DayCtx, type DayTask } from './Day';
 import { buildWorld, WORLD } from '../render/World';
 import { Actions } from '../ui/Actions';
-import { ActionSheet, PREVIEW, type SheetPick } from '../ui/ActionSheet';
+import { ActionSheet, type SheetPick } from '../ui/ActionSheet';
 import { NowChip } from '../ui/NowChip';
 import { People } from '../ui/People';
 import { OFFICE_ACTIONS, type OfficeAction } from '../data/actions';
-import { ACTION_POLAR, ARRIVE_RADIUS, FOLLOW_ZOOM, shotPosition, type Shot } from '../render/cameraFly';
+import { ACTION_POLAR, ARRIVE_RADIUS, FOLLOW_ZOOM, type Shot } from '../render/cameraFly';
 import { Feeds } from '../ui/Feeds';
 import { Overlay } from '../ui/Overlay';
 import { Roster } from '../ui/Roster';
@@ -71,9 +71,6 @@ const ACTION_NO_LEAD = 6; // seconds the chip stays for an action that moves nob
 /** What an action may change on a person; the first person whose values change is the one the camera follows. */
 const leadState = (p: Person): unknown[] => [p.printJob, p.foosJob, p.meetPhase, p.coffeeJob, p.vapeJob, p.phoneJob, p.talk, p.presence === 'in' ? null : p.presence];
 
-/** the card pictures are this much closer than the flight's settle shot, so the place fills the picture */
-const PREVIEW_ZOOM = 1.6;
-
 export class Game {
   private scene = new THREE.Scene();
   /** the office and everybody in it; this class is its view and its input */
@@ -101,9 +98,6 @@ export class Game {
    * `settled` once the camera rests on the place.
    */
   private action: { def: OfficeAction | null; caption: string; lead: Person | null; keys: number[]; owned: boolean; settled: boolean; age: number; azimuth: number } | null = null;
-  /** previews the sheet asked for; drawn in the next frame, right before the main render */
-  private previews: Array<{ action: OfficeAction; canvas: HTMLCanvasElement }> = [];
-  private previewCam = new THREE.PerspectiveCamera(60, PREVIEW.width / PREVIEW.height, 0.1, 400);
   private picker = document.getElementById('picker') as HTMLElement;
   private dayMenu = document.getElementById('day-menu') as HTMLElement;
   private lastPresence = new Map<Person, Person['presence']>();
@@ -318,7 +312,6 @@ export class Game {
     );
     this.sheet = new ActionSheet(this.sim.events, {
       onPick: (pick) => this.runAction(pick),
-      onPreviews: (items) => (this.previews = items),
       onToggle: (open) => open && this.settings.setOpen(false),
     });
     Walker.animate = true; // from now on arrivals and departures get a show
@@ -1244,34 +1237,6 @@ export class Game {
     else if (a.owned) this.views.stopFly();
   }
 
-  /** One small offscreen picture per action card: drawn into the corner of the canvas, copied out, then painted over. */
-  private renderPreviews(): void {
-    const r = this.drawer.renderer;
-    const pr = r.getPixelRatio();
-    const src = r.domElement;
-    const w = Math.min(PREVIEW.width, src.width);
-    const h = Math.min(PREVIEW.height, src.height);
-    const roof = this.roof.visible;
-    this.roof.visible = false;
-    r.setScissorTest(true);
-    r.setViewport(0, 0, w / pr, h / pr);
-    r.setScissor(0, 0, w / pr, h / pr);
-    const cam = this.previewCam;
-    for (const { action, canvas } of this.previews) {
-      const s = this.placeShot(action);
-      s.dist /= PREVIEW_ZOOM;
-      const p = shotPosition(s);
-      cam.position.set(p.x, p.y, p.z);
-      cam.lookAt(s.x, s.y, s.z);
-      r.render(this.scene, cam);
-      canvas.getContext('2d')?.drawImage(src, 0, src.height - h, w, h, 0, 0, canvas.width, canvas.height);
-    }
-    this.previews = [];
-    r.setScissorTest(false);
-    r.setViewport(0, 0, window.innerWidth, window.innerHeight);
-    this.roof.visible = roof;
-  }
-
   private toggleFollow(): void {
     if (this.followed) this.followed = null;
     else if (this.selected && !this.selected.away) this.followed = this.selected;
@@ -1345,7 +1310,6 @@ export class Game {
       this.updateHover();
       this.updateOverlay();
       if (import.meta.env.DEV || import.meta.env.MODE === 'e2e') this.debug?.update(this.clock, this.sim.walkers, this.sim.nav, this.views.camera);
-      if (this.previews.length) this.renderPreviews();
     });
   }
 
