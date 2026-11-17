@@ -32,13 +32,16 @@ export interface DoorLane {
   out: Vec2;
 }
 
+/** How far (m) in front of the wall people appear and vanish: near the front edge of the porch, a few steps from the door. */
+const OUT_DISTANCE = 3;
+
 const lane = (wing: 'left' | 'right', dx: number): DoorLane => {
   const x = snap(ENTRANCE_X + dx);
   return {
     wing,
     in: { x, z: DOOR.z - NAV_CELL * 1.5 },
     gate: { x, z: DOOR.z - NAV_CELL * 0.5 },
-    out: { x, z: DOOR.z + 1.5 },
+    out: { x, z: DOOR.z + OUT_DISTANCE },
   };
 };
 

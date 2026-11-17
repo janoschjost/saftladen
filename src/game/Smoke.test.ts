@@ -5,6 +5,7 @@ import { GROUP, office, run } from '../test/office';
 import { DOOR, DOOR_LANES, fromDoorway } from './Door';
 import type { Person } from './Person';
 import type { Sim } from './Sim';
+import { PORCH } from '../render/officeModel';
 import { DRY_GAP, PORCH_SPOTS, UMBRELLA_CLEAR, UMBRELLA_DIAMETER } from './Smoke';
 import { first } from './simEvents';
 import { cycleOf } from './TimeOfDay';
@@ -92,7 +93,7 @@ describe('presence.smoke: smoke breaks on the porch', () => {
     expect(speakers.size).toBe(2);
     // the first one goes in: the chat is over, nobody is left talking out there
     expect(run(sim, 70, () => !sim.smoke.chat)).toBe(true);
-    expect(run(sim, 70, () => a.presence === 'in' && b.presence === 'in')).toBe(true);
+    expect(run(sim, 120, () => a.presence === 'in' && b.presence === 'in')).toBe(true);
     expect(a.talk).toBeNull();
     expect(b.talk).toBeNull();
   });
@@ -168,6 +169,21 @@ describe('presence.smoke: smoke breaks on the porch', () => {
   });
 });
 
+describe('office.entrance: porch size', () => {
+  it('office.entrance: the porch is wider than 3.4 m, every smoke spot and the place people appear lie on it, spots keep clear of both lanes', () => {
+    expect(PORCH.w).toBeGreaterThan(3.4);
+    const onPorch = (v: { x: number; z: number }) => v.x > PORCH.x && v.x < PORCH.x + PORCH.w && v.z > PORCH.z && v.z < PORCH.z + PORCH.d;
+    for (const s of PORCH_SPOTS) {
+      expect(onPorch(s)).toBe(true);
+      for (const l of DOOR_LANES) expect(dist(s, l.out)).toBeGreaterThanOrEqual(0.8);
+    }
+    for (const l of DOOR_LANES) {
+      expect(onPorch(l.out)).toBe(true);
+      expect(l.out.z - DOOR.z).toBeGreaterThanOrEqual(2.5); // further from the door than the 1.5 m of before
+    }
+  });
+});
+
 describe('actions.force: smoke breaks', () => {
   it('actions.force: an action that needs a smoker on a break ends it: cigarette out, umbrella folded, back in, and the action runs', () => {
     const sim = office();
@@ -217,8 +233,8 @@ describe('actions.force: smoke breaks', () => {
 });
 
 describe('presence.smoke: room on the porch', () => {
-  /** More smokers than the porch has dry spots: the five of the team plus three flagged for the test. */
-  const EXTRA = [GROUP[0], GROUP[1], GROUP[2]];
+  /** More smokers than the porch has dry spots: the five of the team plus six flagged for the test. */
+  const EXTRA = [...GROUP, 'michael-eberle'];
   const SMOKERS = ['jannik-stibi', 'sandro-hagen', 'ramon-lenherr', 'delya-kohler', 'jeerapat-wang', ...EXTRA];
   const flag = (on: boolean) => {
     for (const m of team) if (EXTRA.includes(m.id)) m.smoke = on;
@@ -238,7 +254,7 @@ describe('presence.smoke: room on the porch', () => {
     const seats = rain ? PORCH_SPOTS.filter((s) => s.rain).length : PORCH_SPOTS.length;
     const taken = () => smokers.filter((p) => p.porchSpot).length;
     let waited = false;
-    const full = run(sim, 120, () => taken() === seats && (!hold || onPorch(sim).length === seats), () => {
+    const full = run(sim, 240, () => taken() === seats && (!hold || onPorch(sim).length === seats), () => {
       urge(sim, ...smokers.filter((p) => p.presence === 'in'));
       const out = onPorch(sim);
       expect(taken()).toBeLessThanOrEqual(seats);
@@ -258,7 +274,7 @@ describe('presence.smoke: room on the porch', () => {
     return { sim, smokers };
   }
 
-  it('presence.smoke: dry, the porch holds its seven spots, at least 0.8 m apart; the surplus smoker waits', () => {
+  it('presence.smoke: dry, the porch holds all its spots, at least 0.8 m apart; the surplus smoker waits', () => {
     expect(PORCH_SPOTS.length).toBeLessThan(SMOKERS.length);
     crowd(false);
   });

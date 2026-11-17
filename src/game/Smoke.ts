@@ -61,20 +61,22 @@ export interface PorchSpot extends Vec2 {
   rain: boolean;
 }
 
-const [left, right] = DOOR_LANES.map((l) => l.out.x); // the two wings' lanes
+const right = DOOR_LANES[1].out.x; // the right wing's lane
 /**
- * The smoking spots on the stone porch (3.4 m wide, the door near its middle): beside the door right and left of the
- * two lanes, and in front of where people appear and vanish, so nobody on the way in or out passes them. Dry, all of
- * them (at least DRY_GAP apart); in the rain only those marked (at least UMBRELLA_DIAMETER + 0.2 apart).
+ * The smoking spots on the stone porch (8 m wide, the door near its west end): a loose grid on the wide east side, a
+ * good way off the door. All clear of both lanes (and of where people appear and vanish at the front edge), so nobody
+ * on the way in or out passes them. Dry, all of them (at least DRY_GAP apart); in the rain only those marked (at least
+ * UMBRELLA_DIAMETER + 0.2 apart).
  */
 export const PORCH_SPOTS: readonly PorchSpot[] = [
-  { x: right + 0.95, z: DOOR.z + 0.6, rain: true },
-  { x: right + 0.95, z: DOOR.z + 1.45, rain: false },
-  { x: right + 0.9, z: DOOR.z + 2.35, rain: true },
-  { x: right + 0.05, z: DOOR.z + 2.65, rain: false },
-  { x: left + 0.15, z: DOOR.z + 2.65, rain: true },
-  { x: left - 0.8, z: DOOR.z + 2.3, rain: false },
-  { x: left - 0.8, z: DOOR.z + 0.6, rain: true },
+  { x: right + 2.25, z: DOOR.z + 1.2, rain: true },
+  { x: right + 3.55, z: DOOR.z + 1.2, rain: true },
+  { x: right + 4.85, z: DOOR.z + 1.2, rain: true },
+  { x: right + 2.7, z: DOOR.z + 1.95, rain: false },
+  { x: right + 4.2, z: DOOR.z + 1.95, rain: false },
+  { x: right + 2.9, z: DOOR.z + 2.9, rain: true },
+  { x: right + 4.2, z: DOOR.z + 2.9, rain: true },
+  { x: right + 5.15, z: DOOR.z + 2.9, rain: false },
 ];
 
 const dist = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.z - b.z);

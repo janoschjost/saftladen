@@ -37,6 +37,8 @@ export const OFFICE_D = (B.z1 - B.z0) * SCALE;
 export const ANNEX = { x1: -5, d: 3.5 };
 export const ANNEX_W = ax(ANNEX.x1);
 export const ANNEX_D = ANNEX.d * SCALE;
+/** The stone porch in front of the entrance (game metres): starts at the annex's east wall, reaches the building's south edge, extends east past the door. */
+export const PORCH = { x: ANNEX_W + 0.15, z: OFFICE_D + 0.15, w: 8, d: ANNEX_D };
 /** A point in the middle of the main corridor, in game coordinates. */
 export const CORRIDOR_POINT: Vec2 = { x: ax(12), z: az(1.1) };
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ANNEX_D, ANNEX_W, OFFICE_D, OFFICE_W } from './officeModel';
+import { ANNEX_D, ANNEX_W, OFFICE_D, OFFICE_W, PORCH } from './officeModel';
 
 export const WORLD = {
   width: OFFICE_W, // x, metres
@@ -90,11 +90,9 @@ export function buildWorld(scene: THREE.Scene): { sun: THREE.DirectionalLight; h
   annex.receiveShadow = true;
   scene.add(annex);
   // stone porch in front of the entrance, flush with the annex's south edge, a continuation of the floor slab next to the annex (same thickness, flush)
-  const porchW = 3.4;
-  const porchD = ANNEX_D; // reaches the building's south edge (same as the annex floor)
-  const porchTop = new THREE.MeshLambertMaterial({ map: pavingTexture(porchW, porchD) });
-  const porch = new THREE.Mesh(new THREE.BoxGeometry(porchW, slab, porchD), [side, side, porchTop, side, side, side]);
-  porch.position.set(ANNEX_W + 0.15 + porchW / 2, -slab / 2, D + 0.15 + porchD / 2);
+  const porchTop = new THREE.MeshLambertMaterial({ map: pavingTexture(PORCH.w, PORCH.d) });
+  const porch = new THREE.Mesh(new THREE.BoxGeometry(PORCH.w, slab, PORCH.d), [side, side, porchTop, side, side, side]);
+  porch.position.set(PORCH.x + PORCH.w / 2, -slab / 2, PORCH.z + PORCH.d / 2);
   porch.receiveShadow = true;
   scene.add(porch);
 
