@@ -38,6 +38,7 @@ import { Easter } from './Easter';
 import { Dog } from './Dog';
 import { Christmas } from './Christmas';
 import { RainFx } from '../render/rainFx';
+import { PuddleFx } from '../render/puddleFx';
 import { SpawnFx } from '../render/spawnFx';
 import { loadState, saveState } from '../ui/persist';
 import { DOOR_LANES, laneBusy } from './Door';
@@ -87,6 +88,7 @@ export class Game {
   /** alter egos whose desk monitor shows Kurt right now, with that desk (see updateAlterEgos) */
   private kurtScreens = new Map<Person, Desk>();
   private rainFx!: RainFx;
+  private puddleFx!: PuddleFx;
   private spawnFx!: SpawnFx;
   private xmas!: Christmas;
   private settings!: Settings;
@@ -196,6 +198,7 @@ export class Game {
     this.sky = { scene: this.scene, sun, hemi, dayBackground: new THREE.Color(stageColor) };
     const saved = loadState();
     this.rainFx = new RainFx(this.scene);
+    this.puddleFx = new PuddleFx(this.scene);
     this.spawnFx = new SpawnFx(this.scene);
     this.xmas = new Christmas(this.scene);
     this.restoreSeats();
@@ -830,6 +833,7 @@ export class Game {
     this.sim.weather.update(dt);
     const r = this.sim.weather.rain;
     this.rainFx.update(dt, r, 1 - this.sim.tod.day);
+    this.puddleFx.update(dt, this.sim.weather.wet, r, this.sim.tod.day);
     this.xmas.update(dt, this.sim.tod.day, this.scene.background as THREE.Color, this.sky.sun);
     if (r > 0) {
       this.sky.sun.intensity *= 1 - 0.45 * r;
