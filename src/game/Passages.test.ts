@@ -196,26 +196,37 @@ describe('move.passages', () => {
     });
   }
 
-  it('move.passages: when both sides queue they take turns: who waits on the other side goes before the queue behind the first one is through', () => {
-    everySeed(CORRIDOR, (nav, traffic, p) => {
-      // three come from the left one after the other; r waits on the right, clear of where they come out
-      const ws = [
-        goer('l1', at(3.75, 2.25), at(10.75, 4.25)),
-        goer('l2', at(2.25, 2.75), at(9.25, 4.25)),
-        goer('l3', at(1.25, 2.25), at(10.75, 2.75)),
-        goer('r', at(8.25, 1.25), at(1.25, 0.75)),
-      ];
-      const r = ws[3];
-      const order: string[] = [];
-      let rWaited = 0;
-      run(nav, traffic, ws, 60, () => ws.every((w) => w.arrived), () => {
-        for (const w of ws) if (!order.includes(w.id) && p.at(w.pos) >= 0) order.push(w.id);
-        if (r.yielding && !order.includes('r')) rWaited += STEP;
+  // three come from the left one after the other; r waits on the right
+  for (const [where, walkers] of [
+    ['clear of where they come out', () => [
+      goer('l1', at(3.75, 2.25), at(10.75, 4.25)),
+      goer('l2', at(2.25, 2.75), at(9.25, 4.25)),
+      goer('l3', at(1.25, 2.25), at(10.75, 2.75)),
+      goer('r', at(8.25, 1.25), at(1.25, 0.75)),
+    ]],
+    // #159: the first one comes out right past r (its goal is on his side) and holds him up on his way in
+    ['in front of the exit, where the first one out brushes past', () => [
+      goer('l1', at(3.75, 2.25), at(10.75, 0.75)),
+      goer('l2', at(2.25, 2.75), at(10.75, 2.25)),
+      goer('l3', at(1.25, 2.25), at(10.75, 3.75)),
+      goer('r', at(8.75, 2.75), at(1.25, 1.25)),
+    ]],
+  ] as const) {
+    it(`move.passages: when both sides queue they take turns: who waits on the other side (${where}) goes before the queue behind the first one is through`, () => {
+      everySeed(CORRIDOR, (nav, traffic, p) => {
+        const ws = walkers();
+        const r = ws[3];
+        const order: string[] = [];
+        let rWaited = 0;
+        run(nav, traffic, ws, 60, () => ws.every((w) => w.arrived), () => {
+          for (const w of ws) if (!order.includes(w.id) && p.at(w.pos) >= 0) order.push(w.id);
+          if (r.yielding && !order.includes('r')) rWaited += STEP;
+        });
+        const ok = ws.every((w) => w.arrived) && order[0] === 'l1' && rWaited > 1 && order.indexOf('r') < order.indexOf('l3');
+        return ok ? null : `order ${order.join()}, r waited ${rWaited.toFixed(2)}, arrived ${ws.filter((w) => w.arrived).map((w) => w.id).join()}`;
       });
-      const ok = ws.every((w) => w.arrived) && order[0] === 'l1' && rWaited > 1 && order.indexOf('r') < order.indexOf('l3');
-      return ok ? null : `order ${order.join()}, r waited ${rWaited.toFixed(2)}, arrived ${ws.filter((w) => w.arrived).map((w) => w.id).join()}`;
     });
-  });
+  }
 
   it('move.passages: head-on inside a passage: the one who got in later (up from a desk in there) backs out, both reach their goals', () => {
     everySeed(CORRIDOR, (nav, traffic, p) => {
