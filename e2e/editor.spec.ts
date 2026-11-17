@@ -115,6 +115,7 @@ test('editor.placement: a saved layout that already cuts off a seat does not loc
 
 test('editor.placement: an item dragged into another one turns red and goes back where it was', async ({ page }) => {
   const errors = await openGame(page, 'plan');
+  await page.keyboard.press('c'); // the crew chat (open on desktop) lies over the foosball table's corner of the plan
   await page.keyboard.press('e');
   const before = await itemAt(page, 'foosball');
   const from = await screenAt(page, before);
