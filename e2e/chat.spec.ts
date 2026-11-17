@@ -61,3 +61,41 @@ test.describe('on a phone', () => {
     expect(errors).toEqual([]);
   });
 });
+
+test('chat.dev: the voice editor changes a style, sends a test message, keeps the edit locally and exports the JSON', async ({ page }) => {
+  const errors = await openGame(page);
+  await page.keyboard.press('`');
+  const form = page.locator('#dev-body form[data-section="voice"]');
+  await form.locator('select[name="person"]').selectOption('jan-hasler');
+  await form.locator('select[name="case"]').selectOption('lower');
+  await form.locator('input[name="emoji"]').fill('0');
+  await form.locator('input[name="emoji"]').dispatchEvent('change');
+  await form.locator('textarea[name="lines"]').fill('{"coffee": ["Kafi, sofort."]}');
+  await form.locator('textarea[name="lines"]').dispatchEvent('change');
+  await form.locator('select[name="topic"]').selectOption('coffee');
+  await form.locator('button[name="send"]').click();
+  await expect(page.locator('#dev-status')).toHaveText('Chat: Kafi, sofort.');
+  await expect(page.locator('#chat .m-chat__message', { hasText: 'Kafi, sofort.' })).toHaveCount(1);
+  // no own line for the topic: a shared one in the edited style
+  await form.locator('select[name="topic"]').selectOption('lunch');
+  await form.locator('button[name="send"]').click();
+  const lunch = (await page.locator('#dev-status').textContent())!.replace(/^Chat: /, '');
+  expect(lunch).toBe(lunch.toLowerCase());
+  expect(await read(page, (g) => g.sim.chat.messages.at(-1)?.by)).toBe('jan-hasler');
+
+  await form.locator('button[name="export"]').click();
+  const file = JSON.parse(await form.locator('textarea[name="export"]').inputValue());
+  expect(file.style).toMatchObject({ case: 'lower', emoji: 0 });
+  expect(file.lines).toEqual({ coffee: ['Kafi, sofort.'] });
+
+  // kept in localStorage over a reload, until reset
+  await page.reload();
+  await page.waitForFunction(() => !!window.__game);
+  await page.keyboard.press('`');
+  await form.locator('select[name="person"]').selectOption('jan-hasler');
+  await expect(form.locator('select[name="case"]')).toHaveValue('lower');
+  await form.locator('button[name="reset"]').click();
+  await expect(form.locator('textarea[name="lines"]')).toHaveValue('{}');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('saftladen.voices') ?? '{}'))).toEqual({});
+  expect(errors).toEqual([]);
+});

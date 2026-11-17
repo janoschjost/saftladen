@@ -26,6 +26,7 @@ import { DevPanel } from '../ui/DevPanel';
 import { registerDevSection } from '../ui/devSections';
 import { bubbleLine } from './voice';
 import { ChatPanel } from '../ui/ChatPanel';
+import { loadVoiceEdits, voiceSection } from '../ui/devVoice';
 import { castSection } from '../ui/devCast';
 import { overlaySection } from '../ui/devOverlays';
 import { DebugOverlays } from './DebugOverlays';
@@ -305,6 +306,13 @@ export class Game {
           list: () => [...this.sim.people.map((p) => ({ id: p.id, name: first(p), kind: 'person' as const })), ...this.sim.pets.map((d) => ({ id: d.id, name: d.name, kind: 'pet' as const }))],
           removed: () => this.sim.removedIds,
           set: (id, removed) => this.setRemoved(id, removed),
+        }),
+      );
+      loadVoiceEdits();
+      registerDevSection(
+        voiceSection({
+          people: team.map((m) => ({ id: m.id, name: m.name })),
+          post: (id, topic) => this.sim.chat.post(this.sim.person(id), topic).text,
         }),
       );
       // console: dev.remove('jan-hasler'), dev.restore('jan-hasler'), dev.removed()

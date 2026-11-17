@@ -38,6 +38,7 @@
     --shadow-card: 5px 5px 8.5px rgba(0, 0, 0, 0.2);
     --font-family-base: 'Apercu', system-ui, -apple-system, 'Segoe UI', sans-serif;
     --font-family-heading: var(--font-family-base);
+    --font-family-mono: ui-monospace, monospace;
     /* crew chat: a light messenger panel */
     --color-chat-line: #e3e3e3;
     --color-chat-time: #5f6368;
@@ -2865,6 +2866,45 @@
         &[aria-pressed='true'] {
             background: black;
             color: white;
+        }
+    }
+
+    /* dev panel: the voice editor of the crew chat */
+    .m-dev-voice {
+        display: flex;
+        flex-direction: column;
+        gap: 0.375rem;
+
+        &__field {
+            display: flex;
+            flex-direction: column;
+            gap: 0.125rem;
+            color: var(--color-muted);
+            font-size: 0.6875rem;
+
+            .m-dev__select {
+                margin-bottom: 0;
+            }
+        }
+
+        &__input {
+            width: 100%;
+            padding: 0.375rem 0.5rem;
+            border: 0;
+            border-radius: 0.5rem;
+            background: var(--color-ink-soft);
+            color: white;
+            font: inherit;
+            font-size: 0.75rem;
+
+            &:invalid {
+                outline: 1px solid var(--color-live);
+            }
+        }
+
+        &__lines {
+            font-family: var(--font-family-mono);
+            resize: vertical;
         }
     }
 
