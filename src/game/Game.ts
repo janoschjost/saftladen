@@ -180,6 +180,8 @@ export class Game {
   private paced: boolean;
   private focused = document.hasFocus();
   private paceState: FrameState = { timeScale: 0, viewMoved: true, keysHeld: false, focused: true };
+  /** the last refresh the pacer skipped while the game was held (ms) */
+  private heldAt = -Infinity;
   /** the camera moved on the last frame drawn */
   private viewMoved = true;
   private lastCamera: THREE.Camera | null = null;
@@ -621,10 +623,18 @@ export class Game {
   paused = false;
 
   private frame(now: number): void {
-    if (this.paced && !this.pacer.due(now, this.frameState())) return;
+    const scale = this.timeScale();
+    if (this.paced && !this.pacer.due(now, this.frameState())) {
+      if (scale === 0) this.heldAt = now;
+      return;
+    }
     this.frames++;
+    const dt = this.time.since(now);
+    // only the time since the game was let go runs at its speed, not the skipped refreshes while it was held (Enter on the welcome card at 25x)
+    const game = Math.min(dt, Math.max(0, now - this.heldAt) / 1000);
+    this.heldAt = -Infinity;
     // pause stops the whole game; 10x / 25x run the whole office faster
-    this.step(this.time.since(now), this.timeScale());
+    this.step(dt, dt > 0 ? (scale * game) / dt : scale);
     this.render(this.acc / STEP);
     this.renderFeeds();
   }
@@ -633,7 +643,7 @@ export class Game {
   private frameState(): FrameState {
     const s = this.paceState; // one object, filled in on every refresh
     s.timeScale = this.timeScale();
-    s.viewMoved = this.viewMoved || this.views.flying; // a flight started without input: full rate from its first frame
+    s.viewMoved = this.viewMoved;
     s.keysHeld = this.keys.size > 0;
     s.focused = this.focused;
     return s;

@@ -253,7 +253,7 @@ Rules:
 - `ui.panels` Side panels (seats, dev, editor) close each other; the settings popover makes room when one of its links opens a panel; dock panels (feeds, roster) behave as an accordion, honour reduced motion — `src/ui/exclusive.ts`, `src/ui/collapsible.ts`, `src/ui/Settings.ts`, e2e: `e2e/hud.spec.ts`, url: `/?seed=1&time=11` (#98)
 
 ## Performance
-- `perf.idle` The game draws at most 60 frames a second (also on 120 Hz displays), 4 while nothing on screen can change (paused or the welcome card up, camera still, no input for 1.5 s) and 10 while the window is visible but not in front (the office lives on slowly); pointer, wheel, keys, focus, unpausing and a moving camera bring the full rate back at once; game time runs as before at every rate; `?test` draws every refresh — `src/game/framePacer.ts`, `src/game/Game.ts`, test: `src/game/framePacer.test.ts`, e2e: `e2e/pace.spec.ts`, url: `/?seed=1&time=11` (#212)
+- `perf.idle` The game draws at most 60 frames a second (also on 120 Hz displays), 4 while nothing on screen can change (paused or the welcome card up, camera still, no input for 1.5 s) and 10 while the window is visible but not in front (the office lives on slowly); pointer, wheel, keys, focus, unpausing and a moving camera bring the full rate back at once (pointer input in a window without focus: 10); game time runs as before at every rate; `?test` draws every refresh — `src/game/framePacer.ts`, `src/game/Game.ts`, test: `src/game/framePacer.test.ts`, e2e: `e2e/pace.spec.ts`, url: `/?seed=1&time=11` (#212)
 
 ## Removed on purpose
 Replaced by later commits. Don't bring these back without an issue.
