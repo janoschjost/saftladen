@@ -33,16 +33,18 @@ const GATHER_TIMEOUT = 6;
  * Chance per check that a meeting turns into a conversation, by group size.
  * Two people passing each other rarely stop; bigger groups almost always start talking.
  */
-const START_CHANCE = [0, 0, 0.04, 0.18, 0.35, 0.5, 0.6];
+const START_CHANCE = [0, 0, 0.15, 0.18, 0.35, 0.5, 0.6];
 const JOIN_CHANCE = 0.15;
 export const CROWD_RADIUS = 2.2; // a talk is only started or joined if no more than CROWD_LIMIT bodies stand this close
 export const CROWD_LIMIT = 5;
 const CLEAR_DISTANCE = 4; // how far people walk off when they make room instead of talking
 const MIN_GROUP_SPACING = 3.2; // new conversations keep this far from running ones (no blobs of 10+ people)
 
-const SEEK_CHANCE = 0.02; // per check and free person: walk over to a friend
-const SEEK_MIN = 0.3; // how close a friendship has to be before somebody goes looking for them
-const SEEK_RANGE = 16;
+const SEEK_CHANCE = 0.06; // per check and free person: walk over to somebody else who is free, for a chat
+const SEEK_FRIEND = 4; // how much likelier a close friend (affinity 1) is picked than a stranger
+const SEEK_RANGE = 20;
+const SEEK_TIME = 25; // seconds a walk-over may take before it is given up
+const SEEK_REACH = LINK_DISTANCE + 0.4; // this close to the one they went to, the chat starts
 const LEAVE_CHANCE = 0.12; // per turn in a group of three or more, once the talk is past its middle: somebody says bye and drifts off
 const SWITCH_AFTER = 5; // turns before the talk may wander off to another topic
 const BOND_DECAY = 0.9997; // per check, friendships fade back towards their base
@@ -271,6 +273,10 @@ export class Social {
   private checkTimer = GRACE;
   private clock = 0;
   private seekUntil = new Map<Person, number>();
+  /** walk-overs on their way: who went to whom, until when */
+  private seeking = new Map<Person, { to: Person; until: number }>();
+  /** somebody is coming in through the door */
+  private rush = false;
 
   private centroid(group: readonly Person[]): Vec2 {
     return { x: group.reduce((t, m) => t + m.pos.x, 0) / group.length, z: group.reduce((t, m) => t + m.pos.z, 0) / group.length };
@@ -280,6 +286,7 @@ export class Social {
   private clearOut(group: readonly Person[], nav: NavGrid, traffic: Traffic): void {
     for (const m of group) {
       m.socialCooldown = 6 + random() * 6;
+      if (m.task) continue; // on the way to their desk anyway
       m.walkTo(nav, traffic.wanderSpot(m, 10, CLEAR_DISTANCE));
     }
   }
@@ -287,6 +294,11 @@ export class Social {
   /** Past the quiet start after spawn, in which nobody starts, joins or clears out of a talk. */
   get checking(): boolean {
     return this.clock >= GRACE;
+  }
+
+  /** Whom `p` is walking over to for a chat, if anybody. */
+  walkingOverTo(p: Person): Person | null {
+    return this.seeking.get(p)?.to ?? null;
   }
 
   get chattingCount(): number {
@@ -325,7 +337,9 @@ export class Social {
     this.checkTimer = CHECK_INTERVAL;
     this.affinity.fade(BOND_DECAY);
 
-    const free = people.filter((p) => p.inOffice && !p.held && !p.controlled && !p.talk && !p.playerChat && !p.meetJob && !p.task && !p.printJob && !p.foosJob && !p.vapeJob && !p.snackLeft && !p.phoneJob && p.socialCooldown <= 0);
+    // while somebody comes in through the door nobody starts a chat or walks over to somebody: the hallway stays clear (rush hours)
+    this.rush = people.some((p) => p.presence === 'returning');
+    const free = people.filter((p) => this.available(p));
 
     // others may join a running conversation
     for (const c of this.active) {
@@ -337,6 +351,7 @@ export class Social {
             this.clearOut([p], nav, traffic); // too packed already: make room instead
             continue;
           }
+          if (p.task) p.interrupt();
           c.join(p, nav);
           if (c.members.length >= MAX_GROUP) break;
         }
@@ -360,46 +375,88 @@ export class Social {
         }
       }
       if (group.length < 2) continue;
-      if (traffic && traffic.bodiesNear(this.centroid(group), CROWD_RADIUS) > CROWD_LIMIT) {
-        // too many people in one spot: nobody starts a chat, they clear the way
-        this.clearOut(group, nav, traffic);
-        continue;
-      }
-      const gx = group.reduce((t, m) => t + m.pos.x, 0) / group.length;
-      const gz = group.reduce((t, m) => t + m.pos.z, 0) / group.length;
-      if (this.active.some((c) => Math.hypot(c.center.x - gx, c.center.z - gz) < MIN_GROUP_SPACING)) continue;
       // friends stop for a chat much more readily than strangers
-      if (random() >= Math.min(0.9, START_CHANCE[Math.min(group.length, MAX_GROUP)] * (1 + this.affinity.max(group) * 4))) continue;
-      const cx = group.reduce((s, m) => s + m.pos.x, 0) / group.length;
-      const cz = group.reduce((s, m) => s + m.pos.z, 0) / group.length;
-      let center = { x: Math.min(Math.max(cx, 2), nav.cols * nav.cell - 2), z: Math.min(Math.max(cz, 2), nav.rows * nav.cell - 2) };
-      // gather where it is quiet, not in the middle of a crowd
-      if (traffic) center = traffic.openSpotNear(center, 1.5, group);
-      this.active.push(new Conversation(group, center, nav, this.affinity));
+      this.begin(group, nav, traffic, Math.min(0.9, START_CHANCE[Math.min(group.length, MAX_GROUP)] * (1 + this.affinity.max(group) * 4)));
     }
 
-    if (traffic) this.seekFriends(free, nav, traffic);
+    if (traffic) {
+      this.arrive(free, nav, traffic);
+      this.seekCompany(free, nav, traffic);
+    }
   }
 
-  /** Now and then somebody who is free looks up a good friend and walks over for a chat. */
-  private seekFriends(free: readonly Person[], nav: NavGrid, traffic: Traffic): void {
-    for (const p of free) {
-      if (p.talk || (this.seekUntil.get(p) ?? 0) > this.clock || random() >= SEEK_CHANCE) continue;
-      let best: Person | null = null;
-      let bestAffinity = SEEK_MIN;
-      for (const o of free) {
-        if (o === p || o.talk) continue;
-        const d = Math.hypot(o.pos.x - p.pos.x, o.pos.z - p.pos.z);
-        if (d < LINK_DISTANCE + 0.5 || d > SEEK_RANGE) continue;
-        const a = this.affinity.get(p, o);
-        if (a > bestAffinity) {
-          best = o;
-          bestAffinity = a;
-        }
-      }
-      if (!best) continue;
-      this.seekUntil.set(p, this.clock + 15 + random() * 15);
-      p.walkTo(nav, traffic.openSpotNear(best.pos, 1.1, [p, best]));
+  /** Starts a talk for `group` (with `chance`) at a quiet spot nearby; not in a crowd (they clear the way instead), not next to a running talk. */
+  private begin(group: Person[], nav: NavGrid, traffic?: Traffic, chance = 1): void {
+    const c = this.centroid(group);
+    if (traffic && traffic.bodiesNear(c, CROWD_RADIUS) > CROWD_LIMIT) {
+      this.clearOut(group, nav, traffic);
+      return;
     }
+    if (this.active.some((a) => Math.hypot(a.center.x - c.x, a.center.z - c.z) < MIN_GROUP_SPACING) || random() >= chance) return;
+    for (const m of group) if (m.task) m.interrupt(); // on the way to their desk: the desk can wait
+    let center = { x: Math.min(Math.max(c.x, 2), nav.cols * nav.cell - 2), z: Math.min(Math.max(c.z, 2), nav.rows * nav.cell - 2) };
+    // gather where it is quiet, not in the middle of a crowd
+    if (traffic) center = traffic.openSpotNear(center, 1.5, group);
+    this.active.push(new Conversation(group, center, nav, this.affinity));
+  }
+
+  /** Who went over to somebody: once there the two start talking; somebody who got busy on the way (or took too long) calls it off. */
+  private arrive(free: readonly Person[], nav: NavGrid, traffic: Traffic): void {
+    for (const [p, s] of this.seeking) {
+      const o = s.to;
+      if (!free.includes(p) || !free.includes(o) || s.until < this.clock) {
+        this.seeking.delete(p);
+        continue;
+      }
+      if (Math.hypot(o.pos.x - p.pos.x, o.pos.z - p.pos.z) < SEEK_REACH) {
+        this.seeking.delete(p);
+        this.begin([p, o], nav, traffic);
+        continue;
+      }
+      if (p.state === 'idle') p.walkTo(nav, traffic.openSpotNear(o.pos, 1.1, [p, o])); // they moved on: follow
+      if (o.state === 'idle') o.timer = Math.max(o.timer, 1); // and the other one waits for them
+    }
+  }
+
+  /**
+   * Now and then somebody on a break walks over to somebody else who is free (at the coffee machine, in the kitchen,
+   * strolling about) for a chat; good friends are picked much more often. Busy people (desk, meeting, call, toilet,
+   * held, steered) are never in `free`, so nobody goes to them.
+   */
+  private seekCompany(free: readonly Person[], nav: NavGrid, traffic: Traffic): void {
+    for (const p of free) if (!p.talk && !this.engaged(p) && (this.seekUntil.get(p) ?? 0) <= this.clock && random() < SEEK_CHANCE) this.walkOver(p, free, nav, traffic);
+  }
+
+  /** free for a chat, and nobody is coming in right now */
+  private available(p: Person): boolean {
+    return p.freeToChat && !this.rush;
+  }
+
+  /** on the way to somebody, or waiting for somebody to come over */
+  private engaged(p: Person): boolean {
+    if (this.seeking.has(p)) return true;
+    for (const s of this.seeking.values()) if (s.to === p) return true;
+    return false;
+  }
+
+  /** `p` walks over to somebody else on a break (of `people`) for a chat, now; whom, or null when nobody is free nearby. */
+  walkOver(p: Person, people: readonly Person[], nav: NavGrid, traffic: Traffic): Person | null {
+    const near = people.filter((o) => {
+      if (o === p || !this.available(o) || this.engaged(o)) return false;
+      const d = Math.hypot(o.pos.x - p.pos.x, o.pos.z - p.pos.z);
+      return d >= SEEK_REACH && d <= SEEK_RANGE;
+    });
+    if (!near.length) return null;
+    const weights = near.map((o) => 1 + this.affinity.get(p, o) * SEEK_FRIEND);
+    let r = random() * weights.reduce((t, w) => t + w, 0);
+    const to = near.find((_, i) => (r -= weights[i]) < 0) ?? near[near.length - 1];
+    this.seekUntil.set(p, this.clock + 15 + random() * 15);
+    this.seeking.set(p, { to, until: this.clock + SEEK_TIME });
+    for (const m of [p, to]) if (m.task) m.interrupt(); // the desk can wait
+    // both meet at a quiet spot next to the one who is gone to (not in a doorway or a corridor), who then waits there
+    const spot = traffic.openSpotNear(to.pos, 1.1, [p, to]);
+    p.walkTo(nav, spot);
+    to.walkTo(nav, spot);
+    return to;
   }
 }

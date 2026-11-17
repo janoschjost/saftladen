@@ -50,6 +50,8 @@ const TRANSITION = 1.1; // seconds to sit down / stand up
 const RUN_RATE = 0.012; // per second at the desk without a coffee: chance to get up and fetch one (a lot less with a mug still on the desk)
 const RUN_CHANCE = 0.1; // per decision while wandering: fetch a coffee from the machine
 const BREW = 4.2; // seconds at the machine
+const COFFEE_COMPANY = 4; // metres: somebody else on a break this close to the machine when the coffee is ready...
+const COFFEE_STAY = { min: 10, max: 16 }; // ...and they stay this long with the cup for a chat instead of going straight back
 const SNACK_GRAB = 2.2; // seconds in the kitchen taking a bag of chips
 const SNACK_TIME = { min: 45, max: 90 }; // seconds the chips last while strolling around
 const SNACK_CHANCE = 0.12; // per decision while wandering (snackers only): go and get chips
@@ -497,6 +499,15 @@ export class Person extends Walker {
   /** True while in the office and free to do office things (desk, chat). */
   get inOffice(): boolean {
     return this.presence === 'in';
+  }
+
+  /**
+   * Free for a chat: in the office and not busy (at the desk, in a meeting or on the toilet, on a call, at the printer,
+   * the foosball table or the coffee machine, held, steered, already talking) nor just out of a talk. Walking back to the
+   * desk still counts as a break: the desk can wait.
+   */
+  get freeToChat(): boolean {
+    return this.inOffice && !this.held && !this.controlled && !this.talk && !this.playerChat && !this.meetJob && (!this.task || this.task.phase === 'approach') && !this.run && !this.printJob && !this.foosJob && !this.vapeJob && !this.snackLeft && !this.phoneJob && this.socialCooldown <= 0;
   }
 
   /** the wing of the entrance door this person uses on the current trip */
@@ -1227,11 +1238,22 @@ export class Person extends Walker {
     this.state = 'idle';
     this.path = [];
     this.timer = 0.2;
+    if (this.companyNear(COFFEE_COMPANY)) {
+      // somebody else is on a break here too: stay a moment with the cup (the desk is given up, a free one is picked later)
+      if (j.desk) this.office?.release(j.desk, this);
+      this.timer = COFFEE_STAY.min + random() * (COFFEE_STAY.max - COFFEE_STAY.min);
+      return;
+    }
     const desk = j.desk ?? this.office?.claim(this) ?? null;
     if (!desk) return;
     const left = j.desk ? Math.max(j.left, 20) : (WORK_TIME.min + random() * (WORK_TIME.max - WORK_TIME.min)) * (this.adhd ? 0.3 : 1);
     this.task = { desk, phase: 'approach', t: 0, from: { ...this.pos }, remaining: left, retries: 0, retryIn: 0.5 };
     this.goTo(nav, desk.approach);
+  }
+
+  /** Somebody else on a break (or at the coffee machine) within `r` metres. */
+  private companyNear(r: number): boolean {
+    return !!this.office?.people.some((o) => o !== this && Math.hypot(o.pos.x - this.pos.x, o.pos.z - this.pos.z) < r && (o.freeToChat || (!!o.run && o.inOffice)));
   }
 
   /** Gives up the coffee run where they stand (the desk is free again). */
