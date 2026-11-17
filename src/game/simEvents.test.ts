@@ -385,7 +385,7 @@ describe('dev events on the Sim', () => {
     expect(none.nerf.active).toBe(true);
   });
 
-  it('play.boombox (boombox): Sandro pulls out the boombox wherever he is, Donata may stay at her desk; refused while it plays; calls the two in when they are away; plays again although she took it today', () => {
+  it('play.boombox (boombox): Sandro pulls out the boombox wherever he is, Donata may stay at her desk; a running scene starts over; the two appear when they are away; plays again although she took it today', () => {
     const sim = office();
     const [dj, boss] = only(sim, ['sandro-hagen', 'donata-manser']);
     expect(run(sim, 20, () => dj.sit > 0.9 && boss.sit > 0.9)).toBe(true);
@@ -395,7 +395,9 @@ describe('dev events on the Sim', () => {
     expect(dj.task).toBeNull(); // up from his desk
     expect(dj.boomPose).toBe('play');
     expect(boss.working).toBe(true); // she notices only after a few seconds
-    refused(sim, 'boombox');
+    // again while it plays: it starts over
+    expect(sim.events.trigger('boombox')).toBe(`${first(dj)} packt die Boombox aus`);
+    expect(sim.boombox.stage).toBe('play');
     expect(run(sim, 90, () => sim.boombox.onDesk)).toBe(true);
     // taken away today, the event plays it again
     expect(sim.boombox.taken).toBe(true);
@@ -403,14 +405,14 @@ describe('dev events on the Sim', () => {
     expect(sim.boombox.onDesk).toBeNull();
     expect(sim.boombox.mesh.parent).toBe(dj.rig.body);
 
-    // the two away: the event cannot run yet, but calls them back for the next try
+    // the two away: they appear in the office and it starts at once
     const away = office();
     only(away, []);
     for (const id of ['sandro-hagen', 'donata-manser']) away.scenario.put(id, 'errand', 'free');
     const pair = [who(away, 'sandro-hagen'), who(away, 'donata-manser')];
-    expect(away.events.trigger('boombox')).toMatch(/: nicht möglich$/);
-    expect(run(away, 30, () => pair.every((p) => p.inOffice))).toBe(true); // out for 45 s without the call
     expect(away.events.trigger('boombox')).toBe(`${first(pair[0])} packt die Boombox aus`);
+    expect(pair.every((p) => p.inOffice)).toBe(true);
+    expect(away.boombox.stage).toBe('play');
   });
 
   it('office.door-lettering (door-lettering): opens the lettered doors, the next call shuts them', () => {

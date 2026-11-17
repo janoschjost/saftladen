@@ -29,6 +29,7 @@ function* obstacles(sim: Sim): Generator<() => boolean> {
     (sim.toilets.abort(), true);
   yield () => !!sim.photoStudio.current && (sim.photoStudio.abort(), true);
   yield () => !sim.serverRack.free && (sim.serverRack.abort(), true);
+  yield () => sim.boombox.active && (sim.boombox.abort(), true);
   yield () => {
     const talks = sim.social.active.slice();
     talks.forEach((c) => c.members.slice().forEach((m) => sim.social.leave(m)));
@@ -38,20 +39,24 @@ function* obstacles(sim: Sim): Generator<() => boolean> {
   const away = sim.people
     .filter((p) => p.presence !== "in")
     .sort(() => random() - 0.5);
-  for (const p of away) {
-    yield () => {
-      if (p.presence === "in" || !sim.presence.stay(p)) return false;
-      if (p.presence === "leaving") p.cancelLeave();
-      else
-        sim.scenario.enter(
-          p,
-          sim.deskFor(p)?.approach ??
-            sim.nav.nearestWalkable(CORRIDOR_POINT, 6) ??
-            CORRIDOR_POINT,
-        );
-      return true;
-    };
-  }
+  for (const p of away) yield () => bringIn(sim, p);
+}
+
+/**
+ * Somebody away appears in the office at once, at their desk (their pets with them), and stays on duty; somebody on the
+ * way out turns back. False when they are in already, or a scene or the dev panel holds them.
+ */
+export function bringIn(sim: Sim, p: Person): boolean {
+  if (p.presence === "in" || !sim.presence.stay(p)) return false;
+  if (p.presence === "leaving") p.cancelLeave();
+  else
+    sim.scenario.enter(
+      p,
+      sim.deskFor(p)?.approach ??
+        sim.nav.nearestWalkable(CORRIDOR_POINT, 6) ??
+        CORRIDOR_POINT,
+    );
+  return true;
 }
 
 /**
