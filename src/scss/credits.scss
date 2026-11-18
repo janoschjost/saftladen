@@ -1,0 +1,122 @@
+@use 'vars';
+
+@font-face {
+    font-family: 'Apercu';
+    src: url('/fonts/ApercuMedium.woff2') format('woff2');
+    font-weight: 500;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Apercu';
+    src: url('/fonts/ApercuBold.woff2') format('woff2');
+    font-weight: 700;
+    font-display: swap;
+}
+
+@layer reset, basics, layouts, libraries, modules, utilities;
+
+:root {
+    --color-scene: #0d0f13;
+    --color-ink: white;
+    --color-ink-soft: #9aa3b5;
+    --color-accent: #8cf6c9;
+    --font-family-base: 'Apercu', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+@layer reset {
+    *,
+    *::before,
+    *::after {
+        box-sizing: border-box;
+    }
+
+    body,
+    h1,
+    p,
+    ul {
+        margin: 0;
+        padding: 0;
+    }
+
+    ul {
+        list-style: none;
+    }
+}
+
+@layer basics {
+    html,
+    body {
+        height: 100%;
+        overflow: hidden;
+    }
+
+    body {
+        background: var(--color-scene);
+        color: var(--color-ink);
+        font-family: var(--font-family-base);
+        font-weight: 500;
+        line-height: 1.3;
+        -webkit-font-smoothing: antialiased;
+    }
+}
+
+@layer layouts {
+    .l-stage {
+        position: fixed;
+        inset: 0;
+        cursor: grab;
+
+        canvas {
+            display: block;
+        }
+    }
+}
+
+@layer modules {
+    .m-credits {
+        position: fixed;
+        top: 1.5rem;
+        left: 5rem;
+        right: 5rem;
+        display: grid;
+        justify-items: center;
+        gap: 0.5rem;
+        text-align: center;
+        pointer-events: none;
+
+        @media screen and (max-width: vars.$mobile) {
+            top: 4rem;
+            left: 1rem;
+            right: 1rem;
+        }
+    }
+
+    .m-credits__back {
+        position: fixed;
+        top: 1.5rem;
+        left: 1.5rem;
+        z-index: 1;
+        padding: 0.5rem 1rem;
+        border-radius: 2rem;
+        background: white;
+        color: black;
+        font-size: 0.875rem;
+        text-decoration: none;
+
+        @media screen and (max-width: vars.$mobile) {
+            top: 1rem;
+            left: 1rem;
+        }
+    }
+
+    .m-credits__title {
+        font-size: clamp(2.5rem, 6vw, 4.5rem);
+        font-weight: 700;
+        line-height: 1;
+    }
+
+    .m-credits__lead {
+        color: var(--color-ink-soft);
+    }
+}
