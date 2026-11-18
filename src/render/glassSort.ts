@@ -7,7 +7,7 @@ import * as THREE from 'three';
  */
 export const GLASS_ORDER = 2;
 const BEHIND = GLASS_ORDER - 1;
-export const IN_FRONT = GLASS_ORDER + 1;
+const IN_FRONT = GLASS_ORDER + 1;
 
 const EVERY = 4; // frames between two passes: panes and bubbles move slowly
 const RESCAN = 60; // passes between two scans of the scene for panes and marked objects
@@ -31,6 +31,7 @@ export class GlassSort {
   private frame = 0;
   private pass = 0;
   private readonly ray = new THREE.Raycaster();
+  private readonly eye = new THREE.Vector3();
   private readonly at = new THREE.Vector3();
   private readonly dir = new THREE.Vector3();
 
@@ -41,12 +42,12 @@ export class GlassSort {
     if (this.frame++ % EVERY) return;
     if (this.pass++ % RESCAN === 0) this.scan();
     camera.updateMatrixWorld();
-    const eye = camera.getWorldPosition(this.ray.ray.origin);
+    camera.getWorldPosition(this.eye);
     for (const list of [this.marked, this.tracked]) {
       for (const o of list) {
         if (!o.visible) continue;
         o.getWorldPosition(this.at);
-        o.renderOrder = this.behindGlass(eye, this.at) ? BEHIND : IN_FRONT;
+        o.renderOrder = this.behindGlass(this.eye, this.at) ? BEHIND : IN_FRONT;
       }
     }
   }
