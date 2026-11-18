@@ -926,11 +926,14 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   /* =================================================================
      CORE (z < 0): text wall + rooms
   ================================================================= */
+  // lettering: plane bottom Y0, 0.95 m high on a 256 px canvas, baseline at 232 px, capitals 224 px high (320 px font) -> middle of the capitals
+  const LETTER_Y0 = 1.64;
+  const LETTER_MID = LETTER_Y0 + (256 - 232 + 224 / 2) / 256 * 0.95;
   wall(-5, CZ, 26.06, CZ, H_CORE, [
     { a: -3.0, b: -2.0, door: 1 }, // storage door
     { a: 2.5, b: 3.4, door: 1 }, // door under "RISCHE"
     { a: 4.9, b: 5.8, door: 1 }, // kitchen/dining door
-    { a: 6.2, b: 9.5, top: 1.64, fill: 'glass', flush: true, solidAbove: true, grow: 0.04 }, // glazed panel into dining: glass up to the bottom of the lettering (Y0), solid wall behind the text above
+    { a: 6.2, b: 9.5, top: LETTER_MID, fill: 'glass', flush: true, solidAbove: true, grow: 0.04 }, // glazed panel into dining: glass up to the vertical middle of the capitals, solid wall behind the upper half of the text
     { a: 14.4, b: 15.3, door: 1 }, // "Archiv"
     { a: 18.56, b: 23, top: 2.5 }, // dark room, black curtain (jamb flush with the east face of the x=18.5 wall)
     { a: 23.25, b: 24.25, top: 2.2, fill: 'glass', door: -1 }, // booth glass door, opens outwards (into the hallway)
@@ -951,7 +954,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     const W = ax(X1) - ax(X0); // plan-scaled span of the lettering
     const Hh = 0.95;
     const FLOAT = 0.065; // lettering sits directly on the wall face (half-thickness 0.06 + 5 mm), no visible gap
-    const Y0 = 1.64; // bottom of the plane: the baseline sits at ~1.78 m, the middle of the capitals at 2.1 m = top of the glazed panel
+    const Y0 = LETTER_Y0; // bottom of the plane; the middle of the capitals (LETTER_MID, ~2.15 m) = top of the glazed panel
     const OPEN_TOP = 2.1; // head of an open doorway
     // doors under the lettering: it is masked out of the wall there and drawn onto the door leaf instead.
     // Use the real door rigs (doors keep their size when the plan is scaled, so the mask must too).
