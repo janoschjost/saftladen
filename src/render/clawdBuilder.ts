@@ -87,11 +87,11 @@ export interface ClawdDesk {
  */
 export function buildClawdDesk(laptop: THREE.Object3D): ClawdDesk {
   const group = new THREE.Group();
-  const SEAT = 0.12;
-  const TOP = 0.13;
+  const SEAT = 0.1;
+  const TOP = 0.2;
   const LEGS = '#8b919c';
   const ZC = -0.03; // Clawd's depth: he sits just behind the desk, facing the room like Marco and Janosch
-  const ZD = 0.13; // the desk's
+  const ZD = 0.15; // the desk's
 
   const stool = [box(0.2, 0.02, 0.18, 0, SEAT - 0.01, ZC, '#23262d'), box(0.2, 0.12, 0.016, 0, SEAT + 0.06, ZC - 0.09, '#23262d')]; // seat and back rest
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) stool.push(box(0.016, SEAT - 0.02, 0.016, sx * 0.085, (SEAT - 0.02) / 2, ZC + sz * 0.075, LEGS));
@@ -106,14 +106,14 @@ export function buildClawdDesk(laptop: THREE.Object3D): ClawdDesk {
   }
 
   // the same laptop as Marco's and Janosch's, smaller; it comes in desk coordinates (the desk top at 0.74, the hinge at 0.73)
-  const K = 0.36;
+  const K = 0.3;
   laptop.scale.setScalar(K);
   laptop.position.set(0, TOP - 0.74 * K, ZD + 0.05 - 0.73 * K);
   group.add(laptop);
 
-  const rig = buildClawd(0.9);
+  const rig = buildClawd(1.2);
   rig.root.position.set(0, SEAT - 0.012, ZC);
-  rig.legs.forEach((leg, i) => (leg.rotation.x = -1.35 + (i > 1 ? 0.05 : 0))); // legs stick out over the seat
+  rig.legs.forEach((leg, i) => (leg.rotation.x = -0.85 + (i > 1 ? 0.05 : 0))); // legs stick out over the seat
   group.add(rig.root);
 
   // Claude's sparks: stars that turn and drift round his head while he thinks, and bits that rise off the keys
@@ -122,7 +122,7 @@ export function buildClawdDesk(laptop: THREE.Object3D): ClawdDesk {
   const stars = ['#ffd2b0', '#ff9a68', '#fff1dc', '#ffb48a'].map((color, i) => {
     const mesh = new THREE.Mesh(starGeo(color), glow);
     group.add(mesh);
-    return { mesh, phase: i * 2.4, radius: i === 0 ? 0 : 0.2 + i * 0.03, speed: (i % 2 ? 1 : -1) * (0.45 + i * 0.1), height: i === 0 ? 0.5 : 0.2 + i * 0.07, size: i === 0 ? 1.2 : 0.7 };
+    return { mesh, phase: i * 2.4, radius: i === 0 ? 0 : 0.2 + i * 0.03, speed: (i % 2 ? 1 : -1) * (0.45 + i * 0.1), height: i === 0 ? 0.62 : 0.3 + i * 0.08, size: i === 0 ? 1.2 : 0.7 };
   });
   const bits = [0, 1, 2].map((i) => {
     const mesh = new THREE.Mesh(merge([box(0.016, 0.016, 0.016, 0, 0, 0, i % 2 ? '#ff9a68' : '#ffd2b0')]), glow);
@@ -148,7 +148,7 @@ export function buildClawdDesk(laptop: THREE.Object3D): ClawdDesk {
       }
       for (const b of bits) {
         const u = (t * 0.45 * (0.5 + burst * 0.5) + b.phase) % 1; // rise from the keys, shrink away
-        b.mesh.position.set(b.x + Math.sin(t * 3 + b.phase * 9) * 0.01, TOP + 0.1 + u * 0.14, ZD - 0.03);
+        b.mesh.position.set(b.x + Math.sin(t * 3 + b.phase * 9) * 0.01, TOP + 0.08 + u * 0.14, ZD - 0.03);
         b.mesh.rotation.set(t * 4, t * 3 + b.phase, 0);
         b.mesh.scale.setScalar(Math.sin(u * Math.PI) * burst);
       }

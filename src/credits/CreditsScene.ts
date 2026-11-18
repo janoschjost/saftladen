@@ -191,8 +191,8 @@ const HOME_YAW = -0.5;
 
 /** where Kurt sleeps (world metres): on the floor in front of the big desk's front left leg, his back against it */
 const KURT_AT = { x: -(DESK_W / 2 + DESK_W / 2 - 0.06), y: 0, z: 0.95 + 0.025 + 0.2 * MINI };
-/** where Clawd's little workstation stands: on the floor at the big desk's left end, so he sits at the table, not on it */
-const CLAWD_AT = { x: -2.45, y: 0, z: 0.45, scale: 1.7 };
+/** where Clawd's little workstation stands: on the big desk, on the seam between the two desks */
+const CLAWD_AT = { x: 0, y: DESK_TOP, z: 0.5, scale: 1.2 };
 /** the middle of the play ring and where Ellie waits meanwhile */
 const PLAY_C = { x: 2.9, z: 1.85 };
 /** where the blueprint of the office is projected, in front of the desks */
@@ -249,7 +249,7 @@ function zTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-/** Marco and Janosch coding side by side, Clawd at his own little desk at the table's left end, Ellie at their feet and a miniature Kurt asleep against the desk's front leg, in an endless room. */
+/** Marco and Janosch coding side by side, Clawd at his own little desk on the big desk, Ellie at their feet and a miniature Kurt asleep against the desk's front leg, in an endless room. */
 export class CreditsScene {
   readonly scene = new THREE.Scene();
   /** the point the camera looks at */
