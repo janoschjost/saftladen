@@ -94,7 +94,7 @@ const cats: Record<string, NonNullable<TeamMember['cats']>> = {
   ],
 };
 
-// walking speed overrides (default: random 1.0-1.5)
+// walking speed overrides (default: random 1.15-1.725)
 const speeds: Record<string, number> = {
   'sandro-hagen': 3.4,
   'delya-kohler': 1.8,

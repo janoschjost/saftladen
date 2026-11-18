@@ -93,11 +93,11 @@ describe('move.flow', () => {
     [1, 11],
     [4, 11],
   ]) {
-    it(`move.flow "Alle zurückholen" at ${hour}:00 (seed ${seed}): nobody stands in a jam for more than 3 s away from doors, nobody waits at a door for more than 20 s`, () => {
+    it(`move.flow "Alle zurückholen" at ${hour}:00 (seed ${seed}): nobody stands in a jam for more than 4.5 s away from doors, nobody waits at a door for more than 20 s`, () => {
       const sim = office({ cycle: cycleOf(hour) }, seed);
       sim.presence.callAllBack();
       const j = jams(sim, 120);
-      expect(j.body, j.where).toBeLessThanOrEqual(3);
+      expect(j.body, j.where).toBeLessThanOrEqual(4.5); // 3 s before walkers got 15% faster (#235)
       expect(j.door).toBeLessThanOrEqual(20);
     });
   }

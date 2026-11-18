@@ -115,7 +115,7 @@ export interface TeamMember {
   adhd?: boolean; // restless: short idle/work spells, fidgets
   son?: Look; // little boy who now and then walks into the home office scene
   homebody?: boolean; // works from home a lot and is never out on errands
-  speed?: number; // walking speed override (default: random 1.0-1.5)
+  speed?: number; // walking speed override (default: random 1.15-1.725)
   schedule: Schedule; // habitual office hours
   /** turns into this alter ego when going home (Kompensiertier Kurt, see src/game/AlterEgo.ts) */
   alterEgo?: 'kurt';
