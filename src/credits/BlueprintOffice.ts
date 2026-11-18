@@ -66,6 +66,16 @@ function pieces(g: THREE.BufferGeometry): THREE.BufferGeometry[] {
   });
 }
 
+/** Where and when a piece appears (x, z in model metres): what the mascot walks to. */
+export interface BuildMark {
+  order: number;
+  x: number;
+  z: number;
+}
+
+/** Which part of the cycle the blueprint is in. */
+export type BuildPhase = 'pad' | 'build' | 'hold' | 'melt' | 'rest';
+
 interface Piece {
   faces: THREE.BufferGeometry;
   edges: THREE.BufferGeometry;
@@ -90,7 +100,7 @@ function stamp(geo: THREE.BufferGeometry, p: Piece, order: number, dur: number):
 }
 
 /** Walls and furniture of the real office model, baked into two meshes: translucent faces and their edges (world space, metres). */
-function bake(): { faces: THREE.BufferGeometry; edges: THREE.BufferGeometry } {
+function bake(): { faces: THREE.BufferGeometry; edges: THREE.BufferGeometry; marks: BuildMark[] } {
   const scene = new THREE.Scene();
   const model = buildOffice(scene);
   model.roof.visible = false;
@@ -127,13 +137,15 @@ function bake(): { faces: THREE.BufferGeometry; edges: THREE.BufferGeometry } {
   const floors = rank('floor', (p) => hash(p.at.x, p.at.z));
   const walls = rank('wall', (p) => hash(p.at.x + 1.7, p.at.z + 3.1));
   const things = rank('thing', (p) => p.at.x / OFFICE_W + hash(p.at.x, p.at.z) * 0.15);
+  const marks: BuildMark[] = [];
   for (const p of all) {
-    if (p.kind === 'floor') stamp(p.faces, p, 0.06 * floors.get(p)!, 0.04);
-    else if (p.kind === 'wall') stamp(p.faces, p, 0.08 + 0.42 * walls.get(p)!, 0.03);
-    else stamp(p.faces, p, 0.52 + 0.46 * things.get(p)!, 0.05);
+    const order = p.kind === 'floor' ? 0.06 * floors.get(p)! : p.kind === 'wall' ? 0.08 + 0.42 * walls.get(p)! : 0.52 + 0.46 * things.get(p)!;
+    stamp(p.faces, p, order, p.kind === 'floor' ? 0.04 : p.kind === 'wall' ? 0.03 : 0.05);
+    marks.push({ order, x: p.at.x, z: p.at.z });
     for (const attr of ['aOrder', 'aDur', 'aPiece', 'aMode']) p.edges.setAttribute(attr, p.faces.getAttribute(attr).count === p.edges.attributes.position.count ? p.faces.getAttribute(attr).clone() : expand(p.faces.getAttribute(attr), p.edges.attributes.position.count));
   }
-  return { faces: mergeGeometries(all.map((p) => p.faces))!, edges: mergeGeometries(all.map((p) => p.edges))! };
+  marks.sort((a, b) => a.order - b.order);
+  return { faces: mergeGeometries(all.map((p) => p.faces))!, edges: mergeGeometries(all.map((p) => p.edges))!, marks };
 }
 
 /** The same value on every vertex of a piece, for as many vertices as its edges have. */
@@ -201,10 +213,17 @@ export class BlueprintOffice {
   private readonly lines: THREE.ShaderMaterial;
   private readonly pad: THREE.MeshBasicMaterial;
   private clock = 0;
+  /** how far the build is (0..1 + RISE) and the part of the cycle, for whoever builds along */
+  level = 0;
+  phase: BuildPhase = 'pad';
+  /** every piece in the order it appears, in world metres */
+  readonly marks: BuildMark[];
+  /** the pad's footprint on the floor (world metres) */
+  readonly footprint: { x0: number; z0: number; x1: number; z1: number };
 
   /** `scale` shrinks the office (42 m wide) to the table; `at` is the middle of its footprint on the floor, `lift` how far it floats. */
   constructor(scale: number, at: { x: number; z: number }, lift: number) {
-    const { faces, edges } = bake();
+    const { faces, edges, marks } = bake();
     const w = OFFICE_W;
     const d = OFFICE_D + ANNEX_D;
 
@@ -212,6 +231,7 @@ export class BlueprintOffice {
     body.scale.setScalar(scale);
     body.position.set(at.x - (w * scale) / 2, lift, at.z - (d * scale) / 2);
     this.root.add(body);
+    this.marks = marks.map((m) => ({ order: m.order, x: body.position.x + m.x * scale, z: body.position.z + m.z * scale }));
     const shader = (color: string, opacity: number): THREE.ShaderMaterial =>
       new THREE.ShaderMaterial({
         vertexShader: VERTEX,
@@ -227,6 +247,7 @@ export class BlueprintOffice {
     // the pad it is projected onto: a dark plate with a blueprint grid and a glowing rim
     const px = w * scale + 0.3;
     const pz = d * scale + 0.3;
+    this.footprint = { x0: at.x - px / 2, z0: at.z - pz / 2, x1: at.x + px / 2, z1: at.z + pz / 2 };
     const grid = document.createElement('canvas');
     grid.width = grid.height = 64;
     const g = grid.getContext('2d')!;
@@ -259,7 +280,8 @@ export class BlueprintOffice {
     if (t >= pad && t < pad + build) level = ((t - pad) / build) * full;
     else if (t >= pad + build && t < pad + build + hold) level = full;
     else if (t >= pad + build + hold && t < pad + build + hold + melt) level = (1 - (t - pad - build - hold) / melt) * full;
-    this.progress.value = level;
+    this.progress.value = this.level = level;
+    this.phase = t < pad ? 'pad' : t < pad + build ? 'build' : t < pad + build + hold ? 'hold' : t < pad + build + hold + melt ? 'melt' : 'rest';
     this.pad.opacity = t < pad ? t / pad : 0.9;
   }
 }
