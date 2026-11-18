@@ -933,7 +933,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     { a: -3.0, b: -2.0, door: 1 }, // storage door
     { a: 2.5, b: 3.4, door: 1 }, // door under "RISCHE"
     { a: 4.9, b: 5.8, door: 1 }, // kitchen/dining door
-    { a: 6.2, b: 9.5, top: LETTER_MID, fill: 'glass', flush: true, solidAbove: true, grow: 0.04 }, // glazed panel into dining: glass up to the vertical middle of the capitals, solid wall behind the upper half of the text
+    { a: 6.2, b: 9.5, top: LETTER_MID, fill: 'glass', flush: true, solidAbove: true }, // glazed panel into dining (no grow: same-thickness glass overlapping the wall would share its faces and flicker): glass up to the vertical middle of the capitals, solid wall behind the upper half of the text
     { a: 14.4, b: 15.3, door: 1 }, // "Archiv"
     { a: 18.56, b: 23, top: 2.5 }, // dark room, black curtain (jamb flush with the east face of the x=18.5 wall)
     { a: 23.25, b: 24.25, top: 2.2, fill: 'glass', door: -1 }, // booth glass door, opens outwards (into the hallway)
@@ -953,7 +953,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     const X1 = 15.5;
     const W = ax(X1) - ax(X0); // plan-scaled span of the lettering
     const Hh = 0.95;
-    const FLOAT = 0.065; // lettering sits directly on the wall face (half-thickness 0.06 + 5 mm), no visible gap
+    const FLOAT = 0.07; // lettering sits just in front of the wall and glass faces (half-thickness 0.06 + 1 cm), so it reads as printed on the glass, not inside it
     const Y0 = LETTER_Y0; // bottom of the plane; the middle of the capitals (LETTER_MID, ~2.15 m) = top of the glazed panel
     const OPEN_TOP = 2.1; // head of an open doorway
     // doors under the lettering: it is masked out of the wall there and drawn onto the door leaf instead.
