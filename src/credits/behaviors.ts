@@ -27,10 +27,10 @@ export class Path {
 }
 
 /**
- * Kurt's way from his chair to the front edge of the big desk, in his workstation's coordinates (the chair is the
- * origin, 1 unit = 1/MINI metre): out right of the chair, past his tiny desk, then straight to the edge where he jumps.
+ * Kurt's way from his chair to the right end of the big desk, in his workstation's coordinates (the chair is the
+ * origin, 1 unit = 1/MINI metre): out right of the chair, past his tiny desk, then along the front edge to where he jumps.
  */
-export const KURT_TO_EDGE = new Path([[0, 0], [0.5, -0.05], [1.0, 0.4], [1.0, 2.5]]);
+export const KURT_TO_EDGE = new Path([[0, 0], [0.5, -0.05], [1.0, 0.4], [1.0, 2.5], [6.5, 2.5]]);
 
 export type DogStep =
   | { kind: 'rest'; d: number }
@@ -39,7 +39,7 @@ export type DogStep =
   | { kind: 'sniff'; d: number };
 
 /** Where Ellie may wander: the open floor in front of the desks. */
-export const DOG_AREA = { x: [-3.2, 3.4], z: [1.7, 2.5] } as const;
+export const DOG_AREA = { x: [2.4, 3.7], z: [1.5, 2.2] } as const;
 
 const between = (r: () => number, [a, b]: readonly [number, number]) => a + r() * (b - a);
 

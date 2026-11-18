@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import '../scss/credits.scss';
 import { CreditsScene } from './CreditsScene';
 
 const stage = document.getElementById('stage') as HTMLElement;
@@ -13,7 +12,7 @@ stage.appendChild(renderer.domElement);
 
 const world = new CreditsScene();
 const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 80);
-camera.position.set(3.4, 2.1, 6.4);
+camera.position.set(2.8, 3.3, 8.6);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.copy(world.focus);

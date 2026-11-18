@@ -14,7 +14,7 @@ test('credits.page: /credits shows the 3D scene and the credits, and links back 
 test('credits.link: the Credits link in the game opens the credits page', async ({ page }) => {
   await openGame(page);
   const link = page.locator('.m-credits-link__button');
-  await expect(link).toContainText('Credits');
+  await expect(link).toContainText('Marco & Janosch');
   await link.click();
   await expect(page).toHaveURL(/\/credits\/$/);
   await expect(page.locator('.m-credits__title')).toHaveText('Credits');

@@ -9,6 +9,7 @@ import { box, cyl, merge, propMaterial } from '../render/geo';
 import { addKurt } from '../render/kurtBuilder';
 import { SIT_DROP } from '../render/officeBuilder';
 import { screenMaterial, tickScreens, useScreen } from '../render/screens';
+import { BlueprintOffice } from './BlueprintOffice';
 import { KURT_TO_EDGE, planTrip, type DogStep, type Vec2 } from './behaviors';
 
 /** Same bounds as the home office desks (metres): the desk top and the laptop hinge, in front of the chair. */
@@ -132,6 +133,10 @@ interface Typing {
   /** 0..1: in mid air, arms up and legs spread */
   air: number;
   moving: boolean;
+  /** how far the hips drop when seated (rig units), the knee bend while seated and how much they doze (arms in the lap, slumped) */
+  drop: number;
+  kneeSit: number;
+  sleep: number;
 }
 
 /** Arms that reach the keys at this person's size (the body scales with height, the desk doesn't). */
@@ -165,7 +170,7 @@ function workstation(look: Look, o: { variant: number; extra: THREE.BufferGeomet
   rig.kneeL.rotation.x = rig.kneeR.rotation.x = 1.5;
   rig.legL.position.y = rig.legR.position.y = 0.8 - SIT_DROP;
   useScreen(lap.screen, 1);
-  return { group, typing: { rig, ...typingPoses(rig), phase: o.phase, stand: 0, x: 0, z: 0, yaw: 0, gait: 0, y: 0, air: 0, moving: false }, screen: lap.screen };
+  return { group, typing: { rig, ...typingPoses(rig), phase: o.phase, stand: 0, x: 0, z: 0, yaw: 0, gait: 0, y: 0, air: 0, moving: false, drop: SIT_DROP, kneeSit: 1.5, sleep: 0 }, screen: lap.screen };
 }
 
 function floorTexture(): THREE.CanvasTexture {
@@ -184,17 +189,20 @@ function floorTexture(): THREE.CanvasTexture {
 }
 
 /** Ellie's rest spot, by Janosch's chair, and which way she lies. */
-const HOME = { x: DESK_W / 2 + 1.5, z: 0.7 };
+const HOME = { x: DESK_W / 2 + 0.7, z: 0.6 };
 const HOME_YAW = -0.5;
 
-/** Where Kurt's workstation stands on the big desk (world metres), and the scale it is built at. */
+/** where Kurt's workstation stands on the big desk (world metres) */
 const KURT_AT = { x: 0, y: DESK_TOP, z: 0.4 };
-/** the edge of the big desk he jumps from, where he lands, the middle of the play ring and where Ellie waits meanwhile */
-const EDGE = { x: 0.23, z: 0.97 };
-const LAND = { x: 0.23, z: 1.35 };
-const PLAY_C = { x: 0.2, z: 1.95 };
+/** the edge of the big desk (its right end) he jumps from and where he lands */
+const EDGE = { x: 1.5, z: 0.97 };
+const LAND = { x: 1.5, z: 1.4 };
+/** the middle of the play ring and where Ellie waits meanwhile */
+const PLAY_C = { x: 2.9, z: 1.85 };
+/** where the blueprint of the office is projected, in front of the desks */
+const HOLO = { x: 0, z: 3.1, scale: 0.085, lift: 0.1 };
 const PLAY_START = Math.PI; // he runs onto the ring at its camera-far side
-const DOG_WAIT: Vec2 = [1.2, 1.9];
+const DOG_WAIT: Vec2 = [3.7, 1.9];
 
 type PlayPhase = 'work' | 'rise' | 'toEdge' | 'jump' | 'run' | 'chase' | 'orbit' | 'runBack' | 'leap' | 'toChair' | 'sit';
 /** Kurt's game takes Ellie over: walk somewhere and watch, or be put exactly where the game says */
@@ -234,8 +242,9 @@ const smooth = (t: number) => t * t * (3 - 2 * t);
 export class CreditsScene {
   readonly scene = new THREE.Scene();
   /** the point the camera looks at */
-  readonly focus = new THREE.Vector3(0.35, 0.95, 0.3);
+  readonly focus = new THREE.Vector3(0, 0.7, 1.7);
   private clock = 0;
+  private blueprint: BlueprintOffice;
   private coders: Typing[] = [];
   private screens = new Set<THREE.Material>();
   private ellie: DogRig;
@@ -298,6 +307,9 @@ export class CreditsScene {
 
     this.ellie = buildDog('puppy');
     this.dogPlan = planTrip([HOME.x, HOME.z]);
+
+    this.blueprint = new BlueprintOffice(HOLO.scale, HOLO, HOLO.lift);
+    scene.add(this.blueprint.root);
     this.ellie.root.traverse((o) => ((o as THREE.Mesh).isMesh ? (o.castShadow = true) : undefined));
     scene.add(this.ellie.root);
   }
@@ -320,10 +332,23 @@ export class CreditsScene {
     const step = swing * 0.6 * s;
     rig.legL.rotation.x = L(L(-1.5, 0, s) + step, -0.8, air);
     rig.legR.rotation.x = L(L(-1.5, 0, s) - step, 0.5, air);
-    rig.kneeL.rotation.x = rig.kneeR.rotation.x = L(L(1.5, walking ? 0.15 : 0.05, s), 0.7, air);
-    rig.legL.position.y = rig.legR.position.y = L(0.8 - SIT_DROP, 0.8, s);
-    rig.body.position.y = L(-SIT_DROP + Math.sin(t * 1.3 + phase) * 0.006, walking ? Math.abs(swing) * 0.03 : 0, s);
-    rig.body.rotation.x = L(0.08 + Math.sin(t * 0.5 + phase) * 0.02, 0, s);
+    rig.kneeL.rotation.x = rig.kneeR.rotation.x = L(L(p.kneeSit, walking ? 0.15 : 0.05, s), 0.7, air);
+    rig.legL.rotation.z = -0.12 * (1 - s) * p.sleep;
+    rig.legR.rotation.z = 0.12 * (1 - s) * p.sleep;
+    rig.legL.position.y = rig.legR.position.y = L(0.8 - p.drop, 0.8, s);
+    rig.body.position.y = L(-p.drop + Math.sin(t * (p.sleep ? 0.9 : 1.3) + phase) * (p.sleep ? 0.012 : 0.006), walking ? Math.abs(swing) * 0.03 : 0, s);
+    rig.body.rotation.x = L(L(0.08 + Math.sin(t * 0.5 + phase) * 0.02, -0.12, p.sleep), 0, s);
+    rig.body.rotation.z = 0.1 * p.sleep * (1 - s);
+    // dozing: hands in the lap
+    const doze = p.sleep * (1 - s);
+    if (doze > 0) {
+      rig.armL.rotation.x = L(rig.armL.rotation.x, -0.55, doze);
+      rig.armR.rotation.x = L(rig.armR.rotation.x, -0.55, doze);
+      rig.armL.rotation.z = L(rig.armL.rotation.z, -0.1, doze);
+      rig.armR.rotation.z = L(rig.armR.rotation.z, 0.1, doze);
+      rig.elbowL.rotation.x = L(rig.elbowL.rotation.x, -1.0, doze);
+      rig.elbowR.rotation.x = L(rig.elbowR.rotation.x, -1.0, doze);
+    }
     rig.root.position.set(p.x, p.y, p.z);
     rig.root.rotation.y = p.yaw;
     if (rig.tail) rig.tail.rotation.y = Math.sin(t * (walking ? 9 : 3) + phase) * 0.45;
@@ -584,6 +609,7 @@ export class CreditsScene {
     for (const c of this.coders) this.pose(c, t);
     this.pose(this.kurt, t);
     this.tickEllie(dt, t);
+    this.blueprint.tick(dt);
     tickScreens(dt, this.screens);
   }
 }

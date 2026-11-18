@@ -3,6 +3,10 @@
 Isometric low-poly agency office game (Three.js + TypeScript + Vite).
 Current state: the real office (reconstructed from walkthrough photos, 41 x 15 m; R toggles the roof, `EXACT` in `officeModel.ts` switches between the exact standalone model and the scaled game version) with all team members and two dogs wandering around, sitting at desks and chatting.
 
+![The credits page: Marco and Janosch coding while the office builds up as a blueprint](docs/credits.gif)
+
+The scene is the `/credits` page. `node scripts/record-credits.mjs` (dev server running, ffmpeg installed) re-records the GIF.
+
 ## Run
 
 ```
@@ -32,6 +36,7 @@ CI runs build and Vitest on every push. The Playwright job costs Actions minutes
 
 - `src/game/rng.ts` – the one source of randomness: `random()` for the simulation (seedable, `?seed=<n>` in dev replays a start), `fxRandom()` for per-frame visuals, `seeded(n)` for fixed looks. Never use `Math.random()`
 
+- `src/ui/icons.ts` – the icon set (Phosphor, generated from `scripts/build-icons.mjs`): every icon of the UI by name. HTML: `<icon name="settings" size="24" class="…" />` (filled in by the Vite plugin), code: `icon('settings', 24)`. A new icon goes into the map in `scripts/build-icons.mjs`; no hand-drawn SVG paths elsewhere
 - `src/data/team.ts` – hand-annotated look per person (hair, glasses, beard, clothes) derived from the portraits
 - `src/render/characterBuilder.ts` – builds the low-poly character from a `Look`
 - `src/render/kurtBuilder.ts`, `src/game/AlterEgo.ts` – Kompensiertier Kurt, Marco's alter ego: a second skin on his rig and the rules for when he shows (going home, some home office spells, his monitor)

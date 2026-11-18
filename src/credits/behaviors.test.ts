@@ -12,9 +12,9 @@ describe('credits.page: who moves around', () => {
     expect(turned.yaw).toBeCloseTo(Math.PI / 2);
   });
 
-  it('credits.page: Kurt walks from his chair to the front edge of the desk, clear of his own desk legs', () => {
+  it('credits.page: Kurt walks from his chair to the right end of the desk, clear of his own desk legs', () => {
     expect(KURT_TO_EDGE.at(0)).toMatchObject({ x: 0, z: 0 });
-    expect(KURT_TO_EDGE.at(KURT_TO_EDGE.length)).toMatchObject({ x: 1, z: 2.5 });
+    expect(KURT_TO_EDGE.at(KURT_TO_EDGE.length)).toMatchObject({ x: 6.5, z: 2.5 });
     expect(KURT_TO_EDGE.points.every(([x]) => x < 0.7 || x > 0.9)).toBe(true);
   });
 
