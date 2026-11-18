@@ -221,6 +221,7 @@ export function registerSimEvents(sim: Sim): void {
           p.placeAt(ends.from[i]);
           p.sit = 0;
           p.walkTo(nav, ends.to[i]);
+          p.socialCooldown = Math.max(p.socialCooldown, 20); // they pass each other, no chat in the passage
         });
         sim.point(pair[0]);
         return `${firsts(pair, ' und ')} begegnen sich im Durchgang`;

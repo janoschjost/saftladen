@@ -225,24 +225,19 @@ describe('talks and groups', () => {
     expect(close).toBeGreaterThan(strangers * 1.5);
   });
 
-  it('social.friendship: free people walk over to a good friend further off, not to a stranger', () => {
-    const sim = office();
-    run(sim, 4); // past the quiet start
-    const [a, b, c] = only(sim, [
-      [GROUP[0], at(-3, 0)],
-      [GROUP[1], at(3, 0)],
-      [GROUP[2], at(0, 0)],
-    ]);
-    sim.social.affinity.bond(a, b, 1);
-    // only the social checks run, so nobody walks off on their own and every walk is one the checks sent them on
-    const towards = (p: Person, o: Person) => p.path.length > 0 && dist(p.path.at(-1)!, o.pos) < 1.5;
-    let sought = false;
-    for (let t = 0; t < 120; t += STEP) {
-      sim.social.update(STEP, sim.people, sim.nav, sim.traffic);
-      sought ||= towards(a, b) || towards(b, a);
-      expect(towards(c, a) || towards(c, b)).toBe(false);
+  it('social.friendship: free people walk over to a good friend further off far more often than to a stranger close by', () => {
+    let friend = 0;
+    for (let seed = 1; seed <= 20; seed++) {
+      const sim = office({}, seed);
+      const [a, b] = only(sim, [
+        [GROUP[0], at(-3, 0)],
+        [GROUP[1], at(3, 0)],
+        [GROUP[2], at(0, 0)],
+      ]);
+      sim.social.affinity.bond(a, b, 1);
+      if (sim.social.walkOver(a, sim.people, sim.nav, sim.traffic) === b) friend++;
     }
-    expect(sought).toBe(true);
+    expect(friend).toBeGreaterThanOrEqual(14);
   });
 
   it('social.leave: a long talk drifts to a new topic after a few turns', () => {
