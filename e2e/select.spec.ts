@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, openGame, read, scene, test } from './game';
+import { expect, openGame, read, scene, test, until } from './game';
 
 const WHO = 'oriana-pontieri'; // no pets: they would stand next to her
 
@@ -136,5 +136,39 @@ test('select.hover: a hand cursor over a person, the usual one beside', async ({
   await page.mouse.move(at.x + at.r + 80, at.y);
   await frame(page);
   expect(await cursor()).toBe('grab');
+  expect(errors).toEqual([]);
+});
+
+test('select.actions: the card stays for somebody on the way out, with only Folgen working', async ({ page }) => {
+  const errors = await openGame(page);
+  const at = await standAlone(page);
+  await page.mouse.click(at.x, at.y);
+  await expect(page.locator('#actions-out')).toBeEnabled();
+  await scene(page, (s, id) => s.release(id), WHO); // put pins her: nothing sends a pinned person out
+  await page.locator('#actions-out').click();
+  await until(page, (g, id) => g.sim.person(id).presence === 'leaving', WHO);
+  await expect(page.locator('#actions')).toBeVisible();
+  await expect(page.locator('#actions-name')).toHaveText(await read(page, (g, id) => g.sim.person(id).displayName, WHO));
+  await expect(page.locator('#actions-follow')).toBeEnabled();
+  for (const id of ['steer', 'home', 'out']) await expect(page.locator(`#actions-${id}`)).toBeDisabled();
+  expect(errors).toEqual([]);
+});
+
+test('select.actions: a dog gets the card too, with its name and only Folgen working', async ({ page }) => {
+  const errors = await openGame(page);
+  const dog = await read(page, (g) => {
+    const d = g.sim.people.flatMap((p) => p.pets).find((q) => q.comesToday && !q.away);
+    if (!d) return null;
+    const cam = g.views.camera;
+    const v = d.root.position.clone();
+    v.y += d.headHeight / 2;
+    v.project(cam);
+    return { name: d.name, x: ((v.x + 1) / 2) * innerWidth, y: ((1 - v.y) / 2) * innerHeight };
+  });
+  expect(dog).not.toBeNull();
+  await page.mouse.click(dog!.x, dog!.y);
+  await expect(page.locator('#actions-name')).toHaveText(dog!.name);
+  await expect(page.locator('#actions-follow')).toBeEnabled();
+  for (const id of ['steer', 'home', 'out']) await expect(page.locator(`#actions-${id}`)).toBeDisabled();
   expect(errors).toEqual([]);
 });
