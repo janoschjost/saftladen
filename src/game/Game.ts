@@ -454,7 +454,7 @@ export class Game {
         const start = this.groundAt(this.toNdc({ clientX: this.dragStart.x, clientY: this.dragStart.y }));
         if (!start) return;
         this.dragged = this.pressed;
-        this.dragged.held = true;
+        this.dragged.pickUp();
         this.dragOffset.set(this.dragged.pos.x - start.x, this.dragged.pos.z - start.z);
       }
       const g = this.groundAt(this.pointer);

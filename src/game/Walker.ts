@@ -580,6 +580,14 @@ export abstract class Walker {
     return true;
   }
 
+  /** Lifted by the user: the walk ends at once (no route, no step left to finish in the air) until `held` is cleared. */
+  pickUp(): void {
+    this.held = true;
+    this.halt(0.6);
+    this.moving = 0;
+    this.prevPhase = this.phase; // no leg swing interpolated towards the last step either
+  }
+
   /** Drops the route and stands, for `timer` seconds before deciding again. */
   private halt(timer: number): void {
     this.path = [];
