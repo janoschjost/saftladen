@@ -610,8 +610,8 @@ describe('pets', () => {
       expect(days.length, `${name} comes on some days`).toBeGreaterThan(0);
       expect(days.length, `${name} stays home on some days`).toBeLessThan(DAYS);
     }
-    // fixed weekdays: Ellie only on Tuesday and Thursday, every week
-    expect(seen.get('Ellie')).toEqual(Array.from({ length: DAYS / 7 }, () => [1, 3]).flat());
+    // fixed weekdays: Ellie only on Tuesday to Thursday, every week
+    expect(seen.get('Ellie')).toEqual(Array.from({ length: DAYS / 7 }, () => [1, 2, 3]).flat());
     // the cats come on a whim, on any weekday
     expect(new Set([...seen.get('Angus')!, ...seen.get('Binx')!]).size).toBeGreaterThan(3);
   });

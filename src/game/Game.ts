@@ -10,6 +10,7 @@ import { SIT_DROP } from '../render/officeBuilder';
 import { CLICK_SLOP, Views, type ViewMode } from '../render/Views';
 import { nearestHit, nearestOnScreen, type Column } from './pick';
 import { Bubbles } from '../render/Bubbles';
+import { GlassSort } from '../render/glassSort';
 import { DayHud } from '../ui/DayHud';
 import { DAY_STORIES } from '../data/dayStories';
 import { formatTime, type DayCtx, type DayTask } from './Day';
@@ -158,7 +159,8 @@ export class Game {
   /** reply bubble above the person the player talked to */
   private reply: { who: Person; text: string; t: number } | null = null;
   /** speech bubbles in the scene (read by the e2e tests: `__game.bubbles.state`) */
-  private bubbles = new Bubbles(this.scene);
+  private glassSort = new GlassSort(this.scene);
+  private bubbles = new Bubbles(this.scene, this.glassSort);
   private bubbleClock = 0;
   /** dev: how many times the son was called into the home office (`HomeOffice.callSon` takes it from here) */
   private sonCalls = 0;
@@ -2131,6 +2133,7 @@ export class Game {
       window.innerHeight,
       bubbleDt,
     );
+    this.glassSort.update(this.views.camera);
     this.rosterTimer -= 1 / 60;
     if (this.rosterTimer <= 0) {
       this.rosterTimer = 0.25;

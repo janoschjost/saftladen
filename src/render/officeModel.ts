@@ -7,6 +7,7 @@ import { box as boxGeo, cyl as cylGeo, merge as mergeGeos, propMaterial } from '
 import { tvMaterial } from './screens';
 import { planClutter, type DeskProp, type DeskPlantSpot } from './deskClutter';
 import { seeded } from '../game/rng';
+import { GLASS_ORDER, markGlass, markGlassSorted } from './glassSort';
 import { RoomItem, type ItemAnchor } from './roomItem';
 
 /**
@@ -319,8 +320,8 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     succLight: L(0xb9d6bf),
     flowerPink: L(0xe87a9c),
     flowerYellow: L(0xf2c43a),
-    glass: new THREE.MeshLambertMaterial({ color: 0xbfe0ea, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false }),
-    frosted: new THREE.MeshLambertMaterial({ color: 0xd3e3e3, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false }),
+    glass: markGlass(new THREE.MeshLambertMaterial({ color: 0xbfe0ea, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false })),
+    frosted: markGlass(new THREE.MeshLambertMaterial({ color: 0xd3e3e3, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false })),
     glassBlock: L(0x4a5356),
     fabric: L(0x77787a),
     cardboard: L(0xb89468),
@@ -1020,6 +1021,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
           const x = (a + b) / 2 - lx0;
           const y = Y0 + lh / 2;
           part.position.set(x, y, FLOAT); // door leaf is as thick as the wall (0.12), so its face is flush with the wall face
+          markGlassSorted(part);
           rig.pivot.add(part);
           rig.letters.push({ mesh: part, i: gl.i, x, y });
         }
@@ -1038,7 +1040,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(W, Hh), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 })); // polygon offset pulls it towards the camera: no z-fighting flicker with the wall
     m.position.set(ax(X0) + W / 2, Y0 + Hh / 2, az(CZ) + FLOAT); // flush on the wall face, same plane as the lettering on the door leaves
     m.userData.nonav = true;
-    m.renderOrder = 2; // after the transparent glass so the lettering is never cut by it
+    markGlassSorted(m); // drawn after the glass in front of it (clean), before the glass it is seen through (washed out)
     world.add(m);
   }
   // storage / craft room (room 3, from the photos): black rubber floor, long black work desk along the west wall,
@@ -2830,7 +2832,7 @@ function mergeStatic(root: THREE.Object3D, worldSpace: boolean): THREE.Group {
     const mesh = new THREE.Mesh(merged, material);
     mesh.castShadow = !material.transparent;
     mesh.receiveShadow = true;
-    if (material.transparent) mesh.renderOrder = 2;
+    if (material.transparent) mesh.renderOrder = GLASS_ORDER;
     out.add(mesh);
   }
   for (const l of loose) {

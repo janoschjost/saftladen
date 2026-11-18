@@ -187,8 +187,8 @@ const smooth = (v: number) => {
 };
 
 export class Person extends Walker {
-  /** walking speed (m/s) */
-  private pace = 1.0 + random() * 0.5;
+  /** walking speed (m/s): random 1.15-1.725 (1.0-1.5 plus 15%) */
+  private pace = (1.0 + random() * 0.5) * 1.15;
   /** running after somebody (see Boombox.ts): faster than walking */
   rush = false;
   get speed(): number {

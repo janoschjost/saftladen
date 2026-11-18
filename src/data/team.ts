@@ -77,10 +77,10 @@ const dogNames: Record<string, string> = {
 
 // which days the dogs come to the office (0 = Monday): fixed days, now and then they stay home anyway
 const dogVisits: Record<string, PetVisits> = {
-  'ramon-lenherr': { days: [0, 2, 4], chance: 0.9 },
-  'janosch-jost': { days: [1, 3] },
+  'ramon-lenherr': { days: [0], chance: 0.9 },
+  'janosch-jost': { days: [1, 2, 3] },
   'nina-vetsch': { days: [0, 1, 3], chance: 0.8 },
-  'fabian-bucher': { days: [2, 4], chance: 0.9 },
+  'fabian-bucher': { days: [4], chance: 0.9 },
 };
 
 // the cats come along on a whim (no fixed days)
@@ -94,7 +94,7 @@ const cats: Record<string, NonNullable<TeamMember['cats']>> = {
   ],
 };
 
-// walking speed overrides (default: random 1.0-1.5)
+// walking speed overrides (default: random 1.15-1.725)
 const speeds: Record<string, number> = {
   'sandro-hagen': 3.4,
   'delya-kohler': 1.8,

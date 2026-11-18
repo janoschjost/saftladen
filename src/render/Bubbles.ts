@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { GlassSort } from './glassSort';
 import { BUBBLE, bubbleWorldHeight, easeLift, popScale, stackBubbles, stepOpacity, type BubbleRect } from './bubbleLayout';
 
 /** One speaker this frame: the bubble `id`, its line and the world point on top of the speaker's head. */
@@ -58,7 +59,7 @@ export class Bubbles {
   private ink = '';
   private font = '';
 
-  constructor(private scene: THREE.Scene) {}
+  constructor(private scene: THREE.Scene, private glass?: GlassSort) {}
 
   /** Call once per rendered frame, after the walkers are posed. */
   update(specs: readonly BubbleSpec[], camera: THREE.Camera, width: number, height: number, dt: number): void {
@@ -148,6 +149,7 @@ export class Bubbles {
     const sprite = new THREE.Sprite(material);
     sprite.raycast = () => {}; // not pickable: clicks go to the people below
     sprite.visible = false;
+    this.glass?.track(sprite); // in front of glass: drawn after it, clean; behind glass: drawn before it, washed out by it
     this.scene.add(sprite);
     return { sprite, material, canvas, texture, text: '', res: 1, aspect: 1, opacity: 0, age: 0, lift: 0, head: new THREE.Vector3(), active: false };
   }

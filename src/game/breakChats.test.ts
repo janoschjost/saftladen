@@ -78,7 +78,7 @@ describe('social.start', () => {
   it('social.start: about 2–3 talks per 10 game minutes over seeds 1–10, and work still dominates', () => {
     const all = SEEDS.map(day);
     const mean = (pick: (d: Day) => number): number => all.reduce((t, d) => t + pick(d), 0) / all.length;
-    expect(mean((d) => d.talks)).toBeGreaterThanOrEqual(4);
+    expect(mean((d) => d.talks)).toBeGreaterThanOrEqual(3.5); // 4 before walkers got 15% faster (#235)
     expect(mean((d) => d.talks)).toBeLessThanOrEqual(6);
     // not a chatroom: nearly half the office is at (or on the way to) a desk, hardly anybody in a corridor talk
     expect(mean((d) => d.atDesk)).toBeGreaterThan(0.4);
