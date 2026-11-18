@@ -13,6 +13,7 @@ import { clawdScreenMaterial, screenMaterial, tickScreens, useScreen } from '../
 import { BlueprintOffice } from './BlueprintOffice';
 import { planTrip, type DogStep, type Vec2 } from './behaviors';
 import { ClawdRoutine, Path } from './clawdRoutine';
+import { codeSnippet, type TokenKind } from './clawdCode';
 
 /** Same bounds as the home office desks (metres): the desk top and the laptop hinge, in front of the chair. */
 const DESK_TOP = 0.74;
@@ -196,14 +197,14 @@ const KURT_AT = { x: -(DESK_W / 2 + DESK_W / 2 - 0.06), y: 0, z: 0.95 + 0.025 + 
 const CLAWD_AT = { x: 2.55, y: 0, z: 3.0, yaw: -Math.PI / 2, scale: 1.6 };
 /** his way from his desk round the blueprint's east and back side to the open floor in front of the big desk, where he talks */
 const CLAWD_PATH: Vec2[] = [[2.95, 3.0], [2.95, 2.45], [2.2, 2.1], [1.9, 1.75], [1.0, 1.75]];
-/** what Clawd says */
-const CODE_LINES = ['npm run build ✓', 'const office = build();', '// TODO: more coffee', 'git push origin main', '<Saftladen /> ✓', '427 tests passed ✓'];
-/** the middle of the play ring and where Ellie waits meanwhile */
-const PLAY_C = { x: 2.9, z: 1.85 };
+/** the colours of a bubble's code */
+const TOKEN_COLORS: Record<TokenKind, string> = { keyword: '#d97757', fn: '#e8c27a', string: '#9fd08a', number: '#8fc1e8', comment: '#7d7a72', punct: '#b8b2a6', name: '#f0e6d6' };
+/** the middle of the play ring, west of the blueprint, and where Ellie waits meanwhile */
+const PLAY_C = { x: -2.95, z: 2.75 };
 /** where the blueprint of the office is projected, in front of the desks */
 const HOLO = { x: 0, z: 3.1, scale: 0.085, lift: 0.1 };
 const PLAY_START = Math.PI; // he runs onto the ring at its camera-far side
-const DOG_WAIT: Vec2 = [3.7, 1.9];
+const DOG_WAIT: Vec2 = [-3.9, 2.2];
 
 type PlayPhase = 'work' | 'rise' | 'run' | 'chase' | 'orbit' | 'runBack' | 'sit';
 /** Kurt's game takes Ellie over: walk somewhere and watch, or be put exactly where the game says */
@@ -552,49 +553,55 @@ export class CreditsScene {
     }
     const pop = smooth(Math.min(1, b.u / 0.1)) * (1 - smooth(Math.max(0, (b.u - 0.88) / 0.12)));
     mat.opacity = pop;
-    this.bubble.scale.set(0.8 * (0.6 + 0.4 * pop), 0.3 * (0.6 + 0.4 * pop), 1);
-    this.bubble.position.set(st.x + 0.28, st.y + 0.75 + Math.sin(t * 3) * 0.01, st.z);
+    const img = mat.map!.image as HTMLCanvasElement;
+    const w = 1.45 * (0.6 + 0.4 * pop);
+    this.bubble.scale.set(w, (w * img.height) / img.width, 1);
+    this.bubble.position.set(st.x + 0.45, st.y + 0.95 + Math.sin(t * 3) * 0.01, st.z);
   }
 
-  /** A speech bubble with one line of code, in the terminal colours of the laptops (cached). */
+  /** A speech bubble with a few lines of nonsense code in the terminal colours of the laptops (cached per snippet). */
   private bubbleTexture(index: number): THREE.CanvasTexture {
-    const i = index % CODE_LINES.length;
-    let tex = this.bubbleTextures.get(i);
-    if (!tex) {
-      const c = document.createElement('canvas');
-      c.width = 320;
-      c.height = 120;
-      const g = c.getContext('2d')!;
-      g.fillStyle = '#1f1e1d';
-      g.strokeStyle = '#d97757';
-      g.lineWidth = 5;
-      g.beginPath();
-      g.roundRect(6, 6, 308, 80, 16);
-      g.fill();
-      g.stroke();
-      g.fillStyle = '#1f1e1d';
-      g.beginPath(); // the tail, towards Clawd's head
-      g.moveTo(40, 84);
-      g.lineTo(30, 116);
-      g.lineTo(72, 84);
-      g.fill();
-      g.strokeStyle = '#d97757';
-      g.beginPath();
-      g.moveTo(40, 86);
-      g.lineTo(30, 116);
-      g.lineTo(72, 86);
-      g.stroke();
-      g.fillStyle = '#d97757';
-      g.font = '700 26px "SF Mono", Menlo, Consolas, monospace';
-      g.textBaseline = 'middle';
-      g.fillText('>', 22, 47);
-      g.fillStyle = '#f0e6d6';
-      g.font = '600 24px "SF Mono", Menlo, Consolas, monospace';
-      g.fillText(CODE_LINES[i], 50, 47, 250);
-      tex = new THREE.CanvasTexture(c);
-      tex.colorSpace = THREE.SRGBColorSpace;
-      this.bubbleTextures.set(i, tex);
-    }
+    let tex = this.bubbleTextures.get(index);
+    if (tex) return tex;
+    const lines = codeSnippet(index);
+    const LH = 30;
+    const H = 24 + lines.length * LH;
+    const c = document.createElement('canvas');
+    c.width = 560;
+    c.height = H + 36;
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#1f1e1d';
+    g.strokeStyle = '#d97757';
+    g.lineWidth = 5;
+    g.beginPath();
+    g.roundRect(6, 6, 548, H, 16);
+    g.fill();
+    g.stroke();
+    g.fillStyle = '#1f1e1d';
+    g.beginPath(); // the tail, towards Clawd's head
+    g.moveTo(40, H + 2);
+    g.lineTo(28, H + 32);
+    g.lineTo(72, H + 2);
+    g.fill();
+    g.strokeStyle = '#d97757';
+    g.beginPath();
+    g.moveTo(40, H + 4);
+    g.lineTo(28, H + 32);
+    g.lineTo(72, H + 4);
+    g.stroke();
+    g.font = '600 22px "SF Mono", Menlo, Consolas, monospace';
+    g.textBaseline = 'middle';
+    lines.forEach((line, row) => {
+      let x = 22;
+      for (const tok of line) {
+        g.fillStyle = TOKEN_COLORS[tok.kind];
+        g.fillText(tok.text, x, 6 + 18 + row * LH + LH / 2 - 6);
+        x += g.measureText(tok.text).width;
+      }
+    });
+    tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    this.bubbleTextures.set(index, tex);
     return tex;
   }
 

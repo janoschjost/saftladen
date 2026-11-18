@@ -139,7 +139,7 @@ export interface ClawdDesk {
 export function buildClawdDesk(laptop: THREE.Object3D, scale: number): ClawdDesk {
   const group = new THREE.Group();
   group.scale.setScalar(scale);
-  const SEAT = 0.15;
+  const SEAT = 0.11;
   const TOP = 0.2;
   const LEGS = '#8b919c';
   const CX = 0; // Clawd sits in the middle, the laptop right in front of him, like Marco and Janosch
@@ -167,7 +167,7 @@ export function buildClawdDesk(laptop: THREE.Object3D, scale: number): ClawdDesk
 
   const seatYaw = 0;
   const rig = buildClawd(0.95 * scale);
-  const seat = new THREE.Vector3(CX, SEAT + 0.04, ZC);
+  const seat = new THREE.Vector3(CX, SEAT + 0.015, ZC);
 
   // Claude's sparks: stars that turn and drift round his head while he thinks, and bits that rise off the keys
   const fx = new THREE.Group();
