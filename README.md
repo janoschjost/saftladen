@@ -3,10 +3,6 @@
 Isometric low-poly agency office game (Three.js + TypeScript + Vite).
 Current state: the real office (reconstructed from walkthrough photos, 41 x 15 m; R toggles the roof, `EXACT` in `officeModel.ts` switches between the exact standalone model and the scaled game version) with all team members and two dogs wandering around, sitting at desks and chatting.
 
-![The credits page: Marco and Janosch coding while the office builds up as a blueprint](docs/credits.gif)
-
-The scene is the `/credits` page. `node scripts/record-credits.mjs` (dev server running, ffmpeg installed) re-records the GIF.
-
 ## Run
 
 ```
