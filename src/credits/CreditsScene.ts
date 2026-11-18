@@ -8,8 +8,10 @@ import { solveArm, type ArmPose } from '../render/homeOffice';
 import { box, cyl, merge, propMaterial } from '../render/geo';
 import { addKurt } from '../render/kurtBuilder';
 import { SIT_DROP } from '../render/officeBuilder';
-import { screenMaterial, tickScreens, useScreen } from '../render/screens';
+import { buildClawd, type ClawdRig } from '../render/clawdBuilder';
+import { clawdScreenMaterial, screenMaterial, tickScreens, useScreen } from '../render/screens';
 import { BlueprintOffice } from './BlueprintOffice';
+import { Clawd } from './clawd';
 import { KURT_TO_EDGE, planTrip, type DogStep, type Vec2 } from './behaviors';
 
 /** Same bounds as the home office desks (metres): the desk top and the laptop hinge, in front of the chair. */
@@ -81,7 +83,7 @@ function markMat(): THREE.MeshBasicMaterial {
 }
 
 /** 16" MacBook Pro in space black facing the person; the screen shows an editor. */
-function laptop(variant: number): { root: THREE.Object3D; screen: THREE.MeshBasicMaterial } {
+function laptop(variant: number, shows?: THREE.MeshBasicMaterial): { root: THREE.Object3D; screen: THREE.MeshBasicMaterial } {
   const root = new THREE.Group();
   const hinge = 0.73; // keyboard right under the typing hands (they hover at z 0.6)
   const W = 0.358;
@@ -105,7 +107,7 @@ function laptop(variant: number): { root: THREE.Object3D; screen: THREE.MeshBasi
   const mark = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.0807), markMat());
   mark.position.set(0, D / 2, 0.0065); // on the back of the lid, facing the room
   lid.add(mark);
-  const screen = screenMaterial('code', variant);
+  const screen = shows ?? screenMaterial('code', variant);
   const plane = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.024, D - 0.024), screen);
   plane.rotation.y = Math.PI; // faces the person (-z)
   plane.position.set(0, D / 2, -0.0012);
@@ -157,14 +159,14 @@ interface Workstation {
 }
 
 /** A chair, a desk, a laptop and somebody seated at it, hands on the keys. */
-function workstation(look: Look, o: { variant: number; extra: THREE.BufferGeometry[]; phase: number; alter?: boolean }): Workstation {
+function workstation(look: Look, o: { variant: number; extra: THREE.BufferGeometry[]; phase: number; alter?: boolean; shows?: THREE.MeshBasicMaterial }): Workstation {
   const group = new THREE.Group();
   const rig = buildCharacter(look);
   if (o.alter) {
     addKurt(rig);
     rig.setAlter!(true);
   }
-  const lap = laptop(o.variant);
+  const lap = laptop(o.variant, o.shows);
   group.add(chair('#23262d'), desk('#3a3f4b', '#8b919c', o.extra), lap.root, rig.root);
   rig.legL.rotation.x = rig.legR.rotation.x = -1.5;
   rig.kneeL.rotation.x = rig.kneeR.rotation.x = 1.5;
@@ -248,6 +250,8 @@ export class CreditsScene {
   private coders: Typing[] = [];
   private screens = new Set<THREE.Material>();
   private ellie: DogRig;
+  readonly clawd: Clawd;
+  private clawdRig: ClawdRig;
   private kurt: Typing;
   private pd: { phase: PlayPhase; t: number; wait: number; angle: number; at: Vec2 } = { phase: 'work', t: 0, wait: 6, angle: 0, at: [0, 0] };
   private dogOverride: DogOverride | null = null;
@@ -288,9 +292,9 @@ export class CreditsScene {
       scene.add(glow);
     }
 
-    const marco = workstation(member('marco-rieser').look, { variant: 1, extra: mug(-0.55, 0.65, '#ffffff'), phase: 0 });
+    const marco = workstation(member('marco-rieser').look, { variant: 1, extra: mug(-0.55, 0.65, '#ffffff'), phase: 0, shows: clawdScreenMaterial(true) });
     marco.group.position.x = -DESK_W / 2;
-    const janosch = workstation(member('janosch-jost').look, { variant: 0, extra: can(0.55, 0.65), phase: 1.7 });
+    const janosch = workstation(member('janosch-jost').look, { variant: 0, extra: can(0.55, 0.65), phase: 1.7, shows: clawdScreenMaterial(false) });
     janosch.group.position.x = DESK_W / 2;
 
     // Kurt: Marco's alter ego, a scaled copy of the whole workstation standing on the seam between the two desks
@@ -310,6 +314,13 @@ export class CreditsScene {
 
     this.blueprint = new BlueprintOffice(HOLO.scale, HOLO, HOLO.lift);
     scene.add(this.blueprint.root);
+    // Clawd builds along: he starts at the pad's front left corner and walks its rim, on the plate
+    const rim = 0.12;
+    const f = this.blueprint.footprint;
+    this.clawd = new Clawd({ x0: f.x0 + rim, z0: f.z0 + rim, x1: f.x1 - rim, z1: f.z1 - rim });
+    this.clawdRig = buildClawd();
+    scene.add(this.clawdRig.root);
+    this.tickClawd(0, 0);
     this.ellie.root.traverse((o) => ((o as THREE.Mesh).isMesh ? (o.castShadow = true) : undefined));
     scene.add(this.ellie.root);
   }
@@ -505,6 +516,51 @@ export class CreditsScene {
     void t;
   }
 
+  /** Clawd follows the build: he walks to what is appearing, pokes at it, hops when it is done and waits while it holds. */
+  private tickClawd(dt: number, t: number): void {
+    const { clawd, clawdRig: r, blueprint } = this;
+    clawd.step(dt, blueprint.phase, blueprint.level, blueprint.marks);
+    const at = clawd.place();
+    let hop = 0;
+    let lean = 0;
+    let wave = 0;
+    let swing = 0;
+    if (clawd.mode === 'walk') {
+      swing = Math.sin(t * 16);
+      hop = Math.abs(swing) * 0.015;
+    } else if (clawd.mode === 'build') {
+      // pokes at the new piece with both stubs, now one, now the other
+      wave = Math.sin(t * 9);
+      lean = 0.08 + 0.05 * Math.sin(t * 4.5);
+    } else if (clawd.mode === 'cheer') {
+      hop = Math.abs(Math.sin(t * 7)) * 0.12;
+      wave = 1;
+    } else {
+      hop = Math.max(0, Math.sin(t * 1.1)) * 0.004; // breathing
+    }
+    const spinning = clawd.spin > 0 ? 1 - clawd.spin / 0.9 : 0;
+    if (spinning) hop += Math.sin(spinning * Math.PI) * 0.12;
+    r.root.position.set(at.x, HOLO.lift + hop, at.z);
+    r.root.rotation.y = at.yaw + spinning * Math.PI * 2;
+    r.body.rotation.x = lean;
+    const up = clawd.mode === 'cheer' ? [2.4, 2.4] : [0.1 + 1.3 * Math.max(0, wave), 0.1 + 1.3 * Math.max(0, -wave)];
+    r.armL.rotation.z = -up[0];
+    r.armR.rotation.z = up[1];
+    r.legs.forEach((leg, i) => (leg.rotation.x = swing * 0.7 * (i === 0 || i === 3 ? 1 : -1)));
+    r.eyes.scale.y = Math.floor(t * 1000) % 3400 > 3200 ? 0.15 : 1; // blinks now and then
+  }
+
+  /** Whether a ray (from the camera through a tap) hits Clawd. */
+  hitsClawd(ray: THREE.Raycaster): boolean {
+    return ray.intersectObject(this.clawdRig.hit, false).length > 0;
+  }
+
+  /** Where Clawd is on screen, for the test hook. */
+  clawdScreen(camera: THREE.Camera, w: number, h: number): { x: number; y: number } {
+    const p = this.clawdRig.root.localToWorld(new THREE.Vector3(0, 0.22, 0)).project(camera);
+    return { x: ((p.x + 1) / 2) * w, y: ((1 - p.y) / 2) * h };
+  }
+
   /** Ellie follows her plan (rest, stroll, play or sniff, trot home) unless Kurt's game takes her over. */
   private tickEllie(dt: number, t: number): void {
     const e = this.ellie;
@@ -610,6 +666,7 @@ export class CreditsScene {
     this.pose(this.kurt, t);
     this.tickEllie(dt, t);
     this.blueprint.tick(dt);
+    this.tickClawd(dt, t);
     tickScreens(dt, this.screens);
   }
 }
