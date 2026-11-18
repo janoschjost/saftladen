@@ -8,7 +8,7 @@ import { box, merge, propMaterial } from './geo';
 const C = { orange: '#ff9a68', shade: '#e0764a', eye: '#1b1b22' };
 
 /** a little self-lit, so he stays orange in the dark credits room */
-const material = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: '#6b3418' });
+const material = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: '#8a4520' });
 
 export interface ClawdRig {
   root: THREE.Group;
