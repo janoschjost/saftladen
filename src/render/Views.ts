@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { icon, type IconName } from '../ui/icons';
+import { Popover } from '../ui/Popover';
 import { walkFree, type WalkColliders } from '../game/walkCollision';
-import { makeCollapsible } from '../ui/collapsible';
 import { blendShot, easeInOut, FLY_TIME, shotFrom, shotPosition, TRAIL, type Shot } from './cameraFly';
 import { IsoCamera } from './IsoCamera';
 import { ax, az } from './officeModel';
@@ -22,19 +23,19 @@ export interface ViewSnapshot {
   walk: { x: number; z: number; yaw: number; pitch: number };
 }
 
-/** Mouse gestures in the controls list (24px line icons, drawn with currentColor). */
-const ICONS = {
-  drag: '<path d="M12 3v18M3 12h18"/><path d="m9 6 3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/>',
-  rotate: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v4h-4"/>',
-  rightDrag: '<rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 3v7"/><path d="M12 3a6 6 0 0 1 6 6v1h-6z" fill="currentColor"/>',
-  wheel: '<rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 7v4"/>',
-  click: '<path d="m6 3 13 7-6 2-2 6z"/>',
-  person: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/>',
-  look: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
-} as const;
+/** Mouse gestures in the controls list, by icon name (`src/ui/icons.ts`). */
+const GESTURES = {
+  drag: 'drag',
+  rotate: 'rotate',
+  rightDrag: 'hand',
+  wheel: 'zoom',
+  click: 'pointer',
+  person: 'person',
+  look: 'eye',
+} as const satisfies Record<string, IconName>;
 
 /** One line of the controls list: a mouse gesture (icon, action, how to do it) or keyboard keys and the action. */
-type Hint = { icon: keyof typeof ICONS; text: string; how: string } | { keys: string[]; text: string };
+type Hint = { icon: keyof typeof GESTURES; text: string; how: string } | { keys: string[]; text: string };
 /** The list shows its lines in small titled groups. */
 type HintGroup = { title: string; items: Hint[] };
 
@@ -104,7 +105,7 @@ function hintItem(h: Hint): HTMLLIElement {
   const how = el('span', 'm-help__how');
   const label = el('span', 'm-help__label', h.text);
   if ('icon' in h) {
-    how.innerHTML = `<span class="m-help__chip"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[h.icon]}</svg></span>`;
+    how.innerHTML = `<span class="m-help__chip">${icon(GESTURES[h.icon], 16)}</span>`;
     label.append(el('small', 'm-help__gesture', h.how));
   } else {
     // alternatives (W / S) get a slash between the keys
@@ -216,8 +217,8 @@ export class Views {
 
     this.hint = document.getElementById('hint');
     const help = document.getElementById('help');
-    // one line of key hints; a click unfolds the full controls list of the current view
-    if (help) makeCollapsible(help, help.querySelector('.m-help__title') as HTMLElement, 'saftladen.hints.collapsed', undefined, true);
+    // the ? button next to the sun and gear opens the controls list of the current view
+    if (help) new Popover(help, document.getElementById('open-help') as HTMLButtonElement, { close: document.getElementById('help-close') });
     document.getElementById('walk-exit')?.addEventListener('click', () => this.setMode(DEFAULT_MODE));
     this.bind();
     // deep link: #orbit | #plan | #walk | #walk@x,z,yaw (game metres, radians)

@@ -5,13 +5,16 @@ import { expect, openGame, read, scene, test, until } from './game';
 test('hud.minimal + hud.modes: only title, gear, Aktionen and the key line; Rundgang has its own way back', async ({ page }) => {
   const errors = await openGame(page);
   await expect(page.locator('.m-hud-title')).toBeVisible();
+  // view.help: the controls list is behind the round ? button next to the sun and gear (bottom left)
+  await expect(page.locator('#help')).toBeHidden();
+  await page.locator('#open-help').click();
   await expect(page.locator('#help')).toBeVisible();
-  // status chips: top centre, black, level with the gear button
-  const chip = page.locator('.m-hud-title__chip').first();
-  await expect(chip).toBeVisible();
-  expect((await chip.boundingBox())!.y).toBe((await page.locator('#open-settings').boundingBox())!.y);
-  await expect(chip).toHaveCSS('background-color', 'rgb(0, 0, 0)');
-  for (const id of ['#open-env', '#open-settings', '#open-actions']) {
+  await page.locator('#open-help').click();
+  await expect(page.locator('#help')).toBeHidden();
+  // the old status chips are gone; the Aktionen pill is as tall as the Leute panel titles
+  await expect(page.locator('#hud-meta, .m-hud-title__chip')).toHaveCount(0);
+  expect((await page.locator('#open-actions').boundingBox())!.height).toBe((await page.locator('.m-feeds__title').boundingBox())!.height);
+  for (const id of ['#open-help', '#open-env', '#open-settings', '#open-actions']) {
     const box = await page.locator(id).boundingBox();
     expect(box!.height).toBeGreaterThanOrEqual(44);
   }
@@ -45,10 +48,10 @@ test.describe('hud.settings', () => {
     await gear.click();
     await expect(pop).toBeVisible();
     await expect(gear).toHaveAttribute('aria-expanded', 'true');
-    // under the gear
+    // above the gear
     const g = (await gear.boundingBox())!;
     const p = (await pop.boundingBox())!;
-    expect(p.y).toBeGreaterThan(g.y + g.height - 1);
+    expect(p.y + p.height).toBeLessThan(g.y + 1); // the popover opens above the gear (bottom left)
     await page.keyboard.press('Escape');
     await expect(pop).toBeHidden();
     await expect(gear).toHaveAttribute('aria-expanded', 'false');
@@ -81,7 +84,7 @@ test.describe('hud.settings', () => {
     await expect(pop).toBeHidden();
     const s = (await sun.boundingBox())!;
     const e = (await env.boundingBox())!;
-    expect(e.y).toBeGreaterThan(s.y + s.height - 1);
+    expect(e.y + e.height).toBeLessThan(s.y + 1); // above the sun button
     await env.locator('label:has(input[value="rain"])').click();
     expect(await read(page, (g) => g.sim.weather.mode)).toBe('rain');
     const slider = env.locator('#time-slider');

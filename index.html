@@ -265,7 +265,11 @@
     <header class="l-hud">
       <div class="m-hud-title">
         <h1 class="m-hud-title__name"><svg class="m-hud-title__mark" viewBox="0 0 31 25" width="31" height="25" fill="none" aria-hidden="true"><path class="m-hud-title__mark-two" d="M16.9799 13.9L19.5099 11.79C20.0099 11.39 20.4599 10.87 20.8299 10.26C21.1399 9.74005 21.2999 9.08005 21.2999 8.30005C21.2999 5.87005 19.6099 4.30005 16.9999 4.30005C14.2699 4.30005 12.4999 5.87005 12.4999 8.30005V8.76005L15.9999 9.04005V8.50005C15.9999 8.37005 16.0299 8.24005 16.0899 8.01005C16.1099 7.94005 16.1699 7.83005 16.2499 7.75005C16.2999 7.70005 16.4999 7.60005 16.6199 7.54005C16.7099 7.50005 16.8199 7.49005 17.0199 7.49005C17.1099 7.49005 17.1599 7.49005 17.2899 7.55005C17.5699 7.67005 17.6399 7.75005 17.6399 7.75005C17.7199 7.84005 17.7799 7.89005 17.8199 7.97005C17.8599 8.09005 17.8899 8.21005 17.8899 8.30005C17.8899 8.74005 17.4599 9.12005 16.9799 9.51005L12.1899 13.78V17.1H21.4899V13.9H16.9799Z"/><path fill="currentColor" d="M27.3 0H7C6 0 5 0.4 4.3 1.1C3.6 1.7 3.2 2.7 3.2 3.6V17.1L0 25L8.1 21.8H27.3C28.3 21.8 29.2 21.4 29.9 20.7C30.6 20 31 19.1 31 18.1V3.6C31 3.1 30.9 2.7 30.7 2.2C30.5 1.8 30.2 1.4 29.9 1C29.6 0.7 29.1 0.4 28.7 0.2C28.3 0.1 27.8 0 27.3 0ZM21.1 16.6H12.7V14L17.3 9.9C17.8 9.5 18.4 9 18.4 8.3C18.4 8.1 18.34 7.91 18.3 7.8C18.2 7.6 18.1 7.5 18 7.4C17.9 7.3 17.7 7.19 17.5 7.1C17.26 6.99 17.1 7 17 7C16.8 7 16.6 7 16.4 7.1C16.2 7.2 16 7.3 15.9 7.4C15.8 7.5 15.65 7.69 15.6 7.9C15.54 8.13 15.5 8.3 15.5 8.5L13 8.3C13 6 14.7 4.8 17 4.8C19.2 4.8 20.8 6 20.8 8.3C20.8 8.9 20.7 9.5 20.4 10C20.1 10.5 19.7 11 19.2 11.4L15.6 14.4H21V16.6H21.1Z"/></svg><span>Saftladen</span></h1>
-        <div class="m-clock" id="clock" role="group" aria-label="Uhr">
+        <div class="m-credits-link">
+          <a class="m-credits-link__button" href="credits/"><icon name="code" size="14" />by Marco &amp; Janosch</a>
+        </div>
+      </div>
+      <div class="m-clock" id="clock" role="group" aria-label="Uhr">
           <svg class="m-clock__dial" id="clock-dial" viewBox="-50 -50 100 100" role="slider" tabindex="0" aria-label="Uhrzeit (ziehen zum Springen)" aria-valuemin="0" aria-valuemax="1439" aria-valuenow="600" aria-valuetext="10:00">
             <circle class="m-clock__face" r="48" />
             <path class="m-clock__night" id="clock-night" d="" />
@@ -279,28 +283,23 @@
               <output class="m-clock__time" id="clock-time" for="clock-dial">10:00</output>
             </div>
             <div class="m-clock__speeds" role="group" aria-label="Tempo">
-              <button class="m-clock__speed" type="button" data-speed="0" aria-pressed="false" aria-label="Pause" title="Pause"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg></button>
+              <button class="m-clock__speed" type="button" data-speed="0" aria-pressed="false" aria-label="Pause" title="Pause"><icon name="pause" size="14" /></button>
               <button class="m-clock__speed" type="button" data-speed="1" aria-pressed="true">1×</button>
               <button class="m-clock__speed" type="button" data-speed="10" aria-pressed="false">10×</button>
               <button class="m-clock__speed" type="button" data-speed="25" aria-pressed="false">25×</button>
             </div>
           </div>
         </div>
-        <ul class="m-hud-title__meta" id="hud-meta" aria-live="off"></ul>
-      </div>
-      <div class="m-hud-tools">
-        <button class="m-gear" id="open-env" type="button" aria-label="Wetter und Tageszeit" aria-expanded="false" aria-controls="env"><svg class="m-gear__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg></button>
-        <button class="m-gear" id="open-settings" type="button" aria-label="Einstellungen" aria-expanded="false" aria-controls="settings"><svg class="m-gear__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
-      </div>
     </header>
-    <div class="m-credits-link">
-      <span class="m-credits-link__crew" aria-hidden="true"><img class="m-credits-link__figure" id="credits-marco" alt="" width="52" height="52" /><img class="m-credits-link__figure" id="credits-janosch" alt="" width="52" height="52" /></span>
-      <a class="m-credits-link__button" href="credits/"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M12 21.2 3.2 12.4a5.5 5.5 0 0 1 7.8-7.8l1 1 1-1a5.5 5.5 0 0 1 7.8 7.8z"/></svg>Credits</a>
+    <div class="m-hud-tools">
+        <button class="m-gear" id="open-help" type="button" aria-label="Steuerung" aria-expanded="false" aria-controls="help"><icon name="help" size="24" class="m-gear__icon" /></button>
+        <button class="m-gear" id="open-env" type="button" aria-label="Wetter und Tageszeit" aria-expanded="false" aria-controls="env"><icon name="day" size="24" class="m-gear__icon" /></button>
+        <button class="m-gear" id="open-settings" type="button" aria-label="Einstellungen" aria-expanded="false" aria-controls="settings"><icon name="settings" size="24" class="m-gear__icon" /></button>
     </div>
     <aside class="m-settings" id="settings" role="dialog" aria-labelledby="settings-title" hidden>
       <div class="m-settings__head">
         <h2 class="m-settings__title" id="settings-title">Einstellungen</h2>
-        <button class="m-settings__close" id="settings-close" type="button" aria-label="Einstellungen schliessen"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        <button class="m-settings__close" id="settings-close" type="button" aria-label="Einstellungen schliessen"><icon name="close" size="20" /></button>
       </div>
       <section class="m-settings__group" aria-labelledby="settings-view">
         <h3 class="m-settings__heading" id="settings-view">Ansicht</h3>
@@ -334,7 +333,7 @@
     <aside class="m-settings m-settings--env" id="env" role="dialog" aria-labelledby="env-title" hidden>
       <div class="m-settings__head">
         <h2 class="m-settings__title" id="env-title">Wetter und Tageszeit</h2>
-        <button class="m-settings__close" id="env-close" type="button" aria-label="Wetter und Tageszeit schliessen"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        <button class="m-settings__close" id="env-close" type="button" aria-label="Wetter und Tageszeit schliessen"><icon name="close" size="20" /></button>
       </div>
       <section class="m-settings__group" aria-labelledby="env-title">
         <div class="m-settings__field">
@@ -347,7 +346,7 @@
         </div>
         <div class="m-settings__field m-time" id="time" data-sky="day">
           <div class="m-settings__field-head">
-            <span class="m-time__label"><svg class="m-time__icon m-time__icon--day" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg><svg class="m-time__icon m-time__icon--night" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>Tageszeit</span>
+            <span class="m-time__label"><icon name="day" size="18" class="m-time__icon m-time__icon--day" /><icon name="night" size="18" class="m-time__icon m-time__icon--night" />Tageszeit</span>
             <output class="m-settings__clock m-time__clock" id="time-clock" for="time-slider">10:00</output>
           </div>
           <div class="m-time__bar">
@@ -373,7 +372,7 @@
       <p class="m-people-empty" id="people-empty">Alle sind im Büro.</p>
     </div>
     <aside class="m-dev" id="dev" aria-label="Dev-Events" hidden>
-      <h2 class="m-flyout__title">Dev-Events <span class="m-dev__hint">( ` )</span><button class="m-dev__close" id="dev-close" type="button" aria-label="Dev-Events schliessen"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></h2>
+      <h2 class="m-flyout__title">Dev-Events <span class="m-dev__hint">( ` )</span><button class="m-dev__close" id="dev-close" type="button" aria-label="Dev-Events schliessen"><icon name="close" size="20" /></button></h2>
       <div id="dev-people"></div>
       <div id="dev-body"></div>
       <p class="m-dev__status" id="dev-status" role="status"></p>
@@ -400,17 +399,15 @@
       <button class="m-button" id="actions-home" type="button"></button>
       <button class="m-button" id="actions-out" type="button"></button>
     </div>
-    <button class="m-action-button" id="open-actions" type="button" aria-expanded="false" aria-controls="action-sheet"><svg class="m-action-button__icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 3 5 14h6l-1 7 8-11h-6z"/></svg><span>Aktionen</span><kbd class="m-action-button__key">A</kbd></button>
+    <button class="m-action-button" id="open-actions" type="button" aria-expanded="false" aria-controls="action-sheet"><icon name="zap" size="22" class="m-action-button__icon" /><span>Aktionen</span><kbd class="m-action-button__key">A</kbd></button>
     <button class="m-walk-exit" id="walk-exit" type="button">Rundgang verlassen <kbd class="m-walk-exit__key">Esc</kbd></button>
     <section class="m-sheet" id="action-sheet" role="dialog" aria-labelledby="action-sheet-title" hidden>
       <div class="m-sheet__scrim" id="action-sheet-scrim"></div>
       <div class="m-sheet__panel">
-        <span class="m-sheet__grab" aria-hidden="true"></span>
         <header class="m-sheet__head">
           <h2 class="m-sheet__title" id="action-sheet-title">Aktionen</h2>
-          <span class="m-sheet__hint">Kamera fliegt hin · Taste <kbd class="m-sheet__key">1</kbd>–<kbd class="m-sheet__key">9</kbd></span>
           <input class="m-sheet__search" id="action-search" type="search" placeholder="Suchen …" aria-label="Aktionen suchen" autocomplete="off" />
-          <button class="m-sheet__close" id="action-sheet-close" type="button" aria-label="Aktionen schliessen"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+          <button class="m-sheet__close" id="action-sheet-close" type="button" aria-label="Aktionen schliessen"><icon name="close" size="20" /></button>
         </header>
         <div class="m-sheet__body">
           <ul class="m-sheet__cards" id="action-cards"></ul>
@@ -515,7 +512,7 @@
               <span class="m-picker__home-label">Homeoffice wählen</span>
               <span class="m-picker__home-wrap">
                 <select class="m-picker__home-select" id="picker-home"></select>
-                <svg class="m-picker__home-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                <icon name="chevron" size="16" class="m-picker__home-chevron" />
               </span>
             </label>
           </figure>
@@ -571,8 +568,12 @@
         <button class="m-button" id="day-result-exit" type="button">Beenden</button>
       </div>
     </section>
-    <aside class="m-help" id="help" aria-label="Steuerung">
-      <h2 class="m-help__title"><span class="m-help__line"><span><kbd class="m-help__key">A</kbd> Aktionen</span><span><kbd class="m-help__key">,</kbd> Einstellungen</span><span><kbd class="m-help__key">Esc</kbd> Zurück</span></span></h2>
+    <aside class="m-settings m-help" id="help" role="dialog" aria-labelledby="help-title" hidden>
+      <div class="m-settings__head">
+        <h2 class="m-settings__title" id="help-title">Steuerung</h2>
+        <button class="m-settings__close" id="help-close" type="button" aria-label="Steuerung schliessen"><icon name="close" size="20" /></button>
+      </div>
+      <p class="m-help__line"><span><kbd class="m-help__key">A</kbd> Aktionen</span><span><kbd class="m-help__key">,</kbd> Einstellungen</span><span><kbd class="m-help__key">Esc</kbd> Zurück</span></p>
       <ul class="m-help__list" id="hint"></ul>
     </aside>
     <script type="module" src="/src/main.ts"></script>

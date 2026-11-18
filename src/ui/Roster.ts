@@ -1,4 +1,5 @@
 import { awayStatus, strings, type AwayPhase } from '../i18n/strings';
+import { icon } from './icons';
 import { makeCollapsible } from './collapsible';
 
 /** On a phone the dock starts folded (an open feed grid would cover the office); a remembered state wins. */
@@ -78,7 +79,7 @@ export class Roster {
         back.className = 'm-away__back';
         back.title = t.panel.callBack;
         back.setAttribute('aria-label', t.panel.callBackName(e.name.split(' ')[0]));
-        back.innerHTML = '<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M10 6H2.5M5.5 3 2.5 6l3 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        back.innerHTML = icon('back', 12);
         back.addEventListener('click', () => this.onBack(e.id));
         li.append(el, back);
         this.list.appendChild(li);

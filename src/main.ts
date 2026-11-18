@@ -3,7 +3,6 @@ import { Game } from './game/Game';
 import { blindDrawer, screenDrawer, stillTime, wallTime } from './game/seams';
 import { applySeedParam } from './game/debugParams';
 import { CharacterPicker } from './ui/CharacterPicker';
-import { initCreditsLink } from './ui/CreditsLink';
 import { DayMenu } from './ui/DayMenu';
 import { Welcome } from './ui/Welcome';
 
@@ -33,7 +32,6 @@ try {
   if (dev) void import('./game/DevForce').then((m) => m.installForceState(game));
   new CharacterPicker();
   new DayMenu((id) => game.startDay(id));
-  initCreditsLink();
   new Welcome((held) => (game.paused = held));
 } finally {
   const fontsReady = document.fonts ? document.fonts.ready : Promise.resolve();

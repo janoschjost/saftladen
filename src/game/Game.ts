@@ -119,7 +119,6 @@ export class Game {
   private homes: Array<HomeOffice | null> = Array.from({ length: ROOM_COUNT }, () => null);
   private entrance!: { left: THREE.Object3D; right: THREE.Object3D };
   private doorOpen = { left: 0, right: 0 };
-  private metaTimer = 0;
   private rosterTimer = 0;
   private raycaster = new THREE.Raycaster();
   private pointer = new THREE.Vector2();
@@ -355,7 +354,6 @@ export class Game {
       if (p && p.inOffice) this.selected = this.followed = p;
     }
     window.addEventListener('pagehide', () => this.saveSession());
-    this.overlay.setMeta(`${this.sim.people.length} Personen, ${this.sim.walkers.length - this.sim.people.length} Tiere`);
     this.overlay.initLabels(this.sim.people.map((p) => ({ id: p.id, name: p.member.name })));
     this.seats.setOwners(this.seatOwners());
 
@@ -1238,9 +1236,8 @@ export class Game {
     this.endAction(false);
     if (this.views.mode !== 'orbit') this.views.setMode('orbit', true);
     this.followed = null; // the action directs the camera now
-    const name = lead ? lead.member.name.split(' ')[0] : '';
-    const text = pick.action?.caption ?? (typeof result === 'string' && result ? result : pick.label);
-    const caption = name && !text.includes(name) ? `${text} · ${name}` : text;
+    // only what is happening, never who
+    const caption = pick.action?.caption ?? pick.label;
     this.action = { def: pick.action, caption, lead, keys, owned: true, settled: false, age: 0, azimuth: this.views.orbitShot.azimuth };
     this.now.show(caption, true);
     this.aimCamera();
@@ -2132,31 +2129,6 @@ export class Game {
       window.innerHeight,
       bubbleDt,
     );
-    this.metaTimer -= 1 / 60;
-    if (this.metaTimer <= 0) {
-      this.metaTimer = 0.5;
-      const talking = this.sim.social.chattingCount;
-      const inMeeting = this.sim.meetingRoom.count;
-      const working = this.sim.people.filter((p) => p.working).length;
-      const absent = this.sim.presence.away;
-      const home = absent.filter((p) => p.awayKind === 'home').length;
-      const smoking = absent.filter((p) => p.onSmokeBreak).length;
-      const inside = this.sim.people.filter((p) => p.presence === 'in').length;
-      const pets = this.sim.walkers.filter((w) => w instanceof Dog && !w.away).length;
-      const meta = [strings.presence.count.inOffice(inside)];
-      if (this.sim.weather.rain > 0.3) meta.push('Regen');
-      if (this.sim.presence.lunch) meta.push('Mittagspause');
-      if (absent.length) {
-        if (absent.length - home - smoking > 0) meta.push(strings.presence.count.errand(absent.length - home - smoking));
-        if (home > 0) meta.push(strings.presence.count.home(home));
-        if (smoking > 0) meta.push(strings.presence.count.smoke(smoking));
-      }
-      if (pets > 0) meta.push(`${pets} Tiere`);
-      if (working) meta.push(`${working} arbeiten`);
-      if (talking) meta.push(`${talking} im Gespräch`);
-      if (inMeeting) meta.push(`${inMeeting} im Meeting`);
-      this.overlay.setMeta(meta);
-    }
     this.rosterTimer -= 1 / 60;
     if (this.rosterTimer <= 0) {
       this.rosterTimer = 0.25;

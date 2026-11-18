@@ -4,8 +4,6 @@ export class Overlay {
   private tipName = document.getElementById('tooltip-name') as HTMLElement;
   private tipRole = document.getElementById('tooltip-role') as HTMLElement;
   private labels = document.getElementById('labels') as HTMLElement;
-  private meta = document.getElementById('hud-meta') as HTMLElement;
-  private metaKey = '';
   private labelEls = new Map<string, HTMLElement>();
   private reticle = document.getElementById('reticle') as HTMLElement;
   private reticlePrompt = document.getElementById('reticle-prompt') as HTMLElement;
@@ -21,21 +19,6 @@ export class Overlay {
     this.reticlePrompt.hidden = !has;
     if (has && this.reticlePrompt.textContent !== prompt) this.reticlePrompt.textContent = prompt;
     this.reticle.classList.toggle('is-active', has);
-  }
-
-  setMeta(items: string | string[]): void {
-    const list = Array.isArray(items) ? items : [items];
-    const key = list.join('|');
-    if (key === this.metaKey) return;
-    this.metaKey = key;
-    this.meta.replaceChildren(
-      ...list.map((text) => {
-        const li = document.createElement('li');
-        li.className = 'm-hud-title__chip';
-        li.textContent = text;
-        return li;
-      }),
-    );
   }
 
   initLabels(items: Array<{ id: string; name: string }>): void {
