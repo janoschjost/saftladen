@@ -3,7 +3,7 @@ import { box, merge } from './geo';
 
 /**
  * Clawd, Claude's mascot (#232): a wide orange block with two stub arms, two tall dark eyes and four short legs, in
- * metres (about 0.24 m tall, front is +z). It is its own little voxel build, not a copy of anybody's logo.
+ * metres (about 0.33 m tall, front is +z). It is its own little voxel build, not a copy of anybody's logo.
  */
 const C = { orange: '#ff9a68', shade: '#e0764a', eye: '#1b1b22' };
 
@@ -68,6 +68,6 @@ export function buildClawd(): ClawdRig {
   const hit = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.5, 0.5), new THREE.MeshBasicMaterial({ visible: false }));
   hit.position.y = 0.22;
   root.add(body, hit);
-  root.scale.setScalar(0.8);
+  root.scale.setScalar(1.1);
   return { root, body, armL, armR, legs, eyes, hit };
 }

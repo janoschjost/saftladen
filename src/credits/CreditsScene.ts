@@ -252,6 +252,9 @@ export class CreditsScene {
   private ellie: DogRig;
   readonly clawd: Clawd;
   private clawdRig: ClawdRig;
+  /** the beam from Clawd to the piece he is building, and the flare where it lands */
+  private beam: THREE.Mesh;
+  private flare: THREE.Mesh;
   private kurt: Typing;
   private pd: { phase: PlayPhase; t: number; wait: number; angle: number; at: Vec2 } = { phase: 'work', t: 0, wait: 6, angle: 0, at: [0, 0] };
   private dogOverride: DogOverride | null = null;
@@ -314,12 +317,16 @@ export class CreditsScene {
 
     this.blueprint = new BlueprintOffice(HOLO.scale, HOLO, HOLO.lift);
     scene.add(this.blueprint.root);
-    // Clawd builds along: he starts at the pad's front left corner and walks its rim, on the plate
+    // Clawd builds along: he walks the back rim of the pad (on the plate) with the sweep, facing the room
     const rim = 0.12;
     const f = this.blueprint.footprint;
-    this.clawd = new Clawd({ x0: f.x0 + rim, z0: f.z0 + rim, x1: f.x1 - rim, z1: f.z1 - rim });
+    this.clawd = new Clawd({ x0: f.x0 + rim, x1: f.x1 - rim, z: f.z0 + rim });
     this.clawdRig = buildClawd();
     scene.add(this.clawdRig.root);
+    const glow = new THREE.MeshBasicMaterial({ color: '#ffb48a', transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending });
+    this.beam = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1, 6), glow);
+    this.flare = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), glow);
+    scene.add(this.beam, this.flare);
     this.tickClawd(0, 0);
     this.ellie.root.traverse((o) => ((o as THREE.Mesh).isMesh ? (o.castShadow = true) : undefined));
     scene.add(this.ellie.root);
@@ -548,6 +555,22 @@ export class CreditsScene {
     r.armR.rotation.z = up[1];
     r.legs.forEach((leg, i) => (leg.rotation.x = swing * 0.7 * (i === 0 || i === 3 ? 1 : -1)));
     r.eyes.scale.y = Math.floor(t * 1000) % 3400 > 3200 ? 0.15 : 1; // blinks now and then
+
+    // all the while the build runs (walking or standing), a beam runs from his stubs to the piece that is growing, with a flare where it lands
+    const aim = clawd.aim;
+    this.beam.visible = this.flare.visible = !!aim;
+    if (aim) {
+      const from = new THREE.Vector3(at.x, HOLO.lift + 0.2, at.z);
+      const to = new THREE.Vector3(aim.x, HOLO.lift + 0.12, aim.z);
+      const dir = to.clone().sub(from);
+      this.beam.position.copy(from).addScaledVector(dir, 0.5);
+      this.beam.scale.set(1, dir.length(), 1);
+      this.beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+      (this.beam.material as THREE.MeshBasicMaterial).opacity = 0.55 + 0.35 * Math.sin(t * 25);
+      this.flare.position.copy(to);
+      this.flare.rotation.set(t * 5, t * 7, 0);
+      this.flare.scale.setScalar(0.6 + 0.6 * Math.abs(Math.sin(t * 14)));
+    }
   }
 
   /** Whether a ray (from the camera through a tap) hits Clawd. */

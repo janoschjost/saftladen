@@ -129,19 +129,14 @@ function bake(): { faces: THREE.BufferGeometry; edges: THREE.BufferGeometry; mar
       all.push({ faces: part, edges: new THREE.EdgesGeometry(part, 25), kind: classify(b.getSize(new THREE.Vector3())), min: b.min.y, height: Math.max(0.05, b.max.y - b.min.y), at: b.getCenter(new THREE.Vector3()) });
     }
   });
-  // floors first, then the walls one after the other in a shuffled order, then the furniture room by room
-  const rank = (kind: Kind, key: (p: Piece) => number): Map<Piece, number> => {
-    const list = all.filter((p) => p.kind === kind).sort((a, b) => key(a) - key(b));
-    return new Map(list.map((p, i) => [p, i / Math.max(1, list.length)]));
-  };
-  const floors = rank('floor', (p) => hash(p.at.x, p.at.z));
-  const walls = rank('wall', (p) => hash(p.at.x + 1.7, p.at.z + 3.1));
-  const things = rank('thing', (p) => p.at.x / OFFICE_W + hash(p.at.x, p.at.z) * 0.15);
+  // floors first, then the build sweeps across the office from left to right: each wall, then the furniture behind it
+  const floors = all.filter((p) => p.kind === 'floor').sort((a, b) => hash(a.at.x, a.at.z) - hash(b.at.x, b.at.z));
   const marks: BuildMark[] = [];
   for (const p of all) {
-    const order = p.kind === 'floor' ? 0.06 * floors.get(p)! : p.kind === 'wall' ? 0.08 + 0.42 * walls.get(p)! : 0.52 + 0.46 * things.get(p)!;
+    const sweep = Math.min(1, Math.max(0, p.at.x / OFFICE_W));
+    const order = p.kind === 'floor' ? (0.06 * floors.indexOf(p)) / Math.max(1, floors.length) : 0.07 + 0.86 * sweep + (p.kind === 'thing' ? 0.05 : 0) + hash(p.at.x, p.at.z) * 0.01;
     stamp(p.faces, p, order, p.kind === 'floor' ? 0.04 : p.kind === 'wall' ? 0.03 : 0.05);
-    marks.push({ order, x: p.at.x, z: p.at.z });
+    if (p.kind !== 'floor') marks.push({ order, x: p.at.x, z: p.at.z });
     for (const attr of ['aOrder', 'aDur', 'aPiece', 'aMode']) p.edges.setAttribute(attr, p.faces.getAttribute(attr).count === p.edges.attributes.position.count ? p.faces.getAttribute(attr).clone() : expand(p.faces.getAttribute(attr), p.edges.attributes.position.count));
   }
   marks.sort((a, b) => a.order - b.order);
@@ -155,8 +150,8 @@ function expand(a: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, cou
   return new THREE.BufferAttribute(out, a.itemSize);
 }
 
-/** Seconds of one cycle: the pad lights up, piece after piece appears, it holds, it dissolves again. */
-const CYCLE = { pad: 1.2, build: 16, hold: 6, melt: 2.5, rest: 1 };
+/** Seconds of one cycle: the pad lights up, the build sweeps across the office, it holds, it dissolves again. */
+const CYCLE = { pad: 1.5, build: 36, hold: 8, melt: 3, rest: 1.5 };
 /** the last piece (furniture) takes this share of the build to grow, on top of 1 */
 const RISE = 0.05;
 
