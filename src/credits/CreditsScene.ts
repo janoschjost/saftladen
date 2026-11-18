@@ -197,6 +197,8 @@ const KURT_AT = { x: -(DESK_W / 2 + DESK_W / 2 - 0.06), y: 0, z: 0.95 + 0.025 + 
 const CLAWD_AT = { x: 2.55, y: 0, z: 3.0, yaw: -Math.PI / 2, scale: 1.6 };
 /** his way from his desk round the blueprint's east and back side to the open floor in front of the big desk, where he talks */
 const CLAWD_PATH: Vec2[] = [[2.95, 3.0], [2.95, 2.45], [2.2, 2.1], [1.9, 1.75], [1.0, 1.75]];
+/** how many different bubbles there are: the textures are made once and reused */
+const BUBBLE_POOL = 12;
 /** the colours of a bubble's code */
 const TOKEN_COLORS: Record<TokenKind, string> = { keyword: '#d97757', fn: '#e8c27a', string: '#9fd08a', number: '#8fc1e8', comment: '#7d7a72', punct: '#b8b2a6', name: '#f0e6d6' };
 /** the middle of the play ring, west of the blueprint, and where Ellie waits meanwhile */
@@ -561,6 +563,7 @@ export class CreditsScene {
 
   /** A speech bubble with a few lines of nonsense code in the terminal colours of the laptops (cached per snippet). */
   private bubbleTexture(index: number): THREE.CanvasTexture {
+    index %= BUBBLE_POOL;
     let tex = this.bubbleTextures.get(index);
     if (tex) return tex;
     const lines = codeSnippet(index);
@@ -632,11 +635,14 @@ export class CreditsScene {
     let hop = 0;
     let targetYaw = d.yaw;
     let turnRate = 5;
-    const trot = (to: Vec2, speed: number): number => {
+    const trot = (goal: Vec2, speed: number): number => {
+      // behind the desks (z < 1.25) she steps out beside them first, so a long way along them never cuts through legs
+      const behind = (z: number): boolean => z < 1.25;
+      const to: Vec2 = behind(d.z) && !behind(goal[1]) ? [d.x, 1.5] : !behind(d.z) && behind(goal[1]) ? [goal[0], 1.5] : goal;
       const dx = to[0] - d.x;
       const dz = to[1] - d.z;
       const dist = Math.hypot(dx, dz);
-      if (dist < 0.08) return dist;
+      if (dist < 0.08) return to === goal ? dist : 1;
       targetYaw = Math.atan2(dx, dz);
       // turn first, then trot
       if (Math.abs(Math.atan2(Math.sin(targetYaw - d.yaw), Math.cos(targetYaw - d.yaw))) < 0.5) {
@@ -646,7 +652,7 @@ export class CreditsScene {
         d.gait += dt * 10;
         moving = true;
       }
-      return dist;
+      return to === goal ? dist : Math.hypot(goal[0] - d.x, goal[1] - d.z);
     };
     if (ov?.kind === 'free') {
       d.x = ov.x;
