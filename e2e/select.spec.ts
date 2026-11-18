@@ -74,7 +74,7 @@ test('select.click + drag.person: a short press selects without lifting the pers
   expect(errors).toEqual([]);
 });
 
-test('drag.person: a move past the threshold lifts and drags, and is no click', async ({ page }) => {
+test('drag.person: a move past the threshold lifts, drags and selects, and is no click', async ({ page }) => {
   const errors = await openGame(page);
   const at = await standAlone(page);
   const before = await state(page);
@@ -85,10 +85,12 @@ test('drag.person: a move past the threshold lifts and drags, and is no click', 
   await frame(page);
   const held = await state(page);
   expect(held.held).toBe(true);
+  expect(held.selected).toBe(WHO); // carrying somebody selects them
   expect(held.lift).toBeGreaterThan(0);
   expect(Math.hypot(held.x - before.x, held.z - before.z)).toBeGreaterThan(0.3);
   await page.mouse.up();
-  expect(await state(page)).toMatchObject({ selected: null, held: false });
+  expect(await state(page)).toMatchObject({ selected: WHO, held: false }); // no click on top: still just selected
+  await expect(page.locator('#actions-follow')).toBeVisible();
   expect(errors).toEqual([]);
 });
 

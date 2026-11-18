@@ -2074,13 +2074,6 @@
         }
     }
 
-    @keyframes actions-in {
-        from {
-            opacity: 0;
-            transform: translate(-50%, 1.5rem);
-        }
-    }
-
     @keyframes now-in {
         from {
             opacity: 0;
@@ -2837,19 +2830,9 @@
         background: var(--color-ink);
         box-shadow: var(--shadow-card);
         color: white;
-        animation: actions-in 0.25s ease-out;
 
         &[hidden] {
             display: none;
-        }
-
-        /* another person selected while the card is up: it comes in again */
-        &.is-new {
-            animation: none;
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            animation: none;
         }
 
         &__name {

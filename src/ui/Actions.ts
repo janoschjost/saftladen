@@ -23,13 +23,20 @@ export class Actions {
 
   /** `name` null hides the card. */
   show(name: string | null, homeFull: boolean, steering = false, following = false): void {
+    const wasHidden = this.root.hidden;
     this.root.hidden = !name;
     if (!name) return;
-    if (this.name.textContent !== name) {
-      // a new person: the card slides in again (shown from hidden, the animation runs by itself)
-      this.root.classList.add('is-new');
-      void this.root.offsetWidth;
-      this.root.classList.remove('is-new');
+    if (wasHidden || this.name.textContent !== name) {
+      // shown, or another person selected: the card slides in (a finished animation leaves nothing behind)
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        this.root.animate(
+          [
+            { opacity: 0, transform: 'translate(-50%, 1.5rem)' },
+            { opacity: 1, transform: 'translate(-50%, 0)' },
+          ],
+          { duration: 250, easing: 'ease-out' },
+        );
+      }
       this.name.textContent = name;
     }
     this.follow.setAttribute('aria-pressed', String(following));

@@ -455,6 +455,9 @@ export class Game {
         if (!start) return;
         this.dragged = this.pressed;
         this.dragged.pickUp();
+        // carrying somebody selects them; the camera keeps following only if it already followed this one
+        if (this.followed !== this.dragged) this.followed = null;
+        this.selected = this.dragged;
         this.dragOffset.set(this.dragged.pos.x - start.x, this.dragged.pos.z - start.z);
       }
       const g = this.groundAt(this.pointer);
@@ -1416,7 +1419,7 @@ export class Game {
     w.root.rotation.y = w.prevYaw + dy * alpha;
 
     const ph = THREE.MathUtils.lerp(w.prevPhase, w.phase, alpha);
-    const dangle = Math.sin(this.clock / 0.11) * 0.35 * (w.lift / 0.45);
+    const dangle = Math.sin(this.clock / 0.25) * 0.14 * (w.lift / 0.45); // a slow sway of the hanging limbs, nothing like a walk cycle
     const swing = Math.sin(ph) * 0.42 * w.moving + dangle;
     const bob = 0; // hip height now follows the planted foot (see the leg block below)
     const breathe = Math.sin(this.clock / 0.6 + w.phase) * 0.008 * (1 - w.moving);
