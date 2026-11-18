@@ -87,10 +87,10 @@ export interface ClawdDesk {
  */
 export function buildClawdDesk(laptop: THREE.Object3D): ClawdDesk {
   const group = new THREE.Group();
-  const SEAT = 0.1;
+  const SEAT = 0.11;
   const TOP = 0.2;
   const LEGS = '#8b919c';
-  const ZC = -0.03; // Clawd's depth: he sits just behind the desk, facing the room like Marco and Janosch
+  const ZC = -0.09; // Clawd's depth: he sits just behind the desk, facing the room like Marco and Janosch
   const ZD = 0.15; // the desk's
 
   const stool = [box(0.2, 0.02, 0.18, 0, SEAT - 0.01, ZC, '#23262d'), box(0.2, 0.12, 0.016, 0, SEAT + 0.06, ZC - 0.09, '#23262d')]; // seat and back rest
@@ -98,15 +98,14 @@ export function buildClawdDesk(laptop: THREE.Object3D): ClawdDesk {
 
   const desk = [box(0.46, 0.014, 0.24, 0, TOP - 0.007, ZD, '#3a3f4b')];
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) desk.push(box(0.016, TOP - 0.014, 0.016, sx * 0.2, (TOP - 0.014) / 2, ZD + sz * 0.1, LEGS));
-  const mug = [box(0.032, 0.04, 0.032, -0.17, TOP + 0.02, ZD + 0.05, '#ffffff'), box(0.012, 0.022, 0.008, -0.145, TOP + 0.022, ZD + 0.05, '#ffffff')];
-  for (const parts of [stool, desk, mug]) {
+  for (const parts of [stool, desk]) {
     const m = new THREE.Mesh(merge(parts), propMaterial);
     m.castShadow = true;
     group.add(m);
   }
 
   // the same laptop as Marco's and Janosch's, smaller; it comes in desk coordinates (the desk top at 0.74, the hinge at 0.73)
-  const K = 0.3;
+  const K = 0.42;
   laptop.scale.setScalar(K);
   laptop.position.set(0, TOP - 0.74 * K, ZD + 0.05 - 0.73 * K);
   group.add(laptop);
