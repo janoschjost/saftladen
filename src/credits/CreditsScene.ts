@@ -8,10 +8,11 @@ import { solveArm, type ArmPose } from '../render/homeOffice';
 import { box, cyl, merge, propMaterial } from '../render/geo';
 import { addKurt } from '../render/kurtBuilder';
 import { SIT_DROP } from '../render/officeBuilder';
-import { buildClawdDesk, type ClawdDesk } from '../render/clawdBuilder';
+import { buildClawdDesk, poseClawd, type ClawdDesk } from '../render/clawdBuilder';
 import { clawdScreenMaterial, screenMaterial, tickScreens, useScreen } from '../render/screens';
 import { BlueprintOffice } from './BlueprintOffice';
 import { planTrip, type DogStep, type Vec2 } from './behaviors';
+import { ClawdRoutine, Path } from './clawdRoutine';
 
 /** Same bounds as the home office desks (metres): the desk top and the laptop hinge, in front of the chair. */
 const DESK_TOP = 0.74;
@@ -191,8 +192,12 @@ const HOME_YAW = -0.5;
 
 /** where Kurt sleeps (world metres): on the floor in front of the big desk's front left leg, his back against it */
 const KURT_AT = { x: -(DESK_W / 2 + DESK_W / 2 - 0.06), y: 0, z: 0.95 + 0.025 + 0.2 * MINI };
-/** where Clawd's little workstation stands: on the big desk, on the seam between the two desks */
-const CLAWD_AT = { x: 0, y: DESK_TOP, z: 0.5, scale: 1.2 };
+/** where Clawd's little workstation stands: on the floor, east of the blueprint, facing it */
+const CLAWD_AT = { x: 2.55, y: 0, z: 3.0, yaw: -Math.PI / 2, scale: 1.6 };
+/** his way from his desk round the blueprint's east and back side to the open floor in front of the big desk, where he talks */
+const CLAWD_PATH: Vec2[] = [[2.95, 3.0], [2.95, 2.45], [2.2, 2.1], [1.9, 1.75], [1.0, 1.75]];
+/** what Clawd says */
+const CODE_LINES = ['npm run build ✓', 'const office = build();', '// TODO: more coffee', 'git push origin main', '<Saftladen /> ✓', '427 tests passed ✓'];
 /** the middle of the play ring and where Ellie waits meanwhile */
 const PLAY_C = { x: 2.9, z: 1.85 };
 /** where the blueprint of the office is projected, in front of the desks */
@@ -249,7 +254,7 @@ function zTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-/** Marco and Janosch coding side by side, Clawd at his own little desk on the big desk, Ellie at their feet and a miniature Kurt asleep against the desk's front leg, in an endless room. */
+/** Marco and Janosch coding side by side, Clawd at his own little desk east of the blueprint, Ellie at their feet and a miniature Kurt asleep against the desk's front leg, in an endless room. */
 export class CreditsScene {
   readonly scene = new THREE.Scene();
   /** the point the camera looks at */
@@ -261,6 +266,10 @@ export class CreditsScene {
   private ellie: DogRig;
   private kurt: Typing;
   private clawd: ClawdDesk;
+  private clawdRoutine: ClawdRoutine;
+  /** what Clawd says: one code bubble over his head at a time */
+  private bubble: THREE.Sprite;
+  private bubbleTextures = new Map<number, THREE.CanvasTexture>();
   /** the "z" that float up from the sleeping Kurt */
   private zees: THREE.Sprite[] = [];
   private pd: { phase: PlayPhase; t: number; wait: number; angle: number; at: Vec2 } = { phase: 'work', t: 0, wait: 16, angle: 0, at: [0, 0] };
@@ -309,11 +318,23 @@ export class CreditsScene {
 
     // Clawd works on the desk, between the two of them, on his own little workstation
     const clawdScreen = clawdScreenMaterial(false);
-    this.clawd = buildClawdDesk(laptop(0, clawdScreen).root);
+    this.clawd = buildClawdDesk(laptop(0, clawdScreen).root, CLAWD_AT.scale);
     this.clawd.group.position.set(CLAWD_AT.x, CLAWD_AT.y, CLAWD_AT.z);
-    this.clawd.group.scale.setScalar(CLAWD_AT.scale);
+    this.clawd.group.rotation.y = CLAWD_AT.yaw; // his desk faces the blueprint
     useScreen(clawdScreen, 1);
-    scene.add(this.clawd.group);
+    scene.add(this.clawd.group, this.clawd.rig.root);
+    this.clawd.group.updateMatrixWorld(true);
+    const seat = this.clawd.group.localToWorld(this.clawd.seat.clone());
+    this.clawdRoutine = new ClawdRoutine({
+      seat: { x: seat.x, y: seat.y, z: seat.z, yaw: this.clawd.seatYaw + CLAWD_AT.yaw },
+      path: new Path(CLAWD_PATH),
+      talkYaw: 0,
+    });
+    this.bubble = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, depthTest: false }));
+    this.bubble.visible = false;
+    this.bubble.renderOrder = 10;
+    scene.add(this.bubble);
+    this.clawd.rig.root.traverse((o) => ((o as THREE.Mesh).isMesh ? (o.castShadow = true) : undefined));
 
     // Kurt, Marco's alter ego, a scaled copy of a person: asleep on the floor, his back against the desk's front left leg
     const kurtRig = buildCharacter(member('marco-rieser').look);
@@ -512,6 +533,71 @@ export class CreditsScene {
     this.tickZees(t, k.sleep * (1 - k.stand));
   }
 
+  /** Clawd works, now and then walks round the blueprint to tell a few code bubbles, and goes back to his laptop. */
+  private tickClawd(dt: number, t: number): void {
+    const st = this.clawdRoutine.step(dt);
+    const { rig } = this.clawd;
+    rig.root.position.set(st.x, st.y, st.z);
+    rig.root.rotation.y = st.yaw;
+    poseClawd(rig, st.look, t, { moving: st.moving, air: st.air });
+    this.clawd.tickFx(t, st.look === 'sit' && st.phase === 'work');
+    const b = st.bubble;
+    this.bubble.visible = !!b;
+    if (!b) return;
+    const tex = this.bubbleTexture(b.index);
+    const mat = this.bubble.material as THREE.SpriteMaterial;
+    if (mat.map !== tex) {
+      mat.map = tex;
+      mat.needsUpdate = true;
+    }
+    const pop = smooth(Math.min(1, b.u / 0.1)) * (1 - smooth(Math.max(0, (b.u - 0.88) / 0.12)));
+    mat.opacity = pop;
+    this.bubble.scale.set(0.8 * (0.6 + 0.4 * pop), 0.3 * (0.6 + 0.4 * pop), 1);
+    this.bubble.position.set(st.x + 0.28, st.y + 0.75 + Math.sin(t * 3) * 0.01, st.z);
+  }
+
+  /** A speech bubble with one line of code, in the terminal colours of the laptops (cached). */
+  private bubbleTexture(index: number): THREE.CanvasTexture {
+    const i = index % CODE_LINES.length;
+    let tex = this.bubbleTextures.get(i);
+    if (!tex) {
+      const c = document.createElement('canvas');
+      c.width = 320;
+      c.height = 120;
+      const g = c.getContext('2d')!;
+      g.fillStyle = '#1f1e1d';
+      g.strokeStyle = '#d97757';
+      g.lineWidth = 5;
+      g.beginPath();
+      g.roundRect(6, 6, 308, 80, 16);
+      g.fill();
+      g.stroke();
+      g.fillStyle = '#1f1e1d';
+      g.beginPath(); // the tail, towards Clawd's head
+      g.moveTo(40, 84);
+      g.lineTo(30, 116);
+      g.lineTo(72, 84);
+      g.fill();
+      g.strokeStyle = '#d97757';
+      g.beginPath();
+      g.moveTo(40, 86);
+      g.lineTo(30, 116);
+      g.lineTo(72, 86);
+      g.stroke();
+      g.fillStyle = '#d97757';
+      g.font = '700 26px "SF Mono", Menlo, Consolas, monospace';
+      g.textBaseline = 'middle';
+      g.fillText('>', 22, 47);
+      g.fillStyle = '#f0e6d6';
+      g.font = '600 24px "SF Mono", Menlo, Consolas, monospace';
+      g.fillText(CODE_LINES[i], 50, 47, 250);
+      tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      this.bubbleTextures.set(i, tex);
+    }
+    return tex;
+  }
+
   /** "z z z" float up from Kurt's head while he sleeps. */
   private tickZees(t: number, amount: number): void {
     this.zees.forEach((z, i) => {
@@ -624,7 +710,7 @@ export class CreditsScene {
     this.clock += dt;
     const t = this.clock;
     this.tickKurt(dt, t);
-    this.clawd.tick(t);
+    this.tickClawd(dt, t);
     for (const c of this.coders) this.pose(c, t);
     this.pose(this.kurt, t);
     this.tickEllie(dt, t);
