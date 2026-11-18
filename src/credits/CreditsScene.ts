@@ -8,16 +8,18 @@ import { solveArm, type ArmPose } from '../render/homeOffice';
 import { box, cyl, merge, propMaterial } from '../render/geo';
 import { addKurt } from '../render/kurtBuilder';
 import { SIT_DROP } from '../render/officeBuilder';
-import { screenMaterial, tickScreens, useScreen } from '../render/screens';
+import { buildClawdDesk, poseClawd, type ClawdDesk } from '../render/clawdBuilder';
+import { clawdScreenMaterial, screenMaterial, tickScreens, useScreen } from '../render/screens';
 import { BlueprintOffice } from './BlueprintOffice';
-import { KURT_TO_EDGE, planTrip, type DogStep, type Vec2 } from './behaviors';
+import { planTrip, type DogStep, type Vec2 } from './behaviors';
+import { ClawdRoutine, Path } from './clawdRoutine';
 
 /** Same bounds as the home office desks (metres): the desk top and the laptop hinge, in front of the chair. */
 const DESK_TOP = 0.74;
 const DESK_W = 1.7;
 const BG = '#0d0f13';
-/** Kurt is a miniature: his whole workstation (chair, desk, laptop) is a scaled copy of the big one. */
-const MINI = 0.23;
+/** Kurt is a miniature, a scaled copy of a person: about as big as Ellie. */
+const MINI = 0.34;
 
 const member = (id: string) => {
   const m = team.find((p) => p.id === id);
@@ -81,7 +83,7 @@ function markMat(): THREE.MeshBasicMaterial {
 }
 
 /** 16" MacBook Pro in space black facing the person; the screen shows an editor. */
-function laptop(variant: number): { root: THREE.Object3D; screen: THREE.MeshBasicMaterial } {
+function laptop(variant: number, shows?: THREE.MeshBasicMaterial): { root: THREE.Object3D; screen: THREE.MeshBasicMaterial } {
   const root = new THREE.Group();
   const hinge = 0.73; // keyboard right under the typing hands (they hover at z 0.6)
   const W = 0.358;
@@ -105,7 +107,7 @@ function laptop(variant: number): { root: THREE.Object3D; screen: THREE.MeshBasi
   const mark = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.0807), markMat());
   mark.position.set(0, D / 2, 0.0065); // on the back of the lid, facing the room
   lid.add(mark);
-  const screen = screenMaterial('code', variant);
+  const screen = shows ?? screenMaterial('code', variant);
   const plane = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.024, D - 0.024), screen);
   plane.rotation.y = Math.PI; // faces the person (-z)
   plane.position.set(0, D / 2, -0.0012);
@@ -157,14 +159,10 @@ interface Workstation {
 }
 
 /** A chair, a desk, a laptop and somebody seated at it, hands on the keys. */
-function workstation(look: Look, o: { variant: number; extra: THREE.BufferGeometry[]; phase: number; alter?: boolean }): Workstation {
+function workstation(look: Look, o: { variant: number; extra: THREE.BufferGeometry[]; phase: number; shows: THREE.MeshBasicMaterial }): Workstation {
   const group = new THREE.Group();
   const rig = buildCharacter(look);
-  if (o.alter) {
-    addKurt(rig);
-    rig.setAlter!(true);
-  }
-  const lap = laptop(o.variant);
+  const lap = laptop(o.variant, o.shows);
   group.add(chair('#23262d'), desk('#3a3f4b', '#8b919c', o.extra), lap.root, rig.root);
   rig.legL.rotation.x = rig.legR.rotation.x = -1.5;
   rig.kneeL.rotation.x = rig.kneeR.rotation.x = 1.5;
@@ -192,19 +190,20 @@ function floorTexture(): THREE.CanvasTexture {
 const HOME = { x: DESK_W / 2 + 0.7, z: 0.6 };
 const HOME_YAW = -0.5;
 
-/** where Kurt's workstation stands on the big desk (world metres) */
-const KURT_AT = { x: 0, y: DESK_TOP, z: 0.4 };
-/** the edge of the big desk (its right end) he jumps from and where he lands */
-const EDGE = { x: 1.5, z: 0.97 };
-const LAND = { x: 1.5, z: 1.4 };
-/** the middle of the play ring and where Ellie waits meanwhile */
-const PLAY_C = { x: 2.9, z: 1.85 };
+/** where Kurt sleeps (world metres): on the floor in front of the big desk's front left leg, his back against it */
+const KURT_AT = { x: -(DESK_W / 2 + DESK_W / 2 - 0.06), y: 0, z: 0.95 + 0.025 + 0.2 * MINI };
+/** where Clawd's little workstation stands: on the floor, east of the blueprint, facing it */
+const CLAWD_AT = { x: 2.55, y: 0, z: 3.0, yaw: -Math.PI / 2, scale: 1.6 };
+/** his way from his desk round the blueprint's east and back side to the open floor in front of the big desk, where he talks */
+const CLAWD_PATH: Vec2[] = [[2.95, 3.0], [2.95, 2.45], [2.2, 2.1], [1.9, 1.75], [1.0, 1.75]];
+/** the middle of the play ring, west of the blueprint, and where Ellie waits meanwhile */
+const PLAY_C = { x: -2.95, z: 2.75 };
 /** where the blueprint of the office is projected, in front of the desks */
 const HOLO = { x: 0, z: 3.1, scale: 0.085, lift: 0.1 };
 const PLAY_START = Math.PI; // he runs onto the ring at its camera-far side
-const DOG_WAIT: Vec2 = [3.7, 1.9];
+const DOG_WAIT: Vec2 = [PLAY_C.x + Math.sin(PLAY_START - 1.5) * 0.55, PLAY_C.z + Math.cos(PLAY_START - 1.5) * 0.55];
 
-type PlayPhase = 'work' | 'rise' | 'toEdge' | 'jump' | 'run' | 'chase' | 'orbit' | 'runBack' | 'leap' | 'toChair' | 'sit';
+type PlayPhase = 'work' | 'rise' | 'run' | 'chase' | 'orbit' | 'runBack' | 'sit';
 /** Kurt's game takes Ellie over: walk somewhere and watch, or be put exactly where the game says */
 type DogOverride = { kind: 'go'; to: Vec2 } | { kind: 'free'; x: number; z: number; yaw: number; moving: boolean; bow: boolean };
 
@@ -238,7 +237,22 @@ function gridFloor(): THREE.Mesh {
 
 const smooth = (t: number) => t * t * (3 - 2 * t);
 
-/** Marco and Janosch coding side by side, Ellie at their feet and a miniature Kurt on the desk, in an endless room. */
+/** A white "z" on a clear background (for the sprites over the sleeping Kurt). */
+function zTexture(): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#e6ecff';
+  g.font = '700 52px "Avenir Next", "Helvetica Neue", Arial, sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText('z', 32, 34);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/** Marco and Janosch coding side by side, Clawd at his own little desk east of the blueprint, Ellie at their feet and a miniature Kurt asleep against the desk's front leg, in an endless room. */
 export class CreditsScene {
   readonly scene = new THREE.Scene();
   /** the point the camera looks at */
@@ -249,7 +263,11 @@ export class CreditsScene {
   private screens = new Set<THREE.Material>();
   private ellie: DogRig;
   private kurt: Typing;
-  private pd: { phase: PlayPhase; t: number; wait: number; angle: number; at: Vec2 } = { phase: 'work', t: 0, wait: 6, angle: 0, at: [0, 0] };
+  private clawd: ClawdDesk;
+  private clawdRoutine: ClawdRoutine;
+  /** the "z" that float up from the sleeping Kurt */
+  private zees: THREE.Sprite[] = [];
+  private pd: { phase: PlayPhase; t: number; wait: number; angle: number; at: Vec2 } = { phase: 'work', t: 0, wait: 16, angle: 0, at: [0, 0] };
   private dogOverride: DogOverride | null = null;
   private dogPlan: DogStep[] = [];
   private dog = { x: HOME.x, z: HOME.z, yaw: HOME_YAW, lie: 1, stepT: 0, gait: 0, bow: 0, sniff: 0 };
@@ -288,22 +306,50 @@ export class CreditsScene {
       scene.add(glow);
     }
 
-    const marco = workstation(member('marco-rieser').look, { variant: 1, extra: mug(-0.55, 0.65, '#ffffff'), phase: 0 });
+    const marco = workstation(member('marco-rieser').look, { variant: 1, extra: mug(-0.55, 0.65, '#ffffff'), phase: 0, shows: clawdScreenMaterial(true) });
     marco.group.position.x = -DESK_W / 2;
-    const janosch = workstation(member('janosch-jost').look, { variant: 0, extra: can(0.55, 0.65), phase: 1.7 });
+    const janosch = workstation(member('janosch-jost').look, { variant: 0, extra: can(0.55, 0.65), phase: 1.7, shows: clawdScreenMaterial(false) });
     janosch.group.position.x = DESK_W / 2;
 
-    // Kurt: Marco's alter ego, a scaled copy of the whole workstation standing on the seam between the two desks
-    const kurt = workstation(member('marco-rieser').look, { variant: 1, extra: [], phase: 3.1, alter: true });
-    kurt.group.scale.setScalar(MINI);
-    kurt.group.position.set(KURT_AT.x, KURT_AT.y, KURT_AT.z);
+    // Clawd works on the desk, between the two of them, on his own little workstation
+    const clawdScreen = clawdScreenMaterial(false);
+    this.clawd = buildClawdDesk(laptop(0, clawdScreen).root, CLAWD_AT.scale);
+    this.clawd.group.position.set(CLAWD_AT.x, CLAWD_AT.y, CLAWD_AT.z);
+    this.clawd.group.rotation.y = CLAWD_AT.yaw; // his desk faces the blueprint
+    useScreen(clawdScreen, 1);
+    scene.add(this.clawd.group, this.clawd.rig.root);
+    this.clawd.group.updateMatrixWorld(true);
+    const seat = this.clawd.group.localToWorld(this.clawd.seat.clone());
+    this.clawdRoutine = new ClawdRoutine({
+      seat: { x: seat.x, y: seat.y, z: seat.z, yaw: this.clawd.seatYaw + CLAWD_AT.yaw },
+      path: new Path(CLAWD_PATH),
+      stopYaw: 0,
+    });
+    this.clawd.rig.root.traverse((o) => ((o as THREE.Mesh).isMesh ? (o.castShadow = true) : undefined));
 
-    for (const w of [marco, janosch, kurt]) {
+    // Kurt, Marco's alter ego, a scaled copy of a person: asleep on the floor, his back against the desk's front left leg
+    const kurtRig = buildCharacter(member('marco-rieser').look);
+    addKurt(kurtRig);
+    kurtRig.setAlter!(true);
+    const kurtGroup = new THREE.Group();
+    kurtGroup.add(kurtRig.root);
+    kurtGroup.scale.setScalar(MINI);
+    kurtGroup.position.set(KURT_AT.x, KURT_AT.y, KURT_AT.z);
+    scene.add(kurtGroup);
+    this.kurt = { rig: kurtRig, ...typingPoses(kurtRig), phase: 3.1, stand: 0, x: 0, z: 0, yaw: 0, gait: 0, y: 0, air: 0, moving: false, drop: 0.7, kneeSit: 0.15, sleep: 1 };
+    const zTex = zTexture();
+    for (let i = 0; i < 3; i++) {
+      const z = new THREE.Sprite(new THREE.SpriteMaterial({ map: zTex, transparent: true, depthWrite: false }));
+      kurtGroup.add(z);
+      this.zees.push(z);
+    }
+
+    for (const w of [marco, janosch]) {
       scene.add(w.group);
       this.screens.add(w.screen);
     }
+    this.screens.add(clawdScreen);
     this.coders = [marco.typing, janosch.typing];
-    this.kurt = kurt.typing;
 
     this.ellie = buildDog('puppy');
     this.dogPlan = planTrip([HOME.x, HOME.z]);
@@ -354,7 +400,7 @@ export class CreditsScene {
     if (rig.tail) rig.tail.rotation.y = Math.sin(t * (walking ? 9 : 3) + phase) * 0.45;
   }
 
-  /** Puts Kurt at a world position (he lives in his scaled workstation, the origin is his chair on the big desk). */
+  /** Puts Kurt at a world position (his rig is scaled; its origin is where he sleeps, on the floor). */
   private kurtAt(x: number, y: number, z: number, yaw: number): void {
     const k = this.kurt;
     k.x = (x - KURT_AT.x) / MINI;
@@ -373,14 +419,13 @@ export class CreditsScene {
   }
 
   /**
-   * Now and then Kurt gets up, walks to the front edge of the desk, jumps down and plays chase with Ellie on the
-   * floor, then runs back, leaps up onto the desk and goes back to work.
+   * Kurt sleeps against the desk's front left leg. Now and then he wakes, stretches up, runs to the open floor and plays
+   * chase with Ellie, then runs back, turns round and drops off again.
    */
   private tickKurt(dt: number, t: number): void {
     const k = this.kurt;
     const pd = this.pd;
     pd.t += dt;
-    const WALK = 1.1;
     const toward = (from: { x: number; z: number }, to: Vec2, speed: number): boolean => {
       const dx = to[0] - from.x;
       const dz = to[1] - from.z;
@@ -393,38 +438,27 @@ export class CreditsScene {
     k.air = 0;
     switch (pd.phase) {
       case 'work':
+        k.sleep = 1;
         if (pd.t >= pd.wait) this.goPlay('rise');
         break;
       case 'rise': {
-        const u = smooth(Math.min(1, pd.t / 0.6));
+        // wakes, sits up, gets to his feet
+        const u = smooth(Math.min(1, pd.t / 1.2));
         k.stand = u;
-        k.yaw = KURT_TO_EDGE.at(0.3).yaw * u;
-        if (pd.t >= 0.6) {
-          this.goPlay('toEdge');
+        k.sleep = 1 - u;
+        if (pd.t >= 1.2) {
+          this.goPlay('run');
           this.dogOverride = { kind: 'go', to: DOG_WAIT };
           this.dogPlan = [];
         }
         break;
       }
-      case 'toEdge': {
-        const at = KURT_TO_EDGE.at(pd.t * WALK);
-        k.moving = true;
-        k.gait += dt * 8;
-        Object.assign(k, { x: at.x, z: at.z, y: 0, yaw: at.yaw });
-        if (pd.t * WALK >= KURT_TO_EDGE.length) this.goPlay('jump');
-        break;
-      }
-      case 'jump': {
-        const u = Math.min(1, pd.t / 0.7);
-        this.kurtAt(EDGE.x + (LAND.x - EDGE.x) * u, DESK_TOP * (1 - u * u) + 0.2 * Math.sin(Math.PI * u), EDGE.z + (LAND.z - EDGE.z) * u, 0);
-        k.air = Math.sin(Math.PI * u);
-        if (u >= 1) this.goPlay('run');
-        break;
-      }
       case 'run': {
+        // Kurt runs to the ring and waits there until Ellie has trotted up behind him, so the chase starts where she is
         const here = this.kurtWorld();
-        k.moving = true;
-        if (toward(here, [PLAY_C.x + Math.sin(PLAY_START) * 0.4, PLAY_C.z + Math.cos(PLAY_START) * 0.4], 1.5)) {
+        const arrived = toward(here, [PLAY_C.x + Math.sin(PLAY_START) * 0.4, PLAY_C.z + Math.cos(PLAY_START) * 0.4], 1.5);
+        k.moving = !arrived;
+        if (arrived && Math.hypot(this.dog.x - DOG_WAIT[0], this.dog.z - DOG_WAIT[1]) < 0.15) {
           pd.angle = PLAY_START;
           this.goPlay('chase');
         }
@@ -463,46 +497,54 @@ export class CreditsScene {
       case 'runBack': {
         const here = this.kurtWorld();
         k.moving = true;
-        this.dogOverride = { kind: 'go', to: [LAND.x + 0.8, LAND.z + 0.6] };
-        if (toward(here, [LAND.x, LAND.z], 1.7)) this.goPlay('leap');
-        break;
-      }
-      case 'leap': {
-        const u = Math.min(1, pd.t / 0.8);
-        this.kurtAt(LAND.x + (EDGE.x - LAND.x) * u, DESK_TOP * (1 - (1 - u) * (1 - u)) + 0.3 * Math.sin(Math.PI * u), LAND.z + (EDGE.z - LAND.z) * u, Math.PI);
-        k.air = Math.sin(Math.PI * u);
-        if (u >= 1) {
+        this.dogOverride = { kind: 'go', to: [KURT_AT.x + 1, KURT_AT.z + 0.7] };
+        if (toward(here, [KURT_AT.x, KURT_AT.z], 1.7)) {
           this.dogOverride = null;
           this.dogPlan = [{ kind: 'walk', to: [HOME.x, HOME.z] }, ...planTrip([HOME.x, HOME.z])];
           this.dog.stepT = 0;
-          this.goPlay('toChair');
+          pd.angle = k.yaw;
+          this.goPlay('sit');
         }
         break;
       }
-      case 'toChair': {
-        const d = KURT_TO_EDGE.length - pd.t * WALK;
-        const at = KURT_TO_EDGE.at(Math.max(0, d));
-        k.moving = true;
-        k.gait += dt * 8;
-        Object.assign(k, { x: at.x, z: at.z, y: 0, yaw: at.yaw + Math.PI });
-        if (d <= 0) this.goPlay('sit');
-        break;
-      }
       case 'sit': {
-        const u = smooth(Math.min(1, pd.t / 0.8));
+        // turns his back to the leg, sits down and nods off
+        const u = smooth(Math.min(1, pd.t / 1.4));
         k.stand = 1 - u;
-        k.yaw = Math.PI * (1 - u);
+        k.sleep = u;
+        k.yaw = pd.angle * (1 - u);
         k.moving = false;
-        if (pd.t >= 0.8) {
-          Object.assign(k, { stand: 0, x: 0, y: 0, z: 0, yaw: 0, moving: false });
-          pd.wait = 10 + fxRandom() * 8;
+        if (pd.t >= 1.4) {
+          Object.assign(k, { stand: 0, x: 0, y: 0, z: 0, yaw: 0, moving: false, sleep: 1 });
+          pd.wait = 14 + fxRandom() * 10;
           this.goPlay('work');
         }
         break;
       }
     }
     if (pd.phase === 'work' || pd.phase === 'rise' || pd.phase === 'sit') k.moving = false;
-    void t;
+    this.tickZees(t, k.sleep * (1 - k.stand));
+  }
+
+  /** Clawd works, now and then walks round the blueprint to the open floor, stops there to look about, and goes back to his laptop. */
+  private tickClawd(dt: number, t: number): void {
+    const st = this.clawdRoutine.step(dt);
+    const { rig } = this.clawd;
+    rig.root.position.set(st.x, st.y, st.z);
+    rig.root.rotation.y = st.yaw;
+    poseClawd(rig, st.look, t, { moving: st.moving, air: st.air });
+    this.clawd.tickFx(t, st.look === 'sit' && st.phase === 'work');
+  }
+
+  /** "z z z" float up from Kurt's head while he sleeps. */
+  private tickZees(t: number, amount: number): void {
+    this.zees.forEach((z, i) => {
+      const u = ((t * 0.35 + i / this.zees.length) % 1);
+      z.visible = amount > 0.5;
+      z.position.set((0.45 + u * 0.6) * 0.9, 2.3 + u * 1.3, 0.4);
+      z.scale.setScalar((0.35 + u * 0.45) * 1.3);
+      (z.material as THREE.SpriteMaterial).opacity = Math.sin(u * Math.PI) * 0.9;
+    });
   }
 
   /** Ellie follows her plan (rest, stroll, play or sniff, trot home) unless Kurt's game takes her over. */
@@ -521,11 +563,14 @@ export class CreditsScene {
     let hop = 0;
     let targetYaw = d.yaw;
     let turnRate = 5;
-    const trot = (to: Vec2, speed: number): number => {
+    const trot = (goal: Vec2, speed: number): number => {
+      // behind the desks (z < 1.25) she steps out beside them first, so a long way along them never cuts through legs
+      const behind = (z: number): boolean => z < 1.25;
+      const to: Vec2 = behind(d.z) && !behind(goal[1]) ? [d.x, 1.5] : !behind(d.z) && behind(goal[1]) ? [goal[0], 1.5] : goal;
       const dx = to[0] - d.x;
       const dz = to[1] - d.z;
       const dist = Math.hypot(dx, dz);
-      if (dist < 0.08) return dist;
+      if (dist < 0.08) return to === goal ? dist : 1;
       targetYaw = Math.atan2(dx, dz);
       // turn first, then trot
       if (Math.abs(Math.atan2(Math.sin(targetYaw - d.yaw), Math.cos(targetYaw - d.yaw))) < 0.5) {
@@ -535,7 +580,7 @@ export class CreditsScene {
         d.gait += dt * 10;
         moving = true;
       }
-      return dist;
+      return to === goal ? dist : Math.hypot(goal[0] - d.x, goal[1] - d.z);
     };
     if (ov?.kind === 'free') {
       d.x = ov.x;
@@ -606,6 +651,7 @@ export class CreditsScene {
     this.clock += dt;
     const t = this.clock;
     this.tickKurt(dt, t);
+    this.tickClawd(dt, t);
     for (const c of this.coders) this.pose(c, t);
     this.pose(this.kurt, t);
     this.tickEllie(dt, t);

@@ -362,7 +362,7 @@ const SETS: Record<ScreenKind, Draw[]> = { code, design, data, sheet, docs, medi
 /** One shared texture per kind + picture: the still picture, plus the canvas the GPU texture shows. */
 interface Entry {
   /** what it shows: a role's work, or Kurt (#32) */
-  kind: ScreenKind | 'kurt';
+  kind: ScreenKind | 'kurt' | 'clawd';
   mat: THREE.MeshBasicMaterial;
   tex: THREE.CanvasTexture;
   live: HTMLCanvasElement;
@@ -437,6 +437,58 @@ export function tickScreens(dt: number, typing: ReadonlySet<THREE.Material>): vo
   }
 }
 
+const CLAWD = '#d97757';
+
+/** Clawd's pixels on a screen, 4 px to the unit: the body, stub arms and four legs (eyes are drawn on top, so they can blink). */
+function clawdSprite(c: Ctx, ox: number, oy: number, armUp = 0): void {
+  rect(c, CLAWD, ox + 8, oy, 48, 28);
+  rect(c, CLAWD, ox, oy + 8 - armUp, 8, 8);
+  rect(c, CLAWD, ox + 56, oy + 8, 8, 8);
+  for (const x of [12, 20, 40, 48]) rect(c, CLAWD, ox + x, oy + 28, 4, 8);
+}
+
+const CLAWD_AT = { x: 14, y: 16 };
+
+/**
+ * A laptop showing Claude Code (#232): a terminal with Clawd in the corner, a few lines of work and a prompt.
+ * `light` is the light terminal (Marco), otherwise the dark one (Janosch).
+ */
+export function clawdScreenMaterial(light: boolean): THREE.MeshBasicMaterial {
+  const key = `clawd:${light ? 'light' : 'dark'}`;
+  let e = cache.get(key);
+  if (!e) {
+    const bg = light ? '#faf9f5' : '#1f1e1d';
+    const ink = light ? '#3d3929' : '#d6d3c9';
+    const dim = light ? '#b7b2a0' : '#6b6860';
+    const base = mk();
+    const c = base.getContext('2d')!;
+    rect(c, bg, 0, 0, W, H);
+    // the welcome box: Clawd on the left, who he is on the right
+    c.strokeStyle = CLAWD;
+    c.lineWidth = 1;
+    c.strokeRect(5.5, 7.5, W - 11, 50);
+    clawdSprite(c, CLAWD_AT.x, CLAWD_AT.y);
+    rect(c, ink, 96, 16, 56, 4);
+    rect(c, dim, 96, 26, 74, 3);
+    rect(c, dim, 96, 34, 62, 3);
+    rect(c, dim, 96, 42, 70, 3);
+    // the session: what was asked, what was done
+    for (const [y, w, mark] of [[66, 96, CLAWD], [76, 120, dim], [84, 84, dim], [92, 108, dim]] as const) {
+      rect(c, mark, 8, y, 4, 4);
+      rect(c, mark === CLAWD ? ink : dim, 16, y, w, 3);
+    }
+    const live = mk();
+    live.getContext('2d')!.drawImage(base, 0, 0);
+    const tex = new THREE.CanvasTexture(live);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.MeshBasicMaterial({ map: tex });
+    e = { kind: 'clawd', variant: light ? 1 : 0, mat, tex, live, base, uses: 0, t: light ? 0 : 1.7, seed: 0 };
+    cache.set(key, e);
+    byMat.set(mat, e);
+  }
+  return e.mat;
+}
+
 const LOOP_FPS = 8; // frames per second of a pre-rendered loop (Kurt waving)
 const HEAD = 10; // title / toolbar strip that stays put while the content moves
 
@@ -450,6 +502,23 @@ function paint(c: Ctx, e: Entry): void {
     return;
   }
   switch (e.kind) {
+    case 'clawd': {
+      // eyes (shut for a moment every few seconds), the arm waves now and then, a spinner and a cursor on the prompt
+      const light = e.variant === 1;
+      const { x, y } = CLAWD_AT;
+      const blink = (e.t % 3.4) > 3.2;
+      const wave = (e.t % 7) > 6.2 && Math.floor(e.t * 4) % 2 === 0;
+      if (wave) {
+        rect(c, light ? '#faf9f5' : '#1f1e1d', x, y + 8, 8, 8);
+        rect(c, CLAWD, x, y, 8, 8);
+      }
+      if (blink) for (const ex of [20, 40]) rect(c, '#1b1b22', x + ex, y + 14, 4, 2);
+      else for (const ex of [20, 40]) rect(c, '#1b1b22', x + ex, y + 8, 4, 8);
+      const k = Math.floor(e.t * 4) % 4;
+      rect(c, CLAWD, 8 + (k % 2) * 4, 104 + Math.floor(k / 2) * 4, 3, 3); // a little spinner: one of four dots lit
+      if (Math.floor(e.t * 2) % 2 === 0) rect(c, light ? '#3d3929' : '#d6d3c9', 20, 105, 4, 6);
+      break;
+    }
     case 'code':
     case 'docs': {
       // content scrolls up in lines, wraps around; a cursor blinks at the bottom
