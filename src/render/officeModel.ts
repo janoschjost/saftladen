@@ -2365,20 +2365,20 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   }
   within(23, 6.0, () => {
     // conference table, long axis along z (towards the windows): thin white top with black edge, two black slab legs
-    box(1.3, 0.04, 4.4, 23, 0.72, 6.0, mat.white);
-    box(1.32, 0.012, 4.42, 23, 0.72, 6.0, mat.black);
-    box(0.7, 0.72, 0.07, 23, 0, 4.0, mat.black);
-    box(0.7, 0.72, 0.07, 23, 0, 8.0, mat.black);
+    box(1.3, 0.04, 3.8, 23, 0.72, 5.45, mat.white);
+    box(1.32, 0.012, 3.82, 23, 0.72, 5.45, mat.black);
+    box(0.7, 0.72, 0.07, 23, 0, 3.75, mat.black);
+    box(0.7, 0.72, 0.07, 23, 0, 7.15, mat.black);
     // linear LED pendant over the table
     // (its LED strip glows while the room light is on, see RoomLight.ts; the anchor moves with the lamp in the editor)
     item('pendant', 'meeting-linear-light', 'Hängelampe', () => {
-      box(0.07, 0.07, 2.6, 23, 2.15, 6.0, mat.white);
-      box(0.04, 0.01, 2.55, 23, 2.145, 6.0, meetLamp.glow);
-      for (const lz of [5.0, 7.0]) cyl(0.004, 0.004, 1.1, 23, 2.2, lz, mat.black, world, 4);
-      meetLamp.at = track({ x: gx(23), z: gz(6.0) });
+      box(0.07, 0.07, 2.6, 23, 2.15, 5.45, mat.white);
+      box(0.04, 0.01, 2.55, 23, 2.145, 5.45, meetLamp.glow);
+      for (const lz of [4.45, 6.45]) cyl(0.004, 0.004, 1.1, 23, 2.2, lz, mat.black, world, 4);
+      meetLamp.at = track({ x: gx(23), z: gz(5.45) });
     });
     meetCenter.x = gx(23);
-    meetCenter.z = gz(6.0);
+    meetCenter.z = gz(5.45);
     track(meetCenter);
     meetTv.x = gx(23);
     meetTv.z = gz(2.3);
@@ -2432,19 +2432,8 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       m.userData.nonav = true;
       world.add(m);
     });
-    // low white cubby shelf under the south windows, ficus on the west end, black chair, portable AC on the east end
-    shelf(22.7, 9.15, 5.6, 0.8, 0.35);
-    plant(20.15, 8.85, 1.9);
-    item('chair', 'meeting-black-chair', 'Stuhl', () => {
-      box(0.4, 0.04, 0.4, 20.85, 0.45, 8.85, mat.black);
-      box(0.4, 0.3, 0.04, 20.85, 0.6, 9.05, mat.black);
-      for (const [lx, lz] of [[-0.17, -0.17], [0.17, -0.17], [-0.17, 0.17], [0.17, 0.17]]) box(0.025, 0.45, 0.025, 20.85 + lx, 0, 8.85 + lz, mat.grey);
-    });
-    item('ac', 'meeting-ac', 'Klimagerät', () => {
-      box(0.42, 0.78, 0.38, 25.85, 0, 8.95, mat.white);
-      box(0.3, 0.08, 0.02, 25.85, 0.55, 8.75, mat.lightgrey);
-      cyl(0.08, 0.08, 0.5, 26.25, 0.3, 9.1, mat.white, world, 10);
-    });
+    // low white cubby shelf under the south windows, wall to wall
+    shelf(23.0, 9.15, 6.9, 0.8, 0.35);
     for (const bx of [22.2, 22.38]) cyl(0.03, 0.03, 0.22, bx, 0.8, 9.3, mat.glass, world, 8);
     // frosted sliding-panel curtains on the west and east walls
     for (let pz = 2.7; pz < 9.2; pz += 0.9) {
@@ -2457,9 +2446,9 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     const shellGeo = shellChairGeometry();
     // [x, z, yaw]: local +x = seat front; 3 per long side plus one at each head of the table
     const seats: [number, number, number][] = [
-      ...[4.8, 6.0, 7.2].flatMap((cz): [number, number, number][] => [[22.0, cz, 0], [24.0, cz, Math.PI]]),
-      [23.0, 3.4, -Math.PI / 2], // north head, faces the table
-      [23.0, 8.6, Math.PI / 2], // south head
+      ...[4.25, 5.45, 6.65].flatMap((cz): [number, number, number][] => [[22.0, cz, 0], [24.0, cz, Math.PI]]),
+      [23.0, 3.15, -Math.PI / 2], // north head, faces the table
+      [23.0, 7.75, Math.PI / 2], // south head
     ];
     for (const [cx, cz, ry] of seats) item('chair', at('chair', cx, cz), 'Stuhl', () => {
       const chair = new THREE.Group();
@@ -2509,7 +2498,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   coatRack(26.8, 1.8); // east end of the hallway: at the corner of the glass room
   item('cabinet', at('cabinet', 31.9, 1.1), 'Rollkorpus', () => box(0.8, 0.6, 0.45, 31.9, 0, 1.1, mat.lightgrey)); // drawer cabinet at window
   plant(32.1, -0.9, 1.3);
-  plant(27.1, 9.0, 1.1);
+  plant(27.1, 9.0, 1.1, 0, false, { x0: 26.85 }); // foliage stays east of the glass wall (x 26.55): layout.json moves the plant 0.3 west after this clamp
 
   /* =================================================================
      ROOF / CEILINGS (toggle) - simplified sawtooth with clerestory glazing

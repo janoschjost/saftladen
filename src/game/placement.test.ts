@@ -83,7 +83,7 @@ describe('editor.placement', () => {
 
   it('editor.placement: a coat stand or a meeting chair taken away and put back covers nothing new (its own spot moves with it)', () => {
     const sim = shipped();
-    for (const id of ['coat-rack@-5.6,5', 'chair@22,4.8']) {
+    for (const id of ['coat-rack@-5.6,5', 'chair@22,4.25']) {
       expect(adds(sim, () => item(sim, id).set({ hidden: true }))).toEqual([]);
       expect(adds(sim, () => item(sim, id).set({}))).toEqual([]);
     }
