@@ -1,3 +1,4 @@
+import { icon } from './icons';
 import { storage } from '../game/storage';
 
 const groups = new Map<string, Array<(collapsed: boolean, animate?: boolean) => void>>();
@@ -46,7 +47,7 @@ export function makeCollapsible(root: HTMLElement, title: HTMLElement, key: stri
   } catch {
     /* ignore */
   }
-  btn.innerHTML = '<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M2 4.5 6 8.5 10 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  btn.innerHTML = icon('chevron', 12);
   const siblings = group ? (groups.get(group) ?? []) : [];
   if (group) groups.set(group, [...siblings, set]);
   // the whole title bar toggles (the chevron button is inside it, so its clicks bubble up too)

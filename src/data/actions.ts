@@ -1,3 +1,4 @@
+import type { IconName } from '../ui/icons';
 /**
  * The curated cards of the Aktionen sheet (`A`): things that can happen in the office, each one an existing dev event
  * (`sim.events`, registered in `src/game/simEvents.ts`). Picking a card runs the event and flies the Orbit camera to `place`.
@@ -6,8 +7,8 @@
 export interface OfficeAction {
   id: string;
   label: string;
-  /** 24px line icon: SVG path data, drawn with currentColor */
-  icon: string;
+  /** name in the app's icon set (`src/ui/icons.ts`) */
+  icon: IconName;
   /** id of the dev event that runs (`dev.list()` in the console) */
   eventId: string;
   /** where it happens: the camera settles on this floor point (game metres) */
@@ -26,7 +27,7 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
   {
     id: 'printer',
     label: 'Drucken',
-    icon: 'M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2M6 14h12v7H6z',
+    icon: 'printer',
     eventId: 'printer',
     place: { name: 'Archiv, Drucker', x: 26.5, z: 1.7 },
     angle: -15,
@@ -37,7 +38,7 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
   {
     id: 'meeting',
     label: 'Meeting',
-    icon: 'M3 5h18v11H3zM8 21h8M12 16v5',
+    icon: 'meeting',
     eventId: 'meeting-room',
     place: { name: 'Glasraum', x: 32.5, z: 11.5 },
     angle: 20,
@@ -48,7 +49,7 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
   {
     id: 'coffee',
     label: 'Kaffee',
-    icon: 'M4 8h13v5a6 6 0 0 1-6 6H10a6 6 0 0 1-6-6zM17 9h1.5a2.5 2.5 0 0 1 0 5H17M8 2v3M12 2v3',
+    icon: 'coffee',
     eventId: 'coffee',
     place: { name: 'Küche', x: 15, z: 2.7 },
     angle: 10,
@@ -59,7 +60,7 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
   {
     id: 'phone-booth',
     label: 'Telefonbox',
-    icon: 'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z',
+    icon: 'phone',
     eventId: 'phone-booth',
     place: { name: 'Telefonkabine «PSST!»', x: 33.45, z: 3.85 },
     angle: -30,
@@ -70,7 +71,7 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
   {
     id: 'foosball',
     label: 'Kicker',
-    icon: 'M3 6h18v12H3zM12 6v12M7 9v6M17 9v6',
+    icon: 'foosball',
     eventId: 'foosball',
     place: { name: 'Lounge, Töggelikasten', x: 9.35, z: 13.2 },
     angle: 180,
@@ -81,7 +82,7 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
   {
     id: 'pod',
     label: 'Holzhaus',
-    icon: 'M3 11 12 4l9 7M5 10v10h14V10M10 20v-5h4v5',
+    icon: 'home',
     eventId: 'pod',
     place: { name: 'Lounge, Holzhaus', x: 6.7, z: 9.1 },
     angle: 25,
@@ -92,7 +93,7 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
   {
     id: 'kart',
     label: 'Mariokart',
-    icon: 'M6 12h4M8 10v4M15 13h.01M18 11h.01M17.3 5H6.7a4 4 0 0 0-3.9 3.1l-1.6 7A2.5 2.5 0 0 0 3.6 18c.9 0 1.7-.5 2.1-1.3L6.5 15h11l.8 1.7c.4.8 1.2 1.3 2.1 1.3a2.5 2.5 0 0 0 2.4-2.9l-1.6-7A4 4 0 0 0 17.3 5z',
+    icon: 'gamepad',
     eventId: 'meeting-kart',
     place: { name: 'Glasraum', x: 32.5, z: 11.5 },
     angle: -25,
@@ -103,7 +104,7 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
   {
     id: 'toilet',
     label: 'WC',
-    icon: 'M7 3h10M9 3v6a3 3 0 0 0 6 0V3M12 12v5M8 21h8M12 17v4',
+    icon: 'toilet',
     eventId: 'toilet',
     place: { name: 'Waschraum, WC-Kabinen', x: 12, z: 1.4 },
     angle: 10,
@@ -114,7 +115,7 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
   {
     id: 'chat',
     label: 'Gespräch',
-    icon: 'M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-5.4A8 8 0 1 1 21 12z',
+    icon: 'chat',
     eventId: 'meeting-chat',
     place: { name: 'Flur', x: 21.5, z: 6.6 },
     angle: 15,
@@ -125,7 +126,7 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
   {
     id: 'nerf',
     label: 'Nerf-Gefecht',
-    icon: 'M12 3v4M12 17v4M3 12h4M17 12h4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
+    icon: 'crosshair',
     eventId: 'nerf',
     place: { name: 'Büro', x: 21.5, z: 6.6 },
     angle: -20,
@@ -136,7 +137,7 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
   {
     id: 'photo-shoot',
     label: 'Fotoshooting',
-    icon: 'M3 8h4l2-3h6l2 3h4v12H3zM12 11a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z',
+    icon: 'camera',
     eventId: 'photo-shoot',
     place: { name: 'Fotostudio', x: 30.4, z: 1.7 },
     angle: 15,
@@ -147,7 +148,7 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
   {
     id: 'server-rack',
     label: 'Serverschrank',
-    icon: 'M5 3h14v5H5zM5 10h14v5H5zM5 17h14v4H5zM8 5.5h.01M8 12.5h.01M8 19h.01M13 5.5h4M13 12.5h4',
+    icon: 'server',
     eventId: 'server-rack',
     place: { name: 'Serverschrank', x: 26.3, z: 1.3 },
     angle: -10,
@@ -158,18 +159,18 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
   {
     id: 'boombox',
     label: 'Boombox',
-    icon: 'M3 9h18v11H3zM7 9V6h10v3M8 12a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM16 12a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z',
+    icon: 'speaker',
     eventId: 'boombox',
     place: { name: 'Büro, bei Donata', x: 25.5, z: 10.5 },
     angle: 15,
     zoom: 2.4,
-    caption: 'Sandro packt die Boombox aus',
+    caption: 'Die Boombox wird ausgepackt',
     who: 'Sandro (und Donata)',
   },
   {
     id: 'mail-letter',
     label: 'Brief',
-    icon: 'M3 5h18v14H3zM3 7l9 6 9-6',
+    icon: 'mail',
     eventId: 'mail-letter',
     place: { name: 'Briefkästen am Eingang', x: 7.65, z: 16.2 },
     angle: 15,
@@ -180,7 +181,7 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
   {
     id: 'mail-parcel',
     label: 'Paket',
-    icon: 'M3 8l9-5 9 5v9l-9 5-9-5zM3 8l9 5 9-5M12 13v9M7.5 5.5l9 5',
+    icon: 'package',
     eventId: 'mail-parcel',
     place: { name: 'Briefkästen am Eingang', x: 7.65, z: 16.2 },
     angle: -15,
@@ -191,7 +192,7 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
   {
     id: 'smoke',
     label: 'Rauchpause',
-    icon: 'M2 15h14v3H2zM18 15v3M21 15v3M18 12c0-1.5 2-1.5 2-3s-2-1.5-2-3M21 12c0-1.5 1-2 1-3',
+    icon: 'smoke',
     eventId: 'smoke',
     place: { name: 'Vordach am Eingang', x: 6.25, z: 16.2 },
     angle: 25,

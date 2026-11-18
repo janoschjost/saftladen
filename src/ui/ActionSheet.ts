@@ -1,3 +1,4 @@
+import { icon } from './icons';
 import { OFFICE_ACTIONS, validateActions, type OfficeAction } from '../data/actions';
 import type { DevEvents } from '../game/DevEvents';
 
@@ -15,8 +16,6 @@ export interface ActionSheetHooks {
 }
 
 const SLIDE_MS = 300;
-const svg = (d: string) =>
-  `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`;
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] =>
   Object.assign(document.createElement(tag), { className }, text === undefined ? {} : { textContent: text });
@@ -61,11 +60,9 @@ export class ActionSheet {
       preview.loading = 'lazy';
       const key = el('kbd', 'm-card__key');
       const label = el('span', 'm-card__label');
-      label.innerHTML = svg(action.icon);
+      label.innerHTML = icon(action.icon);
       label.append(action.label);
-      const place = el('small', 'm-card__place', action.place.name);
-      const who = el('small', 'm-card__who', action.who);
-      button.append(preview, key, label, place, who);
+      button.append(preview, key, label);
       button.addEventListener('click', () => this.pick({ eventId: action.eventId, label: action.label, action }));
       li.append(button);
       this.cardsEl.append(li);

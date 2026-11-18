@@ -60,13 +60,6 @@ export const strings = {
       home: 'Ins Homeoffice',
       homeFull: 'Alle Homeoffices sind besetzt',
     },
-    /** chips in the title bar */
-    count: {
-      inOffice: (n: number) => `${n} im Büro`,
-      errand: (n: number) => `${n} weg`,
-      home: (n: number) => `${n} im Homeoffice`,
-      smoke: (n: number) => `${n} in der Rauchpause`,
-    },
     /** owner tooltip: the pets they brought along today */
     pets: {
       with: (names: string[]) => `heute mit ${names.join(' und ')}`,

@@ -16,6 +16,7 @@
     "three": "^0.187.0"
   },
   "devDependencies": {
+    "@iconify-json/ph": "^1.2.2",
     "@playwright/test": "^1.65.0",
     "@types/node": "^26.6.6",
     "@types/three": "^0.187.0",

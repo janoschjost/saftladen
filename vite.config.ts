@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { icon, iconNames, type IconName } from './src/ui/icons';
 import { statSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -31,15 +32,42 @@ const saveJson = (name: string, route: string, file: string): Plugin => ({
   },
 });
 
+/** `<icon name="settings" size="24" class="…" />` in the HTML becomes the inline SVG of that icon (see `src/ui/icons.ts`). */
+const inlineIcons = (): Plugin => ({
+  name: 'inline-icons',
+  transformIndexHtml: (html) =>
+    html.replace(/<icon\s+([^>]*?)\/>/g, (_m, attrs: string) => {
+      const get = (k: string) => new RegExp(`${k}="([^"]*)"`).exec(attrs)?.[1];
+      const name = get('name') as IconName;
+      if (!iconNames.includes(name)) throw new Error(`unknown icon "${name}" (see src/ui/icons.ts)`);
+      return icon(name, Number(get('size') ?? 20), get('class'));
+    }),
+});
+
+/** Dev and preview (the e2e bundle): `/credits` is its own page (credits/index.html), not the game; the SPA fallback would serve the game for it. */
+const creditsRoute = (): Plugin => {
+  const rewrite = (req: { url?: string }, _res: unknown, next: () => void) => {
+    if (req.url && /^\/credits(?=[?#]|$)/.test(req.url)) req.url = req.url.replace('/credits', '/credits/');
+    next();
+  };
+  return {
+    name: 'credits-route',
+    configureServer: (server) => void server.middlewares.use(rewrite),
+    configurePreviewServer: (server) => void server.middlewares.use(rewrite),
+  };
+};
+
 /** In a git worktree `.git` is a file, in the main checkout a directory. */
 const inWorktree = statSync(fileURLToPath(new URL('.git', import.meta.url)), { throwIfNoEntry: false })?.isFile() ?? false;
 
 export default defineConfig({
   base: './',
-  plugins: [saveJson('save-layout', '/__save-layout', './src/data/layout.json'), saveJson('save-seats', '/__save-seats', './src/data/seats.json')],
+  plugins: [inlineIcons(), creditsRoute(), saveJson('save-layout', '/__save-layout', './src/data/layout.json'), saveJson('save-seats', '/__save-seats', './src/data/seats.json')],
   build: {
     // Three.js gets its own file: it only changes on an upgrade, so browsers keep it cached across our deploys
-    rolldownOptions: { output: { codeSplitting: { groups: [{ name: 'three', test: /node_modules[\\/]three[\\/]/ }] } } },
+    rolldownOptions: {
+      input: { main: fileURLToPath(new URL('index.html', import.meta.url)), credits: fileURLToPath(new URL('credits/index.html', import.meta.url)) },
+      output: { codeSplitting: { groups: [{ name: 'three', test: /node_modules[\\/]three[\\/]/ }] } } },
     // Three.js alone is ~615 kB minified, over Vite's 500 kB default; the warning still fires when our own chunk passes 700 kB
     chunkSizeWarningLimit: 700,
   },
