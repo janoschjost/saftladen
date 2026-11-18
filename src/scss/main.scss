@@ -83,6 +83,10 @@
         touch-action: none;
         cursor: grab;
 
+        &.is-over-person {
+            cursor: pointer;
+        }
+
         &.is-dragging {
             cursor: grabbing;
         }
@@ -2833,6 +2837,7 @@
 
         &__name {
             margin-right: 0.5rem;
+            font-size: 1.125rem;
             font-weight: 700;
         }
 

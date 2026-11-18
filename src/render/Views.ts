@@ -7,6 +7,9 @@ import { IsoCamera } from './IsoCamera';
 import { ax, az } from './officeModel';
 import { WORLD } from './World';
 
+/** Pixels a press may move and still count as a click (trackpad and mouse jitter); past it, it is a drag. */
+export const CLICK_SLOP = 8;
+
 /** `third` is the behind-the-shoulder camera of the day-in-the-life mode; it has no segment in the settings popover. */
 export type ViewMode = 'iso' | 'orbit' | 'plan' | 'walk' | 'third';
 
@@ -171,6 +174,7 @@ export class Views {
   private sprint = 0;
   private sprintGoal = 0;
   private moved = 0;
+  private pressAt = { x: 0, y: 0 };
   private hint: HTMLElement | null;
   /** Orbit camera flight (Aktionen): from a shot to a fixed shot, or to a moving one it keeps trailing after arrival */
   private fly: { from: Shot; to: Shot | (() => Shot); t: number; dur: number } | null = null;
@@ -272,7 +276,7 @@ export class Views {
 
   /** true when the last pointer gesture moved more than a click's worth */
   get wasDrag(): boolean {
-    return this.moved > 5;
+    return this.moved > CLICK_SLOP;
   }
 
   /** `keepCamera`: the orbit camera stays where `restore` put it instead of jumping back to the default spot. */
@@ -517,13 +521,15 @@ export class Views {
     // click-vs-drag tracking for every mode, and mouse-look for the walk mode
     this.stage.addEventListener('pointerdown', (e) => {
       this.moved = 0;
+      this.pressAt = { x: e.clientX, y: e.clientY };
       if (this.mode === 'walk' || this.mode === 'third') {
         this.look = { id: e.pointerId };
         this.stage.setPointerCapture(e.pointerId);
       }
     });
     this.stage.addEventListener('pointermove', (e) => {
-      if (e.buttons) this.moved += Math.abs(e.movementX) + Math.abs(e.movementY);
+      // how far from the press, so jitter back and forth stays a click; with the pointer locked it does not move, so the path counts
+      if (e.buttons) this.moved = this.locked ? this.moved + Math.abs(e.movementX) + Math.abs(e.movementY) : Math.max(this.moved, Math.hypot(e.clientX - this.pressAt.x, e.clientY - this.pressAt.y));
       if (!(this.look || this.locked)) return;
       if (this.mode === 'third') {
         this.thirdYaw -= e.movementX * 0.004;

@@ -23,9 +23,22 @@ export class Actions {
 
   /** `name` null hides the card. */
   show(name: string | null, homeFull: boolean, steering = false, following = false): void {
+    const wasHidden = this.root.hidden;
     this.root.hidden = !name;
     if (!name) return;
-    if (this.name.textContent !== name) this.name.textContent = name;
+    if (wasHidden || this.name.textContent !== name) {
+      // shown, or another person selected: the card slides in (a finished animation leaves nothing behind)
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        this.root.animate(
+          [
+            { opacity: 0, transform: 'translate(-50%, 1.5rem)' },
+            { opacity: 1, transform: 'translate(-50%, 0)' },
+          ],
+          { duration: 250, easing: 'ease-out' },
+        );
+      }
+      this.name.textContent = name;
+    }
     this.follow.setAttribute('aria-pressed', String(following));
     this.follow.textContent = following ? 'Folgen beenden (F)' : 'Folgen (F)';
     this.steer.setAttribute('aria-pressed', String(steering));

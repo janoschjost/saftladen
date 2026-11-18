@@ -7,7 +7,8 @@ import { kurtPortrait, kurtWave } from '../render/kurtBuilder';
 import { PoofFx } from '../render/poofFx';
 import { petPortrait } from '../render/petPortrait';
 import { SIT_DROP } from '../render/officeBuilder';
-import { Views, type ViewMode } from '../render/Views';
+import { CLICK_SLOP, Views, type ViewMode } from '../render/Views';
+import { nearestHit, nearestOnScreen, type Column } from './pick';
 import { Bubbles } from '../render/Bubbles';
 import { DayHud } from '../ui/DayHud';
 import { DAY_STORIES } from '../data/dayStories';
@@ -61,6 +62,8 @@ import { poseRepair } from './repairPose';
 import { savedStateIgnored, storage } from './storage';
 
 const STEP = 1 / 60; // fixed simulation step
+const NEAR_PX = 20; // a click that hits nobody still picks whoever is this close on screen
+const OFF_SCREEN = Object.freeze({ x: -9999, y: -9999 }); // `projectPoint` of a point outside the camera's depth range
 const TALK_REACH = 2.6; // metres: how far the player can be from somebody to talk to them
 const ANSWERS = ['Hoi!', 'Na, alles klar?', 'Gerade viel los…', 'Kaffee später?', 'Schönen Tag!', 'Ha, du hier?', 'Moment, bin gleich bei dir.', 'Hast du das Meeting gesehen?', 'Mir fehlt Kaffee.', 'Läuft!'];
 const BUSY_ANSWERS = ['Grad keine Zeit!', 'Später…', 'Bin im Fokus.', 'Psst, Call!', 'Mhm.'];
@@ -123,6 +126,8 @@ export class Game {
   private centre = new THREE.Vector2(0, 0);
   private pointerInside = false;
   private hovered: Walker | null = null;
+  /** who a click would select now (hand cursor, hover ring), see `updateHover` */
+  private over: Walker | null = null;
   private selected: Walker | null = null;
   /** the camera trails this walker (follow mode) */
   private followed: Walker | null = null;
@@ -130,6 +135,8 @@ export class Game {
   /** dev only: debug overlays (nav grid, state labels, paths), see the dev panel */
   debug: DebugOverlays | null = null;
   private dragged: Walker | null = null;
+  /** who the last press started on (kept until the next one): lifted (`dragged`) only once the pointer moves past `CLICK_SLOP` */
+  private pressed: Walker | null = null;
   private steered: Person | null = null;
   /** "Ein Tag im Leben": the person the player plays; `waiting` until they are (back) in the office */
   private day: {
@@ -162,8 +169,10 @@ export class Game {
   private dragOffset = new THREE.Vector2();
   private dragMoved = false;
   private fwd = new THREE.Vector3();
+  private scratch = new THREE.Vector3();
   private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private ring: THREE.Mesh;
+  private hoverRing: THREE.Mesh;
   private savedSeats: Record<string, number> = {};
   private acc = 0;
   /** game time in seconds: what the frames' time source gave, times the clock speed, plus what `advance` ran; stands still while paused. Poses and bubbles animate on it. */
@@ -298,9 +307,15 @@ export class Game {
       new THREE.RingGeometry(0.5, 0.65, 32).rotateX(-Math.PI / 2),
       new THREE.MeshBasicMaterial({ color: getComputedStyle(document.documentElement).getPropertyValue('--color-ink').trim() }),
     );
-    this.ring.position.y = 0.02;
     this.ring.visible = false;
     this.scene.add(this.ring);
+    // thinner and see-through: who a click would select
+    this.hoverRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.52, 0.6, 32).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: (this.ring.material as THREE.MeshBasicMaterial).color, transparent: true, opacity: 0.45, depthWrite: false }),
+    );
+    this.hoverRing.visible = false;
+    this.scene.add(this.hoverRing);
 
     exposeDevConsole(this.sim.events);
     if (import.meta.env.DEV || import.meta.env.MODE === 'e2e') {
@@ -400,6 +415,8 @@ export class Game {
     this.stage.addEventListener(
       'pointerdown',
       (e) => {
+        this.pressed = null;
+        this.dragMoved = false;
         if (this.views.mode === 'walk' || this.views.mode === 'third') return; // dragging looks around instead
         if (this.editor.active) {
           // furniture instead of people; a click on anything else still moves the camera
@@ -409,16 +426,15 @@ export class Game {
           this.stage.setPointerCapture(e.pointerId);
           return;
         }
-        const hit = this.pick(this.toNdc(e));
+        // only the hit volume: a press just beside somebody still moves the camera (its click still picks them)
+        const hit = this.pick(this.toNdc(e), false);
         if (!hit) return;
         const g = this.groundAt(this.toNdc(e));
         if (!g) return;
         e.stopImmediatePropagation();
-        this.dragged = hit;
-        this.dragMoved = false;
+        // nothing happens yet: a press is a click until it moves (pointermove lifts them)
+        this.pressed = hit;
         this.dragStart = { x: e.clientX, y: e.clientY };
-        hit.held = true;
-        this.dragOffset.set(hit.pos.x - g.x, hit.pos.z - g.z);
         this.stage.setPointerCapture(e.pointerId);
       },
       true,
@@ -427,12 +443,25 @@ export class Game {
       this.pointerInside = true;
       this.toNdc(e, this.pointer);
       if (this.editor.active && this.views.mode !== 'walk' && this.views.mode !== 'third') this.editor.pointerMove(this.raycaster, this.groundAt(this.pointer), e.altKey);
-      if (!this.dragged) return;
+      // the press is over once the stage lets go of the pointer (a press that started on a panel is not ours)
+      if (!this.pressed || !this.stage.hasPointerCapture(e.pointerId)) return;
+      // a few pixels of hand jitter still count as a click, not a drag
+      if (!this.dragMoved && Math.hypot(e.clientX - this.dragStart.x, e.clientY - this.dragStart.y) <= CLICK_SLOP) return;
+      this.dragMoved = true; // from here on no click, even if nobody gets lifted
+      if (!this.dragged) {
+        if (this.pressed.away) return; // went out of the door during the press
+        // they may have walked on since the press: grab them where they are now, relative to the pressed point
+        const start = this.groundAt(this.toNdc({ clientX: this.dragStart.x, clientY: this.dragStart.y }));
+        if (!start) return;
+        this.dragged = this.pressed;
+        this.dragged.pickUp();
+        // carrying somebody selects them; the camera keeps following only if it already followed this one
+        if (this.followed !== this.dragged) this.followed = null;
+        this.selected = this.dragged;
+        this.dragOffset.set(this.dragged.pos.x - start.x, this.dragged.pos.z - start.z);
+      }
       const g = this.groundAt(this.pointer);
       if (!g) return;
-      // a few pixels of hand jitter still count as a click, not a drag
-      if (!this.dragMoved && Math.hypot(e.clientX - this.dragStart.x, e.clientY - this.dragStart.y) < 5) return;
-      this.dragMoved = true;
       const w = this.dragged;
       w.pos.x = THREE.MathUtils.clamp(g.x + this.dragOffset.x, 0.4, WORLD.width - 0.4);
       w.pos.z = THREE.MathUtils.clamp(g.z + this.dragOffset.y, 0.4, WORLD.depth - 0.4);
@@ -516,6 +545,7 @@ export class Game {
     };
     this.stage.addEventListener('pointerup', drop);
     this.stage.addEventListener('pointercancel', drop);
+    this.stage.addEventListener('lostpointercapture', drop); // moves no longer reach the stage: put them down
     this.stage.addEventListener('pointerleave', () => {
       this.pointerInside = false;
       this.hovered = null;
@@ -526,10 +556,8 @@ export class Game {
         if (!this.editor.takeClick() && !this.views.wasDrag) this.editor.deselect();
         return;
       }
-      if (this.views.wasDrag || this.dragMoved) {
-        this.dragMoved = false;
-        return;
-      }
+      // a press on a person never reaches the camera, so only its own movement tells a drag
+      if (this.dragMoved || (!this.pressed && this.views.wasDrag)) return;
       // pick at the click itself: the hover state may be a frame behind (or empty on touch)
       if (this.views.mode === 'walk') return this.interact();
       if (this.views.mode === 'third') return;
@@ -537,8 +565,9 @@ export class Game {
       if (hit) {
         this.easter.click(hit);
         this.handBack(); // selecting by hand: the selection's follow takes over
+        if (hit === this.selected) return; // clicking them again keeps them, and follow as it is
       }
-      this.selected = hit && hit !== this.selected ? hit : null;
+      this.selected = hit; // the floor, Esc or somebody else ends a selection
       this.followed = this.selected && !this.selected.away ? this.selected : null; // selecting starts follow mode right away
     });
     window.addEventListener('keydown', (e) => {
@@ -948,6 +977,7 @@ export class Game {
       if (this.selected === who) this.selected = null;
       if (this.followed === who) this.followed = null;
       if (this.dragged === who) this.dragged = null;
+      if (this.pressed === who) this.pressed = null;
       if (who instanceof Person) {
         if (this.day?.person === who) this.endDay(false);
         this.release(who);
@@ -1389,7 +1419,7 @@ export class Game {
     w.root.rotation.y = w.prevYaw + dy * alpha;
 
     const ph = THREE.MathUtils.lerp(w.prevPhase, w.phase, alpha);
-    const dangle = Math.sin(this.clock / 0.11) * 0.35 * (w.lift / 0.45);
+    const dangle = Math.sin(this.clock / 0.25) * 0.14 * (w.lift / 0.45); // a slow sway of the hanging limbs, nothing like a walk cycle
     const swing = Math.sin(ph) * 0.42 * w.moving + dangle;
     const bob = 0; // hip height now follows the planted foot (see the leg block below)
     const breathe = Math.sin(this.clock / 0.6 + w.phase) * 0.008 * (1 - w.moving);
@@ -1974,20 +2004,35 @@ export class Game {
     u.canopy.scale.set(lerp(0.12, 1, open), lerp(1.6, 1, open), lerp(0.12, 1, open));
   }
 
-  private pick(ndc: THREE.Vector2): Walker | null {
+  /**
+   * Who is under the pointer: of the generous upright volumes around each body, the one nearest to the camera; with
+   * `near`, else whoever is within `NEAR_PX` on screen. Thin arms, legs and a walking body are hard to hit otherwise.
+   */
+  private pick(ndc: THREE.Vector2, near = true): Walker | null {
     if (this.editor.active) return null; // the room editor owns the pointer
     this.raycaster.setFromCamera(ndc, this.views.camera);
-    const hits = this.raycaster.intersectObjects(
-      this.sim.walkers.filter((w) => !w.away).map((w) => w.root),
-      true,
-    );
-    if (!hits.length) return null;
-    let o: THREE.Object3D | null = hits[0].object;
-    while (o && !o.userData.walker) o = o.parent;
-    return (o?.userData.walker as Walker) ?? null;
+    const here = this.sim.walkers.filter((w) => !w.away);
+    const columns: Column[] = here.map((w) => {
+      const p = w.root.position; // posed: lift and the interpolated step included
+      return { x: p.x, z: p.z, r: w instanceof Person ? 0.4 : Math.max(0.3, w.headHeight * 0.6), y0: p.y, y1: p.y + w.headHeight + 0.15 };
+    });
+    const i = nearestHit(this.raycaster.ray, columns);
+    if (i >= 0) return here[i];
+    if (!near) return null;
+    const pointer = { x: ((ndc.x + 1) / 2) * window.innerWidth, y: ((1 - ndc.y) / 2) * window.innerHeight };
+    const side = new THREE.Vector3().setFromMatrixColumn(this.views.camera.matrixWorld, 0); // screen right, in the world
+    const bodies = columns.map((c) => {
+      const feet = this.projectPoint(c.x, c.y0, c.z);
+      const head = this.projectPoint(c.x, c.y1, c.z);
+      const edge = this.projectPoint(c.x + side.x * c.r, c.y0, c.z + side.z * c.r);
+      if (feet === OFF_SCREEN || head === OFF_SCREEN || edge === OFF_SCREEN) return { feet: OFF_SCREEN, head: OFF_SCREEN, r: 0 }; // partly behind the camera: not by screen distance
+      return { feet, head, r: Math.hypot(edge.x - feet.x, edge.y - feet.y) };
+    });
+    const j = nearestOnScreen(pointer, bodies, NEAR_PX);
+    return j >= 0 ? here[j] : null;
   }
 
-  private toNdc(e: PointerEvent, out = new THREE.Vector2()): THREE.Vector2 {
+  private toNdc(e: { clientX: number; clientY: number }, out = new THREE.Vector2()): THREE.Vector2 {
     return out.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
   }
 
@@ -1998,14 +2043,17 @@ export class Game {
   }
 
   private updateHover(): void {
-    this.hovered = this.dragged ?? (this.pointerInside && this.views.mode !== 'third' ? this.pick(this.pointer) : null);
-    this.stage.classList.toggle('is-hovering', (!!this.hovered && !this.dragged) || (this.editor.hovering && !this.editor.dragging));
+    this.hovered = this.dragged ?? (this.pointerInside && this.views.mode !== 'third' ? this.pick(this.pointer, this.views.mode !== 'walk') : null);
+    // who a click would select: hand cursor and a ring on the floor (`updateOverlay`); not in walk mode, nor the editor (pick is null there)
+    this.over = this.hovered && !this.dragged && this.views.mode !== 'walk' ? this.hovered : null;
+    this.stage.classList.toggle('is-over-person', !!this.over);
+    this.stage.classList.toggle('is-hovering', this.editor.hovering && !this.editor.dragging);
     this.stage.classList.toggle('is-holding', !!this.dragged || this.editor.dragging);
   }
 
   private projectPoint(x: number, y: number, z: number): { x: number; y: number } {
-    const v = new THREE.Vector3(x, y, z).project(this.views.camera);
-    if (v.z > 1 || v.z < -1) return { x: -9999, y: -9999 };
+    const v = this.scratch.set(x, y, z).project(this.views.camera);
+    if (v.z > 1 || v.z < -1) return OFF_SCREEN;
     return { x: (v.x * 0.5 + 0.5) * window.innerWidth, y: (-v.y * 0.5 + 0.5) * window.innerHeight };
   }
 
@@ -2031,13 +2079,12 @@ export class Game {
 
   private updateOverlay(): void {
     const active = this.selected ?? this.hovered;
-    if (this.selected) {
-      this.ring.visible = true;
-      this.ring.position.x = this.selected.root.position.x;
-      this.ring.position.z = this.selected.root.position.z;
-    } else {
-      this.ring.visible = false;
-    }
+    const ringAt = (ring: THREE.Mesh, w: Walker | null) => {
+      ring.visible = !!w;
+      if (w) ring.position.set(w.root.position.x, 0.02, w.root.position.z);
+    };
+    ringAt(this.ring, this.selected);
+    ringAt(this.hoverRing, this.over !== this.selected ? this.over : null);
     if (this.selected?.away) this.selected = null;
     this.actions.show(
       this.selected instanceof Person && this.selected.inOffice ? this.selected.displayName : null,
