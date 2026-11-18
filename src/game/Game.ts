@@ -2083,11 +2083,13 @@ export class Game {
     ringAt(this.ring, this.selected);
     ringAt(this.hoverRing, this.over !== this.selected ? this.over : null);
     if (this.selected?.away) this.selected = null;
+    const sel = this.selected;
     this.actions.show(
-      this.selected instanceof Person && this.selected.inOffice ? this.selected.displayName : null,
+      sel instanceof Person ? sel.displayName : sel instanceof Dog ? sel.name : null,
+      sel instanceof Person && sel.inOffice, // steer, home and out only make sense for somebody in the office
       this.sim.presence.homeFull,
-      !!this.selected && this.selected === this.steered,
-      !!this.selected && this.selected === this.followed,
+      !!sel && sel === this.steered,
+      !!sel && sel === this.followed,
     );
     if (active instanceof Person) {
       const pets = active.pets.filter((d) => d.comesToday).map((d) => d.name);

@@ -21,8 +21,8 @@ export class Actions {
     this.out.addEventListener('click', onOut);
   }
 
-  /** `name` null hides the card. */
-  show(name: string | null, homeFull: boolean, steering = false, following = false): void {
+  /** `name` null hides the card; without `inOffice` (a dog, somebody on the way out or on a smoke break) only Folgen works. */
+  show(name: string | null, inOffice: boolean, homeFull: boolean, steering = false, following = false): void {
     const wasHidden = this.root.hidden;
     this.root.hidden = !name;
     if (!name) return;
@@ -43,7 +43,9 @@ export class Actions {
     this.follow.textContent = following ? 'Folgen beenden (F)' : 'Folgen (F)';
     this.steer.setAttribute('aria-pressed', String(steering));
     this.steer.textContent = steering ? 'Steuern beenden' : 'Steuern (WASD)';
-    this.home.disabled = homeFull;
-    this.home.title = homeFull ? t.homeFull : '';
+    this.steer.disabled = !inOffice && !steering;
+    this.out.disabled = !inOffice;
+    this.home.disabled = !inOffice || homeFull;
+    this.home.title = inOffice && homeFull ? t.homeFull : '';
   }
 }
