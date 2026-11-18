@@ -146,7 +146,7 @@ export function buildClawdDesk(laptop: THREE.Object3D, scale: number): ClawdDesk
   const ZC = -0.07;
   const ZD = 0.15;
 
-  const stool = [box(0.2, 0.02, 0.18, CX, SEAT - 0.01, ZC, '#23262d'), box(0.2, 0.15, 0.016, CX, SEAT + 0.075, ZC - 0.09, '#23262d'), box(0.17, 0.05, 0.16, CX, SEAT + 0.025, ZC, '#4b5160')]; // seat, back rest and a thick cushion
+  const stool = [box(0.2, 0.02, 0.18, CX, SEAT - 0.01, ZC, '#23262d'), box(0.2, 0.15, 0.016, CX, SEAT + 0.075, ZC - 0.09, '#23262d')]; // seat and back rest
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) stool.push(box(0.016, SEAT - 0.02, 0.016, CX + sx * 0.085, (SEAT - 0.02) / 2, ZC + sz * 0.075, LEGS));
   const desk = [box(0.66, 0.014, 0.26, 0, TOP - 0.007, ZD, '#3a3f4b')];
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) desk.push(box(0.016, TOP - 0.014, 0.016, sx * 0.3, (TOP - 0.014) / 2, ZD + sz * 0.11, LEGS));
@@ -167,7 +167,7 @@ export function buildClawdDesk(laptop: THREE.Object3D, scale: number): ClawdDesk
 
   const seatYaw = 0;
   const rig = buildClawd(0.95 * scale);
-  const seat = new THREE.Vector3(CX, SEAT + 0.015, ZC);
+  const seat = new THREE.Vector3(CX, SEAT + 0.005, ZC);
 
   // Claude's sparks: stars that turn and drift round his head while he thinks, and bits that rise off the keys
   const fx = new THREE.Group();
