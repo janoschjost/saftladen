@@ -7,6 +7,7 @@ import { box as boxGeo, cyl as cylGeo, merge as mergeGeos, propMaterial } from '
 import { tvMaterial } from './screens';
 import { planClutter, type DeskProp, type DeskPlantSpot } from './deskClutter';
 import { seeded } from '../game/rng';
+import { GLASS_ORDER, markGlass, markGlassSorted } from './glassSort';
 import { RoomItem, type ItemAnchor } from './roomItem';
 
 /**
@@ -46,7 +47,6 @@ export const CORRIDOR_POINT: Vec2 = { x: ax(12), z: az(1.1) };
 const DEBUG_ROW_LABELS = true;
 let rowCount = 0;
 
-import { GLASS_ORDER, markGlass, markGlassSorted } from './glassSort';
 import { BAND, CZ, H_CORE, H_LOW, ROOF_HI, ROOF_LO, TEETH, roofHeightAt } from './roofHeight';
 
 const PENDANT_FLAT = 4.2; // cord top of the open-office pendants with the roof off

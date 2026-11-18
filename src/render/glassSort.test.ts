@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { GLASS_ORDER, GlassSort, markGlass, markGlassSorted } from './glassSort';
 
-// a pane across x = 0 (one metre wide, three high), the camera stands at z = 10 looking at it
+// a pane across z = 0 (four metres wide, three high), the camera stands at z = 10 looking at it
 function setup() {
   const scene = new THREE.Scene();
   const pane = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 0.03), markGlass(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false })));
@@ -59,5 +59,15 @@ describe('office.glass-sort', () => {
     s.position.x = 5; // the view ray passes the pane's edge
     sort.update(camera);
     expect(s.renderOrder).toBeGreaterThan(GLASS_ORDER);
+  });
+
+  it('office.glass-sort: a bubble that pops up behind a pane is sorted at once, not a few frames later', () => {
+    const { camera, sort, bubble } = setup();
+    const s = bubble(-2);
+    s.visible = false;
+    sort.update(camera);
+    s.visible = true;
+    sort.update(camera); // not a pass frame
+    expect(s.renderOrder).toBeLessThan(GLASS_ORDER);
   });
 });
