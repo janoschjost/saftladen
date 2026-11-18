@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CreditsScene } from './CreditsScene';
-import type { CreditsHook } from './hook';
 
 const stage = document.getElementById('stage') as HTMLElement;
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -33,33 +32,6 @@ controls.addEventListener('start', () => (controls.autoRotate = false));
 controls.addEventListener('end', () => {
   idleAt = performance.now() + 4000;
 });
-
-// a tap on Clawd (not the end of a drag) makes him spin; the pointer shows a hand over him
-const ray = new THREE.Raycaster();
-const aim = (e: PointerEvent): THREE.Raycaster => {
-  const box = renderer.domElement.getBoundingClientRect();
-  ray.setFromCamera(new THREE.Vector2(((e.clientX - box.left) / box.width) * 2 - 1, -((e.clientY - box.top) / box.height) * 2 + 1), camera);
-  return ray;
-};
-let down: { x: number; y: number } | null = null;
-renderer.domElement.addEventListener('pointerdown', (e) => (down = { x: e.clientX, y: e.clientY }));
-renderer.domElement.addEventListener('pointerup', (e) => {
-  const moved = down ? Math.hypot(e.clientX - down.x, e.clientY - down.y) : Infinity;
-  down = null;
-  if (moved < 6 && world.hitsClawd(aim(e))) world.clawd.poke();
-});
-renderer.domElement.addEventListener('pointermove', (e) => {
-  if (e.buttons) return;
-  renderer.domElement.style.cursor = world.hitsClawd(aim(e)) ? 'pointer' : '';
-});
-
-const hook: CreditsHook = {
-  clawdScreen: () => world.clawdScreen(camera, stage.clientWidth, stage.clientHeight),
-  get pokes() {
-    return world.clawd.pokes;
-  },
-};
-window.credits = hook;
 
 const resize = (): void => {
   const w = stage.clientWidth;
