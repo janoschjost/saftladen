@@ -239,6 +239,10 @@ Rules:
 - `day.spots` Task targets spread far from the player and each other — `src/game/tasks/spots.ts`
 - `day.space` `Space` doesn't scroll the page during a day — `src/game/Game.ts`
 
+## Credits
+- `credits.page` Own page `/credits` (no game, no `url:` since the game's URL check can't open it): Marco and Janosch typing side by side (hands on the keys) on dark 16" MacBook Pros (white Saftladen mark on the lid; Marco light mode, Janosch dark mode with a Red Bull), Ellie lying at their feet, a miniature Kurt at his own tiny desk between them who now and then jumps off the desk, plays chase with Ellie (who also strolls, plays and naps on her own) and leaps back up to work, in an endless dark blueprint-grid room lit by their screens; drag orbits, idle camera sways; centred title and one line crediting both — `src/credits/CreditsScene.ts`, `src/credits/main.ts`, `credits/index.html`, e2e: `e2e/credits.spec.ts`
+- `credits.link` Quiet "Credits" text link under the sun and gear buttons (top right) opens `/credits/`; hovering it lets Marco and Janosch, rendered from their in-game models, pop out from behind it — `index.html`, `src/scss/main.scss`, e2e: `e2e/credits.spec.ts`, url: `/?seed=1&time=11`
+
 ## Easter eggs
 - `egg.konami` Konami code: 14 s office disco, dancing at 124 BPM, colour lights, dimmed daylight — `src/game/Easter.ts`, e2e: `e2e/modes.spec.ts` (#34)
 - `egg.angry` Clicking a person 7× quickly: angry bubble, then they storm out — `src/game/Easter.ts`
