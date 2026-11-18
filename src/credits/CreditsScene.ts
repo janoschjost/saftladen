@@ -13,7 +13,6 @@ import { clawdScreenMaterial, screenMaterial, tickScreens, useScreen } from '../
 import { BlueprintOffice } from './BlueprintOffice';
 import { planTrip, type DogStep, type Vec2 } from './behaviors';
 import { ClawdRoutine, Path } from './clawdRoutine';
-import { codeSnippet, type TokenKind } from './clawdCode';
 
 /** Same bounds as the home office desks (metres): the desk top and the laptop hinge, in front of the chair. */
 const DESK_TOP = 0.74;
@@ -197,16 +196,12 @@ const KURT_AT = { x: -(DESK_W / 2 + DESK_W / 2 - 0.06), y: 0, z: 0.95 + 0.025 + 
 const CLAWD_AT = { x: 2.55, y: 0, z: 3.0, yaw: -Math.PI / 2, scale: 1.6 };
 /** his way from his desk round the blueprint's east and back side to the open floor in front of the big desk, where he talks */
 const CLAWD_PATH: Vec2[] = [[2.95, 3.0], [2.95, 2.45], [2.2, 2.1], [1.9, 1.75], [1.0, 1.75]];
-/** how many different bubbles there are: the textures are made once and reused */
-const BUBBLE_POOL = 12;
-/** the colours of a bubble's code */
-const TOKEN_COLORS: Record<TokenKind, string> = { keyword: '#d97757', fn: '#e8c27a', string: '#9fd08a', number: '#8fc1e8', comment: '#7d7a72', punct: '#b8b2a6', name: '#f0e6d6' };
 /** the middle of the play ring, west of the blueprint, and where Ellie waits meanwhile */
 const PLAY_C = { x: -2.95, z: 2.75 };
 /** where the blueprint of the office is projected, in front of the desks */
 const HOLO = { x: 0, z: 3.1, scale: 0.085, lift: 0.1 };
 const PLAY_START = Math.PI; // he runs onto the ring at its camera-far side
-const DOG_WAIT: Vec2 = [-3.9, 2.2];
+const DOG_WAIT: Vec2 = [PLAY_C.x + Math.sin(PLAY_START - 1.5) * 0.55, PLAY_C.z + Math.cos(PLAY_START - 1.5) * 0.55];
 
 type PlayPhase = 'work' | 'rise' | 'run' | 'chase' | 'orbit' | 'runBack' | 'sit';
 /** Kurt's game takes Ellie over: walk somewhere and watch, or be put exactly where the game says */
@@ -270,9 +265,6 @@ export class CreditsScene {
   private kurt: Typing;
   private clawd: ClawdDesk;
   private clawdRoutine: ClawdRoutine;
-  /** what Clawd says: one code bubble over his head at a time */
-  private bubble: THREE.Sprite;
-  private bubbleTextures = new Map<number, THREE.CanvasTexture>();
   /** the "z" that float up from the sleeping Kurt */
   private zees: THREE.Sprite[] = [];
   private pd: { phase: PlayPhase; t: number; wait: number; angle: number; at: Vec2 } = { phase: 'work', t: 0, wait: 16, angle: 0, at: [0, 0] };
@@ -331,12 +323,8 @@ export class CreditsScene {
     this.clawdRoutine = new ClawdRoutine({
       seat: { x: seat.x, y: seat.y, z: seat.z, yaw: this.clawd.seatYaw + CLAWD_AT.yaw },
       path: new Path(CLAWD_PATH),
-      talkYaw: 0,
+      stopYaw: 0,
     });
-    this.bubble = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, depthTest: false }));
-    this.bubble.visible = false;
-    this.bubble.renderOrder = 10;
-    scene.add(this.bubble);
     this.clawd.rig.root.traverse((o) => ((o as THREE.Mesh).isMesh ? (o.castShadow = true) : undefined));
 
     // Kurt, Marco's alter ego, a scaled copy of a person: asleep on the floor, his back against the desk's front left leg
@@ -466,9 +454,11 @@ export class CreditsScene {
         break;
       }
       case 'run': {
+        // Kurt runs to the ring and waits there until Ellie has trotted up behind him, so the chase starts where she is
         const here = this.kurtWorld();
-        k.moving = true;
-        if (toward(here, [PLAY_C.x + Math.sin(PLAY_START) * 0.4, PLAY_C.z + Math.cos(PLAY_START) * 0.4], 1.5)) {
+        const arrived = toward(here, [PLAY_C.x + Math.sin(PLAY_START) * 0.4, PLAY_C.z + Math.cos(PLAY_START) * 0.4], 1.5);
+        k.moving = !arrived;
+        if (arrived && Math.hypot(this.dog.x - DOG_WAIT[0], this.dog.z - DOG_WAIT[1]) < 0.15) {
           pd.angle = PLAY_START;
           this.goPlay('chase');
         }
@@ -536,7 +526,7 @@ export class CreditsScene {
     this.tickZees(t, k.sleep * (1 - k.stand));
   }
 
-  /** Clawd works, now and then walks round the blueprint to tell a few code bubbles, and goes back to his laptop. */
+  /** Clawd works, now and then walks round the blueprint to the open floor, stops there to look about, and goes back to his laptop. */
   private tickClawd(dt: number, t: number): void {
     const st = this.clawdRoutine.step(dt);
     const { rig } = this.clawd;
@@ -544,68 +534,6 @@ export class CreditsScene {
     rig.root.rotation.y = st.yaw;
     poseClawd(rig, st.look, t, { moving: st.moving, air: st.air });
     this.clawd.tickFx(t, st.look === 'sit' && st.phase === 'work');
-    const b = st.bubble;
-    this.bubble.visible = !!b;
-    if (!b) return;
-    const tex = this.bubbleTexture(b.index);
-    const mat = this.bubble.material as THREE.SpriteMaterial;
-    if (mat.map !== tex) {
-      mat.map = tex;
-      mat.needsUpdate = true;
-    }
-    const pop = smooth(Math.min(1, b.u / 0.1)) * (1 - smooth(Math.max(0, (b.u - 0.88) / 0.12)));
-    mat.opacity = pop;
-    const img = mat.map!.image as HTMLCanvasElement;
-    const w = 1.45 * (0.6 + 0.4 * pop);
-    this.bubble.scale.set(w, (w * img.height) / img.width, 1);
-    this.bubble.position.set(st.x + 0.45, st.y + 0.95 + Math.sin(t * 3) * 0.01, st.z);
-  }
-
-  /** A speech bubble with a few lines of nonsense code in the terminal colours of the laptops (cached per snippet). */
-  private bubbleTexture(index: number): THREE.CanvasTexture {
-    index %= BUBBLE_POOL;
-    let tex = this.bubbleTextures.get(index);
-    if (tex) return tex;
-    const lines = codeSnippet(index);
-    const LH = 30;
-    const H = 24 + lines.length * LH;
-    const c = document.createElement('canvas');
-    c.width = 560;
-    c.height = H + 36;
-    const g = c.getContext('2d')!;
-    g.fillStyle = '#1f1e1d';
-    g.strokeStyle = '#d97757';
-    g.lineWidth = 5;
-    g.beginPath();
-    g.roundRect(6, 6, 548, H, 16);
-    g.fill();
-    g.stroke();
-    g.fillStyle = '#1f1e1d';
-    g.beginPath(); // the tail, towards Clawd's head
-    g.moveTo(40, H + 2);
-    g.lineTo(28, H + 32);
-    g.lineTo(72, H + 2);
-    g.fill();
-    g.strokeStyle = '#d97757';
-    g.beginPath();
-    g.moveTo(40, H + 4);
-    g.lineTo(28, H + 32);
-    g.lineTo(72, H + 4);
-    g.stroke();
-    g.font = '600 22px "SF Mono", Menlo, Consolas, monospace';
-    g.textBaseline = 'middle';
-    lines.forEach((line, row) => {
-      let x = 22;
-      for (const tok of line) {
-        g.fillStyle = TOKEN_COLORS[tok.kind];
-        g.fillText(tok.text, x, 6 + 18 + row * LH + LH / 2 - 6);
-        x += g.measureText(tok.text).width;
-      }
-    });
-    tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    this.bubbleTextures.set(index, tex);
-    return tex;
   }
 
   /** "z z z" float up from Kurt's head while he sleeps. */

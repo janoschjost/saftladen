@@ -74,9 +74,9 @@ export function buildClawd(size = 1): ClawdRig {
 
 const smooth = (t: number): number => t * t * (3 - 2 * t);
 
-export type ClawdLook = 'sit' | 'stand' | 'talk';
+export type ClawdLook = 'sit' | 'stand' | 'gesture';
 
-/** One frame of Clawd: typing at the laptop, standing, talking with his arms, walking, in the air. `t` in seconds. */
+/** One frame of Clawd: typing at the laptop, standing, gesturing, walking, in the air. `t` in seconds. */
 export function poseClawd(rig: ClawdRig, look: ClawdLook, t: number, o: { moving?: boolean; air?: number } = {}): void {
   const moving = !!o.moving;
   const air = o.air ?? 0;
@@ -95,7 +95,7 @@ export function poseClawd(rig: ClawdRig, look: ClawdLook, t: number, o: { moving
     lean = 0.1 * burst + Math.sin(t * 0.9) * 0.02;
     legs = -0.85;
     bob = Math.sin(t * 15) * 0.002 * burst;
-  } else if (look === 'talk') {
+  } else if (look === 'gesture') {
     armL = -0.5 + Math.sin(t * 5.3) * 0.6;
     armR = -0.5 + Math.sin(t * 4.1 + 1.7) * 0.6;
     lean = Math.sin(t * 2.6) * 0.05;
