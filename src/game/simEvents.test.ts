@@ -437,13 +437,15 @@ describe('dev events on the Sim', () => {
     expect(sim.people.filter((o) => o.printJob)).toEqual([p]);
   });
 
-  it('place.foosball (foosball): two leave their desks for the table; refused while it is taken or with one person in', () => {
+  it('place.foosball (foosball): two leave their desks for the table; a game that is on is stopped and starts anew (actions.force), refused with one person in', () => {
     const sim = office();
     const two = only(sim, GROUP.slice(0, 2));
     expect(sim.events.trigger('foosball')).toMatch(/ spielen Kicker$/);
     expect(two.every((p) => p.foosJob && p.task?.phase !== 'work')).toBe(true);
     expect(sim.office.foosball!.free).toBe(false);
-    refused(sim, 'foosball');
+    expect(sim.events.trigger('foosball')).toMatch(/ spielen Kicker$/); // the table is taken: the first game is cleared away
+    expect(two.every((p) => p.foosJob)).toBe(true);
+    expect(sim.office.foosball!.spots.every((s) => s.occupant && two.includes(s.occupant))).toBe(true);
 
     const alone = office();
     only(alone, [GROUP[0]]);
@@ -603,7 +605,7 @@ describe('dev events on the Sim', () => {
       expect(sim.events.trigger(id)).toBe(strings.alterEgo.event[kind]);
       expect(marco.presence).toBe('out');
       expect(marco.awayKind).toBe(kind);
-      expect(marco.homeAlter).toBe(kind === 'home');
+      expect(marco.asAlter).toBe(kind === 'home'); // not homeAlter: that stays over from an earlier home office spell
     });
   }
 

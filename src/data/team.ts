@@ -50,6 +50,7 @@ const looks: Record<string, Look> = {
   'celine-buhler': { skin: FAIR, hair: '#9a5a3c', style: 'long', glasses: '#d9c7a4', thinGlasses: true, tee: true, tattoo: 'both', top: '#f1ebe6', bottom: '#202228', heightM: 1.7 },
   'zlatko-pesic': { skin: LIGHT, hair: '#2a2420', style: 'short', beard: 'full', eyebrows: true, top: '#a89a82', bottom: BLACK, strong: true, build: 1.15, heightM: 1.8 },
   'philip-gygax': { skin: LIGHT, hair: '#2a2420', style: 'short', beard: 'stubble', top: '#1f5a58', bottom: '#35507a', heightM: 1.8 },
+  'eliana-lipari': { skin: FAIR, hair: '#74492f', style: 'long', glasses: true, tee: true, top: '#c4161f', bottom: JEANS_DARK, heightM: 1.7 },
 };
 
 // Zlatko's little son (shows up in his home office)

@@ -106,7 +106,7 @@ describe('dev.scene', () => {
     const group = rest.slice(0, 3);
     group.forEach((p) => sim.drop(p));
     expect(sim.kitchen.start(group, sim.nav)).not.toBeNull();
-    advance(sim, 20 * 60);
+    advance(sim, 2 * 60); // the print job (4–9 s at the printer) is still on, whoever the first free person is
     expect(printing.printJob ?? sim.office.printer!.occupant).not.toBeNull();
     expect(sim.kitchen.current).not.toBeNull();
 
