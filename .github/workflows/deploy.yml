@@ -1,0 +1,62 @@
+name: Deploy
+
+# Builds main and rsyncs dist/ to the STAGING host over SSH.
+# Production lives on another host and gets its own job later (environment `production`, same secret names).
+# Secrets live in the GitHub environment `Staging (Janosch Infomaniak)` (Settings → Environments):
+#   DEPLOY_HOST        host name of the server
+#   DEPLOY_USER        SSH user
+#   DEPLOY_PATH        absolute target dir, e.g. /var/www/example.com/htdocs/ (trailing slash)
+#   DEPLOY_SSH_KEY     private key (no passphrase), its public half is in the server's authorized_keys
+#   DEPLOY_KNOWN_HOSTS output of `ssh-keyscan -H <host>`
+#   DEPLOY_PORT        optional, default 22
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**/*.md', '.claude/**', 'scripts/issue.sh']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy (staging)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: "Staging (Janosch Infomaniak)"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm test --if-present
+      - name: Prepare SSH
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      # hashed assets first, index.html last, so visitors never get an index that points to files not uploaded yet
+      - name: Upload
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER_: ${{ secrets.DEPLOY_USER }}
+          TARGET: ${{ secrets.DEPLOY_PATH }}
+          PORT: ${{ secrets.DEPLOY_PORT || '22' }}
+        run: |
+          SSH="ssh -i ~/.ssh/deploy_key -p $PORT"
+          rsync -rlt -e "$SSH" --exclude=index.html dist/ "$USER_@$HOST:$TARGET"
+          rsync -rlt -e "$SSH" dist/index.html "$USER_@$HOST:$TARGET"
+          # remove files no longer in the build
+          rsync -rlt --delete -e "$SSH" dist/ "$USER_@$HOST:$TARGET"
