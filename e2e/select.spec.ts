@@ -172,6 +172,23 @@ test('select.actions: a click the game refuses says why on the card', async ({ p
   expect(errors).toEqual([]);
 });
 
+test('select.actions: a greyed-out Homeoffice explains itself in a tooltip of the game, not a browser title', async ({ page }) => {
+  const errors = await openGame(page, '', 11); // during the day the home offices are usually all taken
+  const at = await standAlone(page);
+  await page.mouse.click(at.x, at.y);
+  expect(await read(page, (g) => g.sim.presence.homeFull)).toBe(true);
+  const home = page.locator('#actions-home');
+  await expect(home).toBeDisabled();
+  await expect(home).toHaveAttribute('data-tip', 'Alle Homeoffices sind besetzt');
+  await expect(home).not.toHaveAttribute('title', /.+/);
+  const tip = () => home.evaluate((el) => { const s = getComputedStyle(el, '::after'); return { text: s.content, opacity: Number(s.opacity) }; });
+  expect((await tip()).opacity).toBe(0);
+  await home.hover();
+  await expect.poll(async () => (await tip()).opacity).toBe(1);
+  expect((await tip()).text).toContain('Alle Homeoffices sind besetzt');
+  expect(errors).toEqual([]);
+});
+
 test('select.actions: a dog gets the card too, with its name and only Folgen working', async ({ page }) => {
   const errors = await openGame(page, '', undefined, '', 2);
   const dog = await read(page, (g) => {

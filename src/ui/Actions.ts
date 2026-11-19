@@ -65,6 +65,14 @@ export class Actions {
     this.steer.disabled = !inOffice && !steering;
     this.out.disabled = !inOffice;
     this.home.disabled = !inOffice || homeFull;
-    this.home.title = inOffice && homeFull ? t.homeFull : '';
+    // why Homeoffice is greyed out: a tooltip in the game's own style (`data-tip`, see `.m-actions .m-button[data-tip]`), not a browser title
+    const tip = inOffice && homeFull ? t.homeFull : '';
+    if (tip) {
+      this.home.dataset.tip = tip;
+      this.home.setAttribute('aria-description', tip);
+    } else {
+      delete this.home.dataset.tip;
+      this.home.removeAttribute('aria-description');
+    }
   }
 }
