@@ -5,8 +5,8 @@ const june = new Date(2026, 5, 1);
 const december = new Date(2026, 11, 1);
 
 describe('hud.settings', () => {
-  it('starts with labels on, auto weather and the camera following actions', () => {
-    expect(parseSettings(null, june)).toEqual({ tables: true, seats: true, rooms: true, weather: 'auto', xmas: false, follow: true });
+  it('starts with labels off, auto weather and the camera following actions', () => {
+    expect(parseSettings(null, june)).toEqual({ tables: false, seats: false, rooms: false, weather: 'auto', xmas: false, follow: true });
   });
 
   it('turns Christmas on by default only in December', () => {
@@ -26,7 +26,7 @@ describe('hud.settings', () => {
     const s = parseSettings('{"weather":"hail","follow":"yes","tables":0}', june);
     expect(s.weather).toBe('auto');
     expect(s.follow).toBe(true);
-    expect(s.tables).toBe(true);
+    expect(s.tables).toBe(false);
   });
 
   it('round-trips through the stored JSON', () => {
