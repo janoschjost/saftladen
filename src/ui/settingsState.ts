@@ -18,9 +18,9 @@ export interface SettingsState {
 
 export const WEATHER_MODES: readonly WeatherMode[] = ['auto', 'sun', 'rain'];
 
-/** Defaults: all labels on, auto weather, camera follows; Christmas only in December. */
+/** Defaults: all labels off, auto weather, camera follows; Christmas only in December. */
 export function defaultSettings(now = new Date()): SettingsState {
-  return { tables: true, seats: true, rooms: true, weather: 'auto', xmas: now.getMonth() === 11, follow: true };
+  return { tables: false, seats: false, rooms: false, weather: 'auto', xmas: now.getMonth() === 11, follow: true };
 }
 
 /** Reads the stored JSON; anything missing, of the wrong type or unreadable falls back to the default. */
