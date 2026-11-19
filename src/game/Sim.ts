@@ -296,6 +296,17 @@ export class Sim {
   }
 
   /**
+   * The player's card sends somebody home or out: whatever they are doing (talk, meeting, printer, coffee, call, WC)
+   * is dropped first, like `actions.force` does for the dev events. False, and nothing touched, when a scene holds
+   * them or no home office is free (`Presence.canSend`).
+   */
+  sendNow(p: Person, kind: 'home' | 'errand'): boolean {
+    if (!this.presence.canSend(p, kind)) return false;
+    this.pull(p);
+    return this.presence.send(p, kind, this.nav);
+  }
+
+  /**
    * Out of everything at once, wherever they sit or queue: talk, desk, printer, meeting, phone box, pod, WC. `drop`
    * lets a seated meeting member walk out; this does not wait for that.
    */

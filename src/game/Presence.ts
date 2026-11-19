@@ -456,6 +456,16 @@ export class Presence {
   }
 
   /**
+   * Nothing but what they are doing stands in the way of sending somebody out by hand: no scene holds them, they are
+   * not out of the sim, and a home office is free for `home`. (Held, steered or in a chat they can still be: the caller
+   * lets go of those first.) The player's card clears what they do and then sends (`Sim.sendNow`).
+   */
+  canSend(p: Person, kind: 'home' | 'errand'): boolean {
+    if (p.presence !== 'in' || this.kept.has(p) || this.removed.has(p)) return false;
+    return !(kind === 'home' && this.homeFull && homeRoomOf(p.id) === null);
+  }
+
+  /**
    * Sends somebody home / out by hand: they stay away until called back (or 10 min). False (nothing changed) when
    * they can't go. With `takeRoom` a full home office is no obstacle: whoever `roomToFree` picks comes back to the
    * office and `p` gets that room (the dev event).
