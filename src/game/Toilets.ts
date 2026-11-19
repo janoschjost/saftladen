@@ -111,7 +111,7 @@ export class Toilets {
   readonly queue: Waiter[] = [];
   private waitSpots: Vec2[] = [];
   private timer = between(FIRST);
-  /** a cabin was taken (true: light red) or freed (false: green) */
+  /** the door shut behind somebody (true: light red) or the cabin is free again (false: green); a cabin reserved for somebody still on the way stays green */
   onOccupied: (cabin: Cabin, occupied: boolean) => void = () => {};
   /** the cabin door should be locked shut (true, somebody sits inside) or released (false) */
   onLocked: (cabin: Cabin, locked: boolean) => void = () => {};
@@ -164,6 +164,11 @@ export class Toilets {
     return !!cabin.session || !!cabin.seat.occupant;
   }
 
+  /** The first place to wait in front of the cabins (dev event). */
+  get waitSpot(): Vec2 | undefined {
+    return this.waitSpots[0];
+  }
+
   /** A cabin is free, or there is still a place to wait in front. */
   get hasRoom(): boolean {
     return this.cabins.some((c) => !this.isOccupied(c)) || (this.queue.length < QUEUE_MAX && this.waitSpots.length > 0);
@@ -200,8 +205,9 @@ export class Toilets {
   update(dt: number, people: readonly Person[], nav: NavGrid): void {
     for (const cabin of this.cabins) {
       if (cabin.session && !cabin.session.update(dt)) cabin.session = null;
-      this.set(this.occupied, cabin, this.isOccupied(cabin), this.onOccupied);
-      this.set(this.locked, cabin, !!cabin.session?.seated, this.onLocked);
+      const shut = !!cabin.session?.seated;
+      this.set(this.occupied, cabin, shut, this.onOccupied);
+      this.set(this.locked, cabin, shut, this.onLocked);
     }
     this.updateQueue(dt, nav);
     this.timer -= dt;

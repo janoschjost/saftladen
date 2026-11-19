@@ -105,16 +105,24 @@ describe('places', () => {
     expect(run(sim, 60, () => a.foosJob?.phase === 'play' && b.foosJob?.phase === 'play')).toBe(true);
   });
 
-  it('place.toilet: the cabin is taken at once, its light turns red', () => {
+  it('place.toilet: the cabin is taken at once, its light turns red only when the door shuts behind the person (sitting), and green when they are up again', () => {
+    const RED = 0xe0342c;
     const sim = office();
     sim.scenario.clear('wc');
     const [p] = crew(sim, 'oscar-grob');
     expect(sim.toilets.go(p, sim.nav)).toBe('cabin');
     const i = sim.toilets.cabins.findIndex((c) => c.session?.person === p);
     expect(i).toBeGreaterThanOrEqual(0);
-    sim.step(STEP); // the light follows on the next simulation step
-    expect(sim.model.toilets.cabins[i].sign.color.getHex()).toBe(0xe0342c);
-    expect(sim.toilets.cabins[i].seat.occupant).toBe(p);
+    const light = () => sim.model.toilets.cabins[i].sign.color.getHex();
+    sim.step(STEP);
+    expect(sim.toilets.cabins[i].seat.occupant).toBe(p); // reserved: nobody else is sent in ...
+    expect(sim.toilets.isOccupied(sim.toilets.cabins[i])).toBe(true);
+    expect(light()).not.toBe(RED); // ... but the cabin looks empty while they are still on the way
+    expect(run(sim, 60, () => sim.toilets.cabins[i].session?.seated)).toBe(true);
+    sim.step(STEP);
+    expect(light()).toBe(RED);
+    expect(run(sim, 90, () => !sim.toilets.cabins[i].session && light() !== RED)).toBe(true);
+    expect(light()).toBe(0x3fbf5a);
   });
 
   it('place.toilet-queue: both cabins taken, the third person waits in front', () => {

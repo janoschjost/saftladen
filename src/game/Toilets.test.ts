@@ -77,7 +77,7 @@ const run = (t: Toilets, seconds: number) => {
 describe('place.toilet', () => {
   beforeEach(() => setSeed(1));
 
-  it('sends one person per cabin, the door is locked and the light red while they sit and play', () => {
+  it('sends one person per cabin, the door is locked and the light red only while they sit and play', () => {
     const t = washroom();
     const locked: boolean[] = [];
     const occupied: boolean[] = [];
@@ -87,11 +87,13 @@ describe('place.toilet', () => {
     expect(t.go(asPerson(a), nav)).toBe('cabin');
     expect(t.cabins[0].seat.occupant).toBe(a);
     t.update(STEP, [], nav);
-    expect(occupied).toEqual([true]); // taken right away, still on the way
+    expect(t.isOccupied(t.cabins[0])).toBe(true); // reserved right away, so nobody else is sent in
+    expect(occupied).toEqual([]); // the light stays green while they are still on the way
     expect(locked).toEqual([]);
     expect(a.gameboyOn).toBe(false);
     a.arrive();
     t.update(STEP, [], nav);
+    expect(occupied).toEqual([true]); // the door shuts behind them: light red and door locked together
     expect(locked).toEqual([true]);
     expect(a.gameboyOn).toBe(true);
   });

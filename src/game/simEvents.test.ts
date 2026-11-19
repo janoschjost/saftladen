@@ -425,6 +425,19 @@ describe('dev events on the Sim', () => {
     expect(run(sim, 60, () => sim.toilets.cabins.every((c) => !c.session))).toBe(true);
   });
 
+  it('place.toilet-queue (toilet-queue): both cabins taken and a third person waiting at once, red lights once they sit', () => {
+    const sim = office();
+    only(sim, GROUP);
+    sim.scenario.clear('wc');
+    expect(sim.events.trigger('toilet-queue')).toMatch(/ sitzen auf dem WC, \S+ wartet$/);
+    expect(sim.toilets.cabins.every((c) => c.session)).toBe(true);
+    expect(sim.toilets.queue).toHaveLength(1);
+    expect(run(sim, 20, () => sim.toilets.cabins.every((c) => c.session?.seated))).toBe(true);
+    sim.step(1 / 60);
+    for (const c of sim.model.toilets.cabins) expect(c.sign.color.getHex()).toBe(0xe0342c);
+    expect(sim.toilets.queue).toHaveLength(1); // still waiting in front
+  });
+
   it('place.printer (printer): somebody leaves the desk to print; while the printer is taken the job is cleared (actions.force) and a new one starts', () => {
     const sim = office();
     const [p] = only(sim, [GROUP[0]]);
