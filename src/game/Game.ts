@@ -270,16 +270,8 @@ export class Game {
       () => this.sim.presence.callAllBack(),
     );
     this.actions = new Actions(
-      () => {
-        if (!(this.selected instanceof Person)) return;
-        this.release(this.selected);
-        this.sim.presence.send(this.selected, 'home', this.sim.nav);
-      },
-      () => {
-        if (!(this.selected instanceof Person)) return;
-        this.release(this.selected);
-        this.sim.presence.send(this.selected, 'errand', this.sim.nav);
-      },
+      () => this.sendSelected('home'),
+      () => this.sendSelected('errand'),
       () => this.selected instanceof Person && this.toggleSteer(this.selected),
       () => this.toggleFollow(),
       () => this.selected instanceof Person && this.sim.presence.callBack(this.selected),
@@ -1298,6 +1290,17 @@ export class Game {
     a.owned = false;
     this.views.stopFly();
     this.now.setFollow(false);
+  }
+
+  /** Card buttons Homeoffice / Rausschicken: a chat is no obstacle (they leave it); a scene that holds them is, and the card says so. */
+  private sendSelected(kind: 'home' | 'errand'): void {
+    const p = this.selected;
+    if (!(p instanceof Person)) return;
+    const presence = this.sim.presence;
+    this.release(p);
+    if (p.talk && !presence.isKept(p) && !presence.isRemoved(p)) this.sim.drop(p); // only when nothing else refuses: a refused click leaves the chat alone
+    if (presence.send(p, kind, this.sim.nav)) return;
+    this.actions.say(kind === 'home' && presence.homeFull ? strings.presence.command.homeFull : strings.presence.command.busy);
   }
 
   /** The chip's Folgen button. */

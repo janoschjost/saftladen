@@ -2814,8 +2814,10 @@
             border-radius: 1rem;
             background: var(--color-ink);
             color: white;
+            color: white;
             font-size: 0.875rem;
-            white-space: nowrap;
+            width: max-content;
+            max-width: calc(100vw - 1.5rem);
 
             &[hidden] {
                 display: none;
@@ -2850,6 +2852,24 @@
             margin-right: 0.5rem;
             font-size: 1.125rem;
             font-weight: 700;
+        }
+
+        /* why a click on the card was refused: floats above the card */
+        &__note {
+            position: absolute;
+            bottom: calc(100% + 0.5rem);
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 0.4rem 0.9rem;
+            border-radius: 1rem;
+            background: var(--color-ink);
+            box-shadow: var(--shadow-card);
+            font-size: 0.875rem;
+            white-space: nowrap;
+
+            &[hidden] {
+                display: none;
+            }
         }
 
         .m-button:disabled {
