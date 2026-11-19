@@ -139,18 +139,24 @@ test('select.hover: a hand cursor over a person, the usual one beside', async ({
   expect(errors).toEqual([]);
 });
 
-test('select.actions: the card stays for somebody on the way out, with only Folgen working', async ({ page }) => {
+test('select.actions: the card stays for somebody on the way out, with Folgen and Zurückrufen instead of the rest', async ({ page }) => {
   const errors = await openGame(page);
   const at = await standAlone(page);
   await page.mouse.click(at.x, at.y);
   await expect(page.locator('#actions-out')).toBeEnabled();
+  await expect(page.locator('#actions-back')).toBeHidden();
   await scene(page, (s, id) => s.release(id), WHO); // put pins her: nothing sends a pinned person out
   await page.locator('#actions-out').click();
   await until(page, (g, id) => g.sim.person(id).presence === 'leaving', WHO);
   await expect(page.locator('#actions')).toBeVisible();
   await expect(page.locator('#actions-name')).toHaveText(await read(page, (g, id) => g.sim.person(id).displayName, WHO));
   await expect(page.locator('#actions-follow')).toBeEnabled();
-  for (const id of ['steer', 'home', 'out']) await expect(page.locator(`#actions-${id}`)).toBeDisabled();
+  for (const id of ['steer', 'home', 'out']) await expect(page.locator(`#actions-${id}`)).toBeHidden();
+  // Zurückrufen does what H does: she turns round and stays in the office
+  await page.locator('#actions-back').click();
+  await until(page, (g, id) => g.sim.person(id).presence === 'in', WHO);
+  await expect(page.locator('#actions-back')).toBeHidden();
+  await expect(page.locator('#actions-out')).toBeVisible();
   expect(errors).toEqual([]);
 });
 

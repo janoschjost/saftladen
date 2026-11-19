@@ -9,20 +9,24 @@ export class Actions {
   private home = document.getElementById('actions-home') as HTMLButtonElement;
   private out = document.getElementById('actions-out') as HTMLButtonElement;
 
+  private back = document.getElementById('actions-back') as HTMLButtonElement;
+
   private follow = document.getElementById('actions-follow') as HTMLButtonElement;
   private steer = document.getElementById('actions-steer') as HTMLButtonElement;
 
-  constructor(onHome: () => void, onOut: () => void, onSteer: () => void, onFollow: () => void) {
+  constructor(onHome: () => void, onOut: () => void, onSteer: () => void, onFollow: () => void, onBack: () => void) {
     this.follow.addEventListener('click', onFollow);
     this.steer.addEventListener('click', onSteer);
     this.home.textContent = t.home;
     this.out.textContent = t.errand;
+    this.back.textContent = t.callBack;
+    this.back.addEventListener('click', onBack);
     this.home.addEventListener('click', onHome);
     this.out.addEventListener('click', onOut);
   }
 
-  /** `name` null hides the card; without `inOffice` (a dog, somebody on the way out or on a smoke break) only Folgen works. */
-  show(name: string | null, inOffice: boolean, homeFull: boolean, steering = false, following = false): void {
+  /** `name` null hides the card; without `inOffice` only Folgen works, for a dog (`callable` false) next to the greyed buttons, for a person on the way out or on a smoke break (`callable`) next to Zurückrufen instead of them. */
+  show(name: string | null, inOffice: boolean, homeFull: boolean, steering = false, following = false, callable = false): void {
     const wasHidden = this.root.hidden;
     this.root.hidden = !name;
     if (!name) return;
@@ -43,6 +47,9 @@ export class Actions {
     this.follow.textContent = following ? 'Folgen beenden (F)' : 'Folgen (F)';
     this.steer.setAttribute('aria-pressed', String(steering));
     this.steer.textContent = steering ? 'Steuern beenden' : 'Steuern (WASD)';
+    for (const b of [this.home, this.out]) b.hidden = callable;
+    this.steer.hidden = callable && !steering; // steering can always be ended from here
+    this.back.hidden = !callable;
     this.steer.disabled = !inOffice && !steering;
     this.out.disabled = !inOffice;
     this.home.disabled = !inOffice || homeFull;
