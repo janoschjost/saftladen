@@ -9,6 +9,10 @@ function strokes(a: Walker, b: Walker): boolean {
   return a instanceof Dog && a.petted?.by === b;
 }
 
+/** how firmly a walker holds its ground when two overlap (`separate`): the higher one is not pushed */
+const STEADY = 2;
+const rank = (w: Walker): number => (w.held ? 3 : w.steady ? STEADY : w.rightOfWay ? 1 : 0);
+
 /** Soft collision: push overlapping walkers apart and keep them on the floor (`width` x `depth` metres, by default the grid's). */
 export function separate(ws: readonly Walker[], nav: NavGrid, width = nav.cols * nav.cell, depth = nav.rows * nav.cell): void {
   for (let i = 0; i < ws.length; i++) {
@@ -29,10 +33,11 @@ export function separate(ws: readonly Walker[], nav: NavGrid, width = nav.cols *
       }
       const d = Math.sqrt(d2);
       const push = ((min - d) / d) * 0.5;
-      // who gives way: the walker the player drags never, then whoever holds their ground (a stroke); equals part evenly
-      const ra = a.held ? 2 : a.steady ? 1 : 0;
-      const rb = b.held ? 2 : b.steady ? 1 : 0;
-      if (ra === 1 && rb === 1 && !strokes(a, b) && !strokes(b, a)) continue; // two strokes side by side: neither leaves the spot
+      // who gives way: the walker the player drags never, then whoever holds their ground (a stroke), then whoever has
+      // right of way (on the phone, `Walker.rightOfWay`); equals part evenly
+      const ra = rank(a);
+      const rb = rank(b);
+      if (ra === STEADY && rb === STEADY && !strokes(a, b) && !strokes(b, a)) continue; // two strokes side by side: neither leaves the spot
       const wa = ra > rb ? 0 : ra < rb ? 2 : 1;
       const wb = rb > ra ? 0 : rb < ra ? 2 : 1;
       a.pos.x -= dx * push * wa;

@@ -13,6 +13,8 @@ export interface Talk {
   members: Person[];
   /** who is talking right now (listeners turn towards them) */
   speaker?: Person;
+  /** a chat standing about on the floor: its members shuffle aside for somebody with right of way (`Walker.rightOfWay`) */
+  giveWay?: boolean;
 }
 
 /** Pick who talks next: never the current speaker, and in groups the previous speaker answers more often than a random bystander. */
@@ -93,6 +95,7 @@ export class Affinity {
 }
 
 export class Conversation {
+  readonly giveWay = true;
   members: Person[];
   kind: ConversationKind;
   center: Vec2;
