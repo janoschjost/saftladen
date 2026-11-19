@@ -2814,10 +2814,8 @@
             border-radius: 1rem;
             background: var(--color-ink);
             color: white;
-            color: white;
             font-size: 0.875rem;
-            width: max-content;
-            max-width: calc(100vw - 1.5rem);
+            white-space: nowrap;
 
             &[hidden] {
                 display: none;
@@ -2864,8 +2862,10 @@
             border-radius: 1rem;
             background: var(--color-ink);
             box-shadow: var(--shadow-card);
+            color: white;
             font-size: 0.875rem;
-            white-space: nowrap;
+            width: max-content;
+            max-width: calc(100vw - 1.5rem);
 
             &[hidden] {
                 display: none;

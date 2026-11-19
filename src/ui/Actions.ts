@@ -53,6 +53,7 @@ export class Actions {
       }
       this.name.textContent = name;
       this.note.hidden = true;
+      clearTimeout(this.noteTimer);
     }
     this.follow.setAttribute('aria-pressed', String(following));
     this.follow.textContent = following ? 'Folgen beenden (F)' : 'Folgen (F)';

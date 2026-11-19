@@ -61,4 +61,27 @@ describe('select.actions: Homeoffice / Rausschicken on the card while the person
     expect(a.talk).toBeTruthy(); // still in their talk
     expect(a.presence).toBe('in');
   });
+
+  it('select.actions: somebody carried by the player is not sent and keeps what they do', () => {
+    const { sim, a } = two();
+    sim.events.trigger('printer');
+    const who = [a, ...sim.people].find((p) => p.printJob)!;
+    who.held = true;
+    expect(sim.sendNow(who, 'errand')).toBe(false);
+    expect(who.printJob).toBeTruthy();
+  });
+
+  it('select.actions: the refusal says why: a scene holds them (busy), or no home office is free (homeFull), busy first', () => {
+    const { sim, a } = two();
+    expect(sim.presence.refusal(a, 'home')).toBeNull();
+    // every home office taken (by people who are away anyway)
+    for (const p of sim.people.filter((o) => o !== a).slice(0, 8)) sim.scenario.put(p.id, 'home', 'free');
+    expect(sim.presence.homeFull).toBe(true);
+    expect(sim.presence.refusal(a, 'errand')).toBeNull();
+    expect(sim.presence.refusal(a, 'home')).toBe('homeFull');
+    expect(sim.sendNow(a, 'home')).toBe(false);
+    expect(a.task).not.toBeNull(); // nothing dropped by a refused click
+    sim.presence.keep(a);
+    expect(sim.presence.refusal(a, 'home')).toBe('busy');
+  });
 });

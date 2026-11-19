@@ -1296,9 +1296,12 @@ export class Game {
   private sendSelected(kind: 'home' | 'errand'): void {
     const p = this.selected;
     if (!(p instanceof Person)) return;
-    this.release(p);
-    if (this.sim.sendNow(p, kind)) return;
-    this.actions.say(kind === 'home' && this.sim.presence.homeFull ? strings.presence.command.homeFull : strings.presence.command.busy);
+    const why = this.sim.presence.refusal(p, kind);
+    if (!why) {
+      this.release(p); // not before: a refused click leaves the steering alone
+      if (this.sim.sendNow(p, kind)) return;
+    }
+    this.actions.say(why === 'homeFull' ? strings.presence.command.homeFull : strings.presence.command.busy);
   }
 
   /** The chip's Folgen button. */

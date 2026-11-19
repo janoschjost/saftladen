@@ -297,11 +297,11 @@ export class Sim {
 
   /**
    * The player's card sends somebody home or out: whatever they are doing (talk, meeting, printer, coffee, call, WC)
-   * is dropped first, like `actions.force` does for the dev events. False, and nothing touched, when a scene holds
-   * them or no home office is free (`Presence.canSend`).
+   * is dropped first, like `actions.force` does for the dev events. False, and nothing touched, when `Presence.refusal`
+   * says no (a scene holds them, no home office is free) or they are still steered.
    */
   sendNow(p: Person, kind: 'home' | 'errand'): boolean {
-    if (!this.presence.canSend(p, kind)) return false;
+    if (p.controlled || this.presence.refusal(p, kind)) return false;
     this.pull(p);
     return this.presence.send(p, kind, this.nav);
   }

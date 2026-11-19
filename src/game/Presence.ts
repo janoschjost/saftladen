@@ -456,13 +456,14 @@ export class Presence {
   }
 
   /**
-   * Nothing but what they are doing stands in the way of sending somebody out by hand: no scene holds them, they are
-   * not out of the sim, and a home office is free for `home`. (Held, steered or in a chat they can still be: the caller
-   * lets go of those first.) The player's card clears what they do and then sends (`Sim.sendNow`).
+   * Why somebody cannot be sent out by hand, null when they can: 'busy' (away, in the player's hands, a scene holds
+   * them, out of the sim) or 'homeFull' (no home office free for them). Steering and a chat are not a reason: the
+   * caller lets go of those first (the card: `Sim.sendNow`), `send` itself refuses them.
    */
-  canSend(p: Person, kind: 'home' | 'errand'): boolean {
-    if (p.presence !== 'in' || this.kept.has(p) || this.removed.has(p)) return false;
-    return !(kind === 'home' && this.homeFull && homeRoomOf(p.id) === null);
+  refusal(p: Person, kind: 'home' | 'errand', takeRoom = false): 'busy' | 'homeFull' | null {
+    if (p.presence !== 'in' || p.held || this.kept.has(p) || this.removed.has(p)) return 'busy';
+    const home = kind === 'home' || p.member.homebody; // a homebody is never sent on an errand
+    return !takeRoom && home && this.homeFull && homeRoomOf(p.id) === null ? 'homeFull' : null;
   }
 
   /**
@@ -471,7 +472,7 @@ export class Presence {
    * office and `p` gets that room (the dev event).
    */
   send(p: Person, kind: 'home' | 'errand', nav: NavGrid, takeRoom = false): boolean {
-    if (p.presence !== 'in' || p.held || p.controlled || p.talk || this.kept.has(p) || this.removed.has(p)) return false;
+    if (p.controlled || p.talk || this.refusal(p, kind, true)) return false;
     if (p.member.homebody) kind = 'home'; // never out on errands
     if (kind === 'home') {
       if (this.homeFull && homeRoomOf(p.id) === null) {
