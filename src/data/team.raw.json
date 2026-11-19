@@ -220,5 +220,11 @@
     "name": "Zlatko Pesic",
     "role": "Team Vitamin 2",
     "portrait": "team/zlatko-pesic.jpg"
+  },
+  {
+    "id": "eliana-lipari",
+    "name": "Eliana Lipari",
+    "role": "Praktikantin Beratung Strategie",
+    "portrait": "team/eliana-lipari.jpg"
   }
 ]
