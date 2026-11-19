@@ -282,6 +282,7 @@ export class Game {
       },
       () => this.selected instanceof Person && this.toggleSteer(this.selected),
       () => this.toggleFollow(),
+      () => this.selected instanceof Person && this.sim.presence.callBack(this.selected),
     );
 
     this.seats = new Seats(
@@ -2092,6 +2093,7 @@ export class Game {
       this.sim.presence.homeFull,
       !!sel && sel === this.steered,
       !!sel && sel === this.followed,
+      sel instanceof Person && (sel.presence === 'leaving' || sel.presence === 'out'), // on the way out or on a smoke break: call back instead (somebody returning is on the way in anyway)
     );
     if (active instanceof Person) {
       const pets = active.pets.filter((d) => d.comesToday).map((d) => d.name);

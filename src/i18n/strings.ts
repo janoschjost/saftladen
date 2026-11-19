@@ -59,6 +59,8 @@ export const strings = {
       errand: 'Rausschicken',
       home: 'Ins Homeoffice',
       homeFull: 'Alle Homeoffices sind besetzt',
+      /** instead of the three above, for somebody on the way out or on a smoke break */
+      callBack: 'Zurückrufen (H)',
     },
     /** owner tooltip: the pets they brought along today */
     pets: {
