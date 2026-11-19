@@ -1484,7 +1484,7 @@ export class Game {
         // gentle weight shift onto the planted leg
         r.body.rotation.z = Math.cos(ph) * 0.035 * w.moving * (1 - sit);
         r.body.position.x = Math.sin(ph) * 0.02 * w.moving * (1 - sit);
-        if (w.working || w.editing) {
+        if (w.working || w.editing || w.laptop) {
           // desk work (typing bursts, mouse, reading, leaning back): see DeskWork
           const dw = w.deskWork.pose;
           r.armL.rotation.x = dw.armL;

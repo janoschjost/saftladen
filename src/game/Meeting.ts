@@ -266,9 +266,14 @@ export class MeetingRoom {
     this.onClosed(closed);
   }
 
+  /** A meeting can take this chair: nobody sits there, or only somebody who works there for want of a desk (see `Benches`). */
+  private open(s: MeetSeat): boolean {
+    return !s.occupant || s.occupant.benched;
+  }
+
   /** Chairs a new meeting could take: none while one is on. */
   get emptySeats(): number {
-    return this.current ? 0 : this.seats.filter((s) => !s.occupant).length;
+    return this.current ? 0 : this.seats.filter((s) => this.open(s)).length;
   }
 
   /** No meeting on and at least two chairs empty: one can start. */
@@ -281,10 +286,12 @@ export class MeetingRoom {
     if (!this.free) return null;
     // side chairs first (north to south), the two head chairs only when the group is big
     const isHead = (s: MeetSeat) => Math.abs(Math.cos(s.yaw)) > 0.5; // heads face north / south
-    const seats = this.seats.filter((s) => !s.occupant).sort((a, b) => Number(isHead(a)) - Number(isHead(b)) || a.seat.z - b.seat.z || a.seat.x - b.seat.x);
+    const seats = this.seats.filter((s) => this.open(s)).sort((a, b) => Number(isHead(a)) - Number(isHead(b)) || a.seat.z - b.seat.z || a.seat.x - b.seat.x);
     const group = people.slice(0, seats.length);
     if (group.length < 2) return null;
     const m = new Meeting(group, this.model.center, this, screen);
+    // a meeting wins: whoever works on a laptop at a chair it needs gets up and looks for another seat
+    group.forEach((_, i) => seats[i].occupant?.leaveBench());
     // nearest person takes the seat nearest to the door side first
     group.forEach((p, i) => p.callToMeeting(nav, seats[i], m));
     this.current = m;

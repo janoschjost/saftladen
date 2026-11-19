@@ -121,6 +121,8 @@ export interface OfficeModel {
   pod: { center: Vec2; seats: Array<{ x: number; z: number; yaw: number }> };
   /** kitchen: where the coffee group gathers (game coordinates, in front of the espresso machine), the machine itself and the two spots to stand at it */
   kitchen: { center: Vec2; machine: Vec2; stands: Vec2[]; table: Array<{ x: number; z: number; yaw: number }> };
+  /** where somebody without a desk sits and works on the laptop (game coordinates, yaw = facing): the kitchen bar stools */
+  benches: Array<{ x: number; z: number; yaw: number }>;
   /** the stool in the phone box (game coordinates, yaw = facing the door) */
   phoneBooth: { seat: { x: number; z: number; yaw: number }; doorPos: Vec2 };
   /** the two WC cabins in the washroom (seat on the bowl facing the door, doorway centre, the occupied light above the door) and where people queue when both are taken */
@@ -244,6 +246,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   const kitchenCenter: Vec2 = { x: 0, z: 0 };
   const kitchenMachine: Vec2 = { x: 0, z: 0 };
   const tableSeats: Array<{ x: number; z: number; yaw: number }> = [];
+  const benchSeats: Array<{ x: number; z: number; yaw: number }> = [];
   const kitchenStands: Vec2[] = [
     { x: 0, z: 0 },
     { x: 0, z: 0 },
@@ -1254,6 +1257,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       world.add(ring);
       cyl(0.19, 0.19, 0.06, x, 0.7, z, mat.black);
       cyl(0.16, 0.16, 0.02, x, 0.68, z, mat.steel);
+      benchSeats.push(track({ x: gx(x), z: gz(z), yaw: Math.atan2(0, gz(-1.25) - gz(z)) })); // sits at the bar, facing it
     }
   }, 'Stehbar');
   // washroom (x 0..4, left of the kitchen): purple walls, black floor, trough sink with mirror on the south wall next to the door, shower + 3 colored WC cabins on the north wall
@@ -2837,7 +2841,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     }
   };
   setRoofVisible(false); // the roof starts hidden
-  return { desks, items, pendantCords: [...pendantCords.values()], setRoofVisible, coatRacks, blockers: allBlockers, walls: blockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter, machine: kitchenMachine, stands: kitchenStands, table: tableSeats }, phoneBooth: { seat: boothSeat, doorPos: { x: ax(23.75), z: az(CZ) } }, toilets: { cabins: toiletCabins, wait: [{ x: ax(3.35), z: az(-3.3) }, { x: ax(0.7), z: az(-3.2) }] }, photoStudio: { stand: studioStand, product: studioProduct, seat: studioSeat, screens: studioScreens, flash: studioFlash }, serverRack: { stand: rackStand, spark: rackSpark, leds: rackLeds }, mess };
+  return { desks, items, pendantCords: [...pendantCords.values()], setRoofVisible, coatRacks, blockers: allBlockers, walls: blockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter, machine: kitchenMachine, stands: kitchenStands, table: tableSeats }, benches: benchSeats, phoneBooth: { seat: boothSeat, doorPos: { x: ax(23.75), z: az(CZ) } }, toilets: { cabins: toiletCabins, wait: [{ x: ax(3.35), z: az(-3.3) }, { x: ax(0.7), z: az(-3.2) }] }, photoStudio: { stand: studioStand, product: studioProduct, seat: studioSeat, screens: studioScreens, flash: studioFlash }, serverRack: { stand: rackStand, spark: rackSpark, leds: rackLeds }, mess };
 }
 
 /**

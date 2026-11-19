@@ -74,6 +74,7 @@ export const strings = {
       someoneLeaves: { errand: 'Jemand geht raus', home: 'Jemand geht ins Homeoffice' },
       leaves: { errand: (first: string) => `${first} geht raus`, home: (first: string) => `${first} geht ins Homeoffice` },
       allReturn: 'Alle kommen zurück',
+      desksFull: (n: number) => `Alle Schreibtische besetzt (${n} sitzen), die anderen kommen zurück`,
       calledBack: (first: string) => `${first} war nicht im Büro und kommt zurück: nochmal klicken, sobald er da ist`,
       remoteVisit: 'Remote-Kollege kommt ins Büro',
       visits: (first: string) => `${first} kommt ins Büro`,

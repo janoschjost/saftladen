@@ -338,7 +338,7 @@ export class Presence {
 
   /** Somebody who is not tied up right now (talk, meeting, printer, ...) nor held by a scene, and so free to walk out. */
   free(p: Person): boolean {
-    return !this.kept.has(p) && p.inOffice && !p.held && !p.controlled && !p.talk && !p.playerChat && !p.meetJob && !p.printJob && !p.foosJob && !p.vapeJob;
+    return !this.kept.has(p) && p.inOffice && !p.held && !p.controlled && !p.talk && !p.playerChat && (!p.meetJob || p.benched) && !p.printJob && !p.foosJob && !p.vapeJob;
   }
 
   /** Free to be sent out by the simulation: not busy, not on the way somewhere, not the remote worker on his visit (he came to see the team; only lunch and the end of the day take him out). */

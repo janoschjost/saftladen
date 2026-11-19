@@ -29,6 +29,7 @@ function* obstacles(sim: Sim): Generator<() => boolean> {
   yield () => !sim.kitchen.free && (sim.kitchen.abort(), true);
   yield () => pullAll(sim, sim.pod.current?.members ?? []);
   yield () => pullAll(sim, sim.phoneBooth.current?.members ?? []);
+  yield () => pullAll(sim, sim.people.filter((p) => p.benched)); // overflow sitters (no desk free): off the stool or the meeting chair
   yield () =>
     (sim.toilets.queue.length > 0 ||
       sim.toilets.cabins.some((c) => c.session)) &&
