@@ -523,12 +523,19 @@ describe('dev events on the Sim', () => {
 
   it('presence.remote-visit (remote-visit): the remote worker is called to the office for a visit; refused once he is there', () => {
     const sim = office();
-    const p = sim.presence.remoteWorker!;
+    const [p, q] = sim.presence.remoteWorkers;
+    expect(q).toBeDefined(); // Zlatko and Martin
+    for (const o of [p, q]) sim.presence.setVisit(o, false); // a remote day for both, whatever the seed dealt
+    run(sim, 30);
     expect(p.presence).toBe('out');
     expect(sim.presence.isVisitor(p)).toBe(false);
     expect(sim.events.trigger('remote-visit')).toBe(ev.visits(first(p)));
     expect(sim.presence.isVisitor(p)).toBe(true);
+    expect(sim.presence.isVisitor(q)).toBe(false);
     expect(run(sim, 120, () => p.inOffice)).toBe(true);
+    // the next call is for the other one; once both are here it is refused
+    expect(sim.events.trigger('remote-visit')).toBe(ev.visits(first(q)));
+    expect(run(sim, 120, () => q.inOffice)).toBe(true);
     refused(sim, 'remote-visit');
   });
 

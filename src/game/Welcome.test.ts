@@ -13,7 +13,7 @@ function fullOfficeVisit(seed: number) {
   setSeed(seed);
   const sim = new Sim({ cycle: cycleOf(11) });
   Walker.animate = true;
-  const v = sim.people.find((p) => p.member.schedule.visitChance !== undefined)!;
+  const v = sim.people.find((p) => p.id === 'zlatko-pesic')!;
   sim.presence.setVisit(v, true);
   sim.presence.callBack(v);
   let i = 0;
@@ -26,7 +26,7 @@ describe('presence.remote-visit', () => {
     setSeed(1);
     const sim = new Sim({ cycle: cycleOf(11), homes: true });
     Walker.animate = true;
-    const v = sim.people.find((p) => p.member.schedule.visitChance !== undefined)!;
+    const v = sim.people.find((p) => p.id === 'zlatko-pesic')!;
     sim.presence.setVisit(v, true); // in for a visit first (as the dev event does) ...
     sim.presence.callBack(v);
     for (let i = 0; i < 90 * 60 && v.presence !== 'in'; i++) sim.step(1 / 60);
@@ -119,7 +119,7 @@ describe('presence.remote-greet', () => {
     const sim = new Sim({ cycle: cycleOf(11) });
     Walker.animate = true;
     for (let i = 0; i < 60; i++) sim.step(1 / 60);
-    const v = sim.people.find((p) => p.member.schedule.visitChance !== undefined)!;
+    const v = sim.people.find((p) => p.id === 'zlatko-pesic')!;
     expect(v).toBeDefined();
     sim.presence.setVisit(v, true);
     sim.presence.callBack(v);

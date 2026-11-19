@@ -99,7 +99,7 @@ describe('social.start', () => {
   }
 
   it('social.start + social.friendship: somebody on a break walks over to a free friend, never to the colleague working next to them', () => {
-    const { sim, a, b, c } = scene(1);
+    const { sim, a, b, c } = scene(2);
     expect(Math.hypot(a.pos.x - c.pos.x, a.pos.z - c.pos.z)).toBeLessThan(Math.hypot(a.pos.x - b.pos.x, a.pos.z - b.pos.z));
     expect(busy(c)).toBe(true);
     const to = sim.social.walkOver(a, sim.people, sim.nav, sim.traffic);

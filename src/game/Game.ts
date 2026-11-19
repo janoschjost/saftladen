@@ -935,7 +935,7 @@ export class Game {
       group,
       label: strings.presence.event.remoteSon,
       run: () => {
-        const p = this.sim.presence.remoteWorker;
+        const p = this.sim.presence.remoteWorkers.find((o) => o.member.son);
         if (!p?.member.son || !this.sim.presence.roomFor(p)) return null;
         // a remote day again: his plan sends him to the home office (a room is freed if need be), the son comes once he is there
         this.sim.presence.setVisit(p, false);

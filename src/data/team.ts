@@ -103,6 +103,7 @@ const speeds: Record<string, number> = {
 
 // what changes when they work from home
 const homeLooks: Record<string, Partial<Look>> = {
+  'martin-fuchs': { top: '#b9a679', bottom: '#8d7c55' }, // khaki safari shirt and trousers
   'sandro-hagen': { tank: true, top: '#ffffff', print: { text: 'Sparklys', color: '#111111' } },
 };
 
@@ -111,9 +112,10 @@ const swimLooks: Record<string, Partial<Look>> = {
   'marco-hefti': { top: LIGHT, tank: true, bottom: '#e8645a' }, // just bathing shorts
 };
 
-// whose home office is which room (beach = Marco's own room in Thailand)
+// whose home office is which room (beach = Marco's own room in Thailand, safari = Martin's in South Africa)
 const homeRooms: Record<string, HomeRoom> = {
   'marco-hefti': 'beach',
+  'martin-fuchs': 'safari',
 };
 
 // signature moves in the home office (optional, happen now and then)
@@ -126,6 +128,7 @@ const signatures: Record<string, SignatureMove> = {
 // home office breaks they never take
 const skipBreaks: Record<string, HomeBreak[]> = {
   'marco-hefti': ['game'], // no video games on the beach
+  'martin-fuchs': ['game'], // none in the bush either
 };
 
 // can't stand coffee
@@ -159,7 +162,8 @@ const schedules: Record<string, Partial<Schedule>> = {
   'sandro-hagen': { arrive: 9.5, leave: 18.5, lunch: 12.75, nightOwlChance: 0.25 },
   'philip-gygax': { arrive: 8, leave: 17.5 },
   'oriana-pontieri': { arrive: 7, leave: 16.25, lunch: 11.5 },
-  'martin-fuchs': { arrive: 8.5, leave: 18, lunch: 12.5 },
+  // works remotely most of the time: in the office on about one day in three (#246)
+  'martin-fuchs': { arrive: 8.5, leave: 18, lunch: 12.5, visitChance: 0.3 },
   'elia-vogt': { arrive: 9, leave: 18 },
   'celine-buhler': { arrive: 8.75, leave: 17.25, lunch: 12.25 },
   'devin-frei': { arrive: 7.5, leave: 16.5, lunch: 11.75 },
