@@ -92,20 +92,24 @@ export class Meeting implements Talk {
         this.text = this.chat.next(this.speaker, this.members, this.kind);
         for (const m of this.members) m.speaking = m === this.speaker;
       }
-      if (this.time >= this.duration || this.members.length < 2 || this.members.some((m) => !m.meetSeated)) {
-        this.phase = 'leaving';
-        this.closed = false;
-        this.room.setClosed(false, nav);
-        for (const m of this.members) {
-          m.speaking = false;
-          m.meetFocus = null;
-          m.dismissMeeting();
-        }
-      }
+      if (this.time >= this.duration || this.members.length < 2 || this.members.some((m) => !m.meetSeated)) this.breakUp(nav);
       return true;
     }
 
     return this.members.length > 0;
+  }
+
+  /** The meeting ends now: the door opens, everybody stands up and leaves (also when somebody is called out of it: they could not get past the shut door). */
+  breakUp(nav: NavGrid): void {
+    if (this.phase === 'leaving') return;
+    this.phase = 'leaving';
+    this.closed = false;
+    this.room.setClosed(false, nav);
+    for (const m of this.members) {
+      m.speaking = false;
+      m.meetFocus = null;
+      m.dismissMeeting();
+    }
   }
 
   /** Over on the spot: the door opens, everybody drops out where they are. */

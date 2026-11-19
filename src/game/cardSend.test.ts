@@ -34,6 +34,7 @@ describe('select.actions: Homeoffice / Rausschicken on the card while the person
     ['playing foosball', (s, a, b) => s.office.foosball!.start(a, b, s.nav), (_s, a) => a.foosJob],
     ['on a coffee break', (s, a, b) => s.kitchen.start([a, b], s.nav), (_s, a) => a.coffeeJob],
     ['in a meeting', (s, a, b) => s.meetingRoom.start([a, b], s.nav), (_s, a) => a.meetSeated],
+    ['on a call in the phone booth', (s, a) => s.phoneBooth.start(a, s.nav), (_s, a) => a.boothCall],
     ['on the toilet', (s, a) => s.toilets.go(a, s.nav), (_s, a) => a.meetSeated],
     ['in a talk', (s, a, b) => s.social.start([a, b], { x: a.pos.x, z: a.pos.z }, s.nav), (_s, a) => a.talk],
   ];
@@ -83,5 +84,23 @@ describe('select.actions: Homeoffice / Rausschicken on the card while the person
     expect(a.task).not.toBeNull(); // nothing dropped by a refused click
     sim.presence.keep(a);
     expect(sim.presence.refusal(a, 'home')).toBe('busy');
+  });
+
+  it('select.actions: somebody in a running meeting of six gets out through the door, from every seat, and the meeting breaks up', () => {
+    const ids = [...GROUP, 'celine-buhler'];
+    for (let k = 0; k < ids.length; k++) {
+      const sim = office();
+      for (const p of sim.people) if (!ids.includes(p.id)) sim.scenario.put(p.id, 'errand');
+      sim.scenario.clear('printer', 'coffee', 'kitchen', 'meeting', 'wc');
+      for (const id of ids) sim.scenario.put(id, 'desk', 'free');
+      const group = ids.map((id) => sim.person(id));
+      const meeting = sim.meetingRoom.start(group, sim.nav)!;
+      expect(run(sim, 90, () => meeting.phase === 'session'), `seat ${k}: meeting runs`).toBe(true);
+      expect(meeting.closed).toBe(true); // the door is shut
+      expect(sim.sendNow(group[k], 'errand')).toBe(true);
+      expect(run(sim, 90, () => group[k].presence === 'out'), `seat ${k}: gets out`).toBe(true);
+      expect(meeting.closed).toBe(false);
+      expect(run(sim, 60, () => !sim.meetingRoom.current), `seat ${k}: meeting over`).toBe(true);
+    }
   });
 });
