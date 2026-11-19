@@ -11,7 +11,7 @@ import { SON_BYE, SON_LINES, sonTimeline } from '../data/sonLines';
 import { LAUNDRY, LAUNDRY_PICKS, RACK_SLOTS, laundryHung, laundryTime, laundryTrip } from './laundry';
 
 /**
- * Home offices: eight small rooms seen through the webcam of the person working there.
+ * Home offices: small rooms seen through the webcam of the person working there.
  * Coordinates: the person sits at the origin facing +z (towards the camera), the desk is in front of them,
  * the back wall is at z = -2. Y is up, one unit is roughly one metre.
  */
@@ -744,6 +744,217 @@ const STYLES: HomeStyle[] = [
       s.cy(0.03, 0.03, 1.4, 1.6, 0, 0.9, '#7a5a38', 6);
       s.glow(0.1, 0.16, 0.1, 1.6, 1.4, 0.9, '#ff9a2a');
       for (let i = 0; i < 4; i++) s.ball(0.05, -0.9 + i * 0.5, 0, 1.2 + rnd() * 0.5, pick(['#f4e4d0', '#e8a09a', '#f2f2ee']), 0.6);
+    },
+  },
+  {
+    // 9 ---------------------------------------------------------------- safari camp, South Africa (Martin)
+    label: 'Safari, Südafrika',
+    bg: '#f7b46e',
+    hemi: ['#ffe2b0', '#c9a45a', 1.35],
+    key: ['#ffb070', 2.4, [-4, 3, 3]],
+    build(s) {
+      // sunset: a smooth gradient sky (many thin bands), a round low sun in soft glowing rings, thin clouds lit from below,
+      // and hazy ranges of hills that get darker towards the viewer
+      const lerpColor = (a: string, b: string, k: number) => new THREE.Color(a).lerp(new THREE.Color(b), k).getStyle();
+      const stops = ['#fff1c9', '#ffd48a', '#fba965', '#ec7a5e', '#b85f84', '#6f4f8c', '#34356b'];
+      const BANDS = 36;
+      for (let i = 0; i < BANDS; i++) {
+        const u = (i / (BANDS - 1)) * (stops.length - 1);
+        const a = Math.min(stops.length - 2, Math.floor(u));
+        s.glow(60, 0.55, 0.1, 0, 0.6 + i * 0.5, -19, lerpColor(stops[a], stops[a + 1], u - a));
+      }
+      const disc = (r: number, x: number, y: number, z: number, color: Color, opacity = 1, sy = 1): THREE.Mesh => {
+        const m = new THREE.Mesh(new THREE.CircleGeometry(r, 48), new THREE.MeshBasicMaterial({ color, transparent: opacity < 1, opacity, depthWrite: false }));
+        m.position.set(x, y, z);
+        m.scale.y = sy;
+        s.group.add(m);
+        return m;
+      };
+      for (const [r, o] of [[5.5, 0.1], [3.8, 0.14], [2.4, 0.2], [1.5, 0.3]] as const) disc(r, -1.6, 1.5, -18.6, '#fff0b8', o); // glow rings
+      disc(0.85, -1.6, 1.5, -18.5, '#fffbe6'); // the sun
+      for (const [x, y, w, o] of [[-4.5, 3.0, 4.2, 0.85], [3.4, 2.6, 5, 0.8], [6.5, 4.4, 3.4, 0.7], [-8, 4.6, 3.6, 0.6], [0.5, 4.0, 2.6, 0.7]] as const) {
+        disc(w, x, y, -18.4, '#f2a28a', o, 0.07); // cloud, orange-pink
+        disc(w * 0.7, x + 0.3, y + 0.12, -18.35, '#ffd9b0', o * 0.8, 0.045); // sun-lit top
+      }
+      [['#c97a5a', 1.1, -17.2, 2.4], ['#a8605a', 0.9, -16.2, 1.6], ['#7a4a52', 0.8, -15.2, 1.0]].forEach(([c, h, z, w], i) => {
+        for (let k = -5; k <= 5; k++) disc(Number(w) * (3 + ((k + i) % 3) * 0.6), k * 4.2 + i * 1.7, 0.1 + (((k * 7 + i * 3) % 5) * 0.12) * 0.3, Number(z), c as string, 1, Number(h) / (Number(w) * 3));
+      });
+      // far-off silhouettes of acacias on the horizon
+      for (const x of [-7, -2.2, 4.6, 8.4]) {
+        s.glow(0.07, 0.5, 0.05, x, 0.2, -16, '#3a2a35');
+        s.glow(0.9, 0.1, 0.05, x, 0.68, -16, '#3a2a35');
+      }
+      // savanna: dust and dry grass
+      s.wall(40, 0.1, 22, 0, -0.1, -8, '#d4a95c');
+      for (let i = 0; i < 22; i++) s.wall(0.8 + rnd() * 1.6, 0.012, 0.5 + rnd(), -4 + rnd() * 8, 0, -1 - rnd() * 7, pick(['#c99a4e', '#dcb468', '#c2a050']));
+      for (let i = 0; i < 46; i++) {
+        const x = -4 + rnd() * 8;
+        const z = -0.8 - rnd() * 7;
+        for (let j = 0; j < 3; j++) s.bx(0.03, 0.16 + rnd() * 0.22, 0.03, x + (j - 1) * 0.05, 0, z + (j % 2) * 0.04, pick(['#b8923f', '#a8a04a', '#c9a85a']));
+      }
+      // flat-topped acacia on the right
+      const acaciaX = 2.2;
+      const acaciaZ = -3.4;
+      for (let i = 0; i < 5; i++) s.bx(0.2 - i * 0.015, 0.4, 0.2 - i * 0.015, acaciaX + i * 0.04, i * 0.4, acaciaZ, '#6a4a30');
+      for (const dx of [-0.5, 0.5]) for (let i = 0; i < 3; i++) s.bx(0.1, 0.35, 0.1, acaciaX + dx * (0.3 + i * 0.35), 1.9 + i * 0.2, acaciaZ, '#6a4a30');
+      for (const [dx, dy, dz, w] of [[0, 2.55, 0, 2.2], [-0.5, 2.7, 0.2, 1.4], [0.6, 2.75, -0.2, 1.3], [0.1, 2.9, 0.1, 0.9]] as const) {
+        s.bx(w, 0.22, w * 0.55, acaciaX + dx, dy, acaciaZ + dz, '#5f7a32');
+        s.bx(w * 0.8, 0.12, w * 0.45, acaciaX + dx, dy + 0.2, acaciaZ + dz, '#7a9040');
+      }
+      // wild animals walking by behind him (legs swing, the giraffes' necks sway); they enter and leave out of sight
+      const walker = (kind: 'giraffe' | 'elephant' | 'lion', z: number, k: number, speed: number, offset: number, dir: 1 | -1) => {
+        const g = new THREE.Group();
+        s.group.add(g);
+        const leg = (lx: number, lz: number, h: number, w: number, c: Color, ph: number) => {
+          const m = s.piece(new THREE.Vector3(lx, h, lz), () => s.bx(w, h, w, lx, 0, lz, c));
+          g.add(m);
+          return { m, ph };
+        };
+        let legs: Array<{ m: THREE.Mesh; ph: number }>;
+        let body: THREE.Mesh;
+        let neck: THREE.Mesh | null = null;
+        if (kind === 'giraffe') {
+          const hy = 1.1 * k;
+          legs = [leg(-0.35 * k, -0.1 * k, hy, 0.08 * k, '#d9a441', 0), leg(-0.35 * k, 0.1 * k, hy, 0.08 * k, '#d9a441', Math.PI), leg(0.35 * k, -0.1 * k, hy, 0.08 * k, '#d9a441', Math.PI), leg(0.35 * k, 0.1 * k, hy, 0.08 * k, '#d9a441', 0)];
+          body = s.piece(new THREE.Vector3(0, hy, 0), () => {
+            s.bx(0.95 * k, 0.5 * k, 0.36 * k, 0, hy, 0, '#d9a441');
+            for (let i = 0; i < 9; i++) s.bx(0.12 * k, 0.1 * k, 0.02 * k, -0.4 * k + (i % 5) * 0.2 * k, (1.1 + Math.floor(i / 5) * 0.25) * k, 0.185 * k, '#8a5a2a');
+            s.bx(0.05 * k, 0.4 * k, 0.05 * k, -0.5 * k, 1.1 * k, 0, '#6a4a30');
+          });
+          neck = s.piece(new THREE.Vector3(0.4 * k, 1.4 * k, 0), () => {
+            for (let i = 0; i < 6; i++) s.bx((0.2 - i * 0.012) * k, 0.3 * k, (0.2 - i * 0.012) * k, (0.4 + i * 0.07) * k, (1.4 + i * 0.27) * k, 0, '#d9a441');
+            s.bx(0.3 * k, 0.15 * k, 0.15 * k, 0.97 * k, 3.0 * k, 0, '#d9a441');
+            for (const dz of [-0.04, 0.04]) s.bx(0.03 * k, 0.1 * k, 0.03 * k, 0.85 * k, 3.15 * k, dz * k, '#6a4a30');
+          });
+          g.add(neck);
+        } else if (kind === 'elephant') {
+          const hy = 0.9 * k;
+          legs = [leg(-0.5 * k, -0.2 * k, hy, 0.26 * k, '#8a8d94', 0), leg(-0.5 * k, 0.2 * k, hy, 0.26 * k, '#8a8d94', Math.PI), leg(0.5 * k, -0.2 * k, hy, 0.26 * k, '#8a8d94', Math.PI), leg(0.5 * k, 0.2 * k, hy, 0.26 * k, '#8a8d94', 0)];
+          body = s.piece(new THREE.Vector3(0, hy, 0), () => {
+            s.bx(1.5 * k, 1.0 * k, 0.8 * k, 0, 0.8 * k, 0, '#9a9da4');
+            s.bx(0.7 * k, 0.75 * k, 0.65 * k, 0.95 * k, 0.95 * k, 0, '#9a9da4');
+            for (const dz of [-0.45, 0.45]) s.bx(0.1 * k, 0.65 * k, 0.5 * k, 0.7 * k, 0.95 * k, dz * k, '#8a8d94');
+            for (let i = 0; i < 4; i++) s.bx((0.2 - i * 0.03) * k, 0.22 * k, (0.2 - i * 0.03) * k, (1.42 + i * 0.03) * k, (0.75 - i * 0.2) * k, 0, '#9a9da4');
+            for (const dz of [-0.18, 0.18]) s.bx(0.3 * k, 0.07 * k, 0.07 * k, 1.5 * k, 0.95 * k, dz * k, '#f2eee4');
+            s.bx(0.05 * k, 0.5 * k, 0.05 * k, -0.78 * k, 0.5 * k, 0, '#8a8d94');
+          });
+        } else {
+          const hy = 0.42 * k;
+          legs = [leg(-0.3 * k, -0.1 * k, hy, 0.07 * k, '#c99a52', 0), leg(-0.3 * k, 0.1 * k, hy, 0.07 * k, '#c99a52', Math.PI), leg(0.3 * k, -0.1 * k, hy, 0.07 * k, '#c99a52', Math.PI), leg(0.3 * k, 0.1 * k, hy, 0.07 * k, '#c99a52', 0)];
+          body = s.piece(new THREE.Vector3(0, hy, 0), () => {
+            s.bx(0.8 * k, 0.3 * k, 0.28 * k, 0, 0.4 * k, 0, '#d2a35a');
+            s.bx(0.26 * k, 0.26 * k, 0.26 * k, 0.5 * k, 0.5 * k, 0, '#d2a35a'); // head
+            s.bx(0.2 * k, 0.4 * k, 0.4 * k, 0.4 * k, 0.4 * k, 0, '#5a3a22'); // mane
+            s.bx(0.1 * k, 0.1 * k, 0.12 * k, 0.65 * k, 0.5 * k, 0, '#e8c890'); // snout
+            s.bx(0.5 * k, 0.04 * k, 0.04 * k, -0.6 * k, 0.55 * k, 0, '#c99a52'); // tail
+            s.bx(0.08 * k, 0.08 * k, 0.08 * k, -0.88 * k, 0.5 * k, 0, '#5a3a22');
+          });
+        }
+        g.add(body);
+        const span = 24; // x from -12 to 12, then round again out of sight
+        s.ticks.push((t) => {
+          const u = (((t * speed + offset) % span) + span) % span;
+          g.position.set(dir > 0 ? -12 + u : 12 - u, 0, z);
+          g.rotation.y = dir > 0 ? 0 : Math.PI;
+          const stride = t * speed * 4.5 / k;
+          for (const l of legs) l.m.rotation.z = Math.sin(stride + l.ph) * 0.35;
+          body.position.y = Math.abs(Math.sin(stride)) * 0.03 * k + body.userData.y0;
+          if (neck) neck.rotation.z = Math.sin(t * 0.7 + offset) * 0.08 + 0.02;
+        });
+        body.userData.y0 = body.position.y;
+      };
+      walker('giraffe', -5.8, 1.15, 0.32, 3, 1);
+      walker('giraffe', -10, 0.9, 0.26, 14, -1);
+      walker('elephant', -8, 0.95, 0.3, 8, -1);
+      walker('elephant', -12, 0.7, 0.22, 20, 1);
+      walker('lion', -4.6, 1.0, 0.7, 5, 1);
+      walker('lion', -6.8, 0.9, 0.6, 17, -1);
+      // zebras grazing
+      const zebra = (x: number, z: number, dir: 1 | -1) => {
+        const X = (dx: number) => x + dx * dir;
+        for (const lx of [-0.28, 0.28]) for (const lz of [-0.07, 0.07]) s.bx(0.05, 0.5, 0.05, X(lx), 0, z + lz, '#f4f1ea');
+        s.bx(0.7, 0.3, 0.24, x, 0.45, z, '#f4f1ea');
+        for (let i = 0; i < 6; i++) s.bx(0.05, 0.32, 0.25, X(-0.28 + i * 0.11), 0.44, z, '#1c1c20');
+        s.bx(0.22, 0.12, 0.12, X(0.47), 0.4, z, '#2a2a2d'); // head down in the grass
+        s.bx(0.1, 0.3, 0.1, X(0.37), 0.5, z, '#f4f1ea');
+      };
+      zebra(1.1, -4.9, 1);
+      zebra(-0.1, -4.2, -1);
+      // safari jeep parked on the left (bow = +x)
+      const jx = -2.0;
+      const jz = -2.7;
+      for (const wx of [-0.62, 0.62]) for (const wz of [-0.4, 0.4]) {
+        s.bx(0.36, 0.36, 0.14, jx + wx, 0, jz + wz, '#1c1c20');
+        s.bx(0.14, 0.14, 0.16, jx + wx, 0.11, jz + wz, '#9a9da2');
+      }
+      s.bx(1.7, 0.4, 0.8, jx, 0.3, jz, '#6f7a45'); // body
+      s.bx(0.5, 0.25, 0.78, jx + 0.55, 0.7, jz, '#6f7a45'); // bonnet
+      s.bx(0.05, 0.4, 0.74, jx + 0.28, 0.7, jz, '#cfe0e8'); // windscreen
+      s.bx(0.06, 0.5, 0.06, jx - 0.5, 0.7, jz - 0.36, '#2a2a2d'); // roll bar
+      s.bx(0.06, 0.5, 0.06, jx - 0.5, 0.7, jz + 0.36, '#2a2a2d');
+      s.bx(0.06, 0.06, 0.8, jx - 0.5, 1.2, jz, '#2a2a2d');
+      s.bx(0.9, 0.05, 0.7, jx - 0.15, 1.2, jz, '#c9b88a'); // roof rack with a bag
+      s.bx(0.4, 0.2, 0.3, jx - 0.2, 1.25, jz, '#8a5a3a');
+      s.cy(0.17, 0.17, 0.1, jx - 0.95, 0.35, jz, '#1c1c20', 8); // spare wheel
+      for (const dz of [-0.2, 0.2]) s.glow(0.06, 0.1, 0.1, jx + 0.82, 0.55, jz + dz, '#fff3c4'); // headlights
+      // camp fire with stones, flickering
+      const fx = 1.2;
+      const fz = -1.3;
+      for (let i = 0; i < 8; i++) s.ball(0.075, fx + Math.cos((i / 8) * Math.PI * 2) * 0.3, 0, fz + Math.sin((i / 8) * Math.PI * 2) * 0.3, '#8a8478', 0.7);
+      s.bx(0.5, 0.07, 0.08, fx, 0.04, fz, '#4a3020');
+      s.bx(0.08, 0.07, 0.5, fx, 0.1, fz, '#5a3a22');
+      const flame = s.glow(0.2, 0.34, 0.2, fx, 0.12, fz, '#ff9a2a');
+      const tip = s.glow(0.1, 0.22, 0.1, fx, 0.4, fz, '#ffd860');
+      s.ticks.push((t) => {
+        flame.scale.set(1 + Math.sin(t * 9) * 0.08, 1 + Math.sin(t * 13 + 1) * 0.18, 1);
+        tip.scale.y = 1 + Math.sin(t * 17 + 2) * 0.3;
+      });
+      s.point('#ff9a40', 1.3, fx, 0.6, fz + 0.4, 5);
+      // signpost
+      s.bx(0.08, 1.5, 0.08, -2.35, 0, 0.0, '#5a3a22');
+      s.bx(0.7, 0.16, 0.04, -2.1, 1.25, 0.02, '#c9a574');
+      s.bx(0.6, 0.16, 0.04, -2.55, 1.0, 0.02, '#e8dcb8');
+      // camp desk (folding wood) and canvas chair
+      // folding camping chair: steel frame, olive canvas seat and back, armrests with a cup holder
+      s.chair = s.piece(new THREE.Vector3(0, 0, 0), () => {
+        const frame = '#3a3d42';
+        const canvas = '#6f7a45';
+        for (const sx of [-1, 1]) {
+          s.bx(0.04, 0.34, 0.04, sx * 0.26, 0, 0.22, frame); // front legs
+          s.bx(0.04, 0.34, 0.04, sx * 0.26, 0, -0.22, frame); // back legs
+          s.bx(0.04, 0.04, 0.5, sx * 0.26, 0.3, 0, frame); // seat rail
+          s.bx(0.04, 0.3, 0.04, sx * 0.26, 0.34, 0.2, frame); // arm post
+          s.bx(0.06, 0.04, 0.46, sx * 0.26, 0.62, 0.0, '#4a3020'); // wooden armrest
+          s.bx(0.04, 0.45, 0.04, sx * 0.26, 0.34, -0.26, frame); // back post
+        }
+        s.bx(0.5, 0.03, 0.46, 0, 0.32, 0.0, canvas); // seat
+        s.bx(0.5, 0.42, 0.03, 0, 0.4, -0.27, canvas); // back
+        s.cy(0.035, 0.03, 0.02, 0.27, 0.64, 0.12, '#9a9da2', 8); // cup holder
+      });
+      // folding camp table: khaki canvas top over a steel frame with cross braces, aluminium edge, a dented jerrycan and a rolled mat beside it
+      desk(s, '#b8a374', '#3a3d42', 1.5);
+      s.bx(1.5, 0.03, 0.03, 0, 0.7, 0.2, '#9a9da2'); // alu edge back
+      s.bx(1.5, 0.03, 0.03, 0, 0.7, 1.0, '#9a9da2'); // alu edge front
+      for (const sx of [-1, 1]) {
+        const x = sx * 0.69;
+        for (let i = 0; i < 10; i++) {
+          s.bx(0.03, 0.03, 0.05, x, 0.12 + i * 0.056, 0.28 + i * 0.07, '#3a3d42'); // X brace, one way
+          s.bx(0.03, 0.03, 0.05, x, 0.12 + i * 0.056, 0.92 - i * 0.07, '#3a3d42'); // and the other
+        }
+      }
+      s.bx(0.3, 0.42, 0.14, -0.95, 0, 0.55, '#6f7a45'); // jerrycan
+      s.bx(0.1, 0.06, 0.1, -0.95, 0.42, 0.55, '#4a5230');
+      s.cy(0.09, 0.09, 0.5, 0.95, 0, 0.6, '#8a7a52', 10); // rolled sleeping mat
+      s.cy(0.05, 0.05, 0.12, 0.62, 0.74, 0.7, '#3a3a3a'); // storm lantern
+      s.glow(0.07, 0.1, 0.07, 0.62, 0.78, 0.7, '#ffcc66');
+      s.bx(0.1, 0.012, 0.012, 0.62, 0.88, 0.7, '#3a3a3a');
+      s.point('#ffb060', 0.8, 0.62, 1.1, 0.9, 3);
+      mug(s, -0.55, 0.7, '#4a6fa5'); // enamel mug
+      s.bx(0.3, 0.006, 0.22, -0.7, 0.74, 0.45, '#e8dcb8'); // paper map
+      s.cy(0.2, 0.2, 0.012, 0.85, 0.74, 0.55, '#b59a62', 12); // safari hat
+      s.cy(0.09, 0.1, 0.08, 0.85, 0.75, 0.55, '#a8895a', 10);
+      s.cy(0.1, 0.1, 0.02, 0.85, 0.77, 0.55, '#5a3a22', 10);
+      for (const dx of [-0.04, 0.04]) s.cy(0.02, 0.02, 0.1, -0.25 + dx, 0.74, 0.62, '#2a2a2d', 6); // binoculars
     },
   },
 ];
