@@ -40,7 +40,7 @@ const looks: Record<string, Look> = {
   'devin-frei': { skin: FAIR, hair: '#3a2a22', style: 'curly', top: '#9fc3e9', bottom: BLACK, build: 1.15, strong: true, eyebrows: 'thick', heightM: 1.8 },
   'elia-vogt': { skin: LIGHT, hair: '#3b2a22', style: 'short', beard: 'mustache', tee: true, top: '#f2f0ec', bottom: '#a47f58', heightM: 1.8 },
   'marianne-hofstetter': { skin: FAIR, hair: '#7a4a34', style: 'long', bangs: true, tee: true, top: '#8a9a7e', bottom: '#4f7fc0', heightM: 1.7 },
-  'dominic-rechsteiner': { skin: LIGHT, hair: '#b8b8b8', style: 'short', beard: 'stubble', top: '#1c1d20', bottom: '#20242c', heightM: 1.9 },
+  'dominic-rechsteiner': { skin: LIGHT, hair: '#a7ebbe', style: 'buzz', beard: 'stubble', tee: true, tattoo: 'both', top: '#1c1d20', bottom: '#20242c', heightM: 1.9 },
   'fabian-bucher': { skin: MEDIUM, hair: '#2a211c', sideColor: '#9a9690', style: 'short', beard: 'stubble', beardColor: '#6e6862', smile: true, buttonShirt: true, vape: true, top: '#6f98c8', bottom: '#b5ad98', heightM: 1.8 },
   'janosch-jost': { skin: LIGHT, hair: '#5a3a28', style: 'short', cap: BLACK, capBack: true, glasses: true, thinGlasses: true, beard: 'full', tee: true, beardColor: '#9a735b', top: '#6b5058', bottom: BLACK, heightM: 1.8 },
   'larissa-lanker': { skin: FAIR, hair: '#e8d8b5', style: 'long', top: '#1d2420', flowers: ['#e8a0b8', '#f0c050', '#e2763a', '#f4efe6'], bottom: '#b79a6a', heightM: 1.7 },
