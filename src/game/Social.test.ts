@@ -328,6 +328,53 @@ describe('talks and groups', () => {
     expect(run(sim, 10, () => p.moving > 0.5)).toBe(true);
   });
 
+  it('social.walk-talk: somebody working at their desk answers from the chair: stays seated, swivels to the player, works on at the same desk afterwards', () => {
+    const sim = office();
+    sim.scenario.clear('printer', 'coffee', 'kitchen', 'meeting', 'wc');
+    sim.scenario.put(GROUP[0], 'desk', 'free');
+    const p = sim.person(GROUP[0]);
+    expect(run(sim, 30, () => p.working)).toBe(true);
+    const desk = p.task!.desk;
+    const left = p.task!.remaining;
+    const eye = { x: p.pos.x + 1.2, z: p.pos.z + 1.2 }; // the player stands beside the desk
+    expect(p.talkTo(eye, 4)).toBe(true);
+    expect(p.speaking).toBe(true); // answers right away
+    run(sim, 1.5);
+    expect(p.task?.phase).toBe('work'); // no stand-up
+    expect(p.task?.desk).toBe(desk);
+    expect(p.sit).toBe(1);
+    const face = Math.atan2(eye.x - p.pos.x, eye.z - p.pos.z);
+    expect(Math.abs(wrapAngle(p.yaw - face))).toBeLessThan(0.1);
+    expect(p.task!.remaining).toBeCloseTo(left, 1); // the work time does not run, nor is it reset
+    // after the chat they turn back to the screen and work on at the same desk
+    expect(run(sim, 5, () => !p.playerChat)).toBe(true);
+    expect(run(sim, 3, () => Math.abs(wrapAngle(p.yaw - desk.yaw)) < 0.1)).toBe(true);
+    expect(p.working).toBe(true);
+    expect(p.task?.desk).toBe(desk);
+    expect(p.task!.remaining).toBeLessThanOrEqual(left);
+    // callers that need somebody on their feet (petting, boombox, nerf) still find a worker at the desk busy
+    expect(p.talkTo(eye, 4, false)).toBe(false);
+    expect(p.working).toBe(true);
+  });
+
+  it('social.walk-talk: a seated worker in a meeting stays busy', () => {
+    const sim = office();
+    sim.scenario.clear('printer', 'coffee', 'kitchen', 'meeting', 'wc');
+    const group = GROUP.slice(0, 3).map((id) => {
+      sim.scenario.put(id, 'desk', 'free');
+      return sim.person(id);
+    });
+    expect(run(sim, 30, () => group.every((p) => p.working))).toBe(true);
+    const meeting = sim.meetingRoom.start(group, sim.nav);
+    expect(meeting).not.toBeNull();
+    for (const p of group) {
+      expect(p.talkTo({ x: p.pos.x + 1, z: p.pos.z }, 4)).toBe(false); // still at the desk (standing up) or on the way: in the meeting's talk
+      expect(p.playerChat).toBeNull();
+    }
+    expect(run(sim, 90, () => group.every((p) => p.meetSeated))).toBe(true);
+    for (const p of group) expect(p.talkTo({ x: p.pos.x + 1, z: p.pos.z }, 4)).toBe(false);
+  });
+
   it('social.walk-talk: somebody busy does not stop: in a talk, carried by the player', () => {
     const busy = (p: Person): void => {
       const before = [p.state, p.path.length, p.speaking];
