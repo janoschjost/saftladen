@@ -344,7 +344,7 @@ export function registerSimEvents(sim: Sim): void {
     }
   };
   habit('vape', (name) => `${name} dampft`, (p) => p.startVape(2));
-  habit('phone', (name) => `${name} telefoniert`, (p) => p.startPhone(nav));
+  habit('phone', (name) => `${name} telefoniert`, (p) => p.startPhone(nav, true));
   /**
    * A smoker steps out for a cigarette now (#169), whatever the time of day: `smoke` sends any free one (the Rauchpause
    * card), `smoke-<id>` that one. Out of the office (errand, home office) they are called back first; already out for
