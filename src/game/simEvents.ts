@@ -609,8 +609,8 @@ export function registerSimEvents(sim: Sim): void {
     group: ev.group,
     label: ev.remoteVisit,
     run: () => {
-      const p = presence.remoteWorker;
-      if (!p || p.inOffice) return null; // already here
+      const p = presence.remoteWorkers.find((o) => !o.inOffice);
+      if (!p) return null; // all of them are here
       presence.setVisit(p, true);
       presence.callBack(p);
       return ev.visits(first(p));

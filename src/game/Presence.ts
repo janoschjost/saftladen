@@ -217,9 +217,9 @@ export class Presence {
     return 'duty';
   }
 
-  /** The colleague who works remotely and only visits (`visitChance` in the team data). */
-  get remoteWorker(): Person | undefined {
-    return this.people.find((p) => p.member.schedule.visitChance !== undefined);
+  /** The colleagues who work remotely and only visit (`visitChance` in the team data). */
+  get remoteWorkers(): Person[] {
+    return this.people.filter((p) => p.member.schedule.visitChance !== undefined);
   }
 
   /** Remote worker who is in the office today (a visit, see Schedule.visitChance). */

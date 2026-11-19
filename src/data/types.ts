@@ -55,7 +55,7 @@ export type SignatureMove = 'swim' | 'catwalk' | 'curl';
  * The home office rooms. The first eight are regular rooms anybody can work in; the rest are somebody's own (only the
  * person whose `homeRoom` it is ever works there).
  */
-export const HOME_ROOMS = ['bedroom', 'kitchen', 'couch', 'balcony', 'study', 'attic', 'scandi', 'gamer', 'beach'] as const;
+export const HOME_ROOMS = ['bedroom', 'kitchen', 'couch', 'balcony', 'study', 'attic', 'scandi', 'gamer', 'beach', 'safari'] as const;
 export type HomeRoom = (typeof HOME_ROOMS)[number];
 
 /** The usual breaks between typing spells in the home office. */

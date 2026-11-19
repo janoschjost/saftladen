@@ -435,8 +435,19 @@ describe('presence', () => {
     // everybody else comes in every day
     for (const seed of [1, 2, 3]) {
       const { plans } = runDay(seed, 5, 5.1);
-      for (const [id, plan] of plans) if (id !== 'zlatko-pesic') expect(plan.remote, id).toBe(false);
+      for (const [id, plan] of plans) if (id !== 'zlatko-pesic' && id !== 'martin-fuchs') expect(plan.remote, id).toBe(false);
     }
+  });
+
+  it('presence.remote-visit: Martin is mostly remote (more days at home than in the office) and works in the safari room', () => {
+    const m = team.find((t) => t.id === 'martin-fuchs')!;
+    expect(m.schedule.visitChance).toBeGreaterThan(0);
+    expect(m.schedule.visitChance).toBeLessThan(0.5);
+    expect(m.homeRoom).toBe('safari');
+    let remote = 0;
+    for (let seed = 1; seed <= 40; seed++) if (runDay(seed, 5, 5.1).plans.get('martin-fuchs')!.remote) remote++;
+    expect(remote).toBeGreaterThan(20); // chance 0.7 of 40 days
+    expect(remote).toBeLessThan(40); // he does come in now and then
   });
 
   it('presence.door-flow: after "all back" the crowd walks in spaced out, one by one', () => {

@@ -155,7 +155,7 @@ test('select.actions: the card stays for somebody on the way out, with only Folg
 });
 
 test('select.actions: a dog gets the card too, with its name and only Folgen working', async ({ page }) => {
-  const errors = await openGame(page);
+  const errors = await openGame(page, '', undefined, '', 2);
   const dog = await read(page, (g) => {
     const d = g.sim.people.flatMap((p) => p.pets).find((q) => q.comesToday && !q.away);
     if (!d) return null;

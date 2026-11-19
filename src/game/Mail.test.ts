@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ENVELOPES, PARCELS, sizeOf } from '../render/mailProps';
 import { installHeadlessDom } from '../test/headlessDom';
-import { office, run, STEP } from '../test/office';
+import { office, ownDesk, run, STEP } from '../test/office';
 import { COURIERS, DOVE, DRONE, MAIL_STAY, PUT } from './Mail';
 import { makePossible } from './makePossible';
 import type { Person } from './Person';
@@ -26,6 +26,7 @@ interface Stage {
 /** The addressee at their desk, the apprentice `by` at theirs (nobody holds them: they may be sent out), everybody else out. */
 function stage(by = COURIER): Stage {
   const sim = office();
+  ownDesk(sim, TO);
   for (const p of sim.people) if (p.id !== TO && p.id !== by) sim.scenario.put(p.id, 'errand');
   sim.scenario.put(TO, 'desk', 'stay');
   sim.scenario.put(by, 'desk', 'free');

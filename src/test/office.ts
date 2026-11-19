@@ -17,6 +17,12 @@ export function office(options: SimOptions = {}, seed = 1): Sim {
   return sim;
 }
 
+/** Gives `id` a desk of their own if the seed left them without, so a scene can rely on `deskFor`. */
+export function ownDesk(sim: Sim, id: string): void {
+  const p = sim.person(id);
+  if (!p.homeDesk) sim.office.assign(p, sim.office.desks.find((d) => !d.owner)!.number);
+}
+
 /** Steps until `done` (true) or `seconds` of game time have passed (false); `each` runs after every step. */
 export function run(sim: Sim, seconds: number, done: () => unknown = () => false, each: () => void = () => {}): boolean {
   for (let i = 0; i < seconds / STEP; i++) {
