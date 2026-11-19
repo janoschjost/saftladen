@@ -89,6 +89,14 @@ function hairParts(look: Look): THREE.BufferGeometry[] {
   switch (look.style) {
     case 'none':
       break;
+    case 'buzz': {
+      // close-cropped: thin shells hugging the skull
+      if (!look.cap) p.push(box(0.4, 0.03, 0.4, 0, 1.76, 0, c));
+      p.push(box(0.4, 0.26, 0.03, 0, 1.64, -0.19, c));
+      p.push(box(0.02, 0.12, 0.3, -0.2, 1.69, -0.02, c));
+      p.push(box(0.02, 0.12, 0.3, 0.2, 1.69, -0.02, c));
+      break;
+    }
     case 'short':
       if (!look.cap) top();
       back(0.3, 1.62);

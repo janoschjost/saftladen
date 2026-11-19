@@ -1,4 +1,4 @@
-export type HairStyle = 'none' | 'short' | 'quiff' | 'long' | 'bob' | 'bun' | 'manbun' | 'pony' | 'curly';
+export type HairStyle = 'none' | 'buzz' | 'short' | 'quiff' | 'long' | 'bob' | 'bun' | 'manbun' | 'pony' | 'curly';
 
 /** Parametric low-poly look, derived by hand from the portrait photos. */
 export interface Look {
