@@ -39,5 +39,6 @@ describe('ui.welcome', () => {
     expect(shouldShowWelcome('?welcome=1', '', true)).toBe(false);
     expect(shouldShowWelcome('?test&welcome=1', '', false)).toBe(true);
     expect(shouldShowWelcome('?test&welcome=1', '', true)).toBe(false);
+    expect(shouldShowWelcome('?show', '', false)).toBe(false); // the Christmas film has no welcome card
   });
 });
