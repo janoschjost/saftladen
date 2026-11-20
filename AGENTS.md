@@ -82,6 +82,7 @@ Devs review a PR in the running app with `/review-pr N`. It claims the PR (`in r
 - No `Co-Authored-By` line and no other attribution line in commit messages.
 - Commit, push and open PRs only on a branch, never on `main`.
 - Merge only when a dev explicitly tells you to, for that PR, and only what was tested on top of `main`: the branch is up to date with `main` (rebase first if not) and `Build and test` and `E2E (Playwright)` are green on that last commit (label `e2e` makes the second one run). Then `gh pr merge N --squash --delete-branch`. Never merge on your own initiative, and not from the GitHub page without those checks: nothing there stops a red merge.
+- **The last rebase before a merge is GitHub's.** A PR that is finished and reviewed, with `main` moved on, needs no local gate again: `gh api -X PUT repos/{owner}/{repo}/pulls/N/update-branch -f update_method=rebase`, then `gh pr checks N --watch` (both checks must run green on the new head; add the `e2e` label first if it is missing) and merge. While the work is still going (implementing, fixing review findings, a rebase that touches the rules or `package-lock.json`) rebase and test locally as in step 6. A conflict makes the call fail: rebase locally then. A branch GitHub rebased differs from the local one: `git fetch origin && git reset --hard origin/<branch>` before any further local commit (nothing unpushed there, or push it first).
 
 ## FEATURES.md
 
