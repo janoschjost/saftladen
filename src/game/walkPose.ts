@@ -19,7 +19,7 @@ export function walkPose(r: CharacterRig, ph: number, moving = 1): void {
   r.kneeL.rotation.x = (Math.max(0, -c) * 1.1 + 0.06) * moving;
   r.kneeR.rotation.x = (Math.max(0, c) * 1.1 + 0.06) * moving;
   // the pelvis rides on the planted foot, so the feet touch the floor
-  const hip = moving > 0.01 ? HIP_HEIGHT + (Math.max(depth(swing, r.kneeL.rotation.x), depth(-swing, r.kneeR.rotation.x)) - HIP_HEIGHT) * 0.5 : HIP_HEIGHT;
+  const hip = HIP_HEIGHT + (Math.max(depth(swing, r.kneeL.rotation.x), depth(-swing, r.kneeR.rotation.x)) - HIP_HEIGHT) * 0.5;
   r.legL.position.y = r.legR.position.y = hip;
   r.armL.rotation.x = -swing * 0.8;
   r.armR.rotation.x = swing * 0.8;

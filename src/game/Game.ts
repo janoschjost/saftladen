@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { CharacterRig } from '../render/characterBuilder';
 import { team } from '../data/team';
 import shippedSeats from '../data/seats.json';
 import { HOME_LABELS, HomeOffice, ROOM_COUNT, heldPoses, type ArmPose } from '../render/homeOffice';
@@ -78,6 +79,11 @@ const ACTION_NO_LEAD = 6; // seconds the chip stays for an action that moves nob
 
 /** What an action may change on a person; the first person whose values change is the one the camera follows. */
 const leadState = (p: Person): unknown[] => [p.printJob, p.foosJob, p.meetPhase, p.coffeeJob, p.vapeJob, p.phoneJob, p.talk, p.presence === 'in' ? null : p.presence];
+
+/** World point on top of a character rig's head, following the posed body; rig heights are in metres, the body's local units are unscaled (the caller has updated the world matrices). */
+function rigHeadTop(rig: CharacterRig): THREE.Vector3 {
+  return rig.body.localToWorld(new THREE.Vector3(0, rig.headHeight / (rig.root.scale.y || 1), 0));
+}
 
 export class Game {
   private scene = new THREE.Scene();
@@ -2186,17 +2192,15 @@ export class Game {
   private headTop(w: Walker): THREE.Vector3 {
     w.root.updateMatrixWorld(true);
     if (w instanceof Dog) return w.rig.body.localToWorld(new THREE.Vector3(0, w.rig.face.y + w.rig.face.r, w.rig.face.z));
-    // rig heights are in metres; the body's local units are unscaled
-    const s = w.root.scale.y || 1;
-    if (w instanceof Person) return w.rig.body.localToWorld(new THREE.Vector3(0, w.rig.headHeight / s, 0));
-    return w.root.localToWorld(new THREE.Vector3(0, w.headHeight / s, 0));
+    if (w instanceof Person) return rigHeadTop(w.rig);
+    return w.root.localToWorld(new THREE.Vector3(0, w.headHeight / (w.root.scale.y || 1), 0));
   }
 
   /** The world point on top of the ghost's head, for his bubble. */
   private ghostHead(): THREE.Vector3 {
     const rig = this.ghost.rig!;
     rig.root.updateMatrixWorld(true);
-    return rig.body.localToWorld(new THREE.Vector3(0, rig.headHeight / (rig.root.scale.y || 1), 0));
+    return rigHeadTop(rig);
   }
 
   private project(w: Walker, extra = 0.25): { x: number; y: number } {

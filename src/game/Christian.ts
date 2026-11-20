@@ -9,6 +9,7 @@ import { buildMop } from '../render/mopProp';
 import { PINCH } from '../render/smokeProps';
 import type { MessItem } from './Mess';
 import type { Vec2 } from './NavGrid';
+import { DAY_START } from './Presence';
 import { stream } from './rng';
 import { CYCLE_SECONDS, cycleOf, hourOf } from './TimeOfDay';
 import type { Sim } from './Sim';
@@ -43,7 +44,7 @@ const ARRIVE_FROM = 0.5;
 const ARRIVE_TO = 1.5;
 export const ARRIVE_LATEST = 2.5;
 /** The visit has to be over by this clock hour: the next working day starts (`Mess` clears what is left). */
-export const VISIT_DEADLINE_HOUR = 4;
+export const VISIT_DEADLINE_HOUR = DAY_START;
 /** At night the clock races (a clock hour is a few real seconds), so he speeds up to be done in time; at most this much (the 04:00 clear takes what is left). */
 const MAX_RATE = 6;
 /** How far from the wall (m) he is fully visible: he fades in over this. */
@@ -194,11 +195,8 @@ export class Christian {
     this.phase = 0;
     this.steps = steps;
     this.rate = this.rateFor(steps);
-    this.cur = null;
     this.pose = 'walk';
     this.hold = 0;
-    this.text = null;
-    this.pending = null;
     this.textT = 0;
     this.gapT = 0;
     this.apply();
@@ -237,7 +235,7 @@ export class Christian {
       for (let k = 0; budget > 0; k++) {
         const to = { x: desk.seat.x + (k % 2 ? -STROKE.x : STROKE.x), z: desk.seat.z + ((k >> 1) % 2 ? STROKE.z : -STROKE.z) };
         steps.push({ to, pose: 'mop', speed: MOP_SPEED });
-        budget -= Math.hypot(to.x - from.x, to.z - from.z) / MOP_SPEED;
+        budget -= dist(to, from) / MOP_SPEED;
         from = to;
       }
     }
@@ -251,17 +249,16 @@ export class Christian {
   private cleanSteps(left: MessItem[], from: Vec2, first: boolean): { steps: Step[]; at: Vec2 } {
     const mess = this.sim.mess;
     const steps: Step[] = [];
-    while (left.length) {
+    const todo = left.map((item) => ({ item, w: mess.where(item) }));
+    while (todo.length) {
       let best = 0;
       let bestD = Infinity;
-      left.forEach((item, i) => {
-        const w = mess.where(item);
+      todo.forEach(({ w }, i) => {
         const d = dist(w, from);
         if (d < bestD) [best, bestD] = [i, d];
       });
-      const [item] = left.splice(best, 1);
-      const w = mess.where(item);
-      const d = Math.max(0.01, Math.hypot(from.x - w.x, from.z - w.z));
+      const [{ item, w }] = todo.splice(best, 1);
+      const d = Math.max(0.01, bestD);
       const to = { x: w.x + ((from.x - w.x) / d) * STAND_OFF, z: w.z + ((from.z - w.z) / d) * STAND_OFF };
       steps.push(this.workStep(item, to, first && steps.length === 0));
       from = to;
@@ -307,8 +304,8 @@ export class Christian {
   }
 
   private workStep(item: MessItem, to: Vec2, first: boolean): Step {
-    const own: Partial<Record<MessItem['kind'], LineKind>> = { lunchbox: 'lunchbox', bin: 'bin' };
-    const kind: LineKind | undefined = first ? 'arrive' : own[item.kind] ?? (this.rnd() < 0.6 ? 'tidy' : undefined);
+    const own = item.kind === 'lunchbox' || item.kind === 'bin' ? item.kind : undefined;
+    const kind: LineKind | undefined = first ? 'arrive' : own ?? (this.rnd() < 0.6 ? 'tidy' : undefined);
     return { to, wait: WORK_TIME, pose: item.kind === 'lunchbox' ? 'nose' : 'pick', say: kind, at: () => void this.sim.mess.take(item) };
   }
 
@@ -370,16 +367,16 @@ export class Christian {
     if (!this.arrived) {
       const dx = s.to.x - this.pos.x;
       const dz = s.to.z - this.pos.z;
-      const dist = Math.hypot(dx, dz);
-      const d = Math.min(dist, (s.speed ?? GLIDE_SPEED) * work);
-      if (dist > 0.001) {
-        this.pos.x += (dx / dist) * d;
-        this.pos.z += (dz / dist) * d;
+      const gap = Math.hypot(dx, dz);
+      const d = Math.min(gap, (s.speed ?? GLIDE_SPEED) * work);
+      if (gap > 0.001) {
+        this.pos.x += (dx / gap) * d;
+        this.pos.z += (dz / gap) * d;
         this.yaw = Math.atan2(dx, dz);
         this.phase += d * WALK_PHASE_PER_M;
         target = 1;
       }
-      if (d >= dist) {
+      if (d >= gap) {
         this.arrived = true;
         this.dwell = s.wait ?? 0;
       }
