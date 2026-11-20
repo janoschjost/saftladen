@@ -160,6 +160,34 @@ test('select.actions: the card stays for somebody on the way out, with Folgen an
   expect(errors).toEqual([]);
 });
 
+test('select.actions: a click the game refuses says why on the card', async ({ page }) => {
+  const errors = await openGame(page);
+  const at = await standAlone(page);
+  await page.mouse.click(at.x, at.y); // put pins her: a scene holds her, nothing sends her out
+  await expect(page.locator('#actions-out')).toBeEnabled();
+  await expect(page.locator('#actions-note')).toBeHidden();
+  await page.locator('#actions-out').click();
+  await expect(page.locator('#actions-note')).toHaveText('Gerade nicht möglich: beschäftigt');
+  expect(await read(page, (g, id) => g.sim.person(id).presence, WHO)).toBe('in');
+  expect(errors).toEqual([]);
+});
+
+test('select.actions: a greyed-out Homeoffice explains itself in a tooltip of the game, not a browser title', async ({ page }) => {
+  const errors = await openGame(page, '', 11); // during the day the home offices are usually all taken
+  const at = await standAlone(page);
+  await page.mouse.click(at.x, at.y);
+  expect(await read(page, (g) => g.sim.presence.homeFull)).toBe(true);
+  const home = page.locator('#actions-home');
+  await expect(home).toBeDisabled();
+  await expect(home).toHaveAttribute('data-tip', 'Alle Homeoffices sind besetzt');
+  await expect(home).not.toHaveAttribute('title', /.+/);
+  const tip = () => home.evaluate((el) => { const s = getComputedStyle(el, '::after'); return { text: s.content, opacity: Number(s.opacity) }; });
+  expect((await tip()).opacity).toBe(0);
+  await expect.poll(async () => { await home.hover(); return (await tip()).opacity; }).toBe(1); // the card is still sliding in on the first try
+  expect((await tip()).text).toContain('Alle Homeoffices sind besetzt');
+  expect(errors).toEqual([]);
+});
+
 test('select.actions: a dog gets the card too, with its name and only Folgen working', async ({ page }) => {
   const errors = await openGame(page, '', undefined, '', 2);
   const dog = await read(page, (g) => {

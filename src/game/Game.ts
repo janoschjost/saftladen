@@ -270,16 +270,8 @@ export class Game {
       () => this.sim.presence.callAllBack(),
     );
     this.actions = new Actions(
-      () => {
-        if (!(this.selected instanceof Person)) return;
-        this.release(this.selected);
-        this.sim.presence.send(this.selected, 'home', this.sim.nav);
-      },
-      () => {
-        if (!(this.selected instanceof Person)) return;
-        this.release(this.selected);
-        this.sim.presence.send(this.selected, 'errand', this.sim.nav);
-      },
+      () => this.sendSelected('home'),
+      () => this.sendSelected('errand'),
       () => this.selected instanceof Person && this.toggleSteer(this.selected),
       () => this.toggleFollow(),
       () => this.selected instanceof Person && this.sim.presence.callBack(this.selected),
@@ -1298,6 +1290,18 @@ export class Game {
     a.owned = false;
     this.views.stopFly();
     this.now.setFollow(false);
+  }
+
+  /** Card buttons Homeoffice / Rausschicken: whatever they are doing gives way (chat, meeting, printer, ...); a scene that holds them does not, and the card says so. */
+  private sendSelected(kind: 'home' | 'errand'): void {
+    const p = this.selected;
+    if (!(p instanceof Person)) return;
+    const why = this.sim.presence.refusal(p, kind);
+    if (!why) {
+      this.release(p); // not before: a refused click leaves the steering alone
+      if (this.sim.sendNow(p, kind)) return;
+    }
+    this.actions.say(why === 'homeFull' ? strings.presence.command.homeFull : strings.presence.command.busy);
   }
 
   /** The chip's Folgen button. */

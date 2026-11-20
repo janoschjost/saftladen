@@ -10,6 +10,8 @@ export class Actions {
   private out = document.getElementById('actions-out') as HTMLButtonElement;
 
   private back = document.getElementById('actions-back') as HTMLButtonElement;
+  private note = document.getElementById('actions-note') as HTMLElement;
+  private noteTimer = 0;
 
   private follow = document.getElementById('actions-follow') as HTMLButtonElement;
   private steer = document.getElementById('actions-steer') as HTMLButtonElement;
@@ -23,6 +25,14 @@ export class Actions {
     this.back.addEventListener('click', onBack);
     this.home.addEventListener('click', onHome);
     this.out.addEventListener('click', onOut);
+  }
+
+  /** Says why a click was refused, above the card, for a few seconds (or until another person is selected). */
+  say(text: string): void {
+    this.note.textContent = text;
+    this.note.hidden = false;
+    clearTimeout(this.noteTimer);
+    this.noteTimer = window.setTimeout(() => (this.note.hidden = true), 3000);
   }
 
   /** `name` null hides the card; without `inOffice` only Folgen works, for a dog (`callable` false) next to the greyed buttons, for a person on the way out or on a smoke break (`callable`) next to Zurückrufen instead of them. */
@@ -42,6 +52,8 @@ export class Actions {
         );
       }
       this.name.textContent = name;
+      this.note.hidden = true;
+      clearTimeout(this.noteTimer);
     }
     this.follow.setAttribute('aria-pressed', String(following));
     this.follow.textContent = following ? 'Folgen beenden (F)' : 'Folgen (F)';
@@ -53,6 +65,14 @@ export class Actions {
     this.steer.disabled = !inOffice && !steering;
     this.out.disabled = !inOffice;
     this.home.disabled = !inOffice || homeFull;
-    this.home.title = inOffice && homeFull ? t.homeFull : '';
+    // why Homeoffice is greyed out: a tooltip in the game's own style (`data-tip`, see `.m-actions .m-button[data-tip]`), not a browser title
+    const tip = inOffice && homeFull ? t.homeFull : '';
+    if (tip) {
+      this.home.dataset.tip = tip;
+      this.home.setAttribute('aria-description', tip);
+    } else {
+      delete this.home.dataset.tip;
+      this.home.removeAttribute('aria-description');
+    }
   }
 }

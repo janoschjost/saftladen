@@ -456,12 +456,23 @@ export class Presence {
   }
 
   /**
+   * Why somebody cannot be sent out by hand, null when they can: 'busy' (away, in the player's hands, a scene holds
+   * them, out of the sim) or 'homeFull' (no home office free for them). Steering and a chat are not a reason: the
+   * caller lets go of those first (the card: `Sim.sendNow`), `send` itself refuses them.
+   */
+  refusal(p: Person, kind: 'home' | 'errand', takeRoom = false): 'busy' | 'homeFull' | null {
+    if (p.presence !== 'in' || p.held || this.kept.has(p) || this.removed.has(p)) return 'busy';
+    const home = kind === 'home' || p.member.homebody; // a homebody is never sent on an errand
+    return !takeRoom && home && this.homeFull && homeRoomOf(p.id) === null ? 'homeFull' : null;
+  }
+
+  /**
    * Sends somebody home / out by hand: they stay away until called back (or 10 min). False (nothing changed) when
    * they can't go. With `takeRoom` a full home office is no obstacle: whoever `roomToFree` picks comes back to the
    * office and `p` gets that room (the dev event).
    */
   send(p: Person, kind: 'home' | 'errand', nav: NavGrid, takeRoom = false): boolean {
-    if (p.presence !== 'in' || p.held || p.controlled || p.talk || this.kept.has(p) || this.removed.has(p)) return false;
+    if (p.controlled || p.talk || this.refusal(p, kind, true)) return false;
     if (p.member.homebody) kind = 'home'; // never out on errands
     if (kind === 'home') {
       if (this.homeFull && homeRoomOf(p.id) === null) {

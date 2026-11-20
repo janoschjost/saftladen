@@ -47,6 +47,8 @@ export class Meeting implements Talk {
   private duration: number;
   /** the door is shut and the doorway blocked: nobody else wanders in */
   closed = false;
+  /** sent out of the running meeting from the card: the door stays open until they are out of the room */
+  private exiting: Person[] = [];
 
   constructor(
     public members: Person[],
@@ -92,20 +94,39 @@ export class Meeting implements Talk {
         this.text = this.chat.next(this.speaker, this.members, this.kind);
         for (const m of this.members) m.speaking = m === this.speaker;
       }
-      if (this.time >= this.duration || this.members.length < 2 || this.members.some((m) => !m.meetSeated)) {
-        this.phase = 'leaving';
-        this.closed = false;
-        this.room.setClosed(false, nav);
-        for (const m of this.members) {
-          m.speaking = false;
-          m.meetFocus = null;
-          m.dismissMeeting();
+      if (this.exiting.length && this.members.length >= 2) {
+        this.exiting = this.exiting.filter((p) => p.presence !== 'out' && this.room.contains(p.pos));
+        if (!this.exiting.length) {
+          this.room.setClosed(true, nav);
+          this.closed = true;
         }
       }
+      if (this.time >= this.duration || this.members.length < 2 || this.members.some((m) => !m.meetSeated)) this.breakUp(nav);
       return true;
     }
 
     return this.members.length > 0;
+  }
+
+  /** Somebody is sent out of the running meeting (the card): the shut door opens for them, the others keep sitting, and it shuts again once they are out of the room. */
+  release(p: Person, nav: NavGrid): void {
+    if (!this.closed || !this.members.includes(p)) return;
+    this.exiting.push(p);
+    this.closed = false;
+    this.room.setClosed(false, nav);
+  }
+
+  /** The meeting ends now: the door opens, everybody stands up and leaves. */
+  breakUp(nav: NavGrid): void {
+    if (this.phase === 'leaving') return;
+    this.phase = 'leaving';
+    this.closed = false;
+    this.room.setClosed(false, nav);
+    for (const m of this.members) {
+      m.speaking = false;
+      m.meetFocus = null;
+      m.dismissMeeting();
+    }
   }
 
   /** Over on the spot: the door opens, everybody drops out where they are. */

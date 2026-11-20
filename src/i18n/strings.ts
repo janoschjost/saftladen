@@ -61,6 +61,8 @@ export const strings = {
       homeFull: 'Alle Homeoffices sind besetzt',
       /** instead of the three above, for somebody on the way out or on a smoke break */
       callBack: 'Zurückrufen (H)',
+      /** a click on Homeoffice / Rausschicken that the game refused (a scene holds the person) */
+      busy: 'Gerade nicht möglich: beschäftigt',
     },
     /** owner tooltip: the pets they brought along today */
     pets: {
