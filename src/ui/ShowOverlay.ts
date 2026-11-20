@@ -42,6 +42,7 @@ export class ShowOverlay {
   fade(black: boolean, seconds: number): void {
     this.fadeEl.style.transitionDuration = `${seconds}s`;
     this.fadeEl.classList.toggle('is-black', black);
+    if (seconds === 0) void this.fadeEl.offsetWidth; // flush: a cut to black paints before the fade back in starts
   }
 
   setPaused(on: boolean): void {

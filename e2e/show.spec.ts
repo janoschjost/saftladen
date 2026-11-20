@@ -15,6 +15,7 @@ test('show.play: ?show starts the film: HUD away, letterbox bars up, the first s
 });
 
 test('show.script: the film plays from the first scene to the end without an error', async ({ page }) => {
+  test.slow(); // ~250 game seconds, a frame per half second
   const errors = await boot(page, '/?test&seed=1&show');
   expect(await read(page, (g) => g.show?.id)).toBe('night');
   await until(page, (g) => g.show?.finished, undefined, 320_000);

@@ -590,8 +590,8 @@ export class Game {
         if (e.key.toLowerCase() === 'p' && !this.steered && !this.editor.active && !this.action?.owned) {
           // the film starts on a fresh page, so nothing of what is going on is in its way; the other params stay
           const q = new URLSearchParams(location.search);
-          q.set('show', '');
-          location.assign(`${location.pathname}?${q.toString().replace('show=', 'show')}${location.hash}`);
+          q.delete('show');
+          location.assign(`${location.pathname}?${q.size ? `${q}&` : ''}show${location.hash}`);
           return;
         }
         // A steers left while a person is steered, and ends the Konami code
