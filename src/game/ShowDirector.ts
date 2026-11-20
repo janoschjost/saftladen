@@ -64,9 +64,10 @@ export class ShowDirector implements ShowHost {
   update(dt: number): void {
     const s = this.skyAnim;
     if (s) {
-      s.t = Math.min(s.over, s.t + dt);
-      this.ctx.sim.tod.setCycle(cycleOf(s.from + ((s.to - s.from) * s.t) / s.over));
-      if (s.t >= s.over) this.skyAnim = null;
+      s.t += dt;
+      const k = Math.min(1, s.t / s.over);
+      this.ctx.sim.tod.setCycle(cycleOf(s.from + (s.to - s.from) * k));
+      if (k >= 1) this.skyAnim = null;
     }
     this.runner.update(dt);
   }
@@ -144,11 +145,10 @@ export class ShowDirector implements ShowHost {
     };
     if (spec.person) {
       const who = sim.person(spec.person);
-      const at = () => ({ x: who.root.position.x, z: who.root.position.z });
-      if (spec.follow) return () => ({ ...base, ...at() });
-      return { ...base, ...at() };
+      const shot = (): Shot => ({ ...base, x: who.root.position.x, z: who.root.position.z });
+      return spec.follow ? shot : shot();
     }
-    if (spec.action && action) return { ...base, x: action.place.x, z: action.place.z };
+    if (action) return { ...base, x: action.place.x, z: action.place.z };
     if (spec.at) return { ...base, x: spec.at[0], z: spec.at[1] };
     return { ...base, x: overview.x, z: overview.z };
   }
@@ -172,7 +172,7 @@ export class ShowDirector implements ShowHost {
 
   sky(hour: number, over: number): void {
     const from = this.ctx.sim.tod.hour;
-    this.skyAnim = { from, to: hour, t: 0, over: Math.max(0.01, over) };
+    this.skyAnim = { from, to: hour, t: 0, over };
   }
 
   feed(id: string | null): void {
@@ -180,7 +180,7 @@ export class ShowDirector implements ShowHost {
   }
 
   say(text: string | null, who: string[]): void {
-    const members = who.flatMap((id) => team.filter((m) => m.id === id));
+    const members = who.flatMap((id) => team.find((m) => m.id === id) ?? []);
     this.ctx.overlay.say(
       text,
       members.map((m) => ({ name: m.name, role: m.role.split(',')[0].trim() })),

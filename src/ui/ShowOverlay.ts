@@ -3,6 +3,7 @@ export class ShowOverlay {
   private root = document.getElementById('show') as HTMLElement;
   private sub = document.getElementById('show-sub') as HTMLElement;
   private plates = document.getElementById('show-plates') as HTMLElement;
+  private card = document.querySelector('#show .m-show__card') as HTMLElement;
   private head = document.getElementById('show-title') as HTMLElement;
   private headSub = document.getElementById('show-title-sub') as HTMLElement;
   private fadeEl = document.getElementById('show-fade') as HTMLElement;
@@ -34,7 +35,7 @@ export class ShowOverlay {
   title(head: string | null, sub = ''): void {
     this.head.textContent = head ?? '';
     this.headSub.textContent = head ? sub : '';
-    this.head.parentElement!.classList.toggle('is-on', !!head);
+    this.card.classList.toggle('is-on', !!head);
   }
 
   /** The picture goes to black (true) or comes back (false) in `seconds`; 0 is at once. */

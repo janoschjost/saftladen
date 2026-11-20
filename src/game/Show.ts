@@ -174,10 +174,13 @@ export class ShowRunner {
 
   private fire(): void {
     while (this.next < this.cues.length && this.cues[this.next].t <= this.t) this.run(this.cues[this.next++]);
-    for (const r of this.retries.slice()) {
-      if (this.t < r.at) continue;
-      if (this.host.event(r.id) || this.t >= r.until) this.retries.splice(this.retries.indexOf(r), 1);
-      else r.at = this.t + RETRY_EVERY;
+    if (this.retries.length) {
+      this.retries = this.retries.filter((r) => {
+        if (this.t < r.at) return true;
+        if (this.host.event(r.id) || this.t >= r.until) return false;
+        r.at = this.t + RETRY_EVERY;
+        return true;
+      });
     }
     if (this.t >= this.sayUntil) {
       this.sayUntil = Infinity;

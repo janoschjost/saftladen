@@ -71,6 +71,7 @@ export class Feeds {
   }
 
   private applyCinema(): void {
+    if (this.cinemaId === null && !this.root.classList.contains('is-cinema')) return; // normal play: nothing to undo
     const on = this.cinemaId !== null && this.tilesEls.has(this.cinemaId);
     this.root.classList.toggle('is-cinema', on);
     for (const [id, t] of this.tilesEls) t.el.classList.toggle('is-cinema-focus', on && id === this.cinemaId);
