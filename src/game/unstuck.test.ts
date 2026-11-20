@@ -50,3 +50,16 @@ describe('move.unstuck', () => {
     expect(run(sim, 60, () => inCabin(sim, a))).toBe(true);
   });
 });
+
+describe('move.unstuck: exit cells', () => {
+  it('move.unstuck: for every desk the cell somebody walks to to sit down and the one they stand up to lie on the chair side of every wall', () => {
+    const sim = office();
+    const bad: string[] = [];
+    for (const d of sim.office.desks) {
+      const out = sim.office.exit(d);
+      if (sim.office.wallBetween(d.seat, d.approach)) bad.push(`desk ${d.number}: seat -> approach ${d.approach.x},${d.approach.z} through a wall`);
+      if (sim.office.wallBetween(d.seat, out)) bad.push(`desk ${d.number}: seat ${d.seat.x},${d.seat.z} -> ${out.x},${out.z} through a wall`);
+    }
+    expect(bad).toEqual([]);
+  });
+});
