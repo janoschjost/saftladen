@@ -26,6 +26,7 @@ const PRINT_TIME = { min: 4, max: 9 }; // seconds spent at the printer
 const STEER_WALK = 2.2; // m/s while steered with the keyboard
 const STEER_RUN = 5.4;
 const RUSH = 2; // running is this much faster than walking
+const HURRY_MAX = 3; // a pinned walker with a deadline (`pinTo` `arriveIn`) runs at most this much faster than their pace
 const SLUMP = 0.55; // walking slumped (sad, see Boombox.ts) is this much slower
 const VAPE_CHANCE = 0.15; // chance per decision (vapers only) to take a drag instead
 const VAPE_RAISE = 0.6; // timeline of one drag, seconds: raise the hand, inhale, hold, exhale (arm drops during it)
@@ -191,8 +192,10 @@ export class Person extends Walker {
   private pace = (1.0 + random() * 0.5) * 1.15;
   /** running after somebody (see Boombox.ts): faster than walking */
   rush = false;
+  /** speed (m/s) that gets a pinned walker there in time, 0: their own pace (see `controlScripted`) */
+  private hurry = 0;
   get speed(): number {
-    return this.pace * (this.rush ? RUSH : this.boomSad > 0 ? SLUMP : 1);
+    return this.hurry || this.pace * (this.rush ? RUSH : this.boomSad > 0 ? SLUMP : 1);
   }
   set speed(v: number) {
     this.pace = v;
@@ -219,7 +222,7 @@ export class Person extends Walker {
   /** steering input in world space (direction on the floor, not normalised) */
   readonly steer = { x: 0, z: 0, run: false };
   /** a day task pins this person: they stand (or sit) exactly there and turn to `yaw`; they are `controlled` meanwhile, so nothing else picks them up */
-  scripted: { at: Vec2; yaw: number; sit: boolean; turn: number; arrived: boolean; tries: number } | null = null;
+  scripted: { at: Vec2; yaw: number; sit: boolean; turn: number; arrived: boolean; tries: number; arriveIn?: number } | null = null;
   /** a day task has the handheld console out (see `gameboy` for the eased amount) */
   gameboyOn = false;
   /** 0..1 eased: both hands hold a handheld console in front of the chest */
@@ -1659,8 +1662,13 @@ export class Person extends Walker {
   }
 
   /** Pins this person for a day task: they walk to `at` first when `walk` is set (else they are there at once), then stay and turn to `yaw`. */
-  pinTo(s: { at: Vec2; yaw: number; sit?: boolean; turn?: number; walk?: boolean }): void {
-    this.scripted = { at: { ...s.at }, yaw: s.yaw, sit: !!s.sit, turn: s.turn ?? 1, arrived: !s.walk, tries: 0 };
+  pinTo(s: { at: Vec2; yaw: number; sit?: boolean; turn?: number; walk?: boolean; arriveIn?: number }): void {
+    this.hurry = 0;
+    if (s.walk) {
+      this.path = []; // somebody already on their way somewhere else walks to the spot, not on to their old goal
+      this.state = 'idle';
+    }
+    this.scripted = { at: { ...s.at }, yaw: s.yaw, sit: !!s.sit, turn: s.turn ?? 1, arrived: !s.walk, tries: 0, arriveIn: s.arriveIn };
     this.controlled = true;
     this.steer.x = this.steer.z = 0;
     this.playerChat = null;
@@ -1683,9 +1691,17 @@ export class Person extends Walker {
   unpin(): void {
     if (!this.scripted) return;
     this.scripted = null;
+    this.hurry = 0;
     this.controlled = false;
     this.gameboyOn = false;
     this.timer = 0.5;
+  }
+
+  /** Speeds the walk along the current path up (never down) so it takes `seconds`, at most `HURRY_MAX` times their pace. */
+  private hurryAlong(seconds: number): void {
+    let len = 0;
+    for (let i = 0, from = this.pos; i < this.path.length; from = this.path[i++]) len += Math.hypot(this.path[i].x - from.x, this.path[i].z - from.z);
+    this.hurry = Math.min(Math.max(len / seconds, this.pace), this.pace * HURRY_MAX);
   }
 
   private controlScripted(dt: number, nav: NavGrid): boolean {
@@ -1697,6 +1713,7 @@ export class Person extends Walker {
       if (Math.hypot(s.at.x - this.pos.x, s.at.z - this.pos.z) < 0.3) s.arrived = true;
       else if (!this.isWalking()) {
         this.walkTo(nav, s.at);
+        if (this.isWalking() && s.arriveIn) this.hurryAlong(s.arriveIn);
         if (!this.isWalking()) {
           // the spot lies in a wall or behind one with no way round: the closest spot that has a way instead, tried next step (#253)
           // (from the closest free cell when the walker stands on a blocked one: a chair, furniture just put down)
@@ -1711,6 +1728,7 @@ export class Person extends Walker {
       } else return false; // normal walking
       if (!s.arrived) return false;
     }
+    this.hurry = 0;
     this.state = 'idle';
     this.path = [];
     this.pos.x = s.at.x;
