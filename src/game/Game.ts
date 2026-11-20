@@ -38,6 +38,7 @@ import type { Desk } from './Office';
 import { RoomLight } from './RoomLight';
 import { Easter } from './Easter';
 import { Dog } from './Dog';
+import { ChristianModel } from './ChristianModel';
 import { Christmas } from './Christmas';
 import { RainFx } from '../render/rainFx';
 import { PuddleFx } from '../render/puddleFx';
@@ -112,6 +113,7 @@ export class Game {
   private deskLights!: DeskLights;
   private meetingLight!: RoomLight;
   private easter!: Easter;
+  private christian!: ChristianModel;
   private timeControl!: TimeControl;
   private feeds = new Feeds();
   private roster: Roster;
@@ -243,6 +245,7 @@ export class Game {
     applySky(this.sim.tod, this.sky);
     this.deskLights = new DeskLights(this.scene, this.sim.office, this.sim.tod);
     this.easter = new Easter(this.scene);
+    this.christian = new ChristianModel(this.scene, this.sim.nav);
     this.roof = model.roof;
     this.roofCords = model.setRoofVisible;
     this.entrance = model.entrance;
@@ -719,6 +722,10 @@ export class Game {
       get xmas() {
         return g.xmas;
       },
+      /** Christian's model check (`christian-model`): there or not, his rig */
+      get christian() {
+        return g.christian;
+      },
       get easter() {
         return g.easter;
       },
@@ -818,6 +825,7 @@ export class Game {
     this.sim.tod.update(dt);
     applySky(this.sim.tod, this.sky);
     this.updateEaster(dt);
+    this.christian.update(dt);
     this.updateSpawnFx(dt);
     this.updateWeather(dt);
     this.updateArrivals();
@@ -935,6 +943,27 @@ export class Game {
         this.release(p);
         this.sonCalls++;
         return strings.presence.event.sonComes(first(p));
+      },
+    });
+    // Christian's model check (#259): only the view builds him, and `…-end` has nothing to do when he is not there
+    this.sim.events.register({
+      id: 'christian-model',
+      group: 'Christian',
+      label: 'Christian Davatz (Modell)',
+      run: () => {
+        this.christian.start();
+        return 'Christian steht im Büro';
+      },
+    });
+    this.sim.events.register({
+      id: 'christian-model-end',
+      group: 'Christian',
+      label: 'Christian Davatz geht',
+      asIs: true,
+      run: () => {
+        if (!this.christian.active) return null;
+        this.christian.stop();
+        return 'Christian ist weg';
       },
     });
     this.sim.events.register({
