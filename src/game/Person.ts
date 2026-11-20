@@ -1575,11 +1575,17 @@ export class Person extends Walker {
     this.goTo(nav, desk.approach);
   }
 
-  /** The player talks to this person: they drop their walk and turn around. False when they are too busy to stop (desk, meeting, printer, …). */
+  /**
+   * The player talks to this person: they drop their walk and turn around. Somebody working at their desk answers
+   * from the chair (swivels towards the player, then works on); callers that need them on their feet (`stayAtDesk`
+   * false: petting, the boombox, nerf) find them busy. False when they are too busy to stop: in a talk or a meeting,
+   * at the printer, the foosball table or the coffee machine, held, steered, away.
+   */
   talkTo(at: Vec2, seconds: number, stayAtDesk = true): boolean {
-    if (this.fixed || this.held || this.controlled || this.talk || this.presence !== 'in' || this.inMeeting) return false;
-    if (stayAtDesk && this.task?.phase === 'work') {
-      // seated: swivel the chair towards the player instead of standing up
+    const seated = stayAtDesk && this.task?.phase === 'work' && !this.run && !this.printJob && !this.foosJob && !this.coffeeJob && !this.meetJob && !this.pendingMeet;
+    if ((this.fixed && !seated) || this.held || this.controlled || this.talk || this.presence !== 'in') return false;
+    if (seated) {
+      // swivel the chair towards the player instead of standing up
       this.phoneJob = null;
       this.vapeJob = null;
     } else this.interrupt();

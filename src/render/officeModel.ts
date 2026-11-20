@@ -648,8 +648,16 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     rbox(0.262, 0.005, 0.098, 0, top + 0.01, kz, mat.white, 0, g);
     for (let r = 1; r < 6; r++) rbox(0.262, 0.0015, 0.003, 0, top + 0.0145, kz - 0.049 + (r * 0.098) / 6, mat.lightgrey, 0, g);
     rbox(0.057, 0.014, 0.113, 0.27, top, 0.12, mat.white, 0, g);
-    officeChair(g, 0, 0.75);
-    return mergeStatic(g, false);
+    const desk = mergeStatic(g, false);
+    // the chair is its own piece on a pivot at its base, so it can swivel with the sitter
+    const chair = new THREE.Group();
+    chair.name = 'chair';
+    chair.position.set(0, 0, 0.75);
+    const parts = new THREE.Group();
+    officeChair(parts, 0, 0);
+    chair.add(mergeStatic(parts, false));
+    desk.add(chair);
+    return desk;
   }
   const tplCache = new Map<string, { group: THREE.Group; box: THREE.Box3 }>();
   const tplFor = (white: boolean, w: number, stand: boolean) => {
@@ -2713,7 +2721,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     mug.traverse((o) => (o.userData.nonav = true));
     root.add(mug);
     scene.add(root);
-    const placement: DeskPlacement = { rig: { root, screen, mug, coffee, messSpots: messSpots(s.w, plantSpot, props) }, seat: { x: 0, z: 0 }, yaw: 0, back: { x: 0, z: 0 } };
+    const placement: DeskPlacement = { rig: { root, screen, chair: root.getObjectByName('chair')!, mug, coffee, messSpots: messSpots(s.w, plantSpot, props) }, seat: { x: 0, z: 0 }, yaw: 0, back: { x: 0, z: 0 } };
     desks.push(placement);
     const turn = new THREE.Matrix4().makeRotationY(s.rot);
     const deskItem = new RoomItem(s.id, 'desk', `Tisch ${i + 1}`, root, { x: s.x, z: s.z, yaw: s.rot }, [tpl.box.clone().applyMatrix4(turn)], tpl.box.clone().applyMatrix4(turn), [], false);
