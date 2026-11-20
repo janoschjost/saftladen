@@ -79,11 +79,8 @@ describe('office.overflow-seats: no desk free, sit down instead of wandering', (
 
   it('office.overflow-seats: nobody gets stuck on the bar when several sitters stand up at once (seeds 1-4)', () => {
     for (const seed of [1, 2, 3, 4]) {
-      const sim = office({}, seed);
-      sim.scenario.clear('printer', 'coffee', 'kitchen', 'meeting', 'wc');
-      sim.events.trigger('desks-full');
-      expect(run(sim, 240, () => sim.office.benches!.seats.every((s) => s.occupant?.benchSeated)), `seed ${seed}: stools full`).toBe(true);
-      run(sim, 60);
+      const sim = crowded(seed);
+      expect(run(sim, 120, () => sim.office.benches!.seats.every((s) => s.occupant?.benchSeated)), `seed ${seed}: stools full`).toBe(true);
       const seats = sim.office.benches!.seats;
       const sitters = seats.map((s) => s.occupant!);
       // the gaps between two stools are not floor to stand in: nobody can wander in and jam the lane behind them
@@ -142,16 +139,19 @@ describe('office.overflow-seats: no desk free, sit down instead of wandering', (
     expect(run(sim, 240, () => sim.people.some((p) => p.benchSeated))).toBe(true);
   });
 
-  it('office.overflow-seats: after desks-full the stools stay taken with real desk sitters, and nobody is handed a desk the moment they sit', () => {
+  it('office.overflow-seats: desks-full holds nobody: they can be sent home, and a sitter is handed a desk only after sitting a while', () => {
     const sim = office({}, 1);
     sim.scenario.clear('printer', 'coffee', 'kitchen', 'meeting', 'wc');
     sim.events.trigger('desks-full');
-    expect(run(sim, 240, () => sim.office.benches!.seats.every((s) => s.occupant?.benchSeated))).toBe(true);
-    const sitters = sim.office.benches!.seats.map((s) => s.occupant!);
-    // a minute on, the same people still sit there and every desk is still taken
-    run(sim, 60, () => false);
-    for (const [i, s] of sim.office.benches!.seats.entries()) expect(s.occupant, `stool ${i}`).toBe(sitters[i]);
-    expect(sim.office.desks.every((d) => d.occupant)).toBe(true);
+    // nobody is pinned or kept by a scene: whoever sits at a desk can be sent out like in a regular run
+    const atDesk = sim.people.find((p) => p.working)!;
+    expect(sim.presence.refusal(atDesk, 'home')).toBeNull();
+    expect(sim.sendNow(atDesk, 'home')).toBe(true);
+    expect(sim.people.every((p) => !sim.presence.isKept(p))).toBe(true);
+    // a sitter stays on the stool for MIN_SIT at least before a free desk goes to them
+    expect(run(sim, 240, () => sim.people.some((p) => p.benchSeated))).toBe(true);
+    const p = sim.people.find((q) => q.benchSeated)!;
+    expect(run(sim, 30, () => !p.benchSeated)).toBe(false);
   });
 
   it('office.overflow-seats: a free desk waits until the sitter has sat for a while, then goes to them', () => {
