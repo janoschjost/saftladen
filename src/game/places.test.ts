@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { installHeadlessDom } from '../test/headlessDom';
 import { GROUP, office, run, STEP } from '../test/office';
+import { PASS_BY } from './Coffee';
 import { forceRunner, simForceCtx } from './forceCtx';
 import type { Person } from './Person';
 import { PET_HEIGHT } from './petPose';
@@ -64,6 +65,28 @@ describe('places', () => {
     sim.step(STEP);
     expect(sim.meetingRoom.current?.screen).toBe('kart');
     expect(run(sim, 90, () => sim.meetingRoom.tv === 'kart')).toBe(true);
+  });
+
+  it('place.coffee-break: the two with a cup leave the way through the kitchen free, a third walks past them to the dining bench (#268)', () => {
+    const sim = office();
+    const [a, b, walker] = GROUP;
+    for (const p of sim.people) if (![a, b, walker].includes(p.id)) sim.setRemoved(p.id, true);
+    sim.scenario.clear('kitchen', 'coffee');
+    // both come from the corridor east of the kitchen: before #268 they stood side by side across the kitchen
+    sim.scenario.put(a, { x: 18.25, z: 3.25 }, 'stay');
+    sim.scenario.put(b, { x: 17.25, z: 3.25 }, 'stay');
+    expect(sim.kitchen.start([sim.person(a), sim.person(b)], sim.nav)).toBeTruthy();
+    expect(run(sim, 60, () => sim.kitchen.current?.phase === 'chat')).toBe(true);
+    const stands = [a, b].map((id) => sim.person(id).coffeeJob!.spot.stand);
+    expect(sim.nav.cutsOff(stands, PASS_BY)).toBe(false);
+
+    // the bench at the far end of the kitchen: the only way there leads past the cups
+    const bench = sim.kitchen.seats.reduce((s, o) => (Math.hypot(o.approach.x - 15.75, o.approach.z - 0.75) < Math.hypot(s.approach.x - 15.75, s.approach.z - 0.75) ? o : s)).approach;
+    sim.scenario.put(walker, { x: 15, z: 6.25 }, 'stay');
+    const p = sim.person(walker);
+    p.walkTo(sim.nav, bench);
+    expect(run(sim, 15, () => Math.hypot(p.pos.x - bench.x, p.pos.z - bench.z) < 0.5)).toBe(true);
+    expect(sim.kitchen.current?.phase).toBe('chat'); // past them, not through a break that ended
   });
 
   it('place.coffee-break: three go to the kitchen and chat there', () => {

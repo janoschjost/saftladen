@@ -78,6 +78,16 @@ describe('move.astar', () => {
   });
 });
 
+describe('place.coffee-break', () => {
+  it('place.coffee-break: cutsOff tells bodies standing across a corridor from bodies standing along one side of it (#268)', () => {
+    const g = new NavGrid(10, 3); // a corridor three cells wide
+    expect(g.cutsOff([at(4, 0), at(4, 2)], 1.1)).toBe(true); // across: the middle cell is taken too
+    expect(g.cutsOff([at(3, 0), at(5, 0)], 1.1)).toBe(false); // along one wall: the far side stays free
+    expect(g.cutsOff([at(4, 0), at(4, 2)], 0.9)).toBe(false); // the middle cell out of reach: a walker fits through
+    expect(g.cutsOff([at(1, 1)], 1.1)).toBe(true); // in front of the corridor's end: the corners behind are walled in
+  });
+});
+
 describe('move.unstuck', () => {
   it('move.unstuck: openNear keeps a cell with a way to the floor and finds the closest one from a walled-in cell', () => {
     const g = new NavGrid(10, 10);

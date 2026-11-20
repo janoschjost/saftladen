@@ -2,6 +2,13 @@ import { random } from './rng';
 
 /** a box must reach this far (m) into a cell to block it: touching edges do not count (`blockWorld`) */
 export const EDGE = 0.02;
+/** the moves of `findPath` between cells that a flood fill follows: no corner cutting */
+const STEPS = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+] as const;
 
 export interface Vec2 {
   x: number;
@@ -44,18 +51,18 @@ export class NavGrid {
   }
 
   block(cx: number, cz: number, w = 1, d = 1): void {
-    this.reached = null;
+    this.dirty();
     for (let z = cz; z < cz + d; z++) for (let x = cx; x < cx + w; x++) if (this.inside(x, z)) this.blocked[z * this.cols + x] = 1;
   }
 
   /** Everything walkable again (the room editor rebuilds the grid after furniture moved). */
   clear(): void {
-    this.reached = null;
+    this.dirty();
     this.blocked.fill(0);
   }
 
   unblock(cx: number, cz: number): void {
-    this.reached = null;
+    this.dirty();
     if (this.inside(cx, cz)) this.blocked[cz * this.cols + cx] = 0;
   }
 
@@ -108,11 +115,20 @@ export class NavGrid {
         sealed++;
       }
     }
+    if (sealed) this.dirty();
     return sealed;
   }
 
   /** the last `reach` (from cell `from`); dropped whenever a cell is blocked or freed */
   private reached: { from: number; open: Uint8Array } | null = null;
+  /** the pieces of floor as the grid is now (`pieces`); dropped whenever a cell is blocked or freed */
+  private floor: Int32Array | null = null;
+
+  /** A cell was blocked or freed: what was worked out from the old floor is dropped. */
+  private dirty(): void {
+    this.reached = null;
+    this.floor = null;
+  }
 
   /** 1 for every cell a walker at `from` can get to (the moves of `findPath`: no corner cutting), 0 elsewhere. */
   private reach(from: Vec2): Uint8Array {
@@ -121,21 +137,67 @@ export class NavGrid {
     if (this.reached?.from === start) return this.reached.open;
     const seen = new Uint8Array(this.cols * this.rows);
     this.reached = { from: start, open: seen };
-    if (!this.walkable(s.cx, s.cz)) return seen;
+    if (this.walkable(s.cx, s.cz)) this.flood(start, (i) => !seen[i], (i) => (seen[i] = 1));
+    return seen;
+  }
+
+  /** Marks `start` and every cell reachable from it with the moves of `findPath` (no corner cutting) over walkable cells `open` lets in. */
+  private flood(start: number, open: (i: number) => boolean, mark: (i: number) => void): void {
+    mark(start);
     const stack = [start];
-    seen[start] = 1;
     while (stack.length) {
       const i = stack.pop()!;
       const cx = i % this.cols;
       const cz = (i / this.cols) | 0;
-      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      for (const [dx, dz] of STEPS) {
         const ni = (cz + dz) * this.cols + cx + dx;
-        if (!this.walkable(cx + dx, cz + dz) || seen[ni]) continue;
-        seen[ni] = 1;
+        if (!this.walkable(cx + dx, cz + dz) || !open(ni)) continue;
+        mark(ni);
         stack.push(ni);
       }
     }
-    return seen;
+  }
+
+  /**
+   * True if bodies standing on `spots` would cut floor off: with every cell whose centre lies within `reach` of a spot
+   * taken, some free cell could no longer be walked to from floor it is connected to now (they stand across a nook or a
+   * corridor and nobody gets past).
+   */
+  cutsOff(spots: readonly Vec2[], reach: number): boolean {
+    const taken = new Uint8Array(this.cols * this.rows);
+    const r = Math.ceil(reach / this.cell);
+    for (const s of spots) {
+      const { cx, cz } = this.toCell(s);
+      for (let z = cz - r; z <= cz + r; z++) {
+        for (let x = cx - r; x <= cx + r; x++) {
+          const c = this.center(x, z);
+          if (this.inside(x, z) && Math.hypot(c.x - s.x, c.z - s.z) < reach) taken[z * this.cols + x] = 1;
+        }
+      }
+    }
+    // the pieces of floor as they are now, then as they are with the spots taken: one piece now must stay one piece
+    const before = (this.floor ??= this.pieces(new Uint8Array(taken.length)));
+    const after = this.pieces(taken);
+    const seen = new Map<number, number>();
+    for (let i = 0; i < after.length; i++) {
+      if (after[i] < 0) continue;
+      const was = seen.get(before[i]);
+      if (was === undefined) seen.set(before[i], after[i]);
+      else if (was !== after[i]) return true;
+    }
+    return false;
+  }
+
+  /** Labels the connected pieces of walkable floor (the moves of `findPath`), leaving out the cells `skip` marks: -1 there and on blocked cells. */
+  private pieces(skip: Uint8Array): Int32Array {
+    const label = new Int32Array(this.cols * this.rows).fill(-1);
+    let next = 0;
+    for (let start = 0; start < label.length; start++) {
+      if (this.blocked[start] || skip[start] || label[start] >= 0) continue;
+      const piece = next++;
+      this.flood(start, (i) => !skip[i] && label[i] < 0, (i) => (label[i] = piece));
+    }
+    return label;
   }
 
   /** True if somebody at p can walk to `floor` from there. */
