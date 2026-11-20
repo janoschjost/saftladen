@@ -153,6 +153,7 @@ export class Office {
   updateScreens(dt: number): void {
     const typing = new Set<THREE.Material>();
     for (const d of this.desks) if (d.occupant?.working) typing.add(d.screenMaterial);
+    this.benches?.addTyping(typing);
     tickScreens(dt, typing);
     tickTv(dt);
   }

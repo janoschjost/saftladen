@@ -15,6 +15,8 @@ export interface MeetSeat {
   /** direction the sitter faces (yaw, 0 = +z) */
   yaw: number;
   occupant: Person | null;
+  /** metres the sitter is raised: the seat is higher than a chair (bar stool) */
+  lift?: number;
 }
 
 type ModelSeat = OfficeModel['meeting']['seats'][number];
@@ -290,8 +292,8 @@ export class MeetingRoom {
     const group = people.slice(0, seats.length);
     if (group.length < 2) return null;
     const m = new Meeting(group, this.model.center, this, screen);
-    // a meeting wins: whoever works on a laptop at a chair it needs gets up and looks for another seat
-    group.forEach((_, i) => seats[i].occupant?.leaveBench());
+    // a meeting wins: whoever works on a laptop in the room gets up and looks for another seat (the room is the meeting's)
+    for (const s of this.seats) s.occupant?.leaveBench();
     // nearest person takes the seat nearest to the door side first
     group.forEach((p, i) => p.callToMeeting(nav, seats[i], m));
     this.current = m;

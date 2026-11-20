@@ -1,3 +1,6 @@
+import * as THREE from 'three';
+import { screenOffMaterial } from '../render/officeBuilder';
+import { screenMaterial, useScreen } from '../render/screens';
 import type { OfficeModel } from '../render/officeModel';
 import type { MeetingRoom, MeetSeat } from './Meeting';
 import type { NavGrid, Vec2 } from './NavGrid';
@@ -22,6 +25,8 @@ export class Benches {
   readonly seats: MeetSeat[] = [];
   private sources = new Map<MeetSeat, ModelSeat>();
   private timer = 0;
+  /** the picture each stool's laptop shows right now (the dark one while nobody sits there) */
+  private shown = new Map<MeetSeat, THREE.Material>();
   /** seconds each sitter has been sitting */
   private sat = new Map<Person, number>();
 
@@ -34,7 +39,7 @@ export class Benches {
     for (const s of model) {
       const approach = this.approachFor(s, nav);
       if (!approach) continue; // boxed in: nobody could walk up to it
-      const seat: MeetSeat = { seat: { x: s.x, z: s.z }, approach, yaw: s.yaw, occupant: null };
+      const seat: MeetSeat = { seat: { x: s.x, z: s.z }, approach, yaw: s.yaw, occupant: null, lift: s.lift };
       this.seats.push(seat);
       this.sources.set(seat, s);
     }
@@ -78,8 +83,31 @@ export class Benches {
     return nearest(this.seats) ?? (this.room.current ? null : nearest(this.room.seats));
   }
 
+  /** A laptop stands on the bar while somebody sits at it and shows what its sitter works on (like a desk's monitor). */
+  private syncLaptops(): void {
+    for (const seat of this.seats) {
+      const { parts, screen } = this.sources.get(seat)!.laptop;
+      const p = seat.occupant;
+      const pic = p?.laptop ? p.meetJob?.screen : undefined;
+      const next = pic ? screenMaterial(pic.kind, pic.variant) : screenOffMaterial();
+      for (const m of parts) m.visible = !!p?.laptop;
+      const old = this.shown.get(seat) ?? screen.material;
+      if (old === next) continue;
+      useScreen(old as THREE.Material, -1);
+      useScreen(next, 1);
+      screen.material = next;
+      this.shown.set(seat, next);
+    }
+  }
+
+  /** The pictures whose sitter is typing (they move faster). */
+  addTyping(typing: Set<THREE.Material>): void {
+    for (const [seat, mat] of this.shown) if (seat.occupant?.laptop) typing.add(mat);
+  }
+
   /** Once a second: every free desk goes to somebody who has sat here a while (they stand up and walk over to it). */
   update(dt: number, people: readonly Person[]): void {
+    this.syncLaptops();
     for (const p of people) {
       if (p.benchSeated) this.sat.set(p, (this.sat.get(p) ?? 0) + dt);
       else this.sat.delete(p);

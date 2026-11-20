@@ -30,7 +30,7 @@ describe('office.overflow-seats: no desk free, sit down instead of wandering', (
     for (const seed of [1, 2, 3]) {
       const sim = crowded(seed);
       const stools = sim.office.benches!.seats;
-      expect(stools.length).toBe(5);
+      expect(stools.length).toBe(4);
       expect(run(sim, 60, () => stools.every((s) => s.occupant)), `seed ${seed}: every stool taken`).toBe(true);
       expect(run(sim, 30, () => stools.every((s) => s.occupant?.meetSeated)), `seed ${seed}: all seated`).toBe(true);
       // sitting means sitting: on their seat, working on the laptop
@@ -38,9 +38,19 @@ describe('office.overflow-seats: no desk free, sit down instead of wandering', (
         const p = s.occupant!;
         expect(Math.hypot(p.pos.x - s.seat.x, p.pos.z - s.seat.z)).toBeLessThan(0.05);
         expect(p.sit).toBe(1);
+        expect(p.seatLift, 'up on the stool, so the arms rest on the bar').toBeGreaterThan(0.2);
         expect(p.laptop).toBe(true);
       }
     }
+  });
+
+  it('office.overflow-seats: a laptop stands on the bar only in front of somebody who sits at it', () => {
+    const sim = crowded();
+    const stools = sim.office.benches!.seats;
+    const model = sim.model.benches;
+    run(sim, 5);
+    stools.forEach((s, i) => expect(model[i].laptop.parts.every((m) => m.visible), `stool ${i}`).toBe(!!s.occupant?.laptop));
+    expect(stools.some((s) => s.occupant?.laptop)).toBe(true);
   });
 
   it('office.overflow-seats: somebody next to a free stool sits down within 10 s', () => {

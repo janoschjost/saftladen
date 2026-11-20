@@ -157,6 +157,8 @@ interface MeetJob {
   solo?: number;
   /** no desk free: sits here on a bench seat and works on the laptop until a desk frees up or a meeting needs the chair (`Benches`) */
   bench?: boolean;
+  /** what the laptop at a bench seat shows (picked when they head there, like a desk monitor's picture) */
+  screen?: { kind: ScreenKind; variant: number };
   /** the desk this bench sitter is about to be sent to (reserved for them while they stand up) */
   desk?: Desk;
 }
@@ -446,8 +448,13 @@ export class Person extends Walker {
     this.rig.setAlter?.(on);
   }
 
+  /** Metres up on a high seat (bar stool) while sitting on it. */
+  get seatLift(): number {
+    return (this.meetJob?.seat.lift ?? 0) * this.sit;
+  }
+
   get headHeight(): number {
-    return this.baseHead - SIT_DROP * this.scale * this.sit;
+    return this.baseHead - SIT_DROP * this.scale * this.sit + this.seatLift;
   }
 
   /** A steered person has no plan: the doors open for them by proximity. The glide onto / off a seat and a step out are straight lines of their own. */
@@ -505,6 +512,7 @@ export class Person extends Walker {
     seat.occupant = this;
     this.startMeetWalk(nav, seat, { kind: 'chat', center: { ...seat.seat }, members: [this] });
     this.meetJob!.bench = true;
+    this.meetJob!.screen = { kind: screenKindOf(this.member.role), variant: screenSeed(this.member) }; // their usual picture; no dice, the sim's random sequence stays as it was
   }
 
   /**

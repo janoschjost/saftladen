@@ -1448,7 +1448,7 @@ export class Game {
     let dy = w.yaw - w.prevYaw;
     dy = Math.atan2(Math.sin(dy), Math.cos(dy));
     w.lift += ((w.held ? 0.45 : 0) - w.lift) * 0.25;
-    w.root.position.set(x, w.lift, z);
+    w.root.position.set(x, w.lift + (w instanceof Person ? w.seatLift : 0), z);
     w.root.rotation.y = w.prevYaw + dy * alpha;
 
     const ph = THREE.MathUtils.lerp(w.prevPhase, w.phase, alpha);
