@@ -1519,7 +1519,7 @@ export class Game {
           this.posePhone(w, r.phone);
           this.poseCallGesture(w, r);
         }
-        const talking = !!(w.talk || (w.playerChat && !w.petting && !w.nerfOn && !w.boomPose)) && w.moving < 0.2 && !(w.sit > 0.5 && !w.speaking);
+        const talking = !!(w.talk || (w.playerChat && !w.petting && !w.nerfOn && !w.boomPose && !w.fireRole)) && w.moving < 0.2 && !(w.sit > 0.5 && !w.speaking);
         w.talkAmt += ((talking ? 1 : 0) - w.talkAmt) * 0.12;
         w.speakAmt += ((talking && w.speaking ? 1 : 0) - w.speakAmt) * 0.15;
         const ta = w.talkAmt;
@@ -1549,6 +1549,7 @@ export class Game {
       }, () => {
         this.poseNerf(w, r);
         this.poseBoombox(w, r);
+        this.poseBonfire(w, r);
         this.poseMail(w, r);
         this.poseCup(w, r);
         this.poseSnack(w, r);
@@ -1769,6 +1770,62 @@ export class Game {
       r.elbowR.rotation.x = lerp(r.elbowR.rotation.x, -0.05, a);
       r.body.rotation.x += 0.12 * a;
       r.body.position.y += Math.abs(Math.sin(now * 7)) * 0.02 * a;
+    }
+  }
+
+  /**
+   * Bonfire scene (see Bonfire.ts): building it (bent over the logs), warming the hands at it, throwing the arms up
+   * when sprayed, spraying (both arms out in front, the extinguisher in the fist). A helper on her way carries the
+   * extinguisher with a stiff right arm. Eases in and out like the other poses.
+   */
+  private poseBonfire(w: Person, r: Person['rig']): void {
+    const now = this.clock;
+    const dt = Math.max(0, now - w.fireClock);
+    w.fireClock = now;
+    const on = !!w.fireRole && w.moving < 0.2 && !w.held && w.sit < 0.05;
+    w.fireAmt = Math.min(1, Math.max(0, w.fireAmt + (on ? 1 : -1) * (dt / 0.3)));
+    if (w.fireCarry && w.fireRole !== 'spray') {
+      // the weight in the right hand: the arm hangs stiff, barely swinging
+      r.armR.rotation.x *= 0.3;
+      r.armR.rotation.z = 0.08;
+      r.elbowR.rotation.x = -0.05;
+    }
+    if (w.fireAmt <= 0) return;
+    const a = smooth(w.fireAmt);
+    const lerp = THREE.MathUtils.lerp;
+    const both = [[r.armL, r.elbowL, -1], [r.armR, r.elbowR, 1]] as const;
+    if (w.fireRole === 'build') {
+      // bent over the logs, the hands busy low in front
+      r.body.rotation.x += 0.5 * a;
+      r.body.position.y -= 0.1 * a;
+      for (const [arm, elbow, side] of both) {
+        arm.rotation.x = lerp(arm.rotation.x, -0.9 + Math.sin(now * 6 + side) * 0.15, a);
+        arm.rotation.z = lerp(arm.rotation.z, side * 0.1, a);
+        elbow.rotation.x = lerp(elbow.rotation.x, -0.7, a);
+      }
+    } else if (w.fireRole === 'warm') {
+      // palms to the flames, a small rock on the heels
+      r.body.rotation.x += 0.06 * a;
+      for (const [arm, elbow, side] of both) {
+        arm.rotation.x = lerp(arm.rotation.x, -1.1 + Math.sin(now * 2.2 + side) * 0.06, a);
+        arm.rotation.z = lerp(arm.rotation.z, side * 0.12, a);
+        elbow.rotation.x = lerp(elbow.rotation.x, -0.9, a);
+      }
+    } else if (w.fireRole === 'protest') {
+      const shake = Math.sin(now * 16) * 0.12;
+      r.body.position.y += Math.abs(Math.sin(now * 8)) * 0.03 * a;
+      for (const [arm, elbow, side] of both) {
+        arm.rotation.x = lerp(arm.rotation.x, -2.6, a);
+        arm.rotation.z = lerp(arm.rotation.z, side * (0.3 + shake), a);
+        elbow.rotation.x = lerp(elbow.rotation.x, -0.3, a);
+      }
+    } else if (w.fireRole === 'spray') {
+      r.body.rotation.x += 0.1 * a;
+      for (const [arm, elbow, side] of both) {
+        arm.rotation.x = lerp(arm.rotation.x, -1.3, a);
+        arm.rotation.z = lerp(arm.rotation.z, side * 0.05 + Math.sin(now * 9) * 0.05, a);
+        elbow.rotation.x = lerp(elbow.rotation.x, -0.4, a);
+      }
     }
   }
 
@@ -2150,6 +2207,7 @@ export class Game {
         ...(this.easter.angry && !this.easter.angry.who.away ? [say(`angry-${this.easter.angry.who.id}`, this.easter.angry.text, this.easter.angry.who)] : []),
         ...(call && !call.who.away ? [say(`welcome-${call.who.id}`, call.text, call.who)] : []),
         ...this.sim.boombox.bubbles.map((b) => say(`boombox-${b.who.id}`, b.text, b.who)),
+        ...this.sim.bonfire.bubbles.map((b) => say(`bonfire-${b.who.id}`, b.text, b.who)),
         ...this.sim.mail.bubbles.map((b) => say(`mail-${b.who.id}`, b.text, b.who)),
         ...(rep && !rep.who.away ? [say(`reply-${rep.who.id}`, rep.text, rep.who)] : []),
         ...this.sim.people.filter((p) => p.callText && !p.away).map((p) => say(`call-${p.id}`, p.callText!, p)),

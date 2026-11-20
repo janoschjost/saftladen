@@ -278,6 +278,14 @@ export class Person extends Walker {
   boomSad = 0;
   boomSadAmt = 0;
   boomClock = 0;
+  /**
+   * Bonfire scene (see Bonfire.ts): what this person does in it (builds the fire, warms their hands at it, protests
+   * when sprayed, stares at it, sprays), whether an extinguisher hangs from their hand, and the eased pose
+   */
+  fireRole: 'build' | 'warm' | 'protest' | 'look' | 'spray' | null = null;
+  fireCarry = false;
+  fireAmt = 0;
+  fireClock = 0;
   /** what they carry from the mailboxes to a desk (see Mail.ts), the eased pose, and the last frame time of the pose */
   mailCarry: 'letter' | 'parcel' | null = null;
   mailAmt = 0;

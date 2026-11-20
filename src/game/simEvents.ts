@@ -1,5 +1,6 @@
 import { strings } from '../i18n/strings';
 import { CORRIDOR_POINT } from '../render/officeModel';
+import { ELIA } from './Bonfire';
 import { BOSS, DJ, free as freeForBoombox } from './Boombox';
 import { bringIn } from './makePossible';
 import { isCourier } from './Mail';
@@ -580,6 +581,23 @@ export function registerSimEvents(sim: Sim): void {
       if (!sim.boombox.start(dj, boss)) return null;
       sim.point(dj);
       return `${first(dj)} packt die Boombox aus`;
+    },
+  });
+  // Elia's bonfire (#251): he builds a small camping fire, the nearest free person puts it out with an extinguisher
+  events.register({
+    id: 'bonfire',
+    group: 'Aktionen',
+    label: 'Elias Lagerfeuer',
+    run: () => {
+      const elia = sim.person(ELIA);
+      if (elia.held || elia.controlled) return null; // held: nobody is brought in for nothing
+      if (!elia.inOffice) bringIn(sim, elia);
+      if (!isFree(elia)) return null;
+      sim.bonfire.reset(); // a running scene ends, the charred spot goes
+      sim.pull(elia);
+      if (!sim.bonfire.start(elia, people)) return null; // nobody free to put it out, or no free floor
+      sim.point(elia);
+      return `${first(elia)} baut ein Lagerfeuer`;
     },
   });
   // the post (#202): a dove brings a letter, a drone a parcel; an apprentice carries it to the desk it is addressed to
