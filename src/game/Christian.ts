@@ -189,6 +189,7 @@ export class Christian {
     this.scene.add(this.rig.root);
     this.t = 0;
     this.startDay = this.sim.presence.days;
+    if (hourOf(this.sim.tod.cycle) < ARRIVE_LATEST) this.visitedDay = this.startDay; // a visit in the small hours (the dev event too) is that night's one
     this.pos = { ...WALL_ENTRY };
     this.yaw = 0; // facing +z, into the room
     this.moving = 0;
@@ -275,10 +276,7 @@ export class Christian {
       to: at,
       at: () => {
         const more = this.cleanSteps([...this.sim.mess.list()], at, false);
-        if (more.steps.length) {
-          this.rate = Math.max(this.rate, this.rateFor(more.steps, at)); // the new mess has its own deadline
-          this.steps.unshift(...more.steps, this.checkStep(more.at));
-        }
+        if (more.steps.length) this.steps.unshift(...more.steps, this.checkStep(more.at)); // its rate: when the next step starts
         else this.steps.unshift({ to: at, wait: DONE_WAIT, say: 'done' }, { to: WALL_ENTRY });
       },
     };
@@ -333,7 +331,6 @@ export class Christian {
     if (this.visitedDay === day || !mess.count()) return; // the cheap checks first: this runs every frame
     const hour = hourOf(tod.cycle);
     if (hour < this.arriveAt || hour >= ARRIVE_LATEST) return;
-    this.visitedDay = day;
     this.start();
   }
 
@@ -354,39 +351,49 @@ export class Christian {
       this.gapT -= dt;
       if (this.pending && this.gapT <= 0) this.speak(this.pending);
     }
-    if (!this.cur) {
-      this.cur = this.steps.shift() ?? null;
-      if (!this.cur) return this.stop(); // back in the wall
-      this.arrived = false;
-      this.fired = false;
-      if (this.cur.say) this.speak(this.cur.say);
-    }
-    const s = this.cur;
-    const work = dt * this.rate; // his own clock: faster at night
+    let work = dt * this.rate; // his own clock: faster at night
     let target = 0;
-    if (!this.arrived) {
-      const dx = s.to.x - this.pos.x;
-      const dz = s.to.z - this.pos.z;
-      const gap = Math.hypot(dx, dz);
-      const d = Math.min(gap, (s.speed ?? GLIDE_SPEED) * work);
-      if (gap > 0.001) {
-        this.pos.x += (dx / gap) * d;
-        this.pos.z += (dz / gap) * d;
-        this.yaw = Math.atan2(dx, dz);
-        this.phase += d * WALK_PHASE_PER_M;
-        target = 1;
+    let s: Step;
+    // one frame can finish a step and go on with the next: what is left of the frame is not lost (at 25× a frame is long)
+    for (let guard = 0; ; guard++) {
+      if (!this.cur) {
+        this.cur = this.steps.shift() ?? null;
+        if (!this.cur) return this.stop(); // back in the wall
+        this.arrived = false;
+        this.fired = false;
+        // the clock may have been let go, sped up or resumed since he came: keep him on time for 04:00
+        this.rate = Math.max(this.rate, this.rateFor([this.cur, ...this.steps], this.pos));
+        if (this.cur.say) this.speak(this.cur.say);
       }
-      if (d >= gap) {
+      s = this.cur;
+      if (!this.arrived) {
+        const speed = s.speed ?? GLIDE_SPEED;
+        const dx = s.to.x - this.pos.x;
+        const dz = s.to.z - this.pos.z;
+        const gap = Math.hypot(dx, dz);
+        const d = Math.min(gap, speed * work);
+        if (gap > 0.001) {
+          this.pos.x += (dx / gap) * d;
+          this.pos.z += (dz / gap) * d;
+          this.yaw = Math.atan2(dx, dz);
+          this.phase += d * WALK_PHASE_PER_M;
+          target = 1;
+        }
+        work = Math.max(0, work - d / speed); // no float dust below 0: it would hold a finished step over
+        if (d < gap) break;
         this.arrived = true;
         this.dwell = s.wait ?? 0;
       }
-    } else {
-      this.dwell -= work;
+      const used = Math.min(work, Math.max(0, this.dwell));
+      this.dwell -= used;
+      work -= used;
       if (!this.fired && this.dwell <= (s.wait ?? 0) / 2) {
         this.fired = true;
         s.at?.();
       }
-      if (this.dwell <= 0 && !(s.say === 'done' && (this.pending || this.text !== null))) this.cur = null; // his last word is heard first
+      if (this.dwell > 0 || (s.say === 'done' && (this.pending || this.text !== null))) break; // his last word is heard first
+      this.cur = null;
+      if (work <= 0 || guard > 64) break;
     }
     const pose = s.pose === 'mop' || (this.arrived && s.pose) ? s.pose : 'walk';
     if (pose !== 'walk') this.pose = pose;

@@ -5,6 +5,7 @@ import seats from '../data/seats.json';
 import { installHeadlessDom } from '../test/headlessDom';
 import { office, STEP } from '../test/office';
 import { HIP_HEIGHT } from './petPose';
+import { MAX_FRAME } from './seams';
 import { ARRIVE_LATEST, Christian, VISIT_DEADLINE_HOUR, WALL_ENTRY } from './Christian';
 import type { Sim } from './Sim';
 import { CYCLE_SECONDS, cycleOf } from './TimeOfDay';
@@ -25,12 +26,12 @@ function stage(hour: number): { sim: Sim; ghost: Christian } {
 }
 
 /** Steps him until he is gone (true) or `seconds` have passed (false); `each` runs after every step. */
-function visit(ghost: Christian, seconds = 400, each: () => void = () => {}): number {
+function visit(ghost: Christian, seconds = 400, each: () => void = () => {}, step = STEP): number {
   let t = 0;
   while (ghost.active && t < seconds) {
-    ghost.update(STEP);
+    ghost.update(step);
     each();
-    t += STEP;
+    t += step;
   }
   return t;
 }
@@ -157,6 +158,35 @@ describe('christian.night', () => {
       expect(sim.mess.count()).toBe(0);
       expect(took).toBeLessThan(window);
     }
+  });
+
+  it('christian.night: also in the long frames of a fast clock (25×) full mess is gone before 04:00: a step that ends mid-frame hands the rest of the frame on', () => {
+    const { sim, ghost } = stage(1.5);
+    ghost.start();
+    const window = (cycleOf(VISIT_DEADLINE_HOUR) - cycleOf(1.5)) * CYCLE_SECONDS;
+    const took = visit(ghost, 400, () => {}, MAX_FRAME);
+    expect(sim.mess.count()).toBe(0);
+    expect(took).toBeLessThan(window);
+  });
+
+  it('christian.night: a clock that is let go during his visit (`?time=1`, then a speed button) makes him hurry for 04:00', () => {
+    const { sim, ghost } = stage(1);
+    sim.tod.pinned = true;
+    ghost.start();
+    expect(ghost.rate).toBe(1);
+    ghost.update(STEP);
+    sim.tod.pinned = false;
+    visit(ghost, 5);
+    expect(ghost.rate).toBeGreaterThan(2);
+  });
+
+  it('christian.night: a visit in the small hours from the dev event is that night\'s one', () => {
+    const { sim, ghost } = stage(2); // after every arrival time he draws: the night's visit would start now
+    ghost.start();
+    visit(ghost);
+    sim.mess.fill();
+    ghost.update(STEP);
+    expect(ghost.active).toBe(false);
   });
 
   it('christian.night: the evening counts too: 04:00 is only seconds away on the racing clock, so he hurries; a clock that stands still has no 04:00', () => {
