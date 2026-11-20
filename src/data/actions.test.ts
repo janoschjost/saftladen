@@ -35,7 +35,6 @@ describe('actions.list', () => {
       ['Brief', 'mail-letter'],
       ['Paket', 'mail-parcel'],
       ['Rauchpause', 'smoke'],
-      ['Chaos', 'mess'],
     ]);
   });
 

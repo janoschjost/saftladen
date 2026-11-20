@@ -200,17 +200,6 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
     caption: 'Rauchpause vor der Tür',
     who: 'Ein Raucher',
   },
-  {
-    id: 'mess',
-    label: 'Chaos',
-    icon: 'trash',
-    eventId: 'mess',
-    place: { name: 'Küche und Esstisch', x: 16.8, z: 2.8 },
-    angle: 10,
-    zoom: 3.4,
-    caption: 'Überall liegt Zeug herum',
-    who: 'Alle, die heute da waren',
-  },
 ];
 
 /** Problems of an action list: duplicate ids, unknown dev events, bad numbers. Empty when the list is fine. */
