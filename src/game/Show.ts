@@ -132,7 +132,8 @@ export class ShowRunner {
     const i = Math.min(this.scenes.length - 1, Math.max(0, index));
     const scene = this.scenes[i];
     // a scene that runs on from the one before only when it plays on in order; a jump always starts it clean
-    const continuous = scene.cut === false && i === this.index + 1 && !this.finished;
+    const prev = this.scenes[this.index];
+    const continuous = scene.cut === false && i === this.index + 1 && !this.finished && !!prev && this.t >= prev.length;
     this.index = i;
     this.t = 0;
     this.finished = false;

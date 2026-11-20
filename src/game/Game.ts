@@ -587,8 +587,11 @@ export class Game {
           this.settings.setOpen(!this.settings.isOpen);
           return;
         }
-        if (e.key.toLowerCase() === 'p' && !this.steered) {
-          location.assign(`${location.pathname}?show`); // the film starts on a fresh page, so nothing of what is going on is in its way
+        if (e.key.toLowerCase() === 'p' && !this.steered && !this.editor.active && !this.action?.owned) {
+          // the film starts on a fresh page, so nothing of what is going on is in its way; the other params stay
+          const q = new URLSearchParams(location.search);
+          q.set('show', '');
+          location.assign(`${location.pathname}?${q.toString().replace('show=', 'show')}${location.hash}`);
           return;
         }
         // A steers left while a person is steered, and ends the Konami code
@@ -859,7 +862,7 @@ export class Game {
   private stepView(dt: number): void {
     this.updateFollow(dt);
     this.timeControl.sync();
-    this.views.update(dt);
+    this.views.update(this.show && this.paused ? 0 : dt); // a paused film holds the camera too
     this.updateAim();
     if (this.reply && (this.reply.t -= dt) <= 0) this.reply = null;
     if ((this.persistTimer -= dt) <= 0) {
@@ -1269,7 +1272,11 @@ export class Game {
       (e) => {
         e.stopImmediatePropagation();
         if (e.repeat || e.altKey || e.ctrlKey || e.metaKey) return;
-        if (e.key === 'Escape') location.assign(location.pathname);
+        if (e.key === 'Escape') {
+          const q = new URLSearchParams(location.search);
+          q.delete('show');
+          location.assign(`${location.pathname}${q.size ? `?${q}` : ''}${location.hash}`);
+        }
         else if (e.code === 'Space') {
           e.preventDefault();
           this.paused = !this.paused;

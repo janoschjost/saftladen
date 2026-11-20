@@ -65,7 +65,7 @@ export class ShowDirector implements ShowHost {
     const s = this.skyAnim;
     if (s) {
       s.t += dt;
-      const k = Math.min(1, s.t / s.over);
+      const k = s.over > 0 ? Math.min(1, s.t / s.over) : 1;
       this.ctx.sim.tod.setCycle(cycleOf(s.from + (s.to - s.from) * k));
       if (k >= 1) this.skyAnim = null;
     }

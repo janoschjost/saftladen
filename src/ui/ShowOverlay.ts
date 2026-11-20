@@ -46,5 +46,6 @@ export class ShowOverlay {
 
   setPaused(on: boolean): void {
     this.pause.hidden = !on;
+    document.body.classList.toggle('is-show-paused', on);
   }
 }

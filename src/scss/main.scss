@@ -3303,7 +3303,7 @@
             align-items: baseline;
             gap: 0.5rem;
             padding: 0.25rem 0.875rem;
-            border-radius: 999px;
+            border-radius: 62rem;
             background: rgba(0, 0, 0, 0.7);
             font-size: clamp(0.8125rem, 1.1vw, 1.125rem);
             white-space: nowrap;
@@ -3352,7 +3352,7 @@
             right: 1.5rem;
             z-index: 3;
             padding: 0.25rem 0.875rem;
-            border-radius: 999px;
+            border-radius: 62rem;
             background: rgba(0, 0, 0, 0.7);
             font-size: 1rem;
             font-weight: 700;
@@ -3730,6 +3730,10 @@ body.is-show {
             animation: show-push 12s ease-out forwards;
         }
     }
+}
+
+body.is-show-paused .m-feed.is-cinema-focus {
+    animation-play-state: paused;
 }
 
 @keyframes show-push {
