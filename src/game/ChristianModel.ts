@@ -2,11 +2,10 @@ import * as THREE from 'three';
 import { christianLook } from '../data/christian';
 import { buildCharacter, type CharacterRig } from '../render/characterBuilder';
 import type { NavGrid } from './NavGrid';
-import { HIP_HEIGHT as HIP } from './petPose';
+import { WALK_PHASE_PER_M, walkPose } from './walkPose';
 
 const IN_PLACE = 4; // seconds he walks on the spot before he sets off
 const SPEED = 1.3; // m/s along the line
-const PHASE_PER_M = 4.2; // walk-cycle radians per metre walked: what `Person` uses (phase += dt * speed * 4.2)
 const MAX_LINE = 8; // m
 
 /**
@@ -99,22 +98,6 @@ export class ChristianModel {
     }
     r.root.position.set(x, 0, z);
     r.root.rotation.y = yaw;
-    // the walk cycle of everybody else (`Game.ts`): same swing, knee bend, arm swing and weight shift, at the same pace
-    const ph = this.t * SPEED * PHASE_PER_M;
-    const swing = Math.sin(ph) * 0.42;
-    const c = Math.cos(ph);
-    r.legL.rotation.x = swing;
-    r.legR.rotation.x = -swing;
-    r.kneeL.rotation.x = Math.max(0, -c) * 1.1 + 0.06;
-    r.kneeR.rotation.x = Math.max(0, c) * 1.1 + 0.06;
-    // the pelvis rides on the planted foot, so the feet touch the floor
-    const depth = (a: number, k: number) => 0.4 * Math.cos(a) + 0.4 * Math.cos(a + k);
-    const hip = HIP + (Math.max(depth(swing, r.kneeL.rotation.x), depth(-swing, r.kneeR.rotation.x)) - HIP) * 0.5;
-    r.legL.position.y = r.legR.position.y = hip;
-    r.armL.rotation.x = -swing * 0.8;
-    r.armR.rotation.x = swing * 0.8;
-    r.body.position.y = hip - HIP;
-    r.body.rotation.z = c * 0.035;
-    r.body.position.x = Math.sin(ph) * 0.02;
+    walkPose(r, this.t * SPEED * WALK_PHASE_PER_M);
   }
 }
