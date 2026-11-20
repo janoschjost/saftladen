@@ -18,6 +18,7 @@ export interface Look {
   vest?: string; // waistcoat colour, worn over `top`
   moody?: boolean; // switches between a very happy and a very serious face
   necklace?: string[]; // bead colours, hangs on the chest
+  neckerchief?: { body: string; edge: string }; // scout neckerchief tied round the collar: cloth and border colour
   wristbands?: string[]; // colours, worn on the person's right wrist
   flipflops?: boolean;
   shoeColor?: string; // shoe colour, overrides the light/dark pick from the trousers
