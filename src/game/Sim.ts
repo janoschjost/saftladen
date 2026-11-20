@@ -6,6 +6,7 @@ import { addKurt } from '../render/kurtBuilder';
 import { addCigarette, addUmbrella } from '../render/smokeProps';
 import { buildDog, type DogRig } from '../render/dogBuilder';
 import { HOME_COUNT } from '../render/homeOffice';
+import { Bonfire, keepOut } from './Bonfire';
 import { Boombox } from './Boombox';
 import { CoatRacks } from './CoatRacks';
 import { buildOffice, CORRIDOR_POINT, type OfficeModel } from '../render/officeModel';
@@ -114,6 +115,8 @@ export class Sim {
   readonly nerf: Nerf;
   /** Sandro's boombox, and Donata who takes it away */
   readonly boombox: Boombox;
+  /** Elia's bonfire, and whoever puts it out */
+  readonly bonfire: Bonfire;
   private stands: (w: Walker) => boolean;
   private doorsSee: () => Array<{ x: number; z: number }>;
   /** coats on the stands follow who is in the office */
@@ -155,6 +158,7 @@ export class Sim {
       (p) => p.boothCall || this.toilets.queue.some((w) => w.person === p) || this.toilets.cabins.some((c) => c.session?.person === p),
     );
     this.spawn(seats, portrait);
+    this.bonfire = new Bonfire(scene, this.nav, keepOut(model, this.office.desks));
     this.pets = this.walkers.filter((w): w is Dog => w instanceof Dog);
     this.coatRacks = new CoatRacks(model.coatRacks, this.people);
     this.presence = new Presence(this.people, this.tod, this.weather);
@@ -400,6 +404,7 @@ export class Sim {
     this.petCare.update(dt, this.people, this.pets, this.nav);
     this.nerf.update(dt, this.people, this.nav);
     this.boombox.update(dt, this.people, this.nav, this.presence.days);
+    this.bonfire.update(dt, this.people, this.tod.night);
     this.mail.update(dt, this.nav, this.presence.days);
     this.mess.update(dt, this.presence.days, this.people, this.presence);
     this.meetingRoom.update(dt, this.people, this.nav, this.tod.hour);

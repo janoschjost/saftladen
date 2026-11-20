@@ -321,6 +321,48 @@ export function buildCharacter(look: Look): CharacterRig {
     beads.forEach(([x, y], i) => torso.push(box(0.035, 0.035, 0.03, x, y, 0.14, look.necklace![i % look.necklace!.length])));
   }
 
+  // scout neckerchief: rolled to a tube that lies round the neck and hangs down the chest in a V to a knot below the
+  // throat, the border wound round it as a spiral stripe, two short tails below the knot
+  if (look.neckerchief) {
+    const { body, edge } = look.neckerchief;
+    /** one piece of the tube from a to b (x/y in the chest plane, z the depth), with a slanted slab of the border across it */
+    const piece = (ax: number, ay: number, az: number, bx: number, by: number, bz: number) => {
+      const len = Math.hypot(bx - ax, by - ay);
+      for (const g of [box(len + 0.015, 0.065, 0.065, 0, 0, 0, body), box(0.028, 0.07, 0.07, 0, 0, 0, edge, 0, 0.7)]) {
+        g.rotateZ(Math.atan2(by - ay, bx - ax));
+        g.translate((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2);
+        torso.push(g);
+      }
+    };
+    // behind and beside the neck: a ring of short pieces
+    const SEG = 10;
+    for (let i = 0; i < SEG; i++) {
+      const a = Math.PI * (0.45 + (i / (SEG - 1)) * 1.1);
+      const g = [box(0.115, 0.065, 0.065, 0, 0, 0, body), box(0.028, 0.07, 0.07, 0, 0, 0, edge, 0, 0.7)];
+      for (const m of g) {
+        m.rotateY(a);
+        m.translate(Math.sin(a) * 0.17, 1.375, Math.cos(a) * 0.145);
+        torso.push(m);
+      }
+    }
+    // the two ends hang down the chest from either side of the neck
+    for (const side of [-1, 1]) {
+      const from = { x: side * 0.15, y: 1.37 };
+      const to = { x: side * 0.03, y: 1.21 };
+      for (let k = 0; k < 4; k++) {
+        const t0 = k / 4;
+        const t1 = (k + 1) / 4;
+        piece(from.x + (to.x - from.x) * t0, from.y + (to.y - from.y) * t0, 0.115 + 0.06 * t0, from.x + (to.x - from.x) * t1, from.y + (to.y - from.y) * t1, 0.115 + 0.06 * t1);
+      }
+    }
+    torso.push(box(0.1, 0.085, 0.08, 0, 1.2, 0.185, body)); // the knot
+    torso.push(box(0.022, 0.088, 0.082, 0, 1.2, 0.185, edge));
+    torso.push(box(0.055, 0.15, 0.028, -0.045, 1.115, 0.2, body, 0, 0.25)); // the two tails
+    torso.push(box(0.055, 0.15, 0.028, 0.045, 1.115, 0.2, edge, 0, -0.25));
+    torso.push(box(0.055, 0.05, 0.03, -0.055, 1.05, 0.201, edge, 0, 0.25));
+    torso.push(box(0.055, 0.05, 0.03, 0.055, 1.05, 0.201, body, 0, -0.25));
+  }
+
   // glasses
   if (look.glasses) {
     const fc = typeof look.glasses === 'string' ? look.glasses : '#1c1c22';

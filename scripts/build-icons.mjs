@@ -35,6 +35,7 @@ const MAP = {
   settings: 'gear',
   smoke: 'cigarette',
   speaker: 'speaker-high',
+  campfire: 'campfire',
   toilet: 'toilet',
   zap: 'lightning',
   zoom: 'magnifying-glass-plus',

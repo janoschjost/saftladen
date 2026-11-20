@@ -38,7 +38,7 @@ const looks: Record<string, Look> = {
   'sandro-hagen': { skin: LIGHT, hair: '#5b4333', style: 'manbun', glasses: true, beard: 'stubble', top: BLACK, bottom: '#3a3d42', height: 0.88 },
   'delya-kohler': { skin: LIGHT, hair: '#5a3a2a', style: 'long', top: '#3a3a3e', bottom: '#86aee0', heightM: 1.7 },
   'devin-frei': { skin: FAIR, hair: '#3a2a22', style: 'curly', top: '#9fc3e9', bottom: BLACK, build: 1.15, strong: true, eyebrows: 'thick', heightM: 1.8 },
-  'elia-vogt': { skin: LIGHT, hair: '#3b2a22', style: 'short', beard: 'mustache', tee: true, top: '#f2f0ec', bottom: '#a47f58', heightM: 1.8 },
+  'elia-vogt': { skin: LIGHT, hair: '#3b2a22', style: 'short', beard: 'mustache', tee: true, top: '#f2f0ec', bottom: '#a47f58', heightM: 1.8, neckerchief: { body: '#d8c8a4', edge: '#e2481c' } },
   'marianne-hofstetter': { skin: FAIR, hair: '#7a4a34', style: 'long', bangs: true, tee: true, top: '#8a9a7e', bottom: '#4f7fc0', heightM: 1.7 },
   'dominic-rechsteiner': { skin: LIGHT, hair: '#a7ebbe', style: 'buzz', beard: 'stubble', tee: true, tattoo: 'both', top: '#1c1d20', bottom: '#20242c', heightM: 1.9 },
   'fabian-bucher': { skin: MEDIUM, hair: '#2a211c', sideColor: '#9a9690', style: 'short', beard: 'stubble', beardColor: '#6e6862', smile: true, buttonShirt: true, vape: true, top: '#6f98c8', bottom: '#b5ad98', heightM: 1.8 },
