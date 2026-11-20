@@ -1,4 +1,8 @@
 import { random } from './rng';
+
+/** a box must reach this far (m) into a cell to block it: touching edges do not count (`blockWorld`) */
+export const EDGE = 0.02;
+
 export interface Vec2 {
   x: number;
   z: number;
@@ -57,17 +61,39 @@ export class NavGrid {
 
   /** Blocks every cell overlapped by the world-space rectangle (touching edges do not count). */
   blockWorld(x0: number, z0: number, x1: number, z1: number): void {
-    const e = 0.02;
-    const cx0 = Math.floor((x0 + e) / this.cell);
-    const cz0 = Math.floor((z0 + e) / this.cell);
-    const cx1 = Math.floor((x1 - e) / this.cell);
-    const cz1 = Math.floor((z1 - e) / this.cell);
+    const [cx0, cx1] = this.span(x0, x1);
+    const [cz0, cz1] = this.span(z0, z1);
     this.block(cx0, cz0, cx1 - cx0 + 1, cz1 - cz0 + 1);
   }
 
-  /** Blocks every cell overlapped by one of the boxes (their x / z footprints). */
+  /** First and last cell along one axis that the range a..b overlaps by more than the touching margin (none: last < first). */
+  private span(a: number, b: number): [number, number] {
+    return [Math.floor((a + EDGE) / this.cell), Math.floor((b - EDGE) / this.cell)];
+  }
+
+  /** Blocks every cell overlapped by one of the boxes (their x / z footprints), and the cell edges thin panes stand on. */
   blockBoxes(boxes: ReadonlyArray<{ min: Vec2; max: Vec2 }>): void {
     for (const b of boxes) this.blockWorld(b.min.x, b.min.z, b.max.x, b.max.z);
+    for (const b of boxes) this.sealEdge(b); // only after all boxes: an edge already walled on one side needs nothing more
+  }
+
+  /**
+   * A pane thinner than the touching margin that stands on a cell edge (a glass wall) overlaps no cell: wherever
+   * neither cell beside it is blocked by something else, the one on its lower side is, so nobody walks through it (#253).
+   * Posts and legs (shorter than a cell) are left alone, as before.
+   */
+  private sealEdge(b: { min: Vec2; max: Vec2 }): void {
+    const [cx0, cx1] = this.span(b.min.x, b.max.x);
+    const [cz0, cz1] = this.span(b.min.z, b.max.z);
+    const acrossX = cx1 < cx0 && b.max.z - b.min.z >= this.cell; // a pane along z, standing on the edge between columns
+    const acrossZ = cz1 < cz0 && b.max.x - b.min.x >= this.cell;
+    if (acrossX === acrossZ) return;
+    const [s0, s1] = acrossX ? [cz0, cz1] : [cx0, cx1];
+    const edge = acrossX ? cx0 : cz0; // the cell just past the edge
+    for (let s = s0; s <= s1; s++) {
+      const [ax, az, bx, bz] = acrossX ? [edge - 1, s, edge, s] : [s, edge - 1, s, edge];
+      if (this.walkable(ax, az) && this.walkable(bx, bz)) this.block(ax, az);
+    }
   }
 
   /** Blocks every walkable cell that cannot be reached from `from`, so nobody spawns in a sealed pocket. Returns the count. */

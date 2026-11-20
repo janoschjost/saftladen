@@ -2457,7 +2457,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     const seats: [number, number, number][] = [
       ...[4.25, 5.45, 6.65].flatMap((cz): [number, number, number][] => [[22.0, cz, 0], [24.0, cz, Math.PI]]),
       [23.0, 3.15, -Math.PI / 2], // north head, faces the table
-      [23.0, 7.75, Math.PI / 2], // south head
+      [23.0, 7.72, Math.PI / 2], // south head: its back stays clear of the nav cells behind it, the only way round the table to the east side (the glass walls are solid, #253)
     ];
     for (const [cx, cz, ry] of seats) item('chair', at('chair', cx, cz), 'Stuhl', () => {
       const chair = new THREE.Group();
