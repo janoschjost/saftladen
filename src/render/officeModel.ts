@@ -1289,6 +1289,11 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       world.add(laptop);
       benchSeats.push(track({ x: gx(x), z: gz(z), yaw: Math.atan2(0, gz(-1.25) - gz(z)), lift: STOOL_LIFT, laptop: { parts, screen } })); // sits at the bar, facing it, up on the stool
     }
+    // the gaps between the stools are dead-end pockets in the nav grid: people wandered in and jammed the lane behind the stools,
+    // so the whole row counts as one blocker (an invisible strip: not drawn, but in the walkers' way)
+    const stoolRow = new THREE.Mesh(new THREE.BoxGeometry(3 * 0.9 + 0.4, 0.45, 0.4), new THREE.MeshBasicMaterial({ visible: false }));
+    stoolRow.position.set(gx(6.8 + 1.35), 0.5, gz(-1.65));
+    world.add(stoolRow);
   }, 'Stehbar');
   // washroom (x 0..4, left of the kitchen): purple walls, black floor, trough sink with mirror on the south wall next to the door, shower + 3 colored WC cabins on the north wall
   {

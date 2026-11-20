@@ -77,6 +77,30 @@ describe('office.overflow-seats: no desk free, sit down instead of wandering', (
     for (const s of sim.meetingRoom.seats) expect(!s.occupant || group.includes(s.occupant)).toBe(true);
   });
 
+  it('office.overflow-seats: nobody gets stuck on the bar when several sitters stand up at once (seeds 1-4)', () => {
+    for (const seed of [1, 2, 3, 4]) {
+      const sim = office({}, seed);
+      sim.scenario.clear('printer', 'coffee', 'kitchen', 'meeting', 'wc');
+      sim.events.trigger('desks-full');
+      expect(run(sim, 240, () => sim.office.benches!.seats.every((s) => s.occupant?.benchSeated)), `seed ${seed}: stools full`).toBe(true);
+      run(sim, 60);
+      const seats = sim.office.benches!.seats;
+      const sitters = seats.map((s) => s.occupant!);
+      // the gaps between two stools are not floor to stand in: nobody can wander in and jam the lane behind them
+      for (let i = 1; i < seats.length; i++) {
+        const c = sim.nav.toCell({ x: (seats[i - 1].seat.x + seats[i].seat.x) / 2, z: seats[i].seat.z });
+        expect(sim.nav.walkable(c.cx, c.cz), `gap ${i}`).toBe(false);
+      }
+      sim.events.trigger('meeting-room');
+      run(sim, 40);
+      for (const p of sitters) {
+        if (p.benchSeated) continue; // found a stool again, fine
+        const stuck = seats.some((s) => Math.hypot(p.pos.x - s.seat.x, p.pos.z - s.seat.z) < 1.2) && p.moving < 0.2;
+        expect(stuck, `seed ${seed}: ${p.id} stands still at the bar`).toBe(false);
+      }
+    }
+  });
+
   it('office.overflow-seats: a freed desk is taken by a sitter, who stands up and walks over to it', () => {
     const sim = crowded();
     run(sim, 60, () => false); // the sitters have sat a while
