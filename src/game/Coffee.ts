@@ -27,6 +27,11 @@ const PAUSE = { min: 90, max: 180 }; // seconds between two coffee breaks
 const STAY = { min: 25, max: 45 }; // seconds the group chats once everybody holds a cup
 const GROUP = { min: 2, max: 2 }; // only two people stand in the kitchen at a time
 const RING = 0.75; // metres from the circle centre to each person
+/** a walker gets past somebody standing this far from them (two bodies' radii plus the margin `separate` keeps): the circle must leave that much floor */
+export const PASS_BY = 0.66;
+const TURNS = 12; // ways the circle may be turned to keep the way free
+const SHIFT = 0.5; // ... and metres it may move off the centre, drawing closer together (to RING_CLOSE) if need be
+const RING_CLOSE = 0.5;
 const GATHER_TIMEOUT = 60;
 const TABLE_FIRST = { min: 20, max: 50 };
 const TABLE_PAUSE = { min: 40, max: 100 };
@@ -226,15 +231,14 @@ export class Kitchen {
   /** Calls `people` to the kitchen (they must be free). Returns the break, or null when one is already on or there is no room. */
   start(people: Person[], nav: NavGrid): CoffeeBreak | null {
     if (!this.free || people.length < 2) return null; // somebody still stands at the machine: kitchen is full
-    const c = this.model.center;
+    const m = this.model.center;
     const group = people.slice(0, GROUP.max);
     // spread the circle around the centre starting where the first person comes from: walks cross less
-    const sorted = [...group].sort((a, b) => Math.atan2(a.pos.z - c.z, a.pos.x - c.x) - Math.atan2(b.pos.z - c.z, b.pos.x - c.x));
-    const a0 = Math.atan2(sorted[0].pos.z - c.z, sorted[0].pos.x - c.x);
+    const sorted = [...group].sort((a, b) => Math.atan2(a.pos.z - m.z, a.pos.x - m.x) - Math.atan2(b.pos.z - m.z, b.pos.x - m.x));
+    const { c, stands } = this.circle(nav, sorted.length, Math.atan2(sorted[0].pos.z - m.z, sorted[0].pos.x - m.x));
     const placed: Array<{ p: Person; spot: CoffeeSpot }> = [];
     sorted.forEach((p, i) => {
-      const a = a0 + (i * Math.PI * 2) / sorted.length;
-      const stand = nav.nearestWalkable({ x: c.x + Math.cos(a) * RING, z: c.z + Math.sin(a) * RING }, 3);
+      const stand = stands[i];
       if (stand) placed.push({ p, spot: { stand: { ...stand }, yaw: Math.atan2(c.x - stand.x, c.z - stand.z), occupant: null } });
     });
     if (placed.length < 2) return null;
@@ -245,6 +249,40 @@ export class Kitchen {
     for (const { p, spot } of placed) p.callToCoffee(nav, spot, brk);
     this.current = brk;
     return brk;
+  }
+
+  /**
+   * Where `n` people stand for a break: around the kitchen's centre, the first one at angle `a0`. Nobody may stand across
+   * the way (a nook only one fits past, its entrance), or whoever walks through the kitchen gets stuck behind the cups
+   * (#268): the circle is turned, else moved off the centre a little and drawn closer. As it comes when nothing helps.
+   */
+  private circle(nav: NavGrid, n: number, a0: number): { c: Vec2; stands: Array<Vec2 | null> } {
+    const m = this.model.center;
+    const at = (c: Vec2, ring: number, first: number) => {
+      const stands = Array.from({ length: n }, (_, i) => {
+        const a = first + (i * Math.PI * 2) / n;
+        return nav.nearestWalkable({ x: c.x + Math.cos(a) * ring, z: c.z + Math.sin(a) * ring }, 3);
+      });
+      return { c, stands };
+    };
+    const keep = this.seats.map((s) => s.approach); // the machine is not used during a break (`claimMachine`)
+    const centres = [m, ...Array.from({ length: 8 }, (_, k) => ({ x: m.x + Math.cos((k * Math.PI) / 4) * SHIFT, z: m.z + Math.sin((k * Math.PI) / 4) * SHIFT }))];
+    for (const ring of [RING, RING_CLOSE]) {
+      for (const c of centres) {
+        for (let k = 0; k < TURNS; k++) {
+          // a0 first, then ever further turned either way
+          const circle = at(c, ring, a0 + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * ((Math.PI * 2) / TURNS));
+          const stands = circle.stands;
+          if (!stands.every((s) => s !== null)) continue;
+          const apart = stands.every((s, i) => stands.every((o, j) => j <= i || Math.hypot(o.x - s.x, o.z - s.z) >= PASS_BY));
+          // in the kitchen (not snapped behind a wall), and off the spots others walk to: the benches
+          const inside = stands.every((s) => nav.lineClear(nav.nearestWalkable(c) ?? c, s));
+          const clear = stands.every((s) => keep.every((bench) => Math.hypot(bench.x - s.x, bench.z - s.z) >= PASS_BY));
+          if (apart && inside && clear && !nav.cutsOff(stands, PASS_BY)) return circle;
+        }
+      }
+    }
+    return at(m, RING, a0);
   }
 
   update(dt: number, people: readonly Person[], nav: NavGrid): void {
