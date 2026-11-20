@@ -1,21 +1,29 @@
 import * as THREE from 'three';
 
-/** Real seconds for one full 24 h cycle. */
-export const CYCLE_SECONDS = 600;
-/** Cycle position at the start of the game (10:00). */
-const START = 0.308;
 /**
- * Cycle position -> clock hour. The night (21:00 - 05:00) is squeezed into a small slice of the cycle,
- * so the clock races through it while the working day takes most of the slider.
+ * Real seconds (at 1x) of each part of the clock, from midnight on: the night half to 05:00, the morning (05-08), the
+ * working day (08-18), the evening (18-21) and the night half from 21:00. The night is squeezed, so the clock races
+ * through it while the working day takes most of the slider; the night is not shorter than `NIGHT_SECONDS`, so that
+ * something can happen in it (Christian's visit). The day parts are what they have always been (`GAME_HOUR` in
+ * `Smoke.ts` follows from them): a longer night does not change the day.
  */
-const ANCHORS: ReadonlyArray<readonly [number, number]> = [
-  [0, 0],
-  [0.07, 5],
-  [0.2, 8],
-  [0.74, 18],
-  [0.93, 21],
-  [1, 24],
+export const NIGHT_SECONDS = 132;
+const PARTS: ReadonlyArray<readonly [seconds: number, endHour: number]> = [
+  [NIGHT_SECONDS / 2, 5],
+  [78, 8],
+  [324, 18],
+  [114, 21],
+  [NIGHT_SECONDS / 2, 24],
 ];
+/** Real seconds for one full 24 h cycle. */
+export const CYCLE_SECONDS = PARTS.reduce((sum, [s]) => sum + s, 0);
+/** Cycle position -> clock hour: a corner at the end of every part. */
+const ANCHORS: ReadonlyArray<readonly [number, number]> = (() => {
+  let at = 0;
+  return [[0, 0], ...PARTS.map(([seconds, hour]) => [(at += seconds) / CYCLE_SECONDS, hour] as const)];
+})();
+/** Cycle position at the start of the game (10:00). */
+const START = cycleOf(10);
 
 /** Clock speeds the player can pick: 1x = one day in `CYCLE_SECONDS`. */
 export const SPEEDS = [1, 10, 25] as const;
