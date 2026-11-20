@@ -31,6 +31,7 @@ function office(n: number): Office {
   const model = {
     printer: { stand: { x: 0.5, z: 0.5, yaw: 0 }, paper: { visible: false } },
     foosball: [],
+    walls: [],
     desks: Array.from({ length: n }, (_, i) => ({ seat: { x: 2 * i + 1.5, z: 2.5 }, back: { x: 0, z: 1 }, yaw: 0, rig })),
   } as unknown as OfficeModel;
   return new Office(model, nav);

@@ -158,13 +158,15 @@ export class Office {
     tickTv(dt);
   }
 
-  /** First free cell behind the chair. */
+  /** First free cell behind the chair, on the chair's side of every wall (#266). */
   private approachFor(d: DeskPlacement, nav: NavGrid): Vec2 | null {
+    const here = (c: Vec2) => !this.wallBetween(d.seat, c);
     for (const dist of [1.0, 1.25, 1.5, 1.8, 2.2]) {
       const c = nav.toCell({ x: d.seat.x + d.back.x * dist, z: d.seat.z + d.back.z * dist });
-      if (nav.walkable(c.cx, c.cz)) return nav.center(c.cx, c.cz);
+      if (nav.walkable(c.cx, c.cz) && here(nav.center(c.cx, c.cz))) return nav.center(c.cx, c.cz);
     }
-    return nav.nearestWalkable({ x: d.seat.x + d.back.x * 1.2, z: d.seat.z + d.back.z * 1.2 }, 6);
+    const behind = { x: d.seat.x + d.back.x * 1.2, z: d.seat.z + d.back.z * 1.2 };
+    return nav.openNear(behind, CORRIDOR_POINT, 6, false, here) ?? nav.nearestWalkable(behind, 6);
   }
 
   /**
@@ -198,7 +200,30 @@ export class Office {
    * office now (something was put in the way after the desk was laid out), the closest cell next to the chair that has.
    */
   exit(desk: Desk): Vec2 {
-    return this.nav.openNear(desk.approach, CORRIDOR_POINT, 2) ?? this.nav.openNear(desk.seat, CORRIDOR_POINT, 3) ?? desk.approach;
+    const here = (c: Vec2) => !this.wallBetween(desk.seat, c); // not on the other side of a wall (#266)
+    return this.nav.openNear(desk.approach, CORRIDOR_POINT, 2, false, here) ?? this.nav.openNear(desk.seat, CORRIDOR_POINT, 3, false, here) ?? desk.approach;
+  }
+
+  /** True if the straight line a→b passes through a wall. */
+  wallBetween(a: Vec2, b: Vec2): boolean {
+    return this.model.walls.some((w) => {
+      let t0 = 0;
+      let t1 = 1;
+      for (const [p, d, lo, hi] of [
+        [a.x, b.x - a.x, w.min.x, w.max.x],
+        [a.z, b.z - a.z, w.min.z, w.max.z],
+      ]) {
+        if (d === 0) {
+          if (p < lo || p > hi) return false;
+          continue;
+        }
+        const [s, e] = [(lo - p) / d, (hi - p) / d].sort((m, n) => m - n);
+        t0 = Math.max(t0, s);
+        t1 = Math.min(t1, e);
+        if (t0 > t1) return false;
+      }
+      return true;
+    });
   }
 
   /** `p` asks somebody who is free to play foosball; false when the table is busy or nobody is around. */

@@ -208,12 +208,12 @@ export class NavGrid {
 
   /**
    * Closest cell centre to p (within `maxRing` cells) from which `floor` can be walked to: p itself when its own cell
-   * can, unless `away` asks for another cell. Null if there is none.
+   * can, unless `away` asks for another cell; only cells `accept` takes. Null if there is none.
    */
-  openNear(p: Vec2, floor: Vec2, maxRing = 6, away = false): Vec2 | null {
-    if (!away && this.opens(p, floor)) return p;
+  openNear(p: Vec2, floor: Vec2, maxRing = 6, away = false, accept: (c: Vec2) => boolean = () => true): Vec2 | null {
+    if (!away && this.opens(p, floor) && accept(p)) return p;
     const open = this.reach(floor);
-    return this.nearest(p, maxRing, (x, z) => open[z * this.cols + x] === 1);
+    return this.nearest(p, maxRing, (x, z) => open[z * this.cols + x] === 1 && accept(this.center(x, z)));
   }
 
   /** True if the straight segment a→b crosses no blocked cell (the last `skipEnd` metres before b are ignored, e.g. a chair). */
