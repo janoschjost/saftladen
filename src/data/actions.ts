@@ -168,6 +168,17 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
     who: 'Sandro (und Donata)',
   },
   {
+    id: 'bonfire',
+    label: 'Lagerfeuer',
+    icon: 'campfire',
+    eventId: 'bonfire',
+    place: { name: 'Büro, offene Fläche', x: 20, z: 8 },
+    angle: 20,
+    zoom: 2.6,
+    caption: 'Elia baut ein Lagerfeuer',
+    who: 'Elia (und wer mit dem Feuerlöscher kommt)',
+  },
+  {
     id: 'mail-letter',
     label: 'Brief',
     icon: 'mail',

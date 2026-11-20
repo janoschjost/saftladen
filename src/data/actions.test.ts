@@ -32,6 +32,7 @@ describe('actions.list', () => {
       ['Fotoshooting', 'photo-shoot'],
       ['Serverschrank', 'server-rack'],
       ['Boombox', 'boombox'],
+      ['Lagerfeuer', 'bonfire'],
       ['Brief', 'mail-letter'],
       ['Paket', 'mail-parcel'],
       ['Rauchpause', 'smoke'],
