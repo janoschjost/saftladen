@@ -9,6 +9,9 @@ type ModelSeat = OfficeModel['benches'][number];
 /** Seconds between two looks at who can have a desk now. */
 const DESK_CHECK = 1;
 
+/** Seconds somebody has sat on a seat before a free desk goes to them: no standing up the moment they sat down. */
+const MIN_SIT = 45;
+
 /**
  * Overflow seating (#136): with more people in the office than desks, whoever finds no desk sits down on a free seat
  * and works on the laptop there: the kitchen bar stools, when those are full the chairs of the glass meeting room. They use the meeting-chair logic (walk to the seat, sit down, stand up); a
@@ -19,6 +22,8 @@ export class Benches {
   readonly seats: MeetSeat[] = [];
   private sources = new Map<MeetSeat, ModelSeat>();
   private timer = 0;
+  /** seconds each sitter has been sitting */
+  private sat = new Map<Person, number>();
 
   constructor(
     model: readonly ModelSeat[],
@@ -73,13 +78,17 @@ export class Benches {
     return nearest(this.seats) ?? (this.room.current ? null : nearest(this.room.seats));
   }
 
-  /** Once a second: every free desk goes to somebody who sits here (they stand up and walk over to it). */
+  /** Once a second: every free desk goes to somebody who has sat here a while (they stand up and walk over to it). */
   update(dt: number, people: readonly Person[]): void {
+    for (const p of people) {
+      if (p.benchSeated) this.sat.set(p, (this.sat.get(p) ?? 0) + dt);
+      else this.sat.delete(p);
+    }
     this.timer -= dt;
     if (this.timer > 0) return;
     this.timer = DESK_CHECK;
     for (const p of people) {
-      if (!p.benchSeated) continue;
+      if (!p.benchSeated || (this.sat.get(p) ?? 0) < MIN_SIT) continue;
       const desk = this.office.claim(p, false);
       if (!desk) return; // no desk free for the others either
       p.leaveBench(desk);

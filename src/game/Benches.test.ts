@@ -69,6 +69,7 @@ describe('office.overflow-seats: no desk free, sit down instead of wandering', (
 
   it('office.overflow-seats: a freed desk is taken by a sitter, who stands up and walks over to it', () => {
     const sim = crowded();
+    run(sim, 60, () => false); // the sitters have sat a while
     const sitters = sim.people.filter((p) => p.benched);
     // a few desks free up (others who find none walk to them too, so one desk alone may not reach a sitter)
     const freed = sim.office.desks.slice(0, 6);
@@ -105,5 +106,32 @@ describe('office.overflow-seats: no desk free, sit down instead of wandering', (
     sim.scenario.clear('printer', 'coffee', 'kitchen', 'meeting', 'wc');
     expect(sim.events.trigger('desks-full')).toMatch(/^Alle Schreibtische besetzt/);
     expect(run(sim, 240, () => sim.people.some((p) => p.benchSeated))).toBe(true);
+  });
+
+  it('office.overflow-seats: after desks-full the stools stay taken with real desk sitters, and nobody is handed a desk the moment they sit', () => {
+    const sim = office({}, 1);
+    sim.scenario.clear('printer', 'coffee', 'kitchen', 'meeting', 'wc');
+    sim.events.trigger('desks-full');
+    expect(run(sim, 240, () => sim.office.benches!.seats.every((s) => s.occupant?.benchSeated))).toBe(true);
+    const sitters = sim.office.benches!.seats.map((s) => s.occupant!);
+    // a minute on, the same people still sit there and every desk is still taken
+    run(sim, 60, () => false);
+    for (const [i, s] of sim.office.benches!.seats.entries()) expect(s.occupant, `stool ${i}`).toBe(sitters[i]);
+    expect(sim.office.desks.every((d) => d.occupant)).toBe(true);
+  });
+
+  it('office.overflow-seats: a free desk waits until the sitter has sat for a while, then goes to them', () => {
+    const sim = office({}, 1);
+    fillDesks(sim);
+    const p = sim.person('oscar-grob');
+    const stool = sim.office.benches!.seats[0];
+    sim.scenario.put(p.id, { x: stool.approach.x, z: stool.approach.z }, 'stay');
+    p.moveOn();
+    expect(run(sim, 10, () => p.benchSeated)).toBe(true);
+    for (const d of sim.office.desks) d.occupant = null;
+    run(sim, 20, () => !p.benchSeated);
+    expect(p.benchSeated, 'sat down a moment ago: stays').toBe(true);
+    expect(run(sim, 120, () => !p.benchSeated)).toBe(true);
+    expect(sim.office.desks.some((d) => d.occupant === p)).toBe(true);
   });
 });

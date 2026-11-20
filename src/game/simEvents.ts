@@ -737,11 +737,12 @@ export function registerSimEvents(sim: Sim): void {
       let seated = 0;
       // the team is brought in at once, as `scenario.put` does for somebody away; whoever is left walks in through the door
       for (const p of people) {
-        if (sim.office.desks.every((d) => d.occupant)) break;
-        if (p.held || p.controlled || p.scripted || tiedUp(p) || presence.isRemoved(p) || presence.isKept(p) || !sim.deskFor(p)) continue;
-        if (p.working) continue; // sits at a desk already
-        sim.scenario.put(p.id, 'desk', 'free');
-        seated++;
+        if (p.held || p.controlled || p.scripted || tiedUp(p) || presence.isRemoved(p) || presence.isKept(p)) continue;
+        // pinned at the desk: the desks stay taken for the scene, so the stools stay full (somebody at a desk already stays on that chair)
+        if (p.working || (!sim.office.desks.every((d) => d.occupant) && sim.deskFor(p))) {
+          sim.scenario.put(p.id, 'desk');
+          seated++;
+        }
       }
       return seated || away ? ev.desksFull(seated) : null;
     },
