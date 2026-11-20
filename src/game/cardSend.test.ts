@@ -86,7 +86,7 @@ describe('select.actions: Homeoffice / Rausschicken on the card while the person
     expect(sim.presence.refusal(a, 'home')).toBe('busy');
   });
 
-  it('select.actions: somebody in a running meeting of six gets out through the door, from every seat, and the meeting breaks up', () => {
+  it('select.actions: somebody sent out of a running meeting of six gets out through the door, the others keep sitting, the door shuts again, the meeting ends with the second-last', () => {
     const ids = [...GROUP, 'celine-buhler'];
     for (let k = 0; k < ids.length; k++) {
       const sim = office();
@@ -98,9 +98,31 @@ describe('select.actions: Homeoffice / Rausschicken on the card while the person
       expect(run(sim, 90, () => meeting.phase === 'session'), `seat ${k}: meeting runs`).toBe(true);
       expect(meeting.closed).toBe(true); // the door is shut
       expect(sim.sendNow(group[k], 'errand')).toBe(true);
+      expect(meeting.closed, `seat ${k}: door opens for them`).toBe(false);
       expect(run(sim, 90, () => group[k].presence === 'out'), `seat ${k}: gets out`).toBe(true);
-      expect(meeting.closed).toBe(false);
-      expect(run(sim, 60, () => !sim.meetingRoom.current), `seat ${k}: meeting over`).toBe(true);
+      // the others sit on, the door is shut again
+      expect(meeting.phase).toBe('session');
+      expect(meeting.closed, `seat ${k}: door shuts again`).toBe(true);
+      expect(group.filter((_, i) => i !== k).every((p) => p.meetSeated)).toBe(true);
     }
+  });
+
+  it('select.actions: sending the meeting out one by one ends it when fewer than two are left', () => {
+    const ids = [...GROUP, 'celine-buhler'];
+    const sim = office();
+    for (const p of sim.people) if (!ids.includes(p.id)) sim.scenario.put(p.id, 'errand');
+    sim.scenario.clear('printer', 'coffee', 'kitchen', 'meeting', 'wc');
+    for (const id of ids) sim.scenario.put(id, 'desk', 'free');
+    const group = ids.map((id) => sim.person(id));
+    const meeting = sim.meetingRoom.start(group, sim.nav)!;
+    expect(run(sim, 90, () => meeting.phase === 'session')).toBe(true);
+    for (let i = 0; i < group.length - 2; i++) {
+      expect(sim.sendNow(group[i], 'errand')).toBe(true);
+      expect(run(sim, 30, () => meeting.closed), `person ${i} is out, the door shuts again`).toBe(true);
+      expect(meeting.phase, `after ${i + 1} sent out`).toBe('session');
+    }
+    expect(sim.sendNow(group[group.length - 2], 'errand')).toBe(true); // second-last: one is left
+    expect(run(sim, 60, () => !sim.meetingRoom.current), 'meeting over').toBe(true);
+    expect(meeting.closed).toBe(false);
   });
 });

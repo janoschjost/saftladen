@@ -303,7 +303,7 @@ export class Sim {
   sendNow(p: Person, kind: 'home' | 'errand'): boolean {
     if (p.controlled || this.presence.refusal(p, kind)) return false;
     const meeting = this.meetingRoom.current;
-    if (meeting?.members.includes(p)) meeting.breakUp(this.nav); // its door is shut while it runs: nobody could leave through it
+    meeting?.release(p, this.nav); // its door is shut while it runs: it opens for them, the others keep sitting
     this.pull(p);
     return this.presence.send(p, kind, this.nav);
   }

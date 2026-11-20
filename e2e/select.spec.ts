@@ -183,8 +183,7 @@ test('select.actions: a greyed-out Homeoffice explains itself in a tooltip of th
   await expect(home).not.toHaveAttribute('title', /.+/);
   const tip = () => home.evaluate((el) => { const s = getComputedStyle(el, '::after'); return { text: s.content, opacity: Number(s.opacity) }; });
   expect((await tip()).opacity).toBe(0);
-  await home.hover();
-  await expect.poll(async () => (await tip()).opacity).toBe(1);
+  await expect.poll(async () => { await home.hover(); return (await tip()).opacity; }).toBe(1); // the card is still sliding in on the first try
   expect((await tip()).text).toContain('Alle Homeoffices sind besetzt');
   expect(errors).toEqual([]);
 });
