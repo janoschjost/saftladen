@@ -104,8 +104,8 @@ describe('move.flow', () => {
 
   // The same rush with the clock started a hair later or earlier (nothing a player could notice): the limits hold in every
   // run, not only in one lucky one. 2e-4 left two people with a coffee standing across the kitchen and somebody stuck
-  // behind them for 21 s (#268)
-  for (const nudge of [1e-4, 2e-4, 3e-4, -2e-4]) {
+  // behind them for 21 s (#268); 1.5e-3 and 1.8e-3 a greeter pushed against the visitor for 10 s (#272)
+  for (const nudge of [1e-4, 2e-4, 3e-4, -2e-4, 1.5e-3, 1.8e-3]) {
     it(`move.flow "Alle zurückholen" at 11:00 (seed 1), clock nudged by ${nudge}: nobody stands in a jam for more than 4.5 s away from doors, nobody waits at a door for more than 20 s`, () => {
       const sim = office({ cycle: cycleOf(11) + nudge }, 1);
       sim.presence.callAllBack();

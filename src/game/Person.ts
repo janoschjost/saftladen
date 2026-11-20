@@ -240,7 +240,7 @@ export class Person extends Walker {
   /** steering input in world space (direction on the floor, not normalised) */
   readonly steer = { x: 0, z: 0, run: false };
   /** a day task pins this person: they stand (or sit) exactly there and turn to `yaw`; they are `controlled` meanwhile, so nothing else picks them up */
-  scripted: { at: Vec2; yaw: number; sit: boolean; turn: number; arrived: boolean; tries: number; arriveIn?: number } | null = null;
+  scripted: { at: Vec2; yaw: number; sit: boolean; turn: number; arrived: boolean; tries: number; arriveIn?: number; apart?: { from: Vec2; dist: number } } | null = null;
   /** a day task has the handheld console out (see `gameboy` for the eased amount) */
   gameboyOn = false;
   /** 0..1 eased: both hands hold a handheld console in front of the chest */
@@ -1817,13 +1817,13 @@ export class Person extends Walker {
   }
 
   /** Pins this person for a day task: they walk to `at` first when `walk` is set (else they are there at once), then stay and turn to `yaw`. */
-  pinTo(s: { at: Vec2; yaw: number; sit?: boolean; turn?: number; walk?: boolean; arriveIn?: number }): void {
+  pinTo(s: { at: Vec2; yaw: number; sit?: boolean; turn?: number; walk?: boolean; arriveIn?: number; apart?: { from: Vec2; dist: number } }): void {
     this.hurry = 0;
     if (s.walk) {
       this.path = []; // somebody already on their way somewhere else walks to the spot, not on to their old goal
       this.state = 'idle';
     }
-    this.scripted = { at: { ...s.at }, yaw: s.yaw, sit: !!s.sit, turn: s.turn ?? 1, arrived: !s.walk, tries: 0, arriveIn: s.arriveIn };
+    this.scripted = { at: { ...s.at }, yaw: s.yaw, sit: !!s.sit, turn: s.turn ?? 1, arrived: !s.walk, tries: 0, arriveIn: s.arriveIn, apart: s.apart };
     this.controlled = true;
     this.steer.x = this.steer.z = 0;
     this.playerChat = null;
@@ -1873,7 +1873,8 @@ export class Person extends Walker {
           // the spot lies in a wall or behind one with no way round: the closest spot that has a way instead, tried next step (#253)
           // (from the closest free cell when the walker stands on a blocked one: a chair, furniture just put down)
           const from = nav.nearestWalkable(this.pos) ?? this.pos;
-          const near = nav.openNear(s.at, from);
+          const apart = s.apart; // a spot that has to keep its distance from somebody (the visitor a greeter walks to, #272)
+          const near = nav.openNear(s.at, from, 6, false, apart && ((c) => Math.hypot(c.x - apart.from.x, c.z - apart.from.z) >= apart.dist));
           if (near && near !== s.at) s.at = near;
           else if (++s.tries > 6) {
             if (!nav.lineClear(from, s.at)) s.at = { x: this.pos.x, z: this.pos.z }; // no way there: appears on the spot, unless a wall is in between

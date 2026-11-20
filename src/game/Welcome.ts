@@ -7,9 +7,10 @@ import type { Social } from './Social';
  * How many greet, how many of them walk over (only from within `reach` metres, getting up from their desk if need
  * be), standing distance (m), seconds the cheer lasts, seconds a walker gets to arrive (the visitor waits as long), and
  * how long the walk over should take for the closest and the farthest greeter (s): they hurry, up to a run, to be there
- * about 2 to 5 s after the visitor.
+ * about 2 to 5 s after the visitor, and how far (m) a spot has to be from him when it has to move (two body radii plus the
+ * 0.3 m within which a walker counts as arrived).
  */
-const WELCOME = { crowd: 5, walkers: 2, stand: 1.1, reach: 12, hold: 5, timeout: 20, quick: 2, slow: 5 };
+const WELCOME = { crowd: 5, walkers: 2, stand: 1.1, reach: 12, hold: 5, timeout: 20, quick: 2, slow: 5, apart: 0.9 };
 
 const gesture = () => (random() < 0.6 ? 'cheer' : 'wave');
 
@@ -58,7 +59,7 @@ export class Welcome {
       if (walkers < WELCOME.walkers && d > WELCOME.stand && d < WELCOME.reach) {
         walkers++;
         o.interrupt();
-        o.pinTo({ at: { x: v.pos.x - (dx / d) * WELCOME.stand, z: v.pos.z - (dz / d) * WELCOME.stand }, yaw: Math.atan2(dx, dz), walk: true, arriveIn: WELCOME.quick + (WELCOME.slow - WELCOME.quick) * (d / WELCOME.reach) });
+        o.pinTo({ at: { x: v.pos.x - (dx / d) * WELCOME.stand, z: v.pos.z - (dz / d) * WELCOME.stand }, yaw: Math.atan2(dx, dz), walk: true, arriveIn: WELCOME.quick + (WELCOME.slow - WELCOME.quick) * (d / WELCOME.reach), apart: { from: v.pos, dist: WELCOME.apart } });
         this.walkers.push({ p: o, to: v, pin: o.scripted, t: WELCOME.timeout, cheered: false });
       } else {
         o.talkTo(v.pos, WELCOME.hold); // turns to the visitor unless tied to a desk

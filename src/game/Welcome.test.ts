@@ -173,7 +173,8 @@ describe('presence.remote-greet', () => {
         const t = took.get(w.id);
         expect(t, `seed ${seed}: ${w.id} got there`).toBeDefined();
         expect(t!, `seed ${seed}: ${w.id}`).toBeLessThan(behindGlass.has(w.id) ? 10 : 8); // 5 s; from behind the glass the way round is 20 m or more, and a run is capped
-        expect(gap.get(w.id)!).toBeLessThan(1.6);
+        expect(gap.get(w.id)!).toBeGreaterThan(0.6); // never on top of him (#272)
+        expect(gap.get(w.id)!).toBeLessThan(2.5);
       }
     }
   });
