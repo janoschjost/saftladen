@@ -118,3 +118,27 @@ export function planClutter(
   }
   return out;
 }
+
+/** Where the post puts a letter or a parcel (`Mail.putOnDesk`, desk-local): mess keeps off it. */
+export const MAIL_RECT: DeskRect = { x0: 0.25, x1: 0.75, z0: -0.2, z1: 0.3 };
+/** Footprint radius (m) a spot for mess on a desk leaves free (a cup, a bottle, a ball of paper). */
+export const MESS_SPOT_RADIUS = 0.055;
+
+/**
+ * Spots on a desk of width `w` where mess can be put down (#254), desk-local: on the top, off the gear, the plant, the
+ * clutter and the post, and apart from each other. The same desk always gives the same spots.
+ */
+export function messSpots(w: number, plant: DeskPlantSpot | null, props: readonly DeskProp[]): Array<{ x: number; z: number }> {
+  const r = MESS_SPOT_RADIUS;
+  const out: Array<{ x: number; z: number }> = [];
+  const step = 2 * r + GAP;
+  for (let x = -w / 2 + MARGIN + r; x <= w / 2 - MARGIN - r; x += step) {
+    for (let z = -DESK_DEPTH / 2 + MARGIN + r; z <= DESK_DEPTH / 2 - MARGIN - r; z += step) {
+      if ([...DESK_FIXTURES, MAIL_RECT].some((b) => circleHitsRect(x, z, r + GAP, b))) continue;
+      if (plant && Math.hypot(x - plant.x, z - plant.z) < r + plant.r + GAP) continue;
+      if (props.some((p) => Math.hypot(x - p.x, z - p.z) < r + PROP_RADIUS[p.kind] + GAP)) continue;
+      out.push({ x, z });
+    }
+  }
+  return out;
+}

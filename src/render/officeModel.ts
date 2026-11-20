@@ -5,7 +5,8 @@ import type { RoomLamp } from '../game/RoomLight';
 import { screenOffMaterial, type DeskRig } from './officeBuilder';
 import { box as boxGeo, cyl as cylGeo, merge as mergeGeos, propMaterial } from './geo';
 import { tvMaterial } from './screens';
-import { planClutter, type DeskProp, type DeskPlantSpot } from './deskClutter';
+import { messSpots, planClutter, type DeskProp, type DeskPlantSpot } from './deskClutter';
+import { buildPaperBin } from './messProps';
 import { seeded } from '../game/rng';
 import { GLASS_ORDER, markGlass, markGlassSorted } from './glassSort';
 import { RoomItem, type ItemAnchor } from './roomItem';
@@ -127,6 +128,12 @@ export interface OfficeModel {
    * out when it breaks, and `leds(fault, t)`: the LEDs blink (green, amber) while it is fine, flicker red when it is broken (`t` a clock).
    */
   serverRack: { stand: { x: number; z: number; yaw: number }; spark: THREE.Object3D; leds: (fault: boolean, t: number) => void };
+  /**
+   * Where mess lies (#254): empty markers on the dining table, the bar counter and the kitchen worktop (on the top,
+   * between what stands there), and the paper bin by the printer with its heap and the spots on the floor around it.
+   * They ride on their furniture when the room editor moves it.
+   */
+  mess: { table: THREE.Object3D[]; bar: THREE.Object3D[]; counter: THREE.Object3D[]; bin: { heap: THREE.Object3D; floor: THREE.Object3D[] } };
 }
 
 type Mat = THREE.Material;
@@ -2639,7 +2646,8 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     const clutter = new THREE.Group();
     const crnd = seeded(7919 * (i + 1));
     const accents = [mat.flowerPink, mat.flowerYellow, mat.cactus, mat.terracotta, mat.succ];
-    for (const p of planClutter(crnd, s.w, plantSpot)) deskProp(clutter, p, accents[Math.floor(crnd() * accents.length)]);
+    const props = planClutter(crnd, s.w, plantSpot);
+    for (const p of props) deskProp(clutter, p, accents[Math.floor(crnd() * accents.length)]);
     root.add(mergeStatic(clutter, false));
     // the coffee mug that comes and goes with whoever works here (right of the mouse, where the sitter's hand ends up)
     const mug = new THREE.Group();
@@ -2658,7 +2666,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     mug.traverse((o) => (o.userData.nonav = true));
     root.add(mug);
     scene.add(root);
-    const placement: DeskPlacement = { rig: { root, screen, mug, coffee }, seat: { x: 0, z: 0 }, yaw: 0, back: { x: 0, z: 0 } };
+    const placement: DeskPlacement = { rig: { root, screen, mug, coffee, messSpots: messSpots(s.w, plantSpot, props) }, seat: { x: 0, z: 0 }, yaw: 0, back: { x: 0, z: 0 } };
     desks.push(placement);
     const turn = new THREE.Matrix4().makeRotationY(s.rot);
     const deskItem = new RoomItem(s.id, 'desk', `Tisch ${i + 1}`, root, { x: s.x, z: s.z, yaw: s.rot }, [tpl.box.clone().applyMatrix4(turn)], tpl.box.clone().applyMatrix4(turn), [], false);
@@ -2733,18 +2741,50 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     scene.add(logo);
   }
 
-  // printer paper (not merged, shown while somebody prints)
+  /** Puts `o` (game coordinates) onto the movable item `id`, so it rides along when the room editor moves it. */
+  const rideOn = <T extends THREE.Object3D>(id: string, o: T): T => {
+    const holder = items.find((it) => it.id === id);
+    if (holder) {
+      o.position.x -= holder.base.x;
+      o.position.z -= holder.base.z;
+      holder.holder.add(o);
+    } else scene.add(o);
+    return o;
+  };
+  // printer paper (not merged, shown while somebody prints), rides on the printer
   const paper = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.012, 0.22), L(0xffffff));
   paper.position.set(ax(PR.x - 0.52), 0.85, az(PR.z));
   paper.visible = false;
-  const printerItem = items.find((it) => it.id === 'printer');
-  if (printerItem) {
-    // rides on the printer when that is moved
-    paper.position.x -= printerItem.base.x;
-    paper.position.z -= printerItem.base.z;
-    printerItem.holder.add(paper);
-  } else scene.add(paper);
+  rideOn('printer', paper);
   const printer = { stand: printerStand, paper };
+
+  // where mess can lie (#254): empty markers on the furniture (model coordinates of a `within` group: anchor + offset)
+  const markers = (cx: number, cz: number, y: number, pts: ReadonlyArray<readonly [number, number]>): THREE.Object3D[] =>
+    pts.map(([x, z]) => {
+      const o = new THREE.Object3D();
+      o.position.set(ax(cx) + (x - cx), y, az(cz) + (z - cz));
+      return rideOn(at('group', cx, cz), o);
+    });
+  // the paper bin against the east wall next to the printer, and the floor around it where balls of paper land
+  const bin = buildPaperBin();
+  const binAt = { x: PR.x + 0.1, z: PR.z + 0.55 };
+  const onFloor = <T extends THREE.Object3D>(o: T, x: number, z: number): T => {
+    o.position.set(ax(x), 0, az(z));
+    return rideOn('printer', o);
+  };
+  onFloor(bin.root, binAt.x, binAt.z);
+  const mess: OfficeModel['mess'] = {
+    // dining table top (x 6.7 .. 10.44, z -4.05 .. -3.15), two rows in front of the benches
+    table: markers(8.57, -3.6, 0.77, [7.05, 7.65, 8.25, 8.9, 9.5, 10.1].flatMap((x) => [[x, -3.88], [x, -3.32]] as const)),
+    // bar counter (x 6.2 .. 10.45, z -1.25)
+    bar: markers(8.3, 0, 1.05, [6.5, 7.1, 7.7, 8.3, 8.9, 9.5, 10.1].map((x) => [x, -1.25] as const)),
+    // worktop on the west wall: between the espresso machine and the sink, the sink and the hob, beyond the hob
+    counter: markers(4.0, B.z0, 0.9, [[4.55, -3.05], [4.55, -4.06], [4.55, -5.1]]),
+    bin: {
+      heap: bin.heap,
+      floor: [[-0.35, 0.05], [-0.3, 0.35], [0.05, 0.38], [-0.6, 0.25], [-0.2, 0.62], [0.1, 0.7]].map(([dx, dz]) => onFloor(new THREE.Object3D(), binAt.x + dx, binAt.z + dz)),
+    },
+  };
 
   const meeting = { doorPos: { x: ax(20.65), z: az(CORR) }, center: meetCenter, tv: meetTv, seats: meetSeats, lamp: meetLamp };
   // the strip south of the wall, east of the annex, is outside: block it so nobody walks out through the entrance doorway into thin air
@@ -2789,7 +2829,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     }
   };
   setRoofVisible(false); // the roof starts hidden
-  return { desks, items, pendantCords: [...pendantCords.values()], setRoofVisible, coatRacks, blockers: allBlockers, walls: blockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter, machine: kitchenMachine, stands: kitchenStands, table: tableSeats }, phoneBooth: { seat: boothSeat, doorPos: { x: ax(23.75), z: az(CZ) } }, toilets: { cabins: toiletCabins, wait: [{ x: ax(3.35), z: az(-3.3) }, { x: ax(0.7), z: az(-3.2) }] }, photoStudio: { stand: studioStand, product: studioProduct, seat: studioSeat, screens: studioScreens, flash: studioFlash }, serverRack: { stand: rackStand, spark: rackSpark, leds: rackLeds } };
+  return { desks, items, pendantCords: [...pendantCords.values()], setRoofVisible, coatRacks, blockers: allBlockers, walls: blockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter, machine: kitchenMachine, stands: kitchenStands, table: tableSeats }, phoneBooth: { seat: boothSeat, doorPos: { x: ax(23.75), z: az(CZ) } }, toilets: { cabins: toiletCabins, wait: [{ x: ax(3.35), z: az(-3.3) }, { x: ax(0.7), z: az(-3.2) }] }, photoStudio: { stand: studioStand, product: studioProduct, seat: studioSeat, screens: studioScreens, flash: studioFlash }, serverRack: { stand: rackStand, spark: rackSpark, leds: rackLeds }, mess };
 }
 
 /**
