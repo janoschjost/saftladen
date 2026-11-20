@@ -96,3 +96,21 @@ describe('move.unstuck', () => {
     expect(g.openNear(at(5, 5), floor, 1)).toBeNull();
   });
 });
+
+describe('move.collision', () => {
+  it('move.collision: a glass pane thinner than the touching margin blocks a cell even when it stands right on a cell edge; posts do not (#253)', () => {
+    const g = new NavGrid(8, 8);
+    g.blockBoxes([{ min: { x: 3.98, z: 1 }, max: { x: 4.02, z: 7 } }]); // 4 cm pane on the edge x = 4, from z 1 to 7
+    for (let cz = 1; cz < 7; cz++) expect(g.walkable(3, cz) && g.walkable(4, cz), `row ${cz}`).toBe(false);
+    expect(g.walkable(3, 0) && g.walkable(4, 0) && g.walkable(3, 7)).toBe(true); // round its ends
+    const path = [at(1, 4), ...g.findPath(at(1, 4), at(6, 4))];
+    expect(path.length).toBeGreaterThan(6);
+    for (let i = 1; i < path.length; i++) if ((path[i - 1].x - 4) * (path[i].x - 4) < 0) expect(path[i].z < 1 || path[i].z > 7).toBe(true); // round, not through
+
+    const h = new NavGrid(8, 8);
+    h.blockBoxes([{ min: { x: 3, z: 1 }, max: { x: 4, z: 7 } }, { min: { x: 3.98, z: 1 }, max: { x: 4.02, z: 7 } }]); // a cabinet already stands on one side
+    expect(h.walkable(4, 4)).toBe(true);
+    h.blockBoxes([{ min: { x: 5.98, z: 3.98 }, max: { x: 6.02, z: 4.02 } }]); // a thin post on a cell corner
+    expect(h.walkable(5, 3) && h.walkable(6, 4)).toBe(true);
+  });
+});

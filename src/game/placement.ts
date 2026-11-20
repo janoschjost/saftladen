@@ -1,7 +1,7 @@
 import type { Box3 } from 'three';
 import { CORRIDOR_POINT, DOOR_SWING, type OfficeModel } from '../render/officeModel';
 import type { RoomItem } from '../render/roomItem';
-import type { NavGrid, Vec2 } from './NavGrid';
+import { EDGE, type NavGrid, type Vec2 } from './NavGrid';
 import { Passages } from './Passages';
 import type { Sim } from './Sim';
 
@@ -90,7 +90,7 @@ function doorSweep(d: OfficeModel['doors'][number]): Vec2[] {
 const covers = (b: Box3, p: Vec2) => p.x > b.min.x && p.x < b.max.x && p.z > b.min.z && p.z < b.max.z;
 
 /** Boxes that only touch (one standing on, or against, the other) do not overlap: the same margin as `NavGrid.blockWorld`. */
-const TOUCH = 0.02;
+const TOUCH = EDGE;
 const overlap = (a: Box3, b: Box3) =>
   a.min.x + TOUCH < b.max.x && b.min.x + TOUCH < a.max.x && a.min.y + TOUCH < b.max.y && b.min.y + TOUCH < a.max.y && a.min.z + TOUCH < b.max.z && b.min.z + TOUCH < a.max.z;
 
@@ -161,8 +161,7 @@ export function blockages(sim: Sim, nav: NavGrid): Blockage[] {
   const footprints = m.items.map((it) => it.blockers());
   const furniture = footprints.flat();
   nav.clear();
-  nav.blockBoxes(m.walls);
-  nav.blockBoxes(furniture);
+  nav.blockBoxes([...m.walls, ...furniture]); // in one go, as `Sim.blockNav`: a glass pane is sealed only where nothing else walls its edge
   nav.sealUnreachable(CORRIDOR_POINT); // as the sim's own grid (`Sim.blockNav`): nobody is sent into a sealed pocket
   const out: Blockage[] = [];
   m.doors.forEach((d, i) => doorSweep(d).some((p) => furniture.some((b) => covers(b, p))) && out.push({ key: `swing ${i}`, label: 'eine Tür versperren' }));

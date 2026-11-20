@@ -152,4 +152,29 @@ describe('presence.remote-greet', () => {
       expect(sim.welcome.call).toBeNull();
     }
   });
+
+  it('presence.remote-greet: the walkers hurry to the visitor, they run so that near or far they are there about 2 to 5 s after he walks in (longer when the way round a wall is long)', () => {
+    for (const seed of [1, 2, 3, 4]) {
+      const { sim, v, greeted } = fullOfficeVisit(seed);
+      expect(greeted, `seed ${seed}`).toBe(true);
+      const walkers = sim.people.filter((p) => p.scripted && !p.scripted.arrived);
+      expect(walkers.length, `seed ${seed}`).toBeGreaterThan(0);
+      const behindGlass = new Set(walkers.filter((w) => w.pos.x < 4.5).map((w) => w.id)); // the glass door is a long way round from there
+      const took = new Map<string, number>();
+      const gap = new Map<string, number>(); // how far from him when they got there
+      for (let j = 0; j < 12 * 60; j++) {
+        sim.step(1 / 60);
+        for (const w of walkers) if (w.scripted?.arrived && !took.has(w.id)) {
+            took.set(w.id, j / 60);
+            gap.set(w.id, Math.hypot(w.pos.x - v.pos.x, w.pos.z - v.pos.z));
+          }
+      }
+      for (const w of walkers) {
+        const t = took.get(w.id);
+        expect(t, `seed ${seed}: ${w.id} got there`).toBeDefined();
+        expect(t!, `seed ${seed}: ${w.id}`).toBeLessThan(behindGlass.has(w.id) ? 10 : 8); // 5 s; from behind the glass the way round is 20 m or more, and a run is capped
+        expect(gap.get(w.id)!).toBeLessThan(1.6);
+      }
+    }
+  });
 });
