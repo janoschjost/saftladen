@@ -433,6 +433,23 @@ export function registerSimEvents(sim: Sim): void {
       return r === 'cabin' ? `${first(p)} geht aufs WC` : r === 'queue' ? `${first(p)} wartet vor dem WC` : null;
     },
   });
+  // both cabins taken and a third person waiting in front, at once: the first two stand at their cabin door, the third in front of the cabins
+  events.register({
+    id: 'toilet-queue',
+    group: 'Aktionen',
+    label: 'WC voll, einer wartet',
+    run: () => {
+      const { toilets } = sim;
+      const wait = toilets.waitSpot;
+      // all checks before anybody is moved; not before the room is empty (`toilet-end` / the clearing does that)
+      if (!wait || !toilets.cabins.length || toilets.queue.length || toilets.cabins.some((c) => toilets.isOccupied(c))) return null;
+      const group = pickFree(toilets.cabins.length + 1, (o) => !o.talk && !o.inMeeting);
+      if (group.length < toilets.cabins.length + 1) return null;
+      group.forEach((p, i) => sim.scenario.put(p.id, i < toilets.cabins.length ? toilets.cabins[i].seat.approach : wait, 'free'));
+      group.forEach((p) => toilets.go(p, nav)); // cannot be refused now: the cabins are free and the queue is empty
+      return `${firsts(group.slice(0, -1))} sitzen auf dem WC, ${first(group[group.length - 1])} wartet`;
+    },
+  });
   events.register({
     id: 'toilet-end',
     asIs: true,
