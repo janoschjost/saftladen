@@ -169,6 +169,32 @@ function chestPrint(text: string, color: string, build: number): THREE.Mesh {
   return m;
 }
 
+/** A pixel star (5 wide, 4 tall) of gold blocks across the front of the cap's crown. */
+function starBadge(gold: string): THREE.BufferGeometry[] {
+  const rows = ['..X..', 'XXXXX', '.XXX.', '.X.X.'];
+  const cell = 0.026;
+  const out: THREE.BufferGeometry[] = [];
+  rows.forEach((row, r) => {
+    [...row].forEach((c, i) => {
+      if (c === 'X') out.push(box(cell, cell, 0.02, (i - 2) * cell, 1.8 + (1.5 - r) * cell, 0.21, gold));
+    });
+  });
+  return out;
+}
+
+/** Police cap: dark crown with a band, wider flat top, black visor and a gold star badge on the front. Sits on the 0.36 m head, so it follows every pose. */
+function policeCap(): THREE.BufferGeometry[] {
+  const navy = '#1c2540';
+  const gold = '#e6b830';
+  return [
+    box(0.4, 0.1, 0.4, 0, 1.8, 0, navy), // crown
+    box(0.42, 0.05, 0.42, 0, 1.755, 0, '#10162a'), // band
+    box(0.46, 0.035, 0.46, 0, 1.87, 0.01, navy), // wide flat top
+    box(0.3, 0.025, 0.14, 0, 1.745, 0.27, '#0b0b0e'), // visor
+    ...starBadge(gold),
+  ];
+}
+
 export function buildCharacter(look: Look): CharacterRig {
   const root = new THREE.Group();
   const body = new THREE.Group();
@@ -277,9 +303,14 @@ export function buildCharacter(look: Look): CharacterRig {
     torso.push(box(0.04, 0.15, 0.22, -0.19, 1.48, 0.07, bc));
     torso.push(box(0.04, 0.15, 0.22, 0.19, 1.48, 0.07, bc));
     torso.push(box(0.1, 0.022, 0.02, 0, 1.5, 0.205, '#b0605a'));
-  } else if (look.beard === 'mustache' || look.beard === 'goatee') {
-    torso.push(box(0.18, 0.04, 0.03, 0, 1.53, 0.195, bc));
+  } else if (look.beard === 'mustache' || look.beard === 'goatee' || look.beard === 'trimmed') {
+    torso.push(box(0.18, 0.04, 0.03, 0, 1.53, 0.195, bc)); // moustache
     if (look.beard === 'goatee') torso.push(box(0.1, 0.09, 0.04, 0, 1.44, 0.19, bc)); // chin beard
+    if (look.beard === 'trimmed') {
+      torso.push(box(0.19, 0.08, 0.04, 0, 1.445, 0.19, bc)); // chin
+      torso.push(box(0.03, 0.07, 0.1, -0.182, 1.455, 0.12, bc)); // a thin line along the jaw, both sides
+      torso.push(box(0.03, 0.07, 0.1, 0.182, 1.455, 0.12, bc));
+    }
   } else if (look.beard === 'stubble') {
     torso.push(box(0.37, 0.13, 0.02, 0, 1.46, 0.18, mix(skin, bc, 0.4)));
   }
@@ -304,6 +335,7 @@ export function buildCharacter(look: Look): CharacterRig {
     torso.push(box(0.42, 0.12, 0.42, 0, 1.79, 0, look.cap));
     torso.push(box(0.3, 0.025, 0.2, 0, 1.75, look.capBack ? -0.3 : 0.3, look.cap));
   }
+  if (look.policeCap) torso.push(...policeCap());
   const torsoMesh = mesh(torso);
   bodySkin.add(torsoMesh);
   bodySkin.add(buildPersonWear(look)); // christmas hat + scarf (hidden unless christmas mode is on)
@@ -534,7 +566,7 @@ export function buildCharacter(look: Look): CharacterRig {
   body.add(camera);
 
   // ---- legs (pivot at hip)
-  const shoe = new THREE.Color(look.bottom).getHSL({ h: 0, s: 0, l: 0 }).l > 0.6 ? SHOE_DARK : SHOE_LIGHT;
+  const shoe = look.shoeColor ?? (new THREE.Color(look.bottom).getHSL({ h: 0, s: 0, l: 0 }).l > 0.6 ? SHOE_DARK : SHOE_LIGHT);
   const mkLeg = (side: 1 | -1) => {
     const pivot = new THREE.Group();
     pivot.position.set(side * 0.115 * build, 0.8, 0);

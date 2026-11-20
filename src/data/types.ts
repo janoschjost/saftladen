@@ -8,7 +8,7 @@ export interface Look {
   top: string;
   bottom: string;
   bangs?: boolean;
-  beard?: 'stubble' | 'full' | 'mustache' | 'goatee'; // goatee = mustache + chin beard
+  beard?: 'stubble' | 'full' | 'mustache' | 'goatee' | 'trimmed'; // goatee = mustache + chin beard; trimmed = mustache + a short beard along the whole jaw
   beardColor?: string; // defaults to the hair colour
   eyebrows?: boolean | 'thick';
   eyes?: 'narrow';
@@ -20,6 +20,7 @@ export interface Look {
   necklace?: string[]; // bead colours, hangs on the chest
   wristbands?: string[]; // colours, worn on the person's right wrist
   flipflops?: boolean;
+  shoeColor?: string; // shoe colour, overrides the light/dark pick from the trousers
   tattooDark?: boolean; // bold solid-ink tattoo work (upper arm + forearm)
   tattoo?: 'left' | 'right' | 'both'; // forearm tattoo (anatomical side)
   blazer?: string; // blazer colour, worn over `top`
@@ -32,6 +33,7 @@ export interface Look {
   glasses?: boolean | string; // true = dark frame, string = frame colour
   cap?: string; // cap colour
   capBack?: boolean; // brim to the back
+  policeCap?: boolean; // police cap with a star badge on the front (Christian, the Ordnungskreis police officer)
   tee?: boolean; // short sleeves
   tank?: boolean; // tank top: bare arms and shoulders
   print?: { text: string; color: string }; // lettering across the chest
