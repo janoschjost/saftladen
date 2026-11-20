@@ -40,11 +40,13 @@ export class FliesFx {
 
   /** Flies at these places (`n` each, game coordinates, `y` the surface). Call whenever the spots change. */
   set(spots: ReadonlyArray<{ x: number; y: number; z: number; n: number }>): void {
-    this.spots = spots.map((s) => ({ ...s }));
     let total = 0;
-    for (const s of this.spots) total += s.n = Math.min(s.n, MAX_FLIES - total);
+    this.spots = spots.map((s) => {
+      const n = Math.min(s.n, MAX_FLIES - total);
+      total += n;
+      return { ...s, n };
+    });
     this.mesh.count = total;
-    this.mesh.visible = total > 0;
     this.place();
   }
 
