@@ -349,3 +349,30 @@ describe('talks and groups', () => {
     busy(c);
   });
 });
+
+describe('social.start: where members stand', () => {
+  // the archive (x 14.8 .. 16, from z 0): its door is at 14.85, 4.5; the cells west of its middle are walled in
+  const DOOR = { x: 14.85, z: 4.5 };
+  const MIDDLE = { x: 14.8, z: 2.3 };
+
+  it('social.start: nobody in a talk by a doorway stands in the way of people passing, nor where they cannot stand (#265)', () => {
+    for (const [near, far] of [
+      [{ x: 14.8, z: 3.9 }, { x: 15.2, z: 1.9 }], // one of them just inside the door (the way Marco got stuck there)
+      [{ x: 15.3, z: 3.6 }, { x: 15.2, z: 1.9 }],
+    ]) {
+      const sim = office();
+      const [a, b] = only(sim, [
+        [GROUP[0], near],
+        [GROUP[1], far],
+      ]);
+      expect(sim.traffic.passages.near(near, 1)).toBe(true); // set up by the door
+      const conv = sim.social.start([a, b], { ...MIDDLE }, sim.nav, sim.traffic);
+      expect(run(sim, 20, () => conv.phase === 'talk' && !a.path.length && !b.path.length)).toBe(true);
+      for (const m of [a, b]) {
+        expect(sim.traffic.passages.near(m.pos, 1), `${m.id} at ${m.pos.x.toFixed(2)},${m.pos.z.toFixed(2)}`).toBe(false);
+        expect(dist(m.pos, MIDDLE), m.id).toBeLessThan(1);
+      }
+      expect(dist(a.pos, DOOR)).toBeGreaterThan(1);
+    }
+  });
+});

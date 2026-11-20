@@ -138,6 +138,12 @@ export class Passages {
     return this.nav.inside(cx, cz) ? this.id[cz * this.nav.cols + cx] : -1;
   }
 
+  /** True if `p` is in a passage or within `radius` metres of one (somebody standing there is in the way of whoever walks through). */
+  near(p: Vec2, radius: number): boolean {
+    for (let dz = -radius; dz <= radius; dz += 0.5) for (let dx = -radius; dx <= radius; dx += 0.5) if (Math.hypot(dx, dz) <= radius && this.at({ x: p.x + dx, z: p.z + dz }) >= 0) return true;
+    return false;
+  }
+
   /** Passage of the cell with that index (cz * cols + cx), or -1. */
   atIndex(i: number): number {
     return this.id[i];

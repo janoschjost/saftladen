@@ -10,6 +10,8 @@ const REBUILD = 0.2; // seconds between density rebuilds
 const CLAIM_TTL = 8; // seconds a picked destination stays reserved
 const CLAIM_RADIUS = 1.6;
 const PASSAGE_LOAD = 2; // standing around in a doorway or corridor counts like two bodies on the spot
+const PASSAGE_ROOM = 1.6; // a chat gathers this far from one (its members stand about 0.6 m round the centre and keep 1 m clear, see `Conversation`)
+const NEAR_PASSAGE_LOAD = 1.5;
 const SHUN_COST = 40; // extra path cost per cell of a passage that is to be bypassed
 const LYING_COST = 25; // extra path cost per cell next to a lying pet: walk around it when there is a way
 const LYING_REACH = 0.7; // metres around a lying body whose cells cost extra (its radius plus a passer-by's)
@@ -181,7 +183,7 @@ export class Traffic {
         const { cx, cz } = this.nav.toCell(q);
         if (!this.nav.walkable(cx, cz)) continue;
         const c = this.nav.center(cx, cz);
-        const score = Math.max(0, this.density[cz * this.nav.cols + cx]) + this.claimed(c, group[0]) * 0.8 + d * 0.15 + (this.passages.at(c) >= 0 ? PASSAGE_LOAD : 0);
+        const score = Math.max(0, this.density[cz * this.nav.cols + cx]) + this.claimed(c, group[0]) * 0.8 + d * 0.15 + (this.passages.at(c) >= 0 ? PASSAGE_LOAD : this.passages.near(c, PASSAGE_ROOM) ? NEAR_PASSAGE_LOAD : 0);
         if (score < bestScore) {
           bestScore = score;
           best = c;
