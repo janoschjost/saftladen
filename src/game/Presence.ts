@@ -559,6 +559,11 @@ export class Presence {
     return this.removed.has(p);
   }
 
+  /** Out for lunch right now (until they are back in). */
+  atLunch(p: Person): boolean {
+    return this.lunchers.has(p);
+  }
+
   /** A scene holds this person where they are (`keep`). */
   isKept(p: Person): boolean {
     return this.kept.has(p);

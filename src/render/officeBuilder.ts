@@ -9,6 +9,8 @@ export interface DeskRig {
   /** coffee mug standing on the desk (hidden while nobody has a coffee) and its dark coffee surface */
   mug: THREE.Object3D;
   coffee: THREE.Object3D;
+  /** desk-local spots on the top where mess can be put down (#254, see `messSpots`) */
+  messSpots: Array<{ x: number; z: number }>;
 }
 
 let screenOff: THREE.MeshBasicMaterial | null = null;

@@ -29,6 +29,11 @@ export class Desk {
     return this.rig.root;
   }
 
+  /** Desk-local spots on the top where mess can lie (#254). */
+  get messSpots(): ReadonlyArray<{ x: number; z: number }> {
+    return this.rig.messSpots;
+  }
+
   setScreen(on: boolean, show?: { kind: ScreenKind; variant: number }): void {
     this.show(on && show ? screenMaterial(show.kind, show.variant) : screenOffMaterial());
   }

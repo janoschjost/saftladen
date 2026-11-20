@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  DESK_DEPTH,
   DESK_FIXTURES,
+  MAIL_RECT,
+  MESS_SPOT_RADIUS,
+  messSpots,
   PROP_RADIUS,
   planClutter,
   type DeskPlantSpot,
+  type DeskRect,
 } from "./deskClutter";
 import { seeded } from "../game/rng";
 
@@ -52,6 +57,34 @@ describe("office.desk-props", () => {
           expect(Math.hypot(p.x - q.x, p.z - q.z)).toBeGreaterThanOrEqual(
             r + PROP_RADIUS[q.kind],
           );
+      }
+    }
+  });
+});
+
+const hits = (x: number, z: number, r: number, b: DeskRect): boolean => {
+  const dx = Math.max(b.x0 - x, 0, x - b.x1);
+  const dz = Math.max(b.z0 - z, 0, z - b.z1);
+  return dx * dx + dz * dz < r * r;
+};
+
+describe("office.mess-spots", () => {
+  it("office.mess-spots: spots for mess on a desk lie on the top, off the gear, the post, the plant, the clutter and each other", () => {
+    for (let i = 0; i < 200; i++) {
+      const w = WIDTHS[i % WIDTHS.length];
+      const plant = plantFor(i);
+      const props = planClutter(seeded(7919 * (i + 1)), w, plant);
+      const spots = messSpots(w, plant, props);
+      expect(spots.length).toBeGreaterThan(0);
+      expect(messSpots(w, plant, props)).toEqual(spots);
+      const r = MESS_SPOT_RADIUS;
+      for (const [k, s] of spots.entries()) {
+        expect(Math.abs(s.x) + r).toBeLessThanOrEqual(w / 2);
+        expect(Math.abs(s.z) + r).toBeLessThanOrEqual(DESK_DEPTH / 2);
+        for (const b of [...DESK_FIXTURES, MAIL_RECT]) expect(hits(s.x, s.z, r, b)).toBe(false);
+        if (plant) expect(Math.hypot(s.x - plant.x, s.z - plant.z)).toBeGreaterThanOrEqual(r + plant.r);
+        for (const p of props) expect(Math.hypot(s.x - p.x, s.z - p.z)).toBeGreaterThanOrEqual(r + PROP_RADIUS[p.kind]);
+        for (const o of spots.slice(k + 1)) expect(Math.hypot(s.x - o.x, s.z - o.z)).toBeGreaterThanOrEqual(2 * r);
       }
     }
   });

@@ -583,6 +583,28 @@ export function registerSimEvents(sim: Sim): void {
       },
     });
   }
+  // mess (#254): the office as it looks after a long day, and clean again
+  events.register({
+    id: 'mess',
+    group: 'Aktionen',
+    label: 'Chaos: überall liegt Zeug herum',
+    run: () => {
+      const added = sim.mess.fill();
+      if (!sim.mess.count()) return null;
+      return added ? `Chaos: ${sim.mess.count()} Sachen liegen herum` : 'Chaos: mehr passt nicht mehr hin';
+    },
+  });
+  events.register({
+    id: 'mess-end',
+    group: 'Aktionen',
+    label: 'Chaos aufräumen',
+    asIs: true,
+    run: () => {
+      if (!sim.mess.count()) return null;
+      sim.mess.clear();
+      return 'Alles aufgeräumt';
+    },
+  });
   events.register({
     id: 'door-lettering',
     group: 'Aktionen',

@@ -12,6 +12,7 @@ import { buildOffice, CORRIDOR_POINT, type OfficeModel } from '../render/officeM
 import { NAV_CELL, WORLD } from '../render/World';
 import { Kitchen } from './Coffee';
 import { Mail } from './Mail';
+import { DOOR_CLEAR, Mess } from './Mess';
 import { makePossible } from './makePossible';
 import { DevEvents } from './DevEvents';
 import { Dog } from './Dog';
@@ -96,6 +97,8 @@ export class Sim {
   readonly smoke: SmokeBreaks;
   /** the post: a dove or a drone brings it to the mailboxes, an apprentice carries it to a desk */
   readonly mail: Mail;
+  /** what people leave lying around: cups, paper, chip bags, plates, lunchboxes, a jacket (#254) */
+  readonly mess: Mess;
   readonly tod = new TimeOfDay();
   readonly weather = new Weather();
   readonly petCare = new PetCare();
@@ -158,6 +161,12 @@ export class Sim {
     this.presence.seed(homes);
     this.smoke = new SmokeBreaks(this.people, this.presence, this.weather);
     this.mail = new Mail(scene, this.people, this.presence, this.weather, (p) => this.deskFor(p));
+    this.mess = new Mess(scene, model.mess, this.nav, this.traffic.passages, {
+      desks: this.office.desks,
+      keepOff: () => this.messKeepOff(),
+      racks: () => model.coatRacks.filter((r) => r.root.visible).map((r) => r.root.getWorldPosition(new THREE.Vector3())),
+      kitchen: model.kitchen.center,
+    });
     for (const pet of this.pets) if (pet.owner.presence === 'out' || !pet.comesToday) pet.sendAway(); // pets of people who start away, and pets that stay home today
     this.coatRacks.update();
     this.events.forcer = (run) => makePossible(this, run);
@@ -351,6 +360,28 @@ export class Sim {
     return desk;
   }
 
+  /** Spots on the floor mess keeps off (#254): doorways aside, where people sit, stand at something or gather. */
+  private messKeepOff(): Array<{ x: number; z: number; r: number }> {
+    const m = this.model;
+    const at = (r: number) => (p: { x: number; z: number }) => ({ x: p.x, z: p.z, r });
+    return [
+      ...m.doors.map((d) => ({ x: d.center.x, z: d.center.z, r: DOOR_CLEAR })),
+      ...this.office.desks.flatMap((d) => [d.seat, d.approach]).map(at(0.5)),
+      ...this.kitchen.seats.flatMap((s) => [s.seat, s.approach]).map(at(0.5)),
+      ...m.kitchen.stands.map(at(0.5)),
+      at(1.1)(m.kitchen.center),
+      ...(this.office.printer ? [at(0.6)(this.office.printer.stand)] : []),
+      ...m.foosball.map(at(0.6)),
+      ...m.meeting.seats.map(at(0.5)),
+      ...m.pod.seats.map(at(0.5)),
+      at(0.6)(m.phoneBooth.seat),
+      ...m.toilets.wait.map(at(0.6)),
+      at(0.6)(m.photoStudio.stand),
+      at(0.6)(m.photoStudio.seat),
+      at(0.6)(m.serverRack.stand),
+    ];
+  }
+
   /** One simulation step: everybody decides and moves, the rooms follow, nobody ends up inside somebody else or a wall. */
   step(dt: number): void {
     this.presence.update(dt, this.nav);
@@ -370,6 +401,7 @@ export class Sim {
     this.nerf.update(dt, this.people, this.nav);
     this.boombox.update(dt, this.people, this.nav, this.presence.days);
     this.mail.update(dt, this.nav, this.presence.days);
+    this.mess.update(dt, this.presence.days, this.people, this.presence);
     this.meetingRoom.update(dt, this.people, this.nav, this.tod.hour);
     this.pod.update(dt, this.people, this.nav);
     this.kitchen.update(dt, this.people, this.nav);
