@@ -1448,7 +1448,7 @@ export class Game {
     let dy = w.yaw - w.prevYaw;
     dy = Math.atan2(Math.sin(dy), Math.cos(dy));
     w.lift += ((w.held ? 0.45 : 0) - w.lift) * 0.25;
-    w.root.position.set(x, w.lift, z);
+    w.root.position.set(x, w.lift + (w instanceof Person ? w.seatLift : 0), z);
     w.root.rotation.y = w.prevYaw + dy * alpha;
 
     const ph = THREE.MathUtils.lerp(w.prevPhase, w.phase, alpha);
@@ -1484,7 +1484,7 @@ export class Game {
         // gentle weight shift onto the planted leg
         r.body.rotation.z = Math.cos(ph) * 0.035 * w.moving * (1 - sit);
         r.body.position.x = Math.sin(ph) * 0.02 * w.moving * (1 - sit);
-        if (w.working || w.editing) {
+        if (w.working || w.editing || w.laptop) {
           // desk work (typing bursts, mouse, reading, leaning back): see DeskWork
           const dw = w.deskWork.pose;
           r.armL.rotation.x = dw.armL;

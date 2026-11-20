@@ -726,6 +726,28 @@ export function registerSimEvents(sim: Sim): void {
       },
     });
   }
+  // every desk taken and the rest of the team called back: whoever finds no desk sits down on a stool or a meeting chair (#136)
+  events.register({
+    id: 'desks-full',
+    group: ev.group,
+    label: 'Alle Schreibtische besetzt',
+    run: () => {
+      const away = presence.absent.length;
+      presence.callAllBack();
+      let seated = 0;
+      // the team is brought in at once, as `scenario.put` does for somebody away; whoever is left walks in through the door
+      for (const p of people) {
+        if (p.held || p.controlled || p.scripted || tiedUp(p) || presence.isRemoved(p) || presence.isKept(p)) continue;
+        // put at a desk once (somebody at a desk already stays on that chair), then the simulation takes over: nobody is held, so a
+        // regular run goes on after the event (they can be sent home, leave in the evening, and a freed desk goes to a sitter)
+        if (p.working || (!sim.office.desks.every((d) => d.occupant) && sim.deskFor(p))) {
+          sim.scenario.put(p.id, 'desk', 'free');
+          seated++;
+        }
+      }
+      return seated || away ? ev.desksFull(seated) : null;
+    },
+  });
   events.register({
     id: 'all-back',
     group: ev.group,

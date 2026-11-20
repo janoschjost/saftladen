@@ -20,6 +20,7 @@ import { Dog } from './Dog';
 import { resetDoorLanes } from './Door';
 import { Doors } from './Doors';
 import { MeetingRoom } from './Meeting';
+import { Benches } from './Benches';
 import { NavGrid } from './NavGrid';
 import { Office, type Desk } from './Office';
 import { Person } from './Person';
@@ -141,6 +142,7 @@ export class Sim {
     this.office = new Office(model, this.nav);
     this.doors = new Doors(model.doors);
     this.meetingRoom = new MeetingRoom(model.meeting, this.nav);
+    this.office.benches = new Benches(model.benches, this.nav, this.meetingRoom, this.office);
     this.pod = new Pod(model.pod, this.nav);
     this.kitchen = new Kitchen(model.kitchen, this.nav);
     this.phoneBooth = new PhoneBooth(model.phoneBooth, this.nav);
@@ -192,6 +194,7 @@ export class Sim {
     this.blockNav();
     this.office.relayout(this.nav);
     this.meetingRoom.relayout(this.nav);
+    this.office.benches?.relayout(this.nav);
     this.pod.relayout(this.nav);
     this.kitchen.relayout(this.nav);
     this.phoneBooth.relayout(this.nav);
@@ -408,6 +411,7 @@ export class Sim {
     this.mail.update(dt, this.nav, this.presence.days);
     this.mess.update(dt, this.presence.days, this.people, this.presence);
     this.meetingRoom.update(dt, this.people, this.nav, this.tod.hour);
+    this.office.benches?.update(dt, this.people);
     this.pod.update(dt, this.people, this.nav);
     this.kitchen.update(dt, this.people, this.nav);
     this.phoneBooth.update(dt, this.people, this.nav);

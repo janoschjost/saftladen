@@ -155,6 +155,12 @@ interface MeetJob {
   dismissed: boolean;
   /** set when the player dropped the person on the chair: seconds left sitting there alone */
   solo?: number;
+  /** no desk free: sits here on a bench seat and works on the laptop until a desk frees up or a meeting needs the chair (`Benches`) */
+  bench?: boolean;
+  /** what the laptop at a bench seat shows (picked when they head there, like a desk monitor's picture) */
+  screen?: { kind: ScreenKind; variant: number };
+  /** the desk this bench sitter is about to be sent to (reserved for them while they stand up) */
+  desk?: Desk;
 }
 
 interface CoffeeJob {
@@ -442,8 +448,13 @@ export class Person extends Walker {
     this.rig.setAlter?.(on);
   }
 
+  /** Metres up on a high seat (bar stool) while sitting on it. */
+  get seatLift(): number {
+    return (this.meetJob?.seat.lift ?? 0) * this.sit;
+  }
+
   get headHeight(): number {
-    return this.baseHead - SIT_DROP * this.scale * this.sit;
+    return this.baseHead - SIT_DROP * this.scale * this.sit + this.seatLift;
   }
 
   /** A steered person has no plan: the doors open for them by proximity. The glide onto / off a seat and a step out are straight lines of their own. */
@@ -485,6 +496,52 @@ export class Person extends Walker {
     return this.meetJob?.phase === 'sit';
   }
 
+  /** On a bench seat (see `Benches`), on the way there, sitting or standing up. */
+  get benched(): boolean {
+    return !!this.meetJob?.bench;
+  }
+
+  /** Sitting on a bench seat with the laptop, with no desk on its way yet: the one a free desk goes to. */
+  get benchSeated(): boolean {
+    const j = this.meetJob;
+    return !!j?.bench && j.phase === 'sit' && !j.dismissed;
+  }
+
+  /** No desk free: walks to a bench seat, sits down and works there. */
+  sitOnBench(nav: NavGrid, seat: MeetSeat): void {
+    seat.occupant = this;
+    this.startMeetWalk(nav, seat, { kind: 'chat', center: { ...seat.seat }, members: [this] });
+    this.meetJob!.bench = true;
+    this.meetJob!.screen = { kind: screenKindOf(this.member.role), variant: screenSeed(this.member) }; // their usual picture; no dice, the sim's random sequence stays as it was
+  }
+
+  /**
+   * Gets up from the bench seat. With a `desk` (free now, theirs from here) they stand up and walk over to it. Without
+   * (a meeting needs the chair): off the seat at once, onto the cell in front of it, and they look for another seat.
+   */
+  leaveBench(desk?: Desk): void {
+    const j = this.meetJob;
+    if (!j?.bench || (desk && j.dismissed)) return;
+    if (desk && j.phase !== 'approach') {
+      j.dismissed = true;
+      j.desk = desk;
+      return;
+    }
+    this.stepOffBench();
+    this.moveOn();
+  }
+
+  /** Off the seat right now: next to it (not inside the furniture), standing up on their own from there. */
+  private stepOffBench(): void {
+    const j = this.meetJob;
+    if (!j) return;
+    if (j.phase !== 'approach') {
+      this.pos.x = this.prev.x = j.seat.approach.x;
+      this.pos.z = this.prev.z = j.seat.approach.z;
+    }
+    this.cancelMeet();
+  }
+
   /** Called to the meeting room: walks to `seat`, sits down and stays until `dismissMeeting`. */
   callToMeeting(nav: NavGrid, seat: MeetSeat, talk: Talk): void {
     seat.occupant = this;
@@ -520,6 +577,7 @@ export class Person extends Walker {
     const pending = this.pendingMeet;
     const seat = j?.seat ?? pending?.seat;
     if (seat?.occupant === this) seat.occupant = null;
+    if (j?.desk) this.office?.release(j.desk, this); // the desk they were about to go to is free again
     if (this.talk === (j?.talk ?? pending?.talk)) this.talk = null;
     this.meetJob = null;
     this.meetFocus = null;
@@ -549,6 +607,7 @@ export class Person extends Walker {
   /** Walk to the door and leave; comes back after `seconds`. Going home (not `manual`ly sent), an alter ego spins and walks out as itself. */
   leaveOffice(nav: NavGrid, kind: AwayKind, seconds: number, manual = false): void {
     this.cancelTask();
+    if (this.benched) this.stepOffBench(); // gets up from the laptop and goes
     // a chat or a stroke ends at the door
     this.playerChat = null;
     this.speaking = false;
@@ -573,6 +632,7 @@ export class Person extends Walker {
   /** Start the game already outside. */
   startAway(kind: AwayKind, seconds: number): void {
     this.cancelTask();
+    if (this.benched) this.cancelMeet();
     this.endSmoke();
     this.sit = 0;
     this.presence = 'out';
@@ -892,6 +952,11 @@ export class Person extends Walker {
     return this.working ? this.deskWork.activity : null;
   }
 
+  /** True while sitting on a bench seat with the laptop (typing and mouse poses like at a desk). */
+  get laptop(): boolean {
+    return this.benched && this.meetJob!.phase === 'sit';
+  }
+
   /** True while sitting at a desk and working. */
   get working(): boolean {
     return this.task?.phase === 'work';
@@ -1012,7 +1077,7 @@ export class Person extends Walker {
     if (rc && ((rc.t += dt) >= rc.dur || (!rc.free && (!this.talk || this.moving > 0.3)))) this.reaction = null;
     super.update(dt, nav, others);
     this.clock += dt;
-    if (this.working || this.editing) this.deskWork.update(dt);
+    if (this.working || this.editing || this.laptop) this.deskWork.update(dt);
     else this.deskWork.reset();
     if (this.rig.setMood && (this.moodTimer -= dt) <= 0) {
       this.moodTimer = 4 + random() * 10;
@@ -1482,6 +1547,11 @@ export class Person extends Walker {
       const desk = this.office.claim(this);
       if (desk) {
         this.headForDesk(desk, nav);
+        return;
+      }
+      const seat = this.office.benches?.claim(this);
+      if (seat) {
+        this.sitOnBench(nav, seat);
         return;
       }
     }
@@ -1956,9 +2026,13 @@ export class Person extends Walker {
         if (j.t > 0.25) this.turnTo(s.yaw + Math.PI, dt);
         this.step(dt, j.t > 0.35 ? 0.7 : 0);
         if (j.t >= 1) {
+          const desk = j.desk;
+          j.desk = undefined; // theirs now, not released by `cancelMeet`
           this.cancelMeet();
           this.sit = 0;
           this.socialCooldown = 15 + random() * 20;
+          if (desk) this.headForDesk(desk, nav);
+          else if (j.bench) this.moveOn(); // chair needed: the next decision looks for a desk or another seat
         }
         return true;
       }

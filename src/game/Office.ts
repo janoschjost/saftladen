@@ -2,6 +2,7 @@ import type * as THREE from 'three';
 import { screenOffMaterial, type DeskRig } from '../render/officeBuilder';
 import { kurtScreenMaterial, screenMaterial, tickScreens, tickTv, useScreen, type ScreenKind } from '../render/screens';
 import { CORRIDOR_POINT, type DeskPlacement, type OfficeModel } from '../render/officeModel';
+import type { Benches } from './Benches';
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { Person } from './Person';
 import { random } from './rng';
@@ -122,6 +123,8 @@ export class Office {
   readonly foosball: Foosball | null;
   /** everybody who works here (filled by the game), used to find a foosball opponent */
   readonly people: Person[] = [];
+  /** where somebody without a desk sits instead (set by the game, which builds it once the meeting room exists) */
+  benches: Benches | null = null;
 
   /** desk -> where the model puts it (the room editor moves the placement, `relayout` follows) */
   private placements = new Map<Desk, DeskPlacement>();
@@ -150,6 +153,7 @@ export class Office {
   updateScreens(dt: number): void {
     const typing = new Set<THREE.Material>();
     for (const d of this.desks) if (d.occupant?.working) typing.add(d.screenMaterial);
+    this.benches?.addTyping(typing);
     tickScreens(dt, typing);
     tickTv(dt);
   }

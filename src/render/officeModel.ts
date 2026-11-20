@@ -121,6 +121,8 @@ export interface OfficeModel {
   pod: { center: Vec2; seats: Array<{ x: number; z: number; yaw: number }> };
   /** kitchen: where the coffee group gathers (game coordinates, in front of the espresso machine), the machine itself and the two spots to stand at it */
   kitchen: { center: Vec2; machine: Vec2; stands: Vec2[]; table: Array<{ x: number; z: number; yaw: number }> };
+  /** where somebody without a desk sits and works on the laptop (game coordinates, yaw = facing): the kitchen bar stools */
+  benches: Array<{ x: number; z: number; yaw: number; lift: number; laptop: { parts: THREE.Mesh[]; screen: THREE.Mesh } }>;
   /** the stool in the phone box (game coordinates, yaw = facing the door) */
   phoneBooth: { seat: { x: number; z: number; yaw: number }; doorPos: Vec2 };
   /** the two WC cabins in the washroom (seat on the bowl facing the door, doorway centre, the occupied light above the door) and where people queue when both are taken */
@@ -244,6 +246,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   const kitchenCenter: Vec2 = { x: 0, z: 0 };
   const kitchenMachine: Vec2 = { x: 0, z: 0 };
   const tableSeats: Array<{ x: number; z: number; yaw: number }> = [];
+  const benchSeats: Array<{ x: number; z: number; yaw: number; lift: number; laptop: { parts: THREE.Mesh[]; screen: THREE.Mesh } }> = [];
   const kitchenStands: Vec2[] = [
     { x: 0, z: 0 },
     { x: 0, z: 0 },
@@ -1243,8 +1246,11 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     // bar runs from the west edge of the glass panel (x 6.2) to the east wall (inner face ~10.45)
     box(4.25, 0.05, 0.35, 8.325, 1.0, -1.25, mat.white);
     // bar stools: round base, post, footrest ring, padded round seat
-    for (let i = 0; i < 5; i++) {
-      const x = 6.7 + i * 0.7;
+    /** how much higher a stool seat is than a chair's: the sitter is raised by this, so the arms rest on the bar */
+    const STOOL_LIFT = 0.3;
+    const shells = [mat.steel, mat.dark, mat.white, mat.grey, mat.terracotta];
+    for (let i = 0; i < 4; i++) {
+      const x = 6.8 + i * 0.9; // four stools, 0.9 m apart (the east end stays free: people walk there) // four stools, a metre apart, centred on the bar (it is 4.25 long)
       const z = -1.65;
       cyl(0.18, 0.2, 0.025, x, 0, z, mat.steel);
       cyl(0.025, 0.025, 0.68, x, 0.02, z, mat.steel, world, 8);
@@ -1254,7 +1260,40 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       world.add(ring);
       cyl(0.19, 0.19, 0.06, x, 0.7, z, mat.black);
       cyl(0.16, 0.16, 0.02, x, 0.68, z, mat.steel);
+      // a laptop on the bar in front of each stool (shell colour varies per stool), screen towards the sitter; shown while somebody sits there.
+      // Each part stays a mesh of its own (`keep`) when the item is merged, so the game can show and hide them.
+      const shell = shells[i];
+      const keys = shell === mat.dark ? mat.grey : mat.black;
+      const parts: THREE.Mesh[] = [];
+      const part = (mesh: THREE.Mesh): THREE.Mesh => {
+        mesh.userData.keep = true;
+        mesh.visible = false;
+        parts.push(mesh);
+        return mesh;
+      };
+      const laptop = new THREE.Group();
+      laptop.position.set(gx(x), 1.05, gz(-1.3)); // the bar top is at 1.05
+      part(rbox(0.3, 0.015, 0.21, 0, 0, 0, shell, 0, laptop));
+      part(rbox(0.26, 0.004, 0.09, 0, 0.015, 0.03, keys, 0, laptop)); // keyboard
+      part(rbox(0.09, 0.004, 0.05, 0, 0.015, -0.06, mat.lightgrey, 0, laptop)); // trackpad
+      const lid = new THREE.Group();
+      lid.position.set(0, 0.015, 0.1);
+      lid.rotation.x = 0.2; // leans back, away from the sitter
+      part(rbox(0.3, 0.2, 0.01, 0, 0, 0, shell, 0, lid));
+      const screen = part(new THREE.Mesh(new THREE.PlaneGeometry(0.27, 0.17), screenOffMaterial()));
+      screen.userData.liveMaterial = true; // the game swaps its picture (`Benches`)
+      screen.position.set(0, 0.1, -0.0055);
+      screen.rotation.y = Math.PI;
+      lid.add(screen);
+      laptop.add(lid);
+      world.add(laptop);
+      benchSeats.push(track({ x: gx(x), z: gz(z), yaw: Math.atan2(0, gz(-1.25) - gz(z)), lift: STOOL_LIFT, laptop: { parts, screen } })); // sits at the bar, facing it, up on the stool
     }
+    // the gaps between the stools are dead-end pockets in the nav grid: people wandered in and jammed the lane behind the stools,
+    // so the whole row counts as one blocker (an invisible strip: not drawn, but in the walkers' way)
+    const stoolRow = new THREE.Mesh(new THREE.BoxGeometry(3 * 0.9 + 0.4, 0.45, 0.4), new THREE.MeshBasicMaterial({ visible: false }));
+    stoolRow.position.set(gx(6.8 + 1.35), 0.5, gz(-1.65));
+    world.add(stoolRow);
   }, 'Stehbar');
   // washroom (x 0..4, left of the kitchen): purple walls, black floor, trough sink with mirror on the south wall next to the door, shower + 3 colored WC cabins on the north wall
   {
@@ -2837,7 +2876,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     }
   };
   setRoofVisible(false); // the roof starts hidden
-  return { desks, items, pendantCords: [...pendantCords.values()], setRoofVisible, coatRacks, blockers: allBlockers, walls: blockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter, machine: kitchenMachine, stands: kitchenStands, table: tableSeats }, phoneBooth: { seat: boothSeat, doorPos: { x: ax(23.75), z: az(CZ) } }, toilets: { cabins: toiletCabins, wait: [{ x: ax(3.35), z: az(-3.3) }, { x: ax(0.7), z: az(-3.2) }] }, photoStudio: { stand: studioStand, product: studioProduct, seat: studioSeat, screens: studioScreens, flash: studioFlash }, serverRack: { stand: rackStand, spark: rackSpark, leds: rackLeds }, mess };
+  return { desks, items, pendantCords: [...pendantCords.values()], setRoofVisible, coatRacks, blockers: allBlockers, walls: blockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter, machine: kitchenMachine, stands: kitchenStands, table: tableSeats }, benches: benchSeats, phoneBooth: { seat: boothSeat, doorPos: { x: ax(23.75), z: az(CZ) } }, toilets: { cabins: toiletCabins, wait: [{ x: ax(3.35), z: az(-3.3) }, { x: ax(0.7), z: az(-3.2) }] }, photoStudio: { stand: studioStand, product: studioProduct, seat: studioSeat, screens: studioScreens, flash: studioFlash }, serverRack: { stand: rackStand, spark: rackSpark, leds: rackLeds }, mess };
 }
 
 /**
