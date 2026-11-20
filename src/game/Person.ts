@@ -1696,7 +1696,17 @@ export class Person extends Walker {
       if (Math.hypot(s.at.x - this.pos.x, s.at.z - this.pos.z) < 0.3) s.arrived = true;
       else if (!this.isWalking()) {
         this.walkTo(nav, s.at);
-        if (!this.isWalking() && ++s.tries > 6) s.arrived = true; // no way there: appears on the spot
+        if (!this.isWalking()) {
+          // the spot lies in a wall or behind one with no way round: the closest spot that has a way instead, tried next step (#253)
+          // (from the closest free cell when the walker stands on a blocked one: a chair, furniture just put down)
+          const from = nav.nearestWalkable(this.pos) ?? this.pos;
+          const near = nav.openNear(s.at, from);
+          if (near && near !== s.at) s.at = near;
+          else if (++s.tries > 6) {
+            if (!nav.lineClear(from, s.at)) s.at = { x: this.pos.x, z: this.pos.z }; // no way there: appears on the spot, unless a wall is in between
+            s.arrived = true;
+          }
+        }
       } else return false; // normal walking
       if (!s.arrived) return false;
     }
