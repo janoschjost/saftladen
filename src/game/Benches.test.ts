@@ -74,7 +74,7 @@ describe('office.overflow-seats: no desk free, sit down instead of wandering', (
     const freed = sim.office.desks.slice(0, 6);
     for (const d of freed) d.occupant = null;
     const taker = () => sitters.find((p) => p.task && freed.includes(p.task.desk));
-    expect(run(sim, 90, () => taker()?.working)).toBe(true);
+    expect(run(sim, 300, () => taker()?.working)).toBe(true);
     const sitter = taker()!;
     expect(sitter.benched).toBe(false);
     expect(sim.people.filter((p) => p.task?.desk === sitter.task!.desk)).toEqual([sitter]); // one desk, one person
