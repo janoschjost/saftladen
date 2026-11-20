@@ -96,17 +96,21 @@ describe('move.collision: glass walls', () => {
     const door = glassWalls(sim).find((w) => w.name === 'entrance room')!.doors[0];
     let called = false;
     let throughDoor = false;
+    let sitWhileWalking = 1; // his pose in the doorway: he walks over standing, not in the sitting pose
     // greeted ("Zlatko! 🎉" over Ramon), then pinned to a spot next to the visitor until he gets there
     expect(
       run(sim, 5 * 60, () => called && ramon.scripted?.arrived, () => {
         each();
         called ||= sim.welcome.call?.who === ramon;
-        throughDoor ||= Math.abs(ramon.pos.x - 4.5) < 0.2 && ramon.pos.z > door[0] && ramon.pos.z < door[1];
+        const inDoor = Math.abs(ramon.pos.x - 4.5) < 0.2 && ramon.pos.z > door[0] && ramon.pos.z < door[1];
+        if (inDoor && !throughDoor) sitWhileWalking = ramon.sit;
+        throughDoor ||= inDoor;
       }),
     ).toBe(true);
     expect(ramon.pos.x).toBeGreaterThan(4.5); // on the visitor's side of the glass
     expect(Math.hypot(ramon.pos.x - zlatko.pos.x, ramon.pos.z - zlatko.pos.z)).toBeLessThan(2);
     expect(throughDoor).toBe(true);
+    expect(sitWhileWalking).toBeLessThan(0.1);
     expect(crossed).toEqual([]);
   });
 

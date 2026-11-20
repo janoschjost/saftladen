@@ -1693,6 +1693,7 @@ export class Person extends Walker {
     this.speaking = false;
     this.timer = 1;
     if (!s.arrived) {
+      if (this.sit > 0) this.sit = Math.max(0, this.sit - dt * 4); // got up from a desk (`interrupt`): walks standing, not in the sitting pose
       if (Math.hypot(s.at.x - this.pos.x, s.at.z - this.pos.z) < 0.3) s.arrived = true;
       else if (!this.isWalking()) {
         this.walkTo(nav, s.at);
