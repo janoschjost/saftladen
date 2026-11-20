@@ -535,7 +535,7 @@ export class Game {
         const group = this.sim.people.filter((p) => (p === landed || this.sim.meetingRoom.contains(p.pos)) && p.inOffice && !p.held && !p.controlled && !p.talk && !p.inMeeting && !p.playerChat && !p.printJob && !p.foosJob).slice(0, 6);
         if (group.includes(landed) && group.length >= 2) {
           group.forEach((p) => p.interrupt());
-          this.sim.social.start(group, { x: landed.pos.x, z: landed.pos.z }, this.sim.nav);
+          this.sim.social.start(group, { x: landed.pos.x, z: landed.pos.z }, this.sim.nav, this.sim.traffic);
         }
       }
     };

@@ -37,6 +37,7 @@ const GATHER_TIMEOUT = 6;
  */
 const START_CHANCE = [0, 0, 0.15, 0.18, 0.35, 0.5, 0.6];
 const JOIN_CHANCE = 0.15;
+const PASSAGE_CLEAR = 1; // members of a talk stand at least this far (m) from a doorway or corridor, where there is room elsewhere (#265)
 export const CROWD_RADIUS = 2.2; // a talk is only started or joined if no more than CROWD_LIMIT bodies stand this close
 export const CROWD_LIMIT = 5;
 const CLEAR_DISTANCE = 4; // how far people walk off when they make room instead of talking
@@ -94,6 +95,9 @@ export class Affinity {
   }
 }
 
+/** The test a talk uses to keep its members out of the way of people passing (by a doorway or corridor of `traffic`). */
+const clearOf = (traffic?: Traffic) => (traffic ? (q: Vec2) => traffic.passages.near(q, PASSAGE_CLEAR) : undefined);
+
 export class Conversation {
   readonly giveWay = true;
   members: Person[];
@@ -119,6 +123,8 @@ export class Conversation {
     center: Vec2,
     private nav: NavGrid,
     private affinity: Affinity = new Affinity(),
+    /** true for a spot where somebody standing is in the way of people passing (in or by a doorway or corridor) */
+    private inTheWay: (p: Vec2) => boolean = () => false,
   ) {
     this.members = members;
     this.center = center;
@@ -139,21 +145,36 @@ export class Conversation {
     const c = this.center;
     const n = this.members.length;
     const sorted = [...this.members].sort((a, b) => Math.atan2(a.pos.z - c.z, a.pos.x - c.x) - Math.atan2(b.pos.z - c.z, b.pos.x - c.x));
-    const a0 = Math.atan2(sorted[0].pos.z - c.z, sorted[0].pos.x - c.x);
     const r = this.ringRadius(n);
-    sorted.forEach((m, i) => {
-      const a = a0 + (i * Math.PI * 2) / n;
-      m.walkTo(nav, { x: c.x + Math.cos(a) * r, z: c.z + Math.sin(a) * r });
-    });
+    const spot = (a: number) => ({ x: c.x + Math.cos(a) * r, z: c.z + Math.sin(a) * r });
+    // turn the ring (from where the first one stands) until everybody has a spot they can reach that is not in the way of
+    // those who pass; a spot nobody can walk to leaves them standing wherever they got stuck, often in a doorway (#265)
+    const start = Math.atan2(sorted[0].pos.z - c.z, sorted[0].pos.x - c.x);
+    const bad = (a0: number) => sorted.some((_, i) => this.unfit(nav, spot(a0 + (i * Math.PI * 2) / n)));
+    let a0 = start;
+    for (let k = 0; k < 12 && bad(a0); k++) a0 += (Math.PI * 2) / 12;
+    if (bad(a0)) a0 = start; // no such turn: as it was
+    sorted.forEach((m, i) => m.walkTo(nav, spot(a0 + (i * Math.PI * 2) / n)));
+  }
+
+  /** A spot to stand at that is no good: a wall or furniture there, or in the way of people passing. */
+  private unfit(nav: NavGrid, p: Vec2): boolean {
+    const { cx, cz } = nav.toCell(p);
+    return !nav.walkable(cx, cz) || this.inTheWay(p);
   }
 
   join(p: Person, nav: NavGrid): void {
     this.joiner = p;
-    const a = random() * Math.PI * 2;
     const r = this.ringRadius(this.members.length + 1);
+    const spot = () => {
+      const a = random() * Math.PI * 2;
+      return { x: this.center.x + Math.cos(a) * r, z: this.center.z + Math.sin(a) * r };
+    };
+    let at = spot();
+    for (let k = 0; k < 8 && this.unfit(nav, at); k++) at = spot(); // somewhere around the centre that is free and not by a door
     this.members.push(p);
     p.talk = this;
-    p.walkTo(nav, { x: this.center.x + Math.cos(a) * r, z: this.center.z + Math.sin(a) * r });
+    p.walkTo(nav, at);
     if (this.members.length > 2 && this.kind === 'chat') {
       this.kind = 'discussion';
       this.duration += 5;
@@ -321,8 +342,8 @@ export class Social {
   }
 
   /** Dev: start a conversation right now (members must already have dropped what they were doing). */
-  start(group: Person[], center: Vec2, nav: NavGrid): Conversation {
-    const c = new Conversation(group, center, nav, this.affinity);
+  start(group: Person[], center: Vec2, nav: NavGrid, traffic?: Traffic): Conversation {
+    const c = new Conversation(group, center, nav, this.affinity, clearOf(traffic));
     this.active.push(c);
     return c;
   }
@@ -401,7 +422,7 @@ export class Social {
     let center = { x: Math.min(Math.max(c.x, 2), nav.cols * nav.cell - 2), z: Math.min(Math.max(c.z, 2), nav.rows * nav.cell - 2) };
     // gather where it is quiet, not in the middle of a crowd
     if (traffic) center = traffic.openSpotNear(center, 1.5, group);
-    this.active.push(new Conversation(group, center, nav, this.affinity));
+    this.active.push(new Conversation(group, center, nav, this.affinity, clearOf(traffic)));
   }
 
   /** Who went over to somebody: once there the two start talking; somebody who got busy on the way (or took too long) calls it off. */
