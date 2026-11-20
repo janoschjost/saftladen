@@ -43,6 +43,14 @@ export const ANNEX_D = ANNEX.d * SCALE;
 export const PORCH = { x: ANNEX_W + 0.15, z: OFFICE_D + 0.15, w: 8, d: ANNEX_D };
 /** A point in the middle of the main corridor, in game coordinates. */
 export const CORRIDOR_POINT: Vec2 = { x: ax(12), z: az(1.1) };
+/**
+ * The long hallway along the desk rows, end to end: by the reception counter at the west end, short of the meeting room
+ * door at the east end, both in the middle of the hallway (game coordinates). Phone calls pace up and down it (#139).
+ */
+export const HALLWAY_WALK: readonly [Vec2, Vec2] = [
+  { x: ax(2.0), z: az(0.8) },
+  { x: ax(20.4), z: az(0.8) },
+];
 
 /** Debug: red numbered label above every desk row (to refer to rows by number). */
 const DEBUG_ROW_LABELS = true;

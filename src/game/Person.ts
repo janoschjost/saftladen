@@ -1,11 +1,11 @@
-import { REACTION_TIME, type Reaction } from './Chatter';
+import { REACTION_TIME, pick, type Reaction } from './Chatter';
 import type * as THREE from 'three';
 import { screenKindOf, screenSeed } from '../data/screens';
 import type { TeamMember } from '../data/types';
 import type { CharacterRig } from '../render/characterBuilder';
 import { SIT_DROP } from '../render/officeBuilder';
 import { screenVariants, type ScreenKind } from '../render/screens';
-import { CORRIDOR_POINT } from '../render/officeModel';
+import { CORRIDOR_POINT, HALLWAY_WALK } from '../render/officeModel';
 import { DOOR, DOOR_LANES, fromDoorway, pickDoorLane, type DoorLane } from './Door';
 import type { NavGrid, Vec2 } from './NavGrid';
 import type { MeetSeat } from './Meeting';
@@ -38,8 +38,14 @@ const FOOS_CHANCE = 0.03; // chance per decision to challenge somebody to foosba
 const FOOS_TIME = { min: 25, max: 50 }; // seconds of one game
 const FOOS_APPROACH = 90; // seconds both players may take to reach the table (from the far end of the office it takes about 45)
 const PHONE_CHANCE = 0.4; // chance per decision (phone people only) to take a call while walking around
-const PHONE_TIME = { min: 30, max: 80 }; // seconds of one call
+const PHONE_TIME = { min: 90, max: 180 }; // seconds of one call on foot
 const PHONE_PACE_CHANCE = 0.5; // chance that a call is spent pacing up and down one path instead of wandering
+const PHONE_HALL_CHANCE = 0.7; // chance that a pacing call walks the long hallway (`HALLWAY_WALK`) instead of a random path
+const CALL_GESTURE_GAP = { min: 2, max: 5 }; // seconds between two talking gestures of the free hand on a call on foot
+const CALL_GESTURE_TIME = { min: 1.2, max: 2 };
+const CALL_BUBBLE_GAP = { min: 6, max: 12 }; // seconds between two wordless bubbles on a call on foot
+const CALL_BUBBLE_TIME = 2.2;
+const CALL_SYMBOLS = ['…', '!', '!?', '😄'];
 const SEAT_PHONE_RATE = 0.02; // per second while working at the desk (phone people): chance to take a call right in the chair
 const SEAT_PHONE_TIME = { min: 15, max: 40 };
 const UNSTUCK_AFTER = 2; // seconds somebody who stood up from a chair may stand without getting away before they step out
@@ -174,7 +180,13 @@ interface PhoneJob {
   b: Vec2;
   /** pacing: the end walked to next */
   toB: boolean;
+  /** pacing up and down the long hallway (`HALLWAY_WALK`) */
+  hall?: boolean;
 }
+
+/** The talking gestures of the free (left) hand on a call: open palm, pointing, shrug. */
+const CALL_GESTURES = ['palm', 'point', 'shrug'] as const;
+export type CallGesture = (typeof CALL_GESTURES)[number];
 
 interface VapeJob {
   t: number;
@@ -319,6 +331,16 @@ export class Person extends Walker {
   phoneAmt = 0;
   /** on a call, sitting in the phone box (phone at the ear while seated) */
   boothCall = false;
+  /** a talking gesture of the free hand on a call on foot (`t` runs up to `dur`), and its strength 0..1 (eased in and out) */
+  callGesture: { kind: CallGesture; t: number; dur: number } | null = null;
+  /** the gesture the hand is still easing out of (kept after `callGesture` ends) */
+  lastCallGesture: { kind: CallGesture; t: number; dur: number } | null = null;
+  callGestureAmt = 0;
+  /** the wordless bubble over somebody on a call on foot (null between two) */
+  callText: string | null = null;
+  private callGestureIn = 0;
+  private callBubbleIn = 0;
+  private callBubbleLeft = 0;
   /** walking to / standing in the kitchen with a coffee */
   coffeeJob: CoffeeJob | null = null;
   /** 0 = no cup .. 1 = cup in the hand (eased) */
@@ -1077,9 +1099,53 @@ export class Person extends Walker {
         this.endPhone();
       }
     }
+    this.updateCallTalk(dt);
     if (this.playerCall > 0) this.playerCall -= dt;
     this.phoneAmt += ((this.phoneJob || this.playerCall > 0 || (this.boothCall && this.meetSeated) ? 1 : 0) - this.phoneAmt) * Math.min(1, dt * 5);
     if (this.phoneAmt < 0.005) this.phoneAmt = 0;
+  }
+
+  /** The hallway walk is open: straight and clear end to end (room editor), and reachable from here. */
+  private hallwayOpen(nav: NavGrid): boolean {
+    const [a, b] = HALLWAY_WALK;
+    return nav.lineClear(a, b) && nav.opens(b, a) && !!nav.openNear(this.pos, a);
+  }
+
+  /** On a call on foot: every few seconds a gesture of the free hand, now and then a wordless bubble; both stop with the call. */
+  private updateCallTalk(dt: number): void {
+    const j = this.phoneJob;
+    if (!j || j.mode === 'sit' || this.away) {
+      this.callGesture = null;
+      this.callText = null;
+    } else {
+      const on = this.callGesture;
+      if (on && (on.t += dt) >= on.dur) this.callGesture = null;
+      // not while the left hand holds a mug or a snack
+      const handFull = this.cupHeld || this.cupAmt > 0 || this.snackAmt > 0;
+      if (!this.callGesture && (this.callGestureIn -= dt) <= 0 && !handFull) {
+        this.callGestureIn = CALL_GESTURE_GAP.min + random() * (CALL_GESTURE_GAP.max - CALL_GESTURE_GAP.min);
+        this.callGesture = this.lastCallGesture = { kind: pick(CALL_GESTURES), t: 0, dur: CALL_GESTURE_TIME.min + random() * (CALL_GESTURE_TIME.max - CALL_GESTURE_TIME.min) };
+      }
+      if (this.callText && (this.callBubbleLeft -= dt) <= 0) this.callText = null;
+      if ((this.callBubbleIn -= dt) <= 0) {
+        this.callBubbleIn = CALL_BUBBLE_GAP.min + random() * (CALL_BUBBLE_GAP.max - CALL_BUBBLE_GAP.min);
+        this.callText = pick(CALL_SYMBOLS);
+        this.callBubbleLeft = CALL_BUBBLE_TIME;
+      }
+    }
+    const g = this.callGesture;
+    const k = g ? smooth(Math.min(1, Math.min(g.t, g.dur - g.t) / 0.35)) : 0;
+    this.callGestureAmt += (k - this.callGestureAmt) * Math.min(1, dt * 12);
+    if (this.callGestureAmt < 0.005) this.callGestureAmt = 0;
+  }
+
+  /**
+   * Walking with right of way: pacing on the phone, others step aside and he keeps his line (`Walker.avoidance`). On open
+   * floor only: in a doorway or a gap between desks the others have no room to step aside.
+   */
+  override get rightOfWay(): boolean {
+    if (this.phoneJob?.mode !== 'pace' || this.state !== 'walk' || this.controlled || this.held || this.yielding || this.stuck) return false;
+    return !this.traffic || this.traffic.passages.at(this.pos) < 0;
   }
 
   /** The player picked up a ringing phone: the phone goes to the ear for a few seconds, also while steered. */
@@ -1087,12 +1153,21 @@ export class Person extends Walker {
     this.playerCall = Math.max(this.playerCall, seconds);
   }
 
-  /** Starts a phone call: walks around with the phone at the ear, either up and down one path or from spot to spot. */
-  startPhone(nav: NavGrid): void {
-    const pace = random() < PHONE_PACE_CHANCE;
-    const a = { ...this.pos };
+  /**
+   * Starts a phone call: walks around with the phone at the ear, either up and down one path or from spot to spot.
+   * Most pacing calls walk the long hallway end to end; `hallway` (the dev event) always paces there. Where the
+   * hallway is blocked (room editor), the call paces a random path instead.
+   */
+  startPhone(nav: NavGrid, hallway = false): void {
+    const pace = hallway || random() < PHONE_PACE_CHANCE;
+    const hall = pace && (hallway || random() < PHONE_HALL_CHANCE) && this.hallwayOpen(nav);
+    let a = { ...this.pos };
     let b = a;
-    if (pace) {
+    if (hall) {
+      // off to the far end first (`b`): never a first leg that ends where they already stand
+      const [p, q] = HALLWAY_WALK.map((v) => ({ ...v }));
+      [a, b] = Math.hypot(p.x - this.pos.x, p.z - this.pos.z) < Math.hypot(q.x - this.pos.x, q.z - this.pos.z) ? [p, q] : [q, p];
+    } else if (pace) {
       // the far end of the path: a free spot a few metres away
       let best = Infinity;
       for (let i = 0; i < 16; i++) {
@@ -1107,7 +1182,9 @@ export class Person extends Walker {
         if (miss === 0) break;
       }
     }
-    this.phoneJob = { remaining: PHONE_TIME.min + random() * (PHONE_TIME.max - PHONE_TIME.min), mode: pace ? 'pace' : 'wander', a, b, toB: true };
+    this.phoneJob = { remaining: PHONE_TIME.min + random() * (PHONE_TIME.max - PHONE_TIME.min), mode: pace ? 'pace' : 'wander', a, b, toB: true, hall };
+    this.callGestureIn = CALL_GESTURE_GAP.min * random();
+    this.callBubbleIn = CALL_BUBBLE_GAP.min * (0.3 + random() * 0.7);
     this.phoneStep(nav);
   }
 

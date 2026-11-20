@@ -1515,7 +1515,10 @@ export class Game {
         }
         this.poseTired(w, r);
         if (r.vape) this.poseVape(w, r.vape, ph);
-        if (r.phone) this.posePhone(w, r.phone);
+        if (r.phone) {
+          this.posePhone(w, r.phone);
+          this.poseCallGesture(w, r);
+        }
         const talking = !!(w.talk || (w.playerChat && !w.petting && !w.nerfOn && !w.boomPose)) && w.moving < 0.2 && !(w.sit > 0.5 && !w.speaking);
         w.talkAmt += ((talking ? 1 : 0) - w.talkAmt) * 0.12;
         w.speakAmt += ((talking && w.speaking ? 1 : 0) - w.speakAmt) * 0.15;
@@ -1867,16 +1870,7 @@ export class Game {
     const held = heldPoses(r);
     const t = rc.t;
     const hop = 1 - w.sit * 0.8;
-    const lerp = THREE.MathUtils.lerp;
-    const arm = (right: boolean, q: ArmPose) => {
-      const shoulder = right ? r.armR : r.armL;
-      const elbow = right ? r.elbowR : r.elbowL;
-      const sign = right ? 1 : -1;
-      shoulder.rotation.x = lerp(shoulder.rotation.x, q.x, a);
-      shoulder.rotation.z = lerp(shoulder.rotation.z, sign * q.z, a);
-      elbow.rotation.x = lerp(elbow.rotation.x, q.e, a);
-      elbow.rotation.z = lerp(elbow.rotation.z, sign * q.ez, a);
-    };
+    const arm = (right: boolean, q: ArmPose) => blendArm(r, right, q, a);
     switch (rc.kind) {
       case 'laugh':
         // holds the belly, head thrown back, shoulders shaking
@@ -1927,17 +1921,7 @@ export class Game {
     if (a <= 0) return;
     const held = heldPoses(r);
     const t = this.clock + w.phase;
-    const lerp = THREE.MathUtils.lerp;
-    // ArmPose: x swing, z out to the side (away from the body), e elbow bend, ez elbow sideways; the left arm is on -x
-    const arm = (right: boolean, p: ArmPose) => {
-      const shoulder = right ? r.armR : r.armL;
-      const elbow = right ? r.elbowR : r.elbowL;
-      const sign = right ? 1 : -1;
-      shoulder.rotation.x = lerp(shoulder.rotation.x, p.x, a);
-      shoulder.rotation.z = lerp(shoulder.rotation.z, sign * p.z, a);
-      elbow.rotation.x = lerp(elbow.rotation.x, p.e, a);
-      elbow.rotation.z = lerp(elbow.rotation.z, sign * p.ez, a);
-    };
+    const arm = (right: boolean, p: ArmPose) => blendArm(r, right, p, a);
     switch (w.emoteKind) {
       case 'yawn': {
         // hand over the mouth, head back, eyes screwed shut
@@ -1976,6 +1960,22 @@ export class Game {
       r.armR.rotation.z = 0;
       ph.elbow.rotation.x = 0;
     }
+  }
+
+  /** On a call on foot: the free (left) hand talks along now and then, an open palm, a point or a shrug (`Person.callGesture`). */
+  private poseCallGesture(w: Person, r: Person['rig']): void {
+    const a = w.callGestureAmt;
+    const g = w.callGesture ?? w.lastCallGesture; // eases out of the last one after the call ends
+    if (a <= 0 || !g) return;
+    const t = this.clock + w.phase;
+    const q: ArmPose =
+      g.kind === 'palm'
+        ? { x: -0.95 + Math.sin(t * 4.5) * 0.15, z: 0.22, e: -0.95, ez: 0 }
+        : g.kind === 'point'
+          ? { x: -1.35 + Math.sin(t * 9) * 0.12, z: 0.08, e: -0.15, ez: 0 }
+          : { x: -0.5, z: 0.55, e: -1.15, ez: 0 };
+    blendArm(r, false, q, a);
+    if (g.kind === 'shrug') r.body.position.y += 0.015 * a * Math.sin(Math.min(1, g.t / g.dur) * Math.PI);
   }
 
   /** Right hand to the mouth while taking a drag, glowing tip, then a vapour cloud that drifts up and fades. */
@@ -2152,6 +2152,7 @@ export class Game {
         ...this.sim.boombox.bubbles.map((b) => say(`boombox-${b.who.id}`, b.text, b.who)),
         ...this.sim.mail.bubbles.map((b) => say(`mail-${b.who.id}`, b.text, b.who)),
         ...(rep && !rep.who.away ? [say(`reply-${rep.who.id}`, rep.text, rep.who)] : []),
+        ...this.sim.people.filter((p) => p.callText && !p.away).map((p) => say(`call-${p.id}`, p.callText!, p)),
         ...this.sim.social.active.filter((c) => c.phase !== 'gather' && c.text).map((c) => say(c.speaker.id, c.text, c.speaker)),
         ...(coffee?.phase === 'chat' ? [say(coffee.speaker.id, coffee.text, coffee.speaker)] : []),
         ...(this.sim.meetingRoom.casual ? [say(this.sim.meetingRoom.casual.speaker.id, this.sim.meetingRoom.casual.text, this.sim.meetingRoom.casual.speaker)] : []),
@@ -2251,6 +2252,18 @@ declare global {
     /** the test hook, set when a dev param is in the URL (`debugParams.ts`) */
     __game?: TestHook;
   }
+}
+
+/** Blends one arm `a` (0..1) towards `q`. ArmPose: x swing, z out to the side (away from the body), e elbow bend, ez elbow sideways; the left arm is on -x. */
+function blendArm(r: Person['rig'], right: boolean, q: ArmPose, a: number): void {
+  const lerp = THREE.MathUtils.lerp;
+  const shoulder = right ? r.armR : r.armL;
+  const elbow = right ? r.elbowR : r.elbowL;
+  const sign = right ? 1 : -1;
+  shoulder.rotation.x = lerp(shoulder.rotation.x, q.x, a);
+  shoulder.rotation.z = lerp(shoulder.rotation.z, sign * q.z, a);
+  elbow.rotation.x = lerp(elbow.rotation.x, q.e, a);
+  elbow.rotation.z = lerp(elbow.rotation.z, sign * q.ez, a);
 }
 
 /** Two matrices equal but for rounding: an orbit camera's damping eases on in ever smaller steps that nobody sees. */

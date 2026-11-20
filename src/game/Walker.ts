@@ -236,6 +236,11 @@ export abstract class Walker {
     return false;
   }
 
+  /** Walks with right of way (on the phone, see `Person`): walkers coming at it take all of the avoiding, it keeps its line. */
+  get rightOfWay(): boolean {
+    return false;
+  }
+
   /** Walking, but held up by somebody in its way. */
   get stuck(): boolean {
     return this.state === 'walk' && this.blockedTime > 0.3 && this.path.length > 0;
@@ -282,7 +287,8 @@ export abstract class Walker {
     if (this.state === 'idle') {
       this.timer -= dt;
       this.blockedTime = 0;
-      if (!this.talk && this.stepAside(dt, nav, others)) return;
+      // in a chat on the floor only for somebody with right of way, never in a scene that holds them on a spot
+      if ((!this.talk || this.talk.giveWay) && this.stepAside(dt, nav, others, !!this.talk)) return;
       if (!this.talk && !this.fixed && this.timer < 1 && this.crowded(others)) {
         // packed in with a bunch of bystanders: walk off somewhere else
         this.wanderTo(nav);
@@ -386,6 +392,7 @@ export abstract class Walker {
     let wz = dz * this.speed;
     const near: Array<Body & { d: number }> = [];
     let oncoming = false;
+    const row = this.rightOfWay;
     for (const o of others) {
       if (o === this || o.away || this.ignores(o)) continue;
       const ox = o.pos.x - this.pos.x;
@@ -395,12 +402,16 @@ export abstract class Walker {
       const d = Math.sqrt(dSq);
       const moving = o.state === 'walk' && !o.fixed && !o.held && !o.yielding;
       const standing = !moving && !o.held;
+      // right of way: walkers who can still move take all of the avoiding (one held up counts as in the way)
+      const theirs = moving && o.rightOfWay;
+      // (only those that did steer last step: not one held up, shuffling or about to wait at a passage)
+      if (row && moving && !theirs && !o.stuck && (o.vel.x || o.vel.z)) continue;
       // somebody standing in a gap only one fits through (a doorway, the row of meeting seats): after a moment squeeze
       // past them ("excuse me"); the bodies' collision then nudges a bystander aside
       if (standing && this.squeeze > 0) continue;
       // coming the other way: judged by where they want to go, as somebody held up stands still
       if (o.state === 'walk' && d < KEEP_RIGHT_RANGE && (ox * dx + oz * dz) / d > 0.5 && o.heading.x * dx + o.heading.z * dz < -0.2) oncoming = true;
-      near.push({ pos: o.pos, vel: moving ? o.vel : STILL, radius: o.radius, share: moving ? 0.5 : 1, d });
+      near.push({ pos: o.pos, vel: moving ? o.vel : STILL, radius: o.radius, share: !moving || (theirs && !row) ? 1 : 0.5, d });
     }
     this.heading = { x: dx, z: dz };
     near.sort((a, b) => a.d - b.d);
@@ -519,11 +530,12 @@ export abstract class Walker {
     return true;
   }
 
-  private stepAside(dt: number, nav: NavGrid, others: readonly Walker[]): boolean {
+  /** Shuffles out of the way of walkers heading at it (`onlyRightOfWay`: only of those with right of way). */
+  private stepAside(dt: number, nav: NavGrid, others: readonly Walker[], onlyRightOfWay = false): boolean {
     let ax = 0;
     let az = 0;
     for (const o of others) {
-      if (o === this || o.away || o.held || this.ignores(o)) continue;
+      if (o === this || (onlyRightOfWay && !o.rightOfWay) || o.away || o.held || this.ignores(o)) continue;
       const ox = this.pos.x - o.pos.x; // from them to us
       const oz = this.pos.z - o.pos.z;
       const d = Math.hypot(ox, oz);
