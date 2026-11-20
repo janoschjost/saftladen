@@ -36,6 +36,7 @@ const MAP = {
   smoke: 'cigarette',
   speaker: 'speaker-high',
   toilet: 'toilet',
+  trash: 'trash',
   zap: 'lightning',
   zoom: 'magnifying-glass-plus',
 };

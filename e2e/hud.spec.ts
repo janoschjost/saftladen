@@ -144,7 +144,7 @@ test('actions.sheet + actions.search: A toggles the sheet, previews, number keys
   await expect(sheet).toBeVisible();
   await expect(sheet).toHaveClass(/is-open/);
   await expect(page.locator('#open-actions')).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.locator('#action-cards .m-card')).toHaveCount(16);
+  await expect(page.locator('#action-cards .m-card')).toHaveCount(17);
   await expect(page.locator('#action-cards .m-card').first()).toContainText('Drucken');
   await expect(page.locator('#action-cards .m-card__key').first()).toHaveText('1');
   // every other dev event is listed without typing anything
@@ -152,7 +152,7 @@ test('actions.sheet + actions.search: A toggles the sheet, previews, number keys
   // every card has its still: the image of the people doing the action loaded
   await expect
     .poll(() => page.evaluate(() => [...document.querySelectorAll<HTMLImageElement>('#action-cards img')].filter((i) => i.complete && i.naturalWidth > 0).length), { timeout: 30_000 })
-    .toBe(16);
+    .toBe(17);
   // Esc closes the sheet and does nothing else
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
