@@ -578,6 +578,18 @@
       <p class="m-help__line"><span><kbd class="m-help__key">A</kbd> Aktionen</span><span><kbd class="m-help__key">,</kbd> Einstellungen</span><span><kbd class="m-help__key">Esc</kbd> Zurück</span></p>
       <ul class="m-help__list" id="hint"></ul>
     </aside>
+    <div class="m-show" id="show" aria-live="off" hidden>
+      <div class="m-show__bar m-show__bar--top"></div>
+      <div class="m-show__bar m-show__bar--bottom"></div>
+      <div class="m-show__card">
+        <h2 class="m-show__title" id="show-title"></h2>
+        <p class="m-show__title-sub" id="show-title-sub"></p>
+      </div>
+      <div class="m-show__plates" id="show-plates"></div>
+      <p class="m-show__sub" id="show-sub"></p>
+      <p class="m-show__paused" id="show-paused" hidden>Pause</p>
+      <div class="m-show__fade is-black" id="show-fade"></div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

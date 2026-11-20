@@ -3222,6 +3222,162 @@
         }
     }
 
+    /* The Christmas show (#275): letterbox bars, subtitles with name plates, title cards, the dip to black */
+    .m-show {
+        --show-bar: 11vh;
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        overflow: hidden;
+        color: white;
+        cursor: none;
+        user-select: none;
+
+        &[hidden] {
+            display: none;
+        }
+
+        &__bar {
+            position: absolute;
+            left: 0;
+            right: 0;
+            z-index: 1;
+            height: var(--show-bar);
+            background: black;
+
+            &--top {
+                top: 0;
+            }
+
+            &--bottom {
+                bottom: 0;
+            }
+        }
+
+        &__sub {
+            position: absolute;
+            left: 50%;
+            bottom: calc(var(--show-bar) + 1.25rem);
+            z-index: 2;
+            width: min(60rem, calc(100vw - 4rem));
+            padding: 0.25rem 1rem;
+            font-size: clamp(1.25rem, 2.4vw, 2.5rem);
+            font-weight: 500;
+            line-height: 1.25;
+            text-align: center;
+            text-shadow: 0 0 0.5rem black, 0 0.0625rem 0.25rem black, 0 0 1.25rem black;
+            opacity: 0;
+            transform: translate(-50%, 0.5rem);
+            transition:
+                opacity 0.35s,
+                transform 0.35s;
+
+            &.is-on {
+                opacity: 1;
+                transform: translate(-50%, 0);
+            }
+        }
+
+        /* name and role of who the line is about, over the subtitle */
+        &__plates {
+            position: absolute;
+            left: 50%;
+            bottom: calc(var(--show-bar) + 6rem);
+            z-index: 2;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.5rem;
+            width: min(60rem, calc(100vw - 4rem));
+            opacity: 0;
+            transform: translateX(-50%);
+            transition: opacity 0.35s;
+
+            &.is-on {
+                opacity: 1;
+            }
+        }
+
+        &__plate {
+            display: flex;
+            align-items: baseline;
+            gap: 0.5rem;
+            padding: 0.25rem 0.875rem;
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.7);
+            font-size: clamp(0.8125rem, 1.1vw, 1.125rem);
+            white-space: nowrap;
+
+            b {
+                color: var(--color-warn);
+                font-weight: 700;
+            }
+        }
+
+        &__card {
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            text-align: center;
+            text-shadow: 0 0 1rem black, 0 0 2.5rem black;
+            opacity: 0;
+            transition: opacity 0.8s;
+
+            &.is-on {
+                opacity: 1;
+            }
+        }
+
+        &__title {
+            font-family: var(--font-family-heading);
+            font-size: clamp(3rem, 9vw, 9rem);
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        &__title-sub {
+            color: var(--color-warn);
+            font-size: clamp(1.25rem, 2.6vw, 2.75rem);
+            font-weight: 500;
+        }
+
+        &__paused {
+            position: absolute;
+            top: calc(var(--show-bar) + 1rem);
+            right: 1.5rem;
+            z-index: 3;
+            padding: 0.25rem 0.875rem;
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.7);
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+
+            &[hidden] {
+                display: none;
+            }
+        }
+
+        &__fade {
+            position: absolute;
+            inset: 0;
+            z-index: 4;
+            background: black;
+            opacity: 0;
+            transition: opacity 0.6s linear;
+
+            &.is-black {
+                opacity: 1;
+            }
+        }
+    }
+
 }
 
 @media screen and (max-width: vars.$mobile) {
@@ -3503,5 +3659,85 @@
     to {
         scale: 1;
         opacity: 1;
+    }
+}
+
+/*
+ * The show (#275) hides the HUD and lets one home office feed fill the screen. Outside the layers on purpose: the phone
+ * rules above are unlayered too and would win over a layered rule.
+ */
+body.is-show {
+    --show-bar: 11vh;
+    cursor: none;
+
+    .l-hud,
+    .m-hud-tools,
+    .m-settings,
+    .m-away,
+    .m-action-button,
+    .m-actions,
+    .m-sheet,
+    .m-now,
+    .m-reticle,
+    .m-tooltip,
+    .m-dev,
+    .m-seats,
+    .m-editor,
+    .m-walk-exit,
+    .l-labels,
+    .m-people-empty {
+        display: none !important;
+    }
+
+    .l-dock {
+        inset: 0;
+        display: block;
+        pointer-events: none;
+    }
+
+    .m-feeds {
+        position: fixed;
+        inset: 0;
+        z-index: 3;
+        display: none;
+        width: auto;
+        max-height: none;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        pointer-events: none;
+
+        &.is-cinema {
+            display: grid;
+            place-items: center;
+        }
+
+        .m-feeds__title,
+        .m-feed {
+            display: none;
+        }
+
+        .m-feeds__grid {
+            display: block;
+        }
+
+        .m-feed.is-cinema-focus {
+            display: block;
+            width: min(88vw, calc((100vh - 2 * var(--show-bar)) * 1.6 - 4rem));
+            order: 0;
+            box-shadow: 0 0 0 100vmax black;
+            cursor: none;
+            animation: show-push 12s ease-out forwards;
+        }
+    }
+}
+
+@keyframes show-push {
+    from {
+        transform: scale(1);
+    }
+
+    to {
+        transform: scale(1.08);
     }
 }

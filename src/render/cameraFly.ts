@@ -53,6 +53,15 @@ export function easeInOut(t: number): number {
   return u < 0.5 ? 4 * u * u * u : 1 - (-2 * u + 2) ** 3 / 2;
 }
 
+/** How a flight speeds up and slows down: the Aktionen use `inOut`, the show also drifts (`linear`) and glides in (`out`). */
+export type Ease = 'inOut' | 'linear' | 'out';
+
+export const EASE: Record<Ease, (t: number) => number> = {
+  inOut: easeInOut,
+  linear: (t) => Math.min(1, Math.max(0, t)),
+  out: (t) => 1 - (1 - Math.min(1, Math.max(0, t))) ** 3,
+};
+
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 /** The shot `t` (0..1) of the way from `a` to `b`. The distance blends in log space, so zooming feels even. */

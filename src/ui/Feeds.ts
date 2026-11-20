@@ -27,6 +27,8 @@ export class Feeds {
   private count = document.getElementById('feeds-count') as HTMLElement;
   private anims: Animation[] = [];
   private tilesEls = new Map<string, { el: HTMLElement; variant: number; activity: HTMLElement }>();
+  /** the show (#275): the person whose feed fills the screen */
+  private cinemaId: string | null = null;
 
   constructor() {
     makeCollapsible(this.root, this.root.querySelector('.m-feeds__title') as HTMLElement, 'saftladen.feeds.collapsed', 'dock', PHONE_FOLDED);
@@ -59,6 +61,19 @@ export class Feeds {
     }
     this.root.hidden = entries.length === 0;
     this.count.textContent = String(entries.length);
+    this.applyCinema();
+  }
+
+  /** The show: one feed fills the screen (`body.is-show` styles it), `null` puts it away. Shows as soon as that person's tile exists. */
+  cinema(id: string | null): void {
+    this.cinemaId = id;
+    this.applyCinema();
+  }
+
+  private applyCinema(): void {
+    const on = this.cinemaId !== null && this.tilesEls.has(this.cinemaId);
+    this.root.classList.toggle('is-cinema', on);
+    for (const [id, t] of this.tilesEls) t.el.classList.toggle('is-cinema-focus', on && id === this.cinemaId);
   }
 
   /** Enlarge one tile (click again to shrink). The tiles and the panel glide to their new size (FLIP). */
