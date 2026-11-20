@@ -21,8 +21,8 @@ test('show.script: the film plays from the first scene to the end without an err
   expect(errors).toEqual([]);
 });
 
-test('show.keys: P in the game starts the film on a fresh page', async ({ page }) => {
+test('show.keys: P in the game starts the film on a fresh page, the other params stay', async ({ page }) => {
   await openGame(page);
   await page.keyboard.press('p');
-  await expect(page).toHaveURL(/\?show$/);
+  await expect(page).toHaveURL(/seed=1.*[?&]show$/);
 });
