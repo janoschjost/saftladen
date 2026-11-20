@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { MESS_RADIUS, MOULD, type MessKind } from '../render/messProps';
 import { installHeadlessDom } from '../test/headlessDom';
 import { office, run } from '../test/office';
-import { BIN_FULL, DOOR_CLEAR, MESS_CAPS, MESS_CHANCE, MESS_SURFACES, MOULD_HOURS, type MessItem, type MessType } from './Mess';
+import { BIN_FULL, FLIES_FROM, MAX_FLIES_PER_BOX, DOOR_CLEAR, MESS_CAPS, MESS_CHANCE, MESS_SURFACES, MOULD_HOURS, type MessItem, type MessType } from './Mess';
 import type { Person } from './Person';
 import type { Sim } from './Sim';
 import { GAME_HOUR } from './Smoke';
@@ -157,6 +157,51 @@ describe('office.mess', () => {
     sim.mess.update(MOULD_HOURS * GAME_HOUR * 1.2, sim.presence.days, [], sim.presence);
     const d = (c: THREE.Color) => Math.hypot(c.r - MOULD.r, c.g - MOULD.g, c.b - MOULD.b);
     expect(d(color())).toBeLessThan(d(fresh) * 0.3);
+  });
+
+  it('office.mess-flies: only a lunchbox gone green draws flies, more the older it is, and they leave with it', () => {
+    const sim = office();
+    const age = (hours: number) => sim.mess.update(hours * GAME_HOUR, sim.presence.days, [], sim.presence);
+    const box = sim.mess.leave('lunchbox', 'counter')!;
+    sim.mess.leave('cup', 'bar');
+    age(MOULD_HOURS * 0.9);
+    expect(sim.mess.flyCount).toBe(0); // fresh food has none
+    age(MOULD_HOURS * (FLIES_FROM + 0.05) + MOULD_HOURS * 0.1);
+    expect(sim.mess.flyCount).toBeGreaterThanOrEqual(2);
+    const few = sim.mess.flyCount;
+    age(MOULD_HOURS * 2);
+    expect(sim.mess.flyCount).toBeGreaterThan(few);
+    expect(sim.mess.flyCount).toBeLessThanOrEqual(MAX_FLIES_PER_BOX);
+    sim.mess.take(box);
+    expect(sim.mess.flyCount).toBe(0);
+  });
+
+  it('office.mess-flies: the flies circle above the box and follow it', () => {
+    const sim = office();
+    const box = sim.mess.leave('lunchbox', 'counter')!;
+    sim.mess.update(MOULD_HOURS * 2 * GAME_HOUR, sim.presence.days, [], sim.presence);
+    const at = sim.mess.where(box);
+    const flies = (sim.mess as unknown as { flies: { mesh: THREE.InstancedMesh } }).flies.mesh;
+    const m = new THREE.Matrix4();
+    const p = new THREE.Vector3();
+    for (let i = 0; i < flies.count; i++) {
+      flies.getMatrixAt(i, m);
+      p.setFromMatrixPosition(m);
+      expect(Math.hypot(p.x - at.x, p.z - at.z)).toBeLessThan(0.4);
+    }
+    const before = flies.instanceMatrix.array.slice(0, 16);
+    sim.mess.update(0.3, sim.presence.days, [], sim.presence);
+    expect(Array.from(flies.instanceMatrix.array.slice(0, 16))).not.toEqual(Array.from(before));
+  });
+
+  it('office.mess-flies: the next working day clears the flies, and event mess shows them', () => {
+    const sim = office();
+    sim.mess.update(0, sim.presence.days, [], sim.presence); // the day the mess belongs to
+    expect(sim.events.trigger('mess')).toMatch(/^Chaos/);
+    expect(sim.mess.flyCount).toBeGreaterThanOrEqual(2 * sim.mess.count('lunchbox'));
+    sim.mess.update(0, sim.presence.days + 1, [], sim.presence);
+    expect(sim.mess.count()).toBe(0);
+    expect(sim.mess.flyCount).toBe(0);
   });
 });
 

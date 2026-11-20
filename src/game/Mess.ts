@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { FliesFx } from '../render/fliesFx';
 import { buildMess, MESS_RADIUS, mouldy, type MessKind } from '../render/messProps';
 import { OFFICE_D, PORCH, type OfficeModel } from '../render/officeModel';
 import { TableSession } from './Coffee';
@@ -30,6 +31,9 @@ export const MESS_SURFACES: Readonly<Record<MessType, readonly Surface[]>> = {
 };
 /** A lunchbox starts to turn green after this many clock hours and is fully green after twice as many. */
 export const MOULD_HOURS = 2;
+/** A lunchbox draws flies once it is this far gone (0 fresh .. 1 mouldy), 2 at first and up to `MAX_FLIES_PER_BOX` when fully mouldy. */
+export const FLIES_FROM = 0.25;
+export const MAX_FLIES_PER_BOX = 5;
 /** Print jobs until the paper bin by the printer overflows. */
 export const BIN_FULL = 4;
 /** Floor kept clear around a doorway (m). */
@@ -136,6 +140,10 @@ export class Mess {
   private binFill = 0;
   /** the working day the mess belongs to (null: not yet seen) */
   private days: number | null = null;
+  /** the flies around the mouldy lunchboxes: one shared effect */
+  private readonly flies: FliesFx;
+  /** the flies' spots as last set, to see when they change */
+  private fliesKey = '';
 
   constructor(
     private world: THREE.Object3D,
@@ -143,7 +151,14 @@ export class Mess {
     private nav: NavGrid,
     private passages: Passages,
     private office: MessOffice,
-  ) {}
+  ) {
+    this.flies = new FliesFx(world);
+  }
+
+  /** How many flies are out now. */
+  get flyCount(): number {
+    return this.flies.count;
+  }
 
   /** Everything that lies around now (for the night ghost: what to clean, and where). */
   list(): readonly MessItem[] {
@@ -164,6 +179,7 @@ export class Mess {
     const i = this.items.indexOf(item);
     if (i < 0) return false;
     this.items.splice(i, 1);
+    this.showFlies();
     if (item.kind === 'bin') {
       item.mesh.visible = false;
       this.binFill = 0;
@@ -192,6 +208,9 @@ export class Mess {
         if (this.leave(kind, near ?? on)) added++;
       }
     }
+    // the lunchboxes have been there long enough to be mouldy and draw flies
+    for (const item of this.items) if (item.kind === 'lunchbox') item.age = Math.max(item.age, 2 * MOULD_HOURS * GAME_HOUR);
+    this.mould();
     return added;
   }
 
@@ -335,16 +354,36 @@ export class Mess {
       if (this.days !== null) this.clear();
       this.days = days;
     }
-    for (const item of this.items) {
-      item.age += dt;
-      if (item.kind === 'lunchbox') mouldy(item.mesh as THREE.Mesh, (item.age / GAME_HOUR - MOULD_HOURS) / MOULD_HOURS);
-    }
+    for (const item of this.items) item.age += dt;
+    this.mould();
+    this.flies.update(dt);
     for (const p of people) {
       const now = this.look(p, presence);
       const was = this.seen.get(p);
       this.seen.set(p, now);
       if (was) this.compare(p, was, now);
     }
+  }
+
+  /** Lunchboxes turn green with age, and the old ones get flies. */
+  private mould(): void {
+    for (const item of this.items) if (item.kind === 'lunchbox') mouldy(item.mesh as THREE.Mesh, mouldAmount(item));
+    this.showFlies();
+  }
+
+  /** Flies around every lunchbox that is far gone; the spots are only handed on when they change. */
+  private showFlies(): void {
+    const spots: Array<{ x: number; y: number; z: number; n: number }> = [];
+    for (const item of this.items) {
+      const n = fliesAround(item);
+      if (!n) continue;
+      item.mesh.getWorldPosition(v);
+      spots.push({ x: v.x, y: v.y, z: v.z, n });
+    }
+    const key = spots.map((s) => `${s.x.toFixed(2)},${s.y.toFixed(2)},${s.z.toFixed(2)},${s.n}`).join('|');
+    if (key === this.fliesKey) return;
+    this.fliesKey = key;
+    this.flies.set(spots);
   }
 
   private look(p: Person, presence: Presence): Seen {
@@ -397,6 +436,18 @@ export class Mess {
       if (racks.length && roll(MESS_CHANCE.jacket)) this.leave('jacket', 'floor', pick(racks));
     }
   }
+}
+
+/** How far a lunchbox has turned green: 0 fresh .. 1 mouldy. */
+const mouldAmount = (item: MessItem): number => Math.min(1, Math.max(0, (item.age / GAME_HOUR - MOULD_HOURS) / MOULD_HOURS));
+
+/** How many flies buzz around `item`: none unless it is a lunchbox gone green, then more the older it is. */
+export function fliesAround(item: MessItem): number {
+  if (item.kind !== 'lunchbox') return 0;
+  const amount = mouldAmount(item);
+  if (amount < FLIES_FROM) return 0;
+  const span = (amount - FLIES_FROM) / (1 - FLIES_FROM);
+  return Math.min(MAX_FLIES_PER_BOX, 2 + Math.floor(span * (MAX_FLIES_PER_BOX - 1)));
 }
 
 const dist = (a: Vec2, b: Vec2): number => Math.hypot(a.x - b.x, a.z - b.z);
