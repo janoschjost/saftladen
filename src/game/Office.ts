@@ -35,6 +35,11 @@ export class Desk {
     return this.rig.messSpots;
   }
 
+  /** Turns the swivel chair to face `yaw` (world, like `Desk.yaw`); null = back square to the desk. */
+  turnChair(yaw: number | null): void {
+    this.rig.chair.rotation.y = yaw === null ? 0 : yaw - this.yaw;
+  }
+
   setScreen(on: boolean, show?: { kind: ScreenKind; variant: number }): void {
     this.show(on && show ? screenMaterial(show.kind, show.variant) : screenOffMaterial());
   }
