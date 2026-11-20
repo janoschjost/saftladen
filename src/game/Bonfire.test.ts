@@ -118,7 +118,7 @@ describe('play.bonfire: the scene', () => {
 
   it('play.bonfire: by itself about once an hour, by day only', () => {
     const night = stage();
-    expect(night.sim.bonfire.timer).toBeLessThanOrEqual((1.25 * GAME_HOUR) / 2);
+    expect(night.sim.bonfire.timer).toBeGreaterThanOrEqual(0.75 * GAME_HOUR);
     night.sim.bonfire.timer = 0;
     night.sim.tod.night = true;
     night.sim.step(1 / 60);

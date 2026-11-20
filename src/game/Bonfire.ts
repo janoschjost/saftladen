@@ -99,7 +99,7 @@ export class Bonfire {
   readonly fire: Campfire;
   readonly extinguisher = buildExtinguisher();
   /** seconds until the next look for Elia (tests set it to 0 to try right away) */
-  timer = between(GAP.min, GAP.max) / 2;
+  timer = between(GAP.min, GAP.max);
   private scene: Scene | null = null;
 
   constructor(
