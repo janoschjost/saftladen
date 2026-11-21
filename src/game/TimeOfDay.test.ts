@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CYCLE_SECONDS, cycleOf, daylight, hourOf, NIGHT_SECONDS, oppositeDaylight, TimeOfDay } from './TimeOfDay';
+import { CYCLE_SECONDS, cycleOf, daylight, followedDaylight, hourOf, lookOf, NIGHT_SECONDS, oppositeDaylight, roomLight, TimeOfDay } from './TimeOfDay';
 
 describe('time of day', () => {
   it('time.cycle: cycleOf is the inverse of hourOf', () => {
@@ -83,5 +83,28 @@ describe('time of day', () => {
     const t = new TimeOfDay();
     t.jumpToHour(3);
     expect(t.day).toBe(daylight(3));
+  });
+
+  it('home.rooms: a room follows the office light, the flipped light or none, and has three looks over the day', () => {
+    for (let h = 0; h < 24; h += 0.5) {
+      expect(followedDaylight('office', h)).toBe(daylight(h));
+      expect(followedDaylight('opposite', h)).toBe(oppositeDaylight(h));
+    }
+    const noon = roomLight('office', 12);
+    const night = roomLight('office', 0);
+    const sunset = roomLight('office', 19.6);
+    expect(noon).toMatchObject({ night: 0, dusk: 0, bright: 1 });
+    expect(night).toMatchObject({ night: 1, dusk: 0, bright: 0 });
+    expect(sunset.dusk).toBeGreaterThan(0.9); // the orange look at the low sun
+    expect(roomLight('office', 6.4).dusk).toBeGreaterThan(0.6);
+    expect(roomLight('opposite', 0).bright).toBe(1);
+    for (let h = 0; h < 24; h += 0.05) {
+      const l = roomLight('office', h);
+      expect(l.night + l.dusk + l.bright).toBeCloseTo(1, 12);
+      expect(Math.min(l.night, l.dusk, l.bright)).toBeGreaterThanOrEqual(0);
+      const next = roomLight('office', h + 0.05);
+      expect(Math.abs(next.night - l.night) + Math.abs(next.dusk - l.dusk) + Math.abs(next.bright - l.bright)).toBeLessThan(0.25); // no jumps
+    }
+    expect(lookOf(0.5).dusk).toBeLessThan(1);
   });
 });
