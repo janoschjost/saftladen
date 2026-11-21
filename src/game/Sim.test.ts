@@ -56,7 +56,8 @@ describe('dev.seed', () => {
       sim.step(1 / 60);
       maxIn = Math.max(maxIn, sim.people.filter((p) => p.presence === 'returning').length);
       for (const p of sim.people) {
-        if (last.get(p) === 'returning' && p.presence === 'in') inAt.set(p, step);
+        // a remote worker on his visit waits by the entrance for the team's welcome (presence.remote-greet)
+        if (last.get(p) === 'returning' && p.presence === 'in' && !sim.presence.isVisitor(p)) inAt.set(p, step);
         last.set(p, p.presence);
         const t = inAt.get(p);
         if (t !== undefined && step - t >= 4 * 60) {

@@ -92,9 +92,13 @@ describe('social.start', () => {
     const [a, b, c, d] = GROUP.slice(0, 4).map((id) => sim.person(id));
     for (const p of sim.people) if (![a, b, c, d].includes(p)) sim.scenario.put(p.id, 'errand');
     sim.scenario.put(c.id, 'desk', 'stay');
-    sim.scenario.put(a.id, sim.deskFor(c)!.approach, 'stay');
-    sim.scenario.put(b.id, sim.deskFor(b)!.approach, 'stay');
-    sim.scenario.put(d.id, sim.deskFor(d)!.approach, 'stay');
+    const desk = sim.deskFor(c)!;
+    sim.scenario.put(a.id, desk.approach, 'stay');
+    // b and d by two other desks a few metres off (their own desks are wherever the seed put them, maybe out of reach)
+    const away = (k: typeof desk) => Math.hypot(k.approach.x - desk.approach.x, k.approach.z - desk.approach.z);
+    const [kb, kd] = sim.office.desks.filter((k) => away(k) > 3).sort((x, y) => away(x) - away(y));
+    sim.scenario.put(b.id, kb.approach, 'stay');
+    sim.scenario.put(d.id, kd.approach, 'stay');
     sim.social.affinity.bond(a, b, 0.9);
     return { sim, a, b, c, d };
   }
