@@ -250,7 +250,8 @@ export class Presence {
     // from now on, for a few hours at least
     plan.arrive = Math.min(plan.arrive, this.workHour - 0.01);
     plan.leave = Math.max(plan.leave, this.workHour + 3);
-    plan.end = plan.night ? Math.max(plan.end, plan.leave) : plan.leave; // a night shift (Marco Hefti's evening at home) stays
+    // a day that runs on from the home office (Schedule.end: Marco Hefti) keeps its evening there; everybody else is done when they leave
+    plan.end = p.member.schedule.end !== undefined ? Math.max(plan.end, plan.leave) : plan.leave;
     plan.lunch = Infinity;
     if (visit) this.nightHomers.delete(p); // an ordinary return through the door, not a night shift ending
   }
