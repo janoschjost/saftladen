@@ -2435,6 +2435,10 @@
             margin: 0;
             padding: 0 0.75rem 0.25rem;
             list-style: none;
+            // a long list (everybody at night) scrolls here, so the feeds panel below keeps its place on screen
+            max-height: 18rem;
+            overflow-y: auto;
+            overscroll-behavior: contain;
         }
 
         &__list li {

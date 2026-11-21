@@ -141,6 +141,11 @@ export class Presence {
     return this.people.filter((p) => p.presence !== 'in' && p.awayKind !== 'off');
   }
 
+  /** Everybody the "not in the office" list shows: on an errand, in the home office or off duty (not arrived yet, gone home), not those taken out of the sim in the dev panel. */
+  get listed(): Person[] {
+    return this.people.filter((p) => p.presence !== 'in' && !this.removed.has(p));
+  }
+
   /** true while a good part of the team is out for lunch */
   get lunch(): boolean {
     return this.lunchers.size >= LUNCH.crowd;
