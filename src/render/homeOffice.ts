@@ -7,6 +7,7 @@ import { buildDog, type DogRig } from './dogBuilder';
 import { ball, box, cyl, merge, propMaterial } from './geo';
 import { SIT_DROP } from './officeBuilder';
 import { fxRandom, seeded } from '../game/rng';
+import { GROUND_NIGHT, MOON, SKY_NIGHT, oppositeDaylight } from '../game/TimeOfDay';
 import { ARIANA_DAY_LINES, ARIANA_NIGHT_LINES, SPEAK_LEAD, arianaTimeline, arianaVisitAt, isNightHour } from '../data/arianaLines';
 import { SON_BYE, SON_LINES, sonTimeline } from '../data/sonLines';
 import { LAUNDRY, LAUNDRY_PICKS, RACK_SLOTS, laundryHung, laundryTime, laundryTrip } from './laundry';
@@ -57,6 +58,17 @@ class Room {
     this.group.add(m);
     return m;
   }
+  /** Changes of a room with the opposite day (`HomeStyle.opposite`), called with the light there: 0 = dark night .. 1 = full daylight. */
+  readonly looks: Array<(day: number) => void> = [];
+
+  /** An unlit mesh that turns from its own colour (day) to `night` as the light goes. */
+  tint(m: THREE.Mesh, night: Color): void {
+    const mat = m.material as THREE.MeshBasicMaterial;
+    const day = mat.color.clone();
+    const dark = new THREE.Color(night);
+    this.looks.push((d) => mat.color.copy(dark).lerp(day, d));
+  }
+
   light(l: THREE.Light): void {
     this.lights.push(l);
     this.group.add(l);
@@ -248,6 +260,8 @@ export interface HomeStyle {
   drink?: 'coffee' | 'cocktail';
   /** there is sea to swim in (signature move 'swim') */
   sea?: boolean;
+  /** the light of the opposite time of day (12 hours on): dark while it is day in the office, see `Room.looks` (#284) */
+  opposite?: boolean;
   /** has room for a drying rack beside the chair (laundry round) */
   rack?: boolean;
   build(s: Room): void;
@@ -643,16 +657,17 @@ const STYLES: HomeStyle[] = [
     lapCam: true,
     drink: 'cocktail',
     sea: true,
+    opposite: true,
     build(s) {
-      // sand, sea, islands, sun
+      // sand, sea, islands, sun; at night (see `opposite`) the sea and sky turn dark blue, the sun becomes a moon, stars come out
       s.wall(14, 0.1, 9, 0, -0.1, -1.5, '#f0dca8');
       for (let i = 0; i < 14; i++) s.wall(0.6 + rnd(), 0.01, 0.5, -5 + i * 0.8, 0, -1.2 + rnd() * 2.5, '#e6cf94');
-      s.glow(24, 0.3, 14, 0, -0.1, -12, '#2fb8c9');
-      s.glow(24, 0.02, 6, 0, 0.1, -4.4, '#5fd6d0');
-      for (let i = 0; i < 6; i++) s.glow(2 + rnd() * 2, 0.02, 0.1, -4 + i * 1.6, 0.12, -3.4 - rnd(), '#ffffff');
-      s.glow(3.2, 0.9, 0.3, -5, 0.2, -15, '#4f8a78');
-      s.glow(2.4, 1.4, 0.3, 4.5, 0.2, -14, '#5a9684');
-      s.glow(1.0, 1.0, 0.02, 2.2, 3.4, -16, '#fff6c0');
+      s.tint(s.glow(24, 0.3, 14, 0, -0.1, -12, '#2fb8c9'), '#0e2a52');
+      s.tint(s.glow(24, 0.02, 6, 0, 0.1, -4.4, '#5fd6d0'), '#1f4f7d');
+      for (let i = 0; i < 6; i++) s.tint(s.glow(2 + rnd() * 2, 0.02, 0.1, -4 + i * 1.6, 0.12, -3.4 - rnd(), '#ffffff'), '#6f8fc0');
+      s.tint(s.glow(3.2, 0.9, 0.3, -5, 0.2, -15, '#4f8a78'), '#16323c');
+      s.tint(s.glow(2.4, 1.4, 0.3, 4.5, 0.2, -14, '#5a9684'), '#193840');
+      s.tint(s.glow(1.0, 1.0, 0.02, 2.2, 3.4, -16, '#fff6c0'), '#dfe8ff'); // the sun, the moon at night
       // longtail boat: now and then motors across the bay, alternating direction; it turns round only out of sight
       // Thai longtail (rua hang yao): long slim wooden hull rising to a high bow with ribbons on the bow post,
       // a striped canopy, and the car-engine motor at the stern on its long shaft into the water. Bow = +x.
@@ -745,6 +760,18 @@ const STYLES: HomeStyle[] = [
       s.cy(0.03, 0.03, 1.4, 1.6, 0, 0.9, '#7a5a38', 6);
       s.glow(0.1, 0.16, 0.1, 1.6, 1.4, 0.9, '#ff9a2a');
       for (let i = 0; i < 4; i++) s.ball(0.05, -0.9 + i * 0.5, 0, 1.2 + rnd() * 0.5, pick(['#f4e4d0', '#e8a09a', '#f2f2ee']), 0.6);
+      // night: the torch lights the sand, stars over the sea (last, so the shells above keep their dice)
+      const torch = new THREE.PointLight('#ff9a2a', 0, 5, 2);
+      torch.position.set(1.6, 1.5, 0.9);
+      s.light(torch);
+      const stars: THREE.BufferGeometry[] = [];
+      for (let i = 0; i < 70; i++) stars.push(box(0.07, 0.07, 0.02, -9 + rnd() * 18, 1.4 + rnd() * 7, -18.4, rnd() < 0.2 ? '#ffe9b0' : '#ffffff'));
+      const starMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, depthWrite: false });
+      s.group.add(new THREE.Mesh(merge(stars), starMat));
+      s.looks.push((d) => {
+        starMat.opacity = 1 - d;
+        torch.intensity = (1 - d) * 2.2;
+      });
     },
   },
   {
@@ -1482,6 +1509,13 @@ const mixPose = (a: ArmPose, b: ArmPose, k: number): ArmPose => ({ x: lerp(a.x, 
 const X_AXIS = new THREE.Vector3(1, 0, 0);
 const rand = ([a, b]: [number, number]) => a + fxRandom() * (b - a);
 
+const NIGHT_BG = new THREE.Color('#0b1430');
+const SCREEN_GLOW = 0.9;
+const SCREEN_GLOW_NIGHT = 1.6;
+const NIGHT_HEMI = 0.5;
+const NIGHT_KEY = 0.55;
+const tmpColor = new THREE.Color();
+
 /** One home office scene (one of the eight variants) with whoever is currently working there. */
 export class HomeOffice {
   readonly style: HomeStyle;
@@ -1503,6 +1537,10 @@ export class HomeOffice {
   private chair?: THREE.Object3D;
   /** the room's own moving things (see Room.ticks) */
   private ticks: Array<(t: number) => void> = [];
+  /** a room with the opposite day (`HomeStyle.opposite`): what follows its light, and the lights it dims */
+  private looks: Array<(day: number) => void> = [];
+  private lights: { hemi: THREE.HemisphereLight; key: THREE.DirectionalLight; screen: THREE.PointLight } | null = null;
+  private day = 1;
   private push: ArmPose = { x: -1.4, z: 0, e: -0.2, ez: 0 };
   /** which of the desk cats walks into the picture next */
   private catTurn = 0;
@@ -1551,6 +1589,7 @@ export class HomeOffice {
     this.desk = set.desk;
     this.chair = set.chair;
     this.ticks = set.ticks;
+    this.looks = set.looks;
     this.camera.fov = set.webcam.fov;
     this.camera.position.set(...set.webcam.pos);
     this.camera.lookAt(...set.webcam.look);
@@ -1561,7 +1600,8 @@ export class HomeOffice {
     }
 
     const [sky, ground, hi] = this.style.hemi;
-    this.scene.add(new THREE.HemisphereLight(sky, ground, hi));
+    const hemi = new THREE.HemisphereLight(sky, ground, hi);
+    this.scene.add(hemi);
     const [kc, ki, kp] = this.style.key;
     const key = new THREE.DirectionalLight(kc, ki);
     key.position.set(...kp);
@@ -1573,9 +1613,29 @@ export class HomeOffice {
     key.shadow.normalBias = 0.03;
     this.scene.add(key, key.target);
     // the screen's glow on the face (the webcam sits on it)
-    const screen = new THREE.PointLight('#dfeaff', 0.9, 4, 2);
+    const screen = new THREE.PointLight('#dfeaff', SCREEN_GLOW, 4, 2);
     screen.position.set(set.webcam.pos[0], set.webcam.pos[1], set.webcam.pos[2] - 0.1);
     this.scene.add(screen);
+    if (this.style.opposite) this.lights = { hemi, key, screen };
+  }
+
+  /** The light of a room with the opposite day (the game's, 12 hours on): lights, sky and sea follow it, the laptop's glow stays (#284). */
+  private applyLight(): void {
+    const lights = this.lights;
+    if (!lights) return;
+    const day = oppositeDaylight(this.hour);
+    if (Math.abs(day - this.day) < 1e-3) return;
+    this.day = day;
+    const [sky, ground, hi] = this.style.hemi;
+    const [kc, ki] = this.style.key;
+    lights.hemi.color.copy(SKY_NIGHT).lerp(tmpColor.set(sky), day);
+    lights.hemi.groundColor.copy(GROUND_NIGHT).lerp(tmpColor.set(ground), day);
+    lights.hemi.intensity = lerp(NIGHT_HEMI, hi, day);
+    lights.key.color.copy(MOON).lerp(tmpColor.set(kc), day);
+    lights.key.intensity = lerp(NIGHT_KEY, ki, day);
+    lights.screen.intensity = lerp(SCREEN_GLOW_NIGHT, SCREEN_GLOW, day); // he reads as awake in the dark
+    (this.scene.background as THREE.Color).copy(NIGHT_BG).lerp(tmpColor.set(this.style.bg), day);
+    for (const look of this.looks) look(day);
   }
 
   /** how long the visitor walks in and out (the adult takes her time, the boy runs) */
@@ -1891,6 +1951,7 @@ export class HomeOffice {
 
   update(dt: number): void {
     if (!this.occupant) return;
+    this.applyLight();
     this.clock += dt;
     this.actT += dt;
     this.actLeft -= dt;

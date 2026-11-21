@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CYCLE_SECONDS, cycleOf, hourOf, NIGHT_SECONDS, TimeOfDay } from './TimeOfDay';
+import { CYCLE_SECONDS, cycleOf, daylight, hourOf, NIGHT_SECONDS, oppositeDaylight, TimeOfDay } from './TimeOfDay';
 
 describe('time of day', () => {
   it('time.cycle: cycleOf is the inverse of hourOf', () => {
@@ -70,5 +70,18 @@ describe('time of day', () => {
     expect([t.weekday, t.weekdayName, t.jumps, t.picks]).toEqual([4, 'Fr', 2, 1]);
     t.pickWeekday(9);
     expect(t.weekday).toBe(2);
+  });
+
+  it('home.beach: the beach room has the light of the clock 12 hours on, dark at 12:00, bright at 00:00, smooth in between', () => {
+    expect(oppositeDaylight(12)).toBe(0);
+    expect(oppositeDaylight(0)).toBe(1);
+    expect(oppositeDaylight(23)).toBe(1);
+    for (let h = 0; h < 24; h += 0.5) expect(oppositeDaylight(h)).toBeCloseTo(daylight((h + 12) % 24), 12);
+    for (let h = 0; h < 24; h += 0.05) expect(Math.abs(oppositeDaylight(h + 0.05) - oppositeDaylight(h))).toBeLessThan(0.1); // no jumps
+    expect(oppositeDaylight(17)).toBeLessThan(0.5); // dusk there while it is dawn here
+    expect(oppositeDaylight(7)).toBeGreaterThan(0.5);
+    const t = new TimeOfDay();
+    t.jumpToHour(3);
+    expect(t.day).toBe(daylight(3));
   });
 });
