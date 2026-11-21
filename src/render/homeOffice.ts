@@ -7,7 +7,7 @@ import { buildDog, type DogRig } from './dogBuilder';
 import { ball, box, cyl, merge, propMaterial } from './geo';
 import { SIT_DROP } from './officeBuilder';
 import { fxRandom, seeded } from '../game/rng';
-import { GROUND_NIGHT, MOON, SKY_NIGHT, oppositeDaylight } from '../game/TimeOfDay';
+import { GROUND_NIGHT, MOON, SKY_NIGHT, roomLight, type FollowLight, type RoomLight } from '../game/TimeOfDay';
 import { ARIANA_DAY_LINES, ARIANA_NIGHT_LINES, SPEAK_LEAD, arianaTimeline, arianaVisitAt, isNightHour } from '../data/arianaLines';
 import { SON_BYE, SON_LINES, sonTimeline } from '../data/sonLines';
 import { LAUNDRY, LAUNDRY_PICKS, RACK_SLOTS, laundryHung, laundryTime, laundryTrip } from './laundry';
@@ -21,6 +21,16 @@ export const HOME_COUNT = 8; // regular rooms (HOME_ROOMS[0..7]); the rest belon
 export const ROOM_COUNT = HOME_ROOMS.length;
 
 type Color = string;
+
+/** A value in each of the three looks, mixed by the weights of the light; without a dusk value it goes straight from night to day. */
+function blend(l: RoomLight, night: number, day: number, dusk?: number): number {
+  return dusk === undefined ? night + (day - night) * l.day : night * l.night + dusk * l.dusk + day * l.bright;
+}
+
+/** `out` = the night, dusk and day colours mixed by the weights of the light. */
+function mixLooks(out: THREE.Color, night: THREE.Color, dusk: THREE.Color | undefined, day: THREE.Color, l: RoomLight): THREE.Color {
+  return out.setRGB(blend(l, night.r, day.r, dusk?.r), blend(l, night.g, day.g, dusk?.g), blend(l, night.b, day.b, dusk?.b));
+}
 
 /** Collects coloured boxes / balls into one merged mesh, plus separate glowing parts (lamps, neon, windows). */
 class Room {
@@ -58,25 +68,30 @@ class Room {
     this.group.add(m);
     return m;
   }
-  /** Changes of a room with the opposite day (`HomeStyle.opposite`), called with the light there: 0 = dark night .. 1 = full daylight. */
-  readonly looks: Array<(day: number) => void> = [];
+  /** Changes of a room that follows the light (`HomeStyle.light`), called with the light it has: see `RoomLight`. */
+  readonly looks: Array<(l: RoomLight) => void> = [];
 
-  /** An unlit mesh that turns from its own colour (day) to `night` as the light goes. */
-  tint(m: THREE.Mesh, night: Color): void {
+  /**
+   * An unlit mesh that follows the light: its own colour is the day look, `night` the dark one, and `dusk` (if it has one) the
+   * orange look of the low sun, which the mesh passes on the way from night to day. Without `dusk` it goes straight from one to the other.
+   */
+  tint(m: THREE.Mesh, look: { night: Color; dusk?: Color }): void {
     const mat = m.material as THREE.MeshBasicMaterial;
     const day = mat.color.clone();
-    const dark = new THREE.Color(night);
-    this.looks.push((d) => mat.color.copy(dark).lerp(day, d));
+    const night = new THREE.Color(look.night);
+    const dusk = look.dusk === undefined ? undefined : new THREE.Color(look.dusk);
+    this.looks.push((l) => mixLooks(mat.color, night, dusk, day, l));
   }
 
   light(l: THREE.Light): void {
     this.lights.push(l);
     this.group.add(l);
   }
-  point(color: Color, intensity: number, x: number, y: number, z: number, dist = 6): void {
+  point(color: Color, intensity: number, x: number, y: number, z: number, dist = 6): THREE.PointLight {
     const l = new THREE.PointLight(color, intensity, dist, 2);
     l.position.set(x, y, z);
     this.light(l);
+    return l;
   }
 
   /** Floor, three walls and a ceiling. */
@@ -125,6 +140,26 @@ class Room {
 // small deterministic random so the rooms look the same on every load
 let rnd = seeded(1); // reseeded per room (see HomeOffice constructor)
 const pick = <T>(a: readonly T[]): T => a[Math.floor(rnd() * a.length)];
+
+/** Coloured parts that only show at night: they fade in as the night look takes over (`RoomLight.night`). */
+function atNight(s: Room, parts: THREE.BufferGeometry[]): void {
+  const mat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, depthWrite: false });
+  s.group.add(new THREE.Mesh(merge(parts), mat));
+  s.looks.push((l) => (mat.opacity = l.night));
+}
+
+/** Stars on a far wall, with their own dice so the room's keep their order. */
+function stars(s: Room, n: number, x: [number, number], y: [number, number], z: number): void {
+  const dice = seeded(11);
+  const parts: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < n; i++) parts.push(box(0.08, 0.08, 0.02, x[0] + dice() * (x[1] - x[0]), y[0] + dice() * (y[1] - y[0]), z, dice() < 0.2 ? '#ffe9b0' : '#ffffff'));
+  atNight(s, parts);
+}
+
+/** Where a thing sits in each of the three looks (the sun high by day, low at dusk, the moon at night): the weights mix them. */
+function sitAt(l: RoomLight, night: [number, number], dusk: [number, number], day: [number, number]): [number, number] {
+  return [blend(l, night[0], day[0], dusk[0]), blend(l, night[1], day[1], dusk[1])];
+}
 
 const BOOKS = ['#b5483a', '#3f6e8c', '#d8b04a', '#5a7a52', '#8a5a8c', '#e8e2d4', '#2f3e5a', '#c97a3c'];
 
@@ -260,8 +295,10 @@ export interface HomeStyle {
   drink?: 'coffee' | 'cocktail';
   /** there is sea to swim in (signature move 'swim') */
   sea?: boolean;
-  /** the light of the opposite time of day (12 hours on): dark while it is day in the office, see `Room.looks` (#284) */
-  opposite?: boolean;
+  /** follows the game's light (see `Room.looks`): the office's (`office`, #292) or the opposite, 12 hours on (`opposite`, dark while it is day in the office, #284); without it the room looks the same all day */
+  light?: FollowLight;
+  /** the look at the low sun (dusk and dawn) of a room that follows the light; `bg`, `hemi` and `key` are then its day look */
+  dusk?: { bg: Color; hemi: [Color, Color, number]; key: [Color, number] };
   /** has room for a drying rack beside the chair (laundry round) */
   rack?: boolean;
   build(s: Room): void;
@@ -401,16 +438,18 @@ const STYLES: HomeStyle[] = [
     // 3 ---------------------------------------------------------------- balcony
     label: 'Balkon',
     rack: true,
+    light: 'office',
     bg: '#a8d8f5',
     hemi: ['#d8efff', '#c9b79a', 1.5],
     key: ['#fff4d6', 2.4, [-4, 6, 3]],
+    dusk: { bg: '#f2a36b', hemi: ['#ffd9b8', '#b08a6a', 1.2], key: ['#ff9a5c', 1.8] },
     build(s) {
       // deck + brick wall left, open air behind the railing
       for (let i = 0; i < 14; i++) s.wall(0.5, 0.06, 5, -3.2 + i * 0.5, -0.06, -0.3, i % 2 ? '#a67c52' : '#9a7048');
       s.wall(0.15, 3.4, 6, -2.7, 0, -0.2, '#b46a55');
       for (let j = 0; j < 10; j++) for (let i = 0; i < 6; i++) s.wall(0.02, 0.01, 0.55, -2.62, 0.1 + j * 0.3 + (i % 2) * 0.1, -1.9 + i * 0.7, '#8a4a3a');
       s.bx(0.05, 1.1, 0.9, -2.62, 0.9, -0.6, '#e8e2d4'); // window frame on the brick
-      s.glow(0.02, 0.95, 0.75, -2.6, 0.97, -0.6, '#cfeeff');
+      s.tint(s.glow(0.02, 0.95, 0.75, -2.6, 0.97, -0.6, '#cfeeff'), { dusk: '#ffd9a0', night: '#ffd98a' }); // lit at night
       // railing
       s.bx(5.4, 0.05, 0.06, 0, 1.0, -1.4, '#2c2f33');
       s.bx(5.4, 0.04, 0.04, 0, 0.1, -1.4, '#2c2f33');
@@ -422,10 +461,26 @@ const STYLES: HomeStyle[] = [
         for (let i = 0; i < 3; i++) s.ball(0.05, x - 0.25 + i * 0.25, 0.42, -1.2, pick(['#e87a9c', '#f2c43a', '#ffffff']));
       }
       // sun, skyline, parasol
-      s.glow(0.7, 0.7, 0.02, -2.0, 3.0, -7.5, '#fff6c0');
+      // the sun is high by day, low and orange at dusk and dawn, and the moon at night; the skyline darkens and its windows light up
+      const sun = s.glow(0.7, 0.7, 0.02, 0, 0, -7.5, '#fff6c0');
+      s.tint(sun, { dusk: '#ffc27a', night: '#e8eeff' });
+      s.looks.push((l) => {
+        const [x, y] = sitAt(l, [-2.3, 4.2], [-3.1, 2.3], [-2.3, 3.8]);
+        sun.position.set(x, y, -7.5);
+        sun.scale.setScalar(1 + l.dusk * 0.9);
+      });
+      const SKYLINE = [
+        ['#9fb8d0', '#8a6a90', '#161d3a'],
+        ['#8aa6c2', '#7a5a82', '#121933'],
+        ['#b3c8dc', '#9a7694', '#1b2342'],
+      ] as const;
+      const towers: Array<{ x: number; h: number; z: number }> = [];
       for (let i = 0; i < 12; i++) {
         const h = 1.5 + rnd() * 4;
-        s.glow(0.9, h, 0.3, -5 + i * 0.95, 0, -8 - rnd() * 2, pick(['#9fb8d0', '#8aa6c2', '#b3c8dc']));
+        const z = -8 - rnd() * 2;
+        const [day, dusk, night] = pick(SKYLINE);
+        s.tint(s.glow(0.9, h, 0.3, -5 + i * 0.95, 0, z, day), { dusk, night });
+        towers.push({ x: -5 + i * 0.95, h, z });
       }
       s.cy(0.03, 0.03, 2.1, 1.7, 0, -0.2, '#e8e2d4', 6);
       s.cy(0.02, 1.15, 0.45, 1.7, 2.0, -0.2, '#e8645a', 10);
@@ -440,6 +495,16 @@ const STYLES: HomeStyle[] = [
       s.cy(0.07, 0.07, 0.01, 0.6, 0.74, 0.65, '#fff');
       s.cy(0.03, 0.03, 0.16, 0.6, 0.75, 0.65, '#ffffff', 6);
       s.ball(0.04, 0.6, 0.9, 0.65, '#e87a9c');
+      // night: lit windows on the towers (last, so the rest keeps its dice) and stars over them
+      const dice = seeded(5);
+      const panes: THREE.BufferGeometry[] = [];
+      for (const t of towers) {
+        for (let r = 0; r < Math.floor(t.h / 0.55); r++) {
+          for (const dx of [-0.22, 0.22]) if (dice() < 0.45) panes.push(box(0.14, 0.2, 0.02, t.x + dx, 0.35 + r * 0.55, t.z + 0.16, dice() < 0.3 ? '#fff2c0' : '#ffd98a'));
+        }
+      }
+      atNight(s, panes);
+      stars(s, 80, [-14, 14], [6, 16], -18);
     },
   },
   {
@@ -657,17 +722,17 @@ const STYLES: HomeStyle[] = [
     lapCam: true,
     drink: 'cocktail',
     sea: true,
-    opposite: true,
+    light: 'opposite',
     build(s) {
       // sand, sea, islands, sun; at night (see `opposite`) the sea and sky turn dark blue, the sun becomes a moon, stars come out
       s.wall(14, 0.1, 9, 0, -0.1, -1.5, '#f0dca8');
       for (let i = 0; i < 14; i++) s.wall(0.6 + rnd(), 0.01, 0.5, -5 + i * 0.8, 0, -1.2 + rnd() * 2.5, '#e6cf94');
-      s.tint(s.glow(24, 0.3, 14, 0, -0.1, -12, '#2fb8c9'), '#0e2a52');
-      s.tint(s.glow(24, 0.02, 6, 0, 0.1, -4.4, '#5fd6d0'), '#1f4f7d');
-      for (let i = 0; i < 6; i++) s.tint(s.glow(2 + rnd() * 2, 0.02, 0.1, -4 + i * 1.6, 0.12, -3.4 - rnd(), '#ffffff'), '#6f8fc0');
-      s.tint(s.glow(3.2, 0.9, 0.3, -5, 0.2, -15, '#4f8a78'), '#16323c');
-      s.tint(s.glow(2.4, 1.4, 0.3, 4.5, 0.2, -14, '#5a9684'), '#193840');
-      s.tint(s.glow(1.0, 1.0, 0.02, 2.2, 3.4, -16, '#fff6c0'), '#dfe8ff'); // the sun, the moon at night
+      s.tint(s.glow(24, 0.3, 14, 0, -0.1, -12, '#2fb8c9'), { night: '#0e2a52' });
+      s.tint(s.glow(24, 0.02, 6, 0, 0.1, -4.4, '#5fd6d0'), { night: '#1f4f7d' });
+      for (let i = 0; i < 6; i++) s.tint(s.glow(2 + rnd() * 2, 0.02, 0.1, -4 + i * 1.6, 0.12, -3.4 - rnd(), '#ffffff'), { night: '#6f8fc0' });
+      s.tint(s.glow(3.2, 0.9, 0.3, -5, 0.2, -15, '#4f8a78'), { night: '#16323c' });
+      s.tint(s.glow(2.4, 1.4, 0.3, 4.5, 0.2, -14, '#5a9684'), { night: '#193840' });
+      s.tint(s.glow(1.0, 1.0, 0.02, 2.2, 3.4, -16, '#fff6c0'), { night: '#dfe8ff' }); // the sun, the moon at night
       // longtail boat: now and then motors across the bay, alternating direction; it turns round only out of sight
       // Thai longtail (rua hang yao): long slim wooden hull rising to a high bow with ribbons on the bow post,
       // a striped canopy, and the car-engine motor at the stern on its long shaft into the water. Bow = +x.
@@ -768,28 +833,36 @@ const STYLES: HomeStyle[] = [
       for (let i = 0; i < 70; i++) stars.push(box(0.07, 0.07, 0.02, -9 + rnd() * 18, 1.4 + rnd() * 7, -18.4, rnd() < 0.2 ? '#ffe9b0' : '#ffffff'));
       const starMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, depthWrite: false });
       s.group.add(new THREE.Mesh(merge(stars), starMat));
-      s.looks.push((d) => {
-        starMat.opacity = 1 - d;
-        torch.intensity = (1 - d) * 2.2;
+      s.looks.push((l) => {
+        starMat.opacity = 1 - l.day;
+        torch.intensity = (1 - l.day) * 2.2;
       });
     },
   },
   {
     // 9 ---------------------------------------------------------------- safari camp, South Africa (Martin)
     label: 'Safari, Südafrika',
-    bg: '#f7b46e',
-    hemi: ['#ffe2b0', '#c9a45a', 1.35],
-    key: ['#ffb070', 2.4, [-4, 3, 3]],
+    light: 'office',
+    bg: '#8ecdf4',
+    hemi: ['#f2f8ff', '#c9a45a', 1.5],
+    key: ['#fff3d6', 2.6, [-4, 4, 3]],
+    dusk: { bg: '#f7b46e', hemi: ['#ffe2b0', '#c9a45a', 1.35], key: ['#ffb070', 2.4] },
     build(s) {
-      // sunset: a smooth gradient sky (many thin bands), a round low sun in soft glowing rings, thin clouds lit from below,
-      // and hazy ranges of hills that get darker towards the viewer
+      // three looks, following the office's light: by day a bright blue sky with a high sun, at dusk and dawn the sunset (a smooth
+      // gradient sky of many thin bands, a round low sun in soft glowing rings, thin clouds lit from below), at night a dark blue
+      // sky with stars and a moon; hazy ranges of hills get darker towards the viewer
       const lerpColor = (a: string, b: string, k: number) => new THREE.Color(a).lerp(new THREE.Color(b), k).getStyle();
-      const stops = ['#fff1c9', '#ffd48a', '#fba965', '#ec7a5e', '#b85f84', '#6f4f8c', '#34356b'];
+      const ramp = (stops: string[], i: number, n: number) => {
+        const u = (i / (n - 1)) * (stops.length - 1);
+        const a = Math.min(stops.length - 2, Math.floor(u));
+        return lerpColor(stops[a], stops[a + 1], u - a);
+      };
+      const dayStops = ['#e9f6ff', '#cde9ff', '#a8dafa', '#82c5f3', '#62b0ec', '#4a99e0', '#3984d2'];
+      const duskStops = ['#fff1c9', '#ffd48a', '#fba965', '#ec7a5e', '#b85f84', '#6f4f8c', '#34356b'];
+      const nightStops = ['#27345f', '#1e2a52', '#172144', '#121a38', '#0d1431', '#0a1029', '#070b1e'];
       const BANDS = 36;
       for (let i = 0; i < BANDS; i++) {
-        const u = (i / (BANDS - 1)) * (stops.length - 1);
-        const a = Math.min(stops.length - 2, Math.floor(u));
-        s.glow(60, 0.55, 0.1, 0, 0.6 + i * 0.5, -19, lerpColor(stops[a], stops[a + 1], u - a));
+        s.tint(s.glow(60, 0.55, 0.1, 0, 0.6 + i * 0.5, -19, ramp(dayStops, i, BANDS)), { dusk: ramp(duskStops, i, BANDS), night: ramp(nightStops, i, BANDS) });
       }
       const disc = (r: number, x: number, y: number, z: number, color: Color, opacity = 1, sy = 1): THREE.Mesh => {
         const m = new THREE.Mesh(new THREE.CircleGeometry(r, 48), new THREE.MeshBasicMaterial({ color, transparent: opacity < 1, opacity, depthWrite: false }));
@@ -798,19 +871,35 @@ const STYLES: HomeStyle[] = [
         s.group.add(m);
         return m;
       };
-      for (const [r, o] of [[5.5, 0.1], [3.8, 0.14], [2.4, 0.2], [1.5, 0.3]] as const) disc(r, -1.6, 1.5, -18.6, '#fff0b8', o); // glow rings
-      disc(0.85, -1.6, 1.5, -18.5, '#fffbe6'); // the sun
-      for (const [x, y, w, o] of [[-4.5, 3.0, 4.2, 0.85], [3.4, 2.6, 5, 0.8], [6.5, 4.4, 3.4, 0.7], [-8, 4.6, 3.6, 0.6], [0.5, 4.0, 2.6, 0.7]] as const) {
-        disc(w, x, y, -18.4, '#f2a28a', o, 0.07); // cloud, orange-pink
-        disc(w * 0.7, x + 0.3, y + 0.12, -18.35, '#ffd9b0', o * 0.8, 0.045); // sun-lit top
+      // the sun and its glow rings (the moon and its halo at night) sit together, left of Martin's head: high by day, low at dusk, high again at night
+      const sun = new THREE.Group();
+      s.group.add(sun);
+      for (const [r, o] of [[5.5, 0.1], [3.8, 0.14], [2.4, 0.2], [1.5, 0.3]] as const) {
+        const ring = disc(r, 0, 0, -18.6, '#ffffff', o);
+        s.tint(ring, { dusk: '#fff0b8', night: '#9db4ff' });
+        const mat = ring.material as THREE.MeshBasicMaterial;
+        s.looks.push((l) => (mat.opacity = o * (1 - 0.5 * l.night)));
+        sun.add(ring);
       }
-      [['#c97a5a', 1.1, -17.2, 2.4], ['#a8605a', 0.9, -16.2, 1.6], ['#7a4a52', 0.8, -15.2, 1.0]].forEach(([c, h, z, w], i) => {
-        for (let k = -5; k <= 5; k++) disc(Number(w) * (3 + ((k + i) % 3) * 0.6), k * 4.2 + i * 1.7, 0.1 + (((k * 7 + i * 3) % 5) * 0.12) * 0.3, Number(z), c as string, 1, Number(h) / (Number(w) * 3));
+      const disk = disc(0.85, 0, 0, -18.5, '#fffef0');
+      s.tint(disk, { dusk: '#fffbe6', night: '#e8eeff' });
+      sun.add(disk);
+      s.looks.push((l) => {
+        const [x, y] = sitAt(l, [-5.5, 8.5], [-4.6, 3.6], [-6, 8.5]);
+        sun.position.set(x, y, 0);
+      });
+      for (const [x, y, w, o] of [[-4.5, 3.0, 4.2, 0.85], [3.4, 2.6, 5, 0.8], [6.5, 4.4, 3.4, 0.7], [-8, 4.6, 3.6, 0.6], [0.5, 4.0, 2.6, 0.7]] as const) {
+        s.tint(disc(w, x, y, -18.4, '#ffffff', o, 0.07), { dusk: '#f2a28a', night: '#252a58' }); // cloud, orange-pink at dusk
+        s.tint(disc(w * 0.7, x + 0.3, y + 0.12, -18.35, '#ffffff', o * 0.8, 0.045), { dusk: '#ffd9b0', night: '#3c437c' }); // sun-lit top
+      }
+      stars(s, 90, [-14, 14], [4, 17], -18.8);
+      [['#c97a5a', 1.1, -17.2, 2.4, '#a9c0b4', '#141b3a'], ['#a8605a', 0.9, -16.2, 1.6, '#8fb094', '#101733'], ['#7a4a52', 0.8, -15.2, 1.0, '#6f9a6e', '#0c1230']].forEach(([c, h, z, w, day, night], i) => {
+        for (let k = -5; k <= 5; k++) s.tint(disc(Number(w) * (3 + ((k + i) % 3) * 0.6), k * 4.2 + i * 1.7, 0.1 + (((k * 7 + i * 3) % 5) * 0.12) * 0.3, Number(z), day as string, 1, Number(h) / (Number(w) * 3)), { dusk: c as string, night: night as string });
       });
       // far-off silhouettes of acacias on the horizon
       for (const x of [-7, -2.2, 4.6, 8.4]) {
-        s.glow(0.07, 0.5, 0.05, x, 0.2, -16, '#3a2a35');
-        s.glow(0.9, 0.1, 0.05, x, 0.68, -16, '#3a2a35');
+        s.tint(s.glow(0.07, 0.5, 0.05, x, 0.2, -16, '#4a4636'), { dusk: '#3a2a35', night: '#080b18' });
+        s.tint(s.glow(0.9, 0.1, 0.05, x, 0.68, -16, '#4a4636'), { dusk: '#3a2a35', night: '#080b18' });
       }
       // savanna: dust and dry grass
       s.wall(40, 0.1, 22, 0, -0.1, -8, '#d4a95c');
@@ -937,7 +1026,8 @@ const STYLES: HomeStyle[] = [
         flame.scale.set(1 + Math.sin(t * 9) * 0.08, 1 + Math.sin(t * 13 + 1) * 0.18, 1);
         tip.scale.y = 1 + Math.sin(t * 17 + 2) * 0.3;
       });
-      s.point('#ff9a40', 1.3, fx, 0.6, fz + 0.4, 5);
+      const fire = s.point('#ff9a40', 1.3, fx, 0.6, fz + 0.4, 5);
+      s.looks.push((l) => (fire.intensity = 1.3 + 2 * l.night)); // it burns brighter in the dark
       // signpost
       s.bx(0.08, 1.5, 0.08, -2.35, 0, 0.0, '#5a3a22');
       s.bx(0.7, 0.16, 0.04, -2.1, 1.25, 0.02, '#c9a574');
@@ -976,7 +1066,8 @@ const STYLES: HomeStyle[] = [
       s.cy(0.05, 0.05, 0.12, 0.62, 0.74, 0.7, '#3a3a3a'); // storm lantern
       s.glow(0.07, 0.1, 0.07, 0.62, 0.78, 0.7, '#ffcc66');
       s.bx(0.1, 0.012, 0.012, 0.62, 0.88, 0.7, '#3a3a3a');
-      s.point('#ffb060', 0.8, 0.62, 1.1, 0.9, 3);
+      const lantern = s.point('#ffb060', 0.8, 0.62, 1.1, 0.9, 3);
+      s.looks.push((l) => (lantern.intensity = 0.8 + 1.6 * l.night));
       mug(s, -0.55, 0.7, '#4a6fa5'); // enamel mug
       s.bx(0.3, 0.006, 0.22, -0.7, 0.74, 0.45, '#e8dcb8'); // paper map
       s.cy(0.2, 0.2, 0.012, 0.85, 0.74, 0.55, '#b59a62', 12); // safari hat
@@ -1515,6 +1606,7 @@ const SCREEN_GLOW_NIGHT = 1.6;
 const NIGHT_HEMI = 0.5;
 const NIGHT_KEY = 0.55;
 const tmpColor = new THREE.Color();
+const tmpDusk = new THREE.Color();
 
 /** One home office scene (one of the eight variants) with whoever is currently working there. */
 export class HomeOffice {
@@ -1537,10 +1629,11 @@ export class HomeOffice {
   private chair?: THREE.Object3D;
   /** the room's own moving things (see Room.ticks) */
   private ticks: Array<(t: number) => void> = [];
-  /** a room with the opposite day (`HomeStyle.opposite`): what follows its light, and the lights it dims */
-  private looks: Array<(day: number) => void> = [];
+  /** a room that follows the light (`HomeStyle.light`): what follows it, and the lights it dims */
+  private looks: Array<(l: RoomLight) => void> = [];
   private lights: { hemi: THREE.HemisphereLight; key: THREE.DirectionalLight; screen: THREE.PointLight } | null = null;
-  private day = 1;
+  /** the light the room was last set to (NaN: not yet) */
+  private day = NaN;
   private push: ArmPose = { x: -1.4, z: 0, e: -0.2, ez: 0 };
   /** which of the desk cats walks into the picture next */
   private catTurn = 0;
@@ -1616,26 +1709,30 @@ export class HomeOffice {
     const screen = new THREE.PointLight('#dfeaff', SCREEN_GLOW, 4, 2);
     screen.position.set(set.webcam.pos[0], set.webcam.pos[1], set.webcam.pos[2] - 0.1);
     this.scene.add(screen);
-    if (this.style.opposite) this.lights = { hemi, key, screen };
+    if (this.style.light) this.lights = { hemi, key, screen };
   }
 
-  /** The light of a room with the opposite day (the game's, 12 hours on): lights, sky and sea follow it, the laptop's glow stays (#284). */
+  /** The light of a room that follows the game's light (`HomeStyle.light`): lights, sky and the room's own looks follow it, the laptop's glow stays (#284, #292). */
   private applyLight(): void {
     const lights = this.lights;
-    if (!lights) return;
-    const day = oppositeDaylight(this.hour);
-    if (Math.abs(day - this.day) < 1e-3) return;
-    this.day = day;
+    const follow = this.style.light;
+    if (!lights || !follow) return;
+    const l = roomLight(follow, this.hour);
+    if (Math.abs(l.day - this.day) < 1e-3) return;
+    this.day = l.day;
+    const dusk = this.style.dusk;
     const [sky, ground, hi] = this.style.hemi;
     const [kc, ki] = this.style.key;
-    lights.hemi.color.copy(SKY_NIGHT).lerp(tmpColor.set(sky), day);
-    lights.hemi.groundColor.copy(GROUND_NIGHT).lerp(tmpColor.set(ground), day);
-    lights.hemi.intensity = lerp(NIGHT_HEMI, hi, day);
-    lights.key.color.copy(MOON).lerp(tmpColor.set(kc), day);
-    lights.key.intensity = lerp(NIGHT_KEY, ki, day);
-    lights.screen.intensity = lerp(SCREEN_GLOW_NIGHT, SCREEN_GLOW, day); // he reads as awake in the dark
-    (this.scene.background as THREE.Color).copy(NIGHT_BG).lerp(tmpColor.set(this.style.bg), day);
-    for (const look of this.looks) look(day);
+    const colour = (out: THREE.Color, night: THREE.Color, day: Color, dusky?: Color) =>
+      mixLooks(out, night, dusky === undefined ? undefined : tmpDusk.set(dusky), tmpColor.set(day), l);
+    colour(lights.hemi.color, SKY_NIGHT, sky, dusk?.hemi[0]);
+    colour(lights.hemi.groundColor, GROUND_NIGHT, ground, dusk?.hemi[1]);
+    lights.hemi.intensity = blend(l, NIGHT_HEMI, hi, dusk?.hemi[2]);
+    colour(lights.key.color, MOON, kc, dusk?.key[0]);
+    lights.key.intensity = blend(l, NIGHT_KEY, ki, dusk?.key[1]);
+    lights.screen.intensity = lerp(SCREEN_GLOW_NIGHT, SCREEN_GLOW, l.day); // he reads as awake in the dark
+    colour(this.scene.background as THREE.Color, NIGHT_BG, this.style.bg, dusk?.bg);
+    for (const look of this.looks) look(l);
   }
 
   /** how long the visitor walks in and out (the adult takes her time, the boy runs) */

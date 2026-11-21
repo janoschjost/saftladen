@@ -42,9 +42,43 @@ export function daylight(hour: number): number {
   return smooth(5, 8, hour) * (1 - smooth(17.5, 21, hour));
 }
 
-/** The light of a place with the opposite day (a gag: Marco Hefti's beach room): the game's, 12 hours on. Read-only, no effect on the game. */
+/** How a room follows the game's light: the office's clock, or its opposite (12 hours on, a gag: Marco Hefti's beach room). A room that follows neither has no entry. */
+export type FollowLight = 'office' | 'opposite';
+
+/** The light of a place with the opposite day: the game's, 12 hours on. Read-only, no effect on the game. */
 export function oppositeDaylight(hour: number): number {
   return daylight((((hour + 12) % 24) + 24) % 24);
+}
+
+/** The light a room has at a clock hour: 0 = dark night .. 1 = full daylight. */
+export function followedDaylight(follow: FollowLight, hour: number): number {
+  return follow === 'opposite' ? oppositeDaylight(hour) : daylight(hour);
+}
+
+/** Where between night and day the low sun (the orange look of a sunset or sunrise) is at its strongest. */
+const SUNSET_AT = 0.35;
+
+/** What a room shows at one moment: the light (`day`), and how much of each of its three looks (the weights add up to 1). */
+export interface RoomLight {
+  day: number;
+  /** weight of the night look .. */
+  night: number;
+  /** .. of the dusk and dawn look (the sun is low), which only a room with such a look uses .. */
+  dusk: number;
+  /** .. and of the day look */
+  bright: number;
+}
+
+/** The three looks of a light value: night, then dusk or dawn, then day; a smooth mix in between. */
+export function lookOf(day: number): RoomLight {
+  const bright = day <= SUNSET_AT ? 0 : (day - SUNSET_AT) / (1 - SUNSET_AT);
+  const night = day >= SUNSET_AT ? 0 : 1 - day / SUNSET_AT;
+  return { day, night, dusk: 1 - night - bright, bright };
+}
+
+/** The light a room has at a clock hour, with its looks. */
+export function roomLight(follow: FollowLight, hour: number): RoomLight {
+  return lookOf(followedDaylight(follow, hour));
 }
 
 export function hourOf(cycle: number): number {
