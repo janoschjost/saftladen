@@ -91,14 +91,20 @@ test('hud.people: "Alle sind im Büro." shows only when everybody is in the offi
   const errors = await openGame(page, '', NIGHT);
   await rows(page);
   await expect(page.locator('#people-empty')).toBeHidden();
-  // everybody at their desk (on the floor where they have none)
-  const everybody = await read(page, (g) => g.sim.people.map((p) => ({ id: p.id, desk: !!g.sim.deskFor(p) })));
+  // everybody in: at a desk while there is one for them (earlier ones may take it), else standing on the floor
+  const ids = await read(page, (g) => g.sim.people.map((p) => p.id));
   await scene(
     page,
     (s, all) => {
-      for (const p of all) s.put(p.id, p.desk ? 'desk' : { x: 0, z: 0 });
+      for (const id of all) {
+        try {
+          s.put(id, 'desk');
+        } catch {
+          s.put(id, { x: 0, z: 0 });
+        }
+      }
     },
-    everybody,
+    ids,
   );
   expect(await rows(page)).toBe(0);
   await expect(page.locator('#away')).toBeHidden();
