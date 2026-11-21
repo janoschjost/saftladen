@@ -27,6 +27,7 @@ import { Person } from './Person';
 import { PetCare } from './PetCare';
 import { Nerf } from './Nerf';
 import { PhoneBooth } from './PhoneBooth';
+import { treeBlockers } from './xmasTrees';
 import { blockages, type Blockage } from './placement';
 import { Pod } from './Pod';
 import { Presence } from './Presence';
@@ -89,6 +90,8 @@ export class Sim {
   /** the server rack: breaks now and then, a dev comes and fixes it */
   readonly serverRack: ServerRack;
   readonly walkers: Walker[] = [];
+  /** Christmas mode is on: the trees block the walk grid */
+  xmas = false;
   readonly people: Person[] = [];
   /** pets (dogs and cats) */
   readonly pets: Dog[];
@@ -182,11 +185,28 @@ export class Sim {
   /** Walls and furniture as they stand now become what nobody can walk through. */
   blockNav(): void {
     this.nav.clear();
-    const blockers = this.model.blockers();
+    const blockers = [...this.model.blockers(), ...(this.xmas ? treeBlockers() : [])];
     this.nav.blockBoxes(blockers);
     this.walkColliders.boxes = blockers;
     this.nav.sealUnreachable(CORRIDOR_POINT);
     this.traffic.rebuild();
+  }
+
+  /** Christmas mode: the trees are obstacles while it is on. Whoever stands where a tree appears moves to the nearest free spot (#288). */
+  setXmas(on: boolean): void {
+    if (on === this.xmas) return;
+    this.xmas = on;
+    this.relayout();
+    for (const w of this.walkers) {
+      const c = this.nav.toCell(w.pos);
+      if (this.nav.walkable(c.cx, c.cz)) continue;
+      const free = this.nav.nearestWalkable(w.pos, 10);
+      if (!free) continue;
+      w.pos.x = free.x;
+      w.pos.z = free.z;
+      w.prev.x = free.x;
+      w.prev.z = free.z;
+    }
   }
 
   /** The furniture moved (room editor): everything derived from its place follows. */

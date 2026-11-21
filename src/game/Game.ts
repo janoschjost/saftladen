@@ -303,6 +303,7 @@ export class Game {
         this.seats.setLabelsVisible(state.seats);
         this.sim.weather.mode = state.xmas ? 'sun' : state.weather; // it snows instead of raining
         this.xmas.set(state.xmas);
+        this.sim.setXmas(state.xmas);
       },
       onView: (mode) => this.views.setMode(mode),
       onNames: (on) => this.overlay.setNames(on),
