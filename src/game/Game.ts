@@ -25,6 +25,7 @@ import { ACTION_POLAR, ARRIVE_RADIUS, FOLLOW_ZOOM, type Shot } from '../render/c
 import { Feeds } from '../ui/Feeds';
 import { Overlay } from '../ui/Overlay';
 import { Roster } from '../ui/Roster';
+import { rosterEntries } from './rosterEntries';
 import { Seats } from '../ui/Seats';
 import { DevPanel } from '../ui/DevPanel';
 import { registerDevSection } from '../ui/devSections';
@@ -2330,18 +2331,7 @@ export class Game {
     if (this.rosterTimer <= 0) {
       this.rosterTimer = 0.25;
       this.peoplePanel.sync();
-      this.roster.update(
-        this.sim.presence.away
-          .map((p) => ({
-            id: p.id,
-            name: p.displayName,
-            portrait: this.portraitOf(p),
-            kind: p.awayKind === 'home' || p.awayKind === 'smoke' ? p.awayKind : ('errand' as const),
-            phase: p.presence === 'leaving' ? ('leave' as const) : p.presence === 'returning' ? ('return' as const) : ('out' as const),
-            left: p.awayLeft,
-          }))
-          .sort((a, b) => Number(a.kind === 'home') - Number(b.kind === 'home') || a.left - b.left),
-      );
+      this.roster.update(rosterEntries(this.sim.presence.listed, (p) => this.portraitOf(p)));
     }
     this.seats.placeLabels(
       this.sim.office.desks.map((d) => ({ number: d.number, hidden: false, ...this.projectPoint(d.seat.x, 1.3, d.seat.z) })),
