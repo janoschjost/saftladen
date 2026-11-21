@@ -68,8 +68,8 @@ export function ghostify(rig: CharacterRig, opacity = GHOST_OPACITY): { set(alph
     set(alpha, t) {
       // a soft flicker: now and then he thins out for a moment
       const flicker = 1 - 0.28 * Math.max(0, Math.sin(t * 9.1) * Math.sin(t * 2.3 + 1));
-      const k = (alpha * opacity) / GHOST_OPACITY;
-      mat.opacity = GHOST_OPACITY * k * flicker;
+      const k = (alpha * opacity) / GHOST_OPACITY; // 1 at the night ghost's full strength
+      mat.opacity = alpha * opacity * flicker;
       haloMat.opacity = HALO * k * flicker;
       poolMat.opacity = POOL * k * flicker;
     },
