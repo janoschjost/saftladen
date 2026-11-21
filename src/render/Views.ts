@@ -215,6 +215,7 @@ export class Views {
     this.planCtl = new OrbitControls(this.ortho, canvas);
     this.planCtl.target.copy(this.center);
     this.planCtl.enableRotate = false;
+    this.planCtl.minZoom = 0.3; // zoomed out no further than the city reaches: the screen stays full of it
     this.planCtl.screenSpacePanning = true;
     this.planCtl.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
     this.planCtl.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
