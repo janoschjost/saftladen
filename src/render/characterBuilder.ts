@@ -109,6 +109,25 @@ function hairParts(look: Look): THREE.BufferGeometry[] {
       p.push(box(0.3, 0.1, 0.16, 0, 1.86, 0.1, c));
       break;
     case 'long':
+      if (look.streaks) {
+        // the hair as strips of two colours side by side (nothing laid over anything, so nothing can flicker): widths along
+        // the top and the back (x), and along the side panels (z); every other strip is a lighter strand
+        const tile = (widths: number[], from: number, make: (centre: number, w: number, colour: string) => void) => {
+          let at = from;
+          for (const [i, w] of widths.entries()) {
+            make(at + w / 2, w, i % 2 ? look.streaks! : c);
+            at += w;
+          }
+        };
+        const across = [0.11, 0.04, 0.08, 0.04, 0.07, 0.04, 0.02]; // 0.40, the width of the head
+        tile(across, -0.2, (x, w, col) => p.push(box(w, 0.08, 0.4, x, 1.78, 0, col)));
+        tile(across, -0.2, (x, w, col) => p.push(box(w, 0.62, 0.08, x, 1.45, -0.17, col)));
+        tile([0.07, 0.04, 0.06, 0.04, 0.01], -0.13, (z, w, col) => {
+          p.push(box(0.05, 0.5, w, -0.215, 1.5, z, col));
+          p.push(box(0.05, 0.5, w, 0.215, 1.5, z, col));
+        });
+        break;
+      }
       top();
       back(0.62, 1.45);
       sides(0.5, 1.5, 0.22, 0.215);
@@ -283,17 +302,24 @@ export function buildCharacter(look: Look): CharacterRig {
     torso.push(box(thick ? 0.12 : 0.1, thick ? 0.04 : 0.025, 0.02, 0.09, by, 0.185, browColor));
   }
   // mouth (moody looks get two swappable faces instead, see below)
-  const lip = '#b0605a';
+  const lip = look.lipColor ?? '#b0605a';
+  const drop = look.mouthDrop ?? 0;
+  if (look.blush) {
+    // rosy cheeks, a touch below the eyes
+    const rose = mix(look.skin, look.blush, 0.55);
+    torso.push(box(0.07, 0.045, 0.02, -0.105, 1.545 - drop, 0.185, rose));
+    torso.push(box(0.07, 0.045, 0.02, 0.105, 1.545 - drop, 0.185, rose));
+  }
   if (look.moody) {
     // handled by the mood meshes
   } else if (look.mouth === 'full') {
-    torso.push(box(0.15, 0.045, 0.025, 0, 1.495, 0.19, '#b8485a'));
+    torso.push(box(0.15, 0.045, 0.025, 0, 1.495 - drop, 0.19, '#b8485a'));
   } else if (look.smile) {
-    torso.push(box(0.1, 0.022, 0.02, 0, 1.495, 0.185, lip));
-    torso.push(box(0.03, 0.03, 0.02, -0.065, 1.515, 0.185, lip));
-    torso.push(box(0.03, 0.03, 0.02, 0.065, 1.515, 0.185, lip));
+    torso.push(box(0.1, 0.022, 0.02, 0, 1.495 - drop, 0.185, lip));
+    torso.push(box(0.03, 0.03, 0.02, -0.065, 1.515 - drop, 0.185, lip));
+    torso.push(box(0.03, 0.03, 0.02, 0.065, 1.515 - drop, 0.185, lip));
   } else if (look.beard !== 'full') {
-    torso.push(box(0.1, 0.022, 0.02, 0, 1.5, 0.185, lip));
+    torso.push(box(0.1, 0.022, 0.02, 0, 1.5 - drop, 0.185, lip));
   }
 
   // beard
