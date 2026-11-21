@@ -176,6 +176,7 @@ describe('dev events on the Sim', () => {
       // every owner of such a pet is out: one is called in for the next try (#125)
       const away = office();
       const owners = [...new Set(away.pets.filter((d) => d.isCat === (kind === 'cat')).map((d) => d.owner))];
+      only(away, owners.map((o) => o.id)); // the rest is out on errands: one home office is fixed to Marco Rieser (#281), so the seeded office would leave the owners too few
       for (const o of owners) away.scenario.put(o.id, 'home', 'free');
       expect(owners.every((o) => o.awayLeft > 0)).toBe(true);
       expect(away.events.trigger(`pet-${kind}`)).toMatch(/ streichelt /);

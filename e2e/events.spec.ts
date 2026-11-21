@@ -31,7 +31,8 @@ test('place.server-rack (?action=server-rack)', async ({ page }) => {
 });
 
 const cases: [string, string, (g: TestHook) => unknown][] = [
-  ['home.son', 'remote-son', (g) => g.homes.some((h) => h?.sonHere)],
+  ['home.son', 'remote-son', (g) => g.homes.some((h) => h?.visitorHere)],
+  ['home.ariana', 'ariana-hug', (g) => g.homes.some((h) => h?.visitorHere)],
 ];
 
 // The kneel itself is drawn by the view (`applyPetPose` puts `petPose` on the rig); who strokes what: places.test.ts
@@ -76,18 +77,47 @@ test('home.laundry (?event=home-laundry#homes)', async ({ page }) => {
 
 // all eight home offices taken by hand: Zlatko still gets one (somebody gives theirs up) and the son comes
 // The boy speaks first, Papa answers once the boy's bubble is gone, and Papa's bubble is gone before the boy leaves
-test('home.son (?event=remote-son#homes)', async ({ page }) => {
+test('home.son + home.visitor (?event=remote-son#homes)', async ({ page }) => {
   const errors = await openGame(page, 'homes', undefined, 'event=remote-son');
   const { room } = await until(page, (g) => {
-    const i = g.homes.findIndex((h) => h?.sonHere);
+    const i = g.homes.findIndex((h) => h?.visitorHere);
     return i >= 0 ? { room: i } : null;
   }, undefined, 120_000);
-  await until(page, (g, i) => g.homes[i]!.sonBubbles.son, room, 10_000);
-  expect(await read(page, (g, i) => g.homes[i]!.sonBubbles, room)).toEqual({ son: true, dad: false });
-  await until(page, (g, i) => g.homes[i]!.sonBubbles.dad, room, 15_000);
-  expect(await read(page, (g, i) => g.homes[i]!.sonBubbles, room)).toEqual({ son: false, dad: true });
-  await until(page, (g, i) => !g.homes[i]!.sonHere, room, 15_000);
-  expect(await read(page, (g, i) => g.homes[i]!.sonBubbles, room)).toEqual({ son: false, dad: false });
+  await until(page, (g, i) => g.homes[i]!.visitorBubbles.guest, room, 10_000);
+  expect(await read(page, (g, i) => g.homes[i]!.visitorBubbles, room)).toEqual({ guest: true, host: false });
+  await until(page, (g, i) => g.homes[i]!.visitorBubbles.host, room, 15_000);
+  expect(await read(page, (g, i) => g.homes[i]!.visitorBubbles, room)).toEqual({ guest: false, host: true });
+  await until(page, (g, i) => !g.homes[i]!.visitorHere, room, 15_000);
+  expect(await read(page, (g, i) => g.homes[i]!.visitorBubbles, room)).toEqual({ guest: false, host: false });
+  expect(errors).toEqual([]);
+});
+
+// ariana-hug-end lets the visit run on fast, so everything still happens in its order and she is gone well before the 20 s of a whole visit
+test('home.ariana (?event=ariana-hug-end): the visit runs on fast and is over', async ({ page }) => {
+  const errors = await openGame(page, 'homes', undefined, 'event=ariana-hug');
+  const { room } = await until(page, (g) => {
+    const i = g.homes.findIndex((h) => h?.visitorHere);
+    return i >= 0 ? { room: i } : null;
+  }, undefined, 60_000);
+  expect(await read(page, () => window.dev.trigger('ariana-hug-end'))).toBe('Ariana geht wieder');
+  await until(page, (g, i) => !g.homes[i]!.visitorHere, room, 8_000);
+  expect(errors).toEqual([]);
+});
+
+// Ariana: her bubble first, Marco answers, then they hug (no bubble, caption "Marco wird umarmt"), then she leaves
+test('home.ariana + home.visitor (?event=ariana-hug#homes): the lines, the hug without a bubble, and the caption', async ({ page }) => {
+  const errors = await openGame(page, 'homes', undefined, 'event=ariana-hug');
+  const { room } = await until(page, (g) => {
+    const i = g.homes.findIndex((h) => h?.visitorHere);
+    return i >= 0 ? { room: i } : null;
+  }, undefined, 60_000);
+  await until(page, (g, i) => g.homes[i]!.visitorBubbles.guest, room, 10_000);
+  await until(page, (g, i) => g.homes[i]!.visitorBubbles.host && !g.homes[i]!.hugging, room, 15_000);
+  await until(page, (g, i) => g.homes[i]!.hugging, room, 15_000);
+  expect(await read(page, (g, i) => g.homes[i]!.activityLabel, room)).toBe('Marco wird umarmt');
+  expect(await read(page, (g, i) => g.homes[i]!.visitorBubbles, room)).toEqual({ guest: false, host: false });
+  await until(page, (g, i) => !g.homes[i]!.visitorHere, room, 20_000);
+  expect(await read(page, (g, i) => g.homes[i]!.hugging, room)).toBe(false);
   expect(errors).toEqual([]);
 });
 
