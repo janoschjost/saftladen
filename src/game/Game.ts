@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { CharacterRig } from '../render/characterBuilder';
 import { team } from '../data/team';
 import shippedSeats from '../data/seats.json';
 import { HOME_LABELS, HomeOffice, ROOM_COUNT, heldPoses, type ArmPose } from '../render/homeOffice';
@@ -38,6 +39,7 @@ import type { Desk } from './Office';
 import { RoomLight } from './RoomLight';
 import { Easter } from './Easter';
 import { Dog } from './Dog';
+import { Christian } from './Christian';
 import { ChristianModel } from './ChristianModel';
 import { Christmas } from './Christmas';
 import { RainFx } from '../render/rainFx';
@@ -78,6 +80,11 @@ const ACTION_NO_LEAD = 6; // seconds the chip stays for an action that moves nob
 /** What an action may change on a person; the first person whose values change is the one the camera follows. */
 const leadState = (p: Person): unknown[] => [p.printJob, p.foosJob, p.meetPhase, p.coffeeJob, p.vapeJob, p.phoneJob, p.talk, p.presence === 'in' ? null : p.presence];
 
+/** World point on top of a character rig's head, following the posed body; rig heights are in metres, the body's local units are unscaled (the caller has updated the world matrices). */
+function rigHeadTop(rig: CharacterRig): THREE.Vector3 {
+  return rig.body.localToWorld(new THREE.Vector3(0, rig.headHeight / (rig.root.scale.y || 1), 0));
+}
+
 export class Game {
   private scene = new THREE.Scene();
   /** the office and everybody in it; this class is its view and its input */
@@ -114,6 +121,7 @@ export class Game {
   private meetingLight!: RoomLight;
   private easter!: Easter;
   private christian!: ChristianModel;
+  private ghost!: Christian;
   private timeControl!: TimeControl;
   private feeds = new Feeds();
   private roster: Roster;
@@ -246,6 +254,7 @@ export class Game {
     this.deskLights = new DeskLights(this.scene, this.sim.office, this.sim.tod);
     this.easter = new Easter(this.scene);
     this.christian = new ChristianModel(this.scene, this.sim.nav);
+    this.ghost = new Christian(this.scene, this.sim);
     this.roof = model.roof;
     this.roofCords = model.setRoofVisible;
     this.entrance = model.entrance;
@@ -726,6 +735,10 @@ export class Game {
       get christian() {
         return g.christian;
       },
+      /** Christian's night visit (`christian`): the ghost of the Ordnungskreis */
+      get ghost() {
+        return g.ghost;
+      },
       get easter() {
         return g.easter;
       },
@@ -826,6 +839,7 @@ export class Game {
     applySky(this.sim.tod, this.sky);
     this.updateEaster(dt);
     this.christian.update(dt);
+    this.ghost.update(dt);
     this.updateSpawnFx(dt);
     this.updateWeather(dt);
     this.updateArrivals();
@@ -945,12 +959,35 @@ export class Game {
         return strings.presence.event.sonComes(first(p));
       },
     });
+    // Christian's night visit (#255): the ghost cleans the mess; with none lying around he gets some. Starting him ends the model check, and the model check ends him
+    this.sim.events.register({
+      id: 'christian',
+      group: 'Christian',
+      label: 'Ordnungsgeist: Christian kommt durch die Wand',
+      run: () => {
+        this.christian.stop();
+        if (!this.sim.mess.count()) this.sim.mess.fill(); // nothing to clean: he does not come, so give him something to do
+        return this.ghost.start() ? 'Christian kommt durch die Wand' : null;
+      },
+    });
+    this.sim.events.register({
+      id: 'christian-end',
+      group: 'Christian',
+      label: 'Ordnungsgeist geht',
+      asIs: true,
+      run: () => {
+        if (!this.ghost.active) return null;
+        this.ghost.stop();
+        return 'Christian ist weg';
+      },
+    });
     // Christian's model check (#259): only the view builds him, and `…-end` has nothing to do when he is not there
     this.sim.events.register({
       id: 'christian-model',
       group: 'Christian',
       label: 'Christian Davatz (Modell)',
       run: () => {
+        this.ghost.stop();
         this.christian.start();
         return 'Christian steht im Büro';
       },
@@ -2155,10 +2192,15 @@ export class Game {
   private headTop(w: Walker): THREE.Vector3 {
     w.root.updateMatrixWorld(true);
     if (w instanceof Dog) return w.rig.body.localToWorld(new THREE.Vector3(0, w.rig.face.y + w.rig.face.r, w.rig.face.z));
-    // rig heights are in metres; the body's local units are unscaled
-    const s = w.root.scale.y || 1;
-    if (w instanceof Person) return w.rig.body.localToWorld(new THREE.Vector3(0, w.rig.headHeight / s, 0));
-    return w.root.localToWorld(new THREE.Vector3(0, w.headHeight / s, 0));
+    if (w instanceof Person) return rigHeadTop(w.rig);
+    return w.root.localToWorld(new THREE.Vector3(0, w.headHeight / (w.root.scale.y || 1), 0));
+  }
+
+  /** The world point on top of the ghost's head, for his bubble. */
+  private ghostHead(): THREE.Vector3 {
+    const rig = this.ghost.rig!;
+    rig.root.updateMatrixWorld(true);
+    return rigHeadTop(rig);
   }
 
   private project(w: Walker, extra = 0.25): { x: number; y: number } {
@@ -2206,6 +2248,7 @@ export class Game {
       [
         ...(this.easter.angry && !this.easter.angry.who.away ? [say(`angry-${this.easter.angry.who.id}`, this.easter.angry.text, this.easter.angry.who)] : []),
         ...(call && !call.who.away ? [say(`welcome-${call.who.id}`, call.text, call.who)] : []),
+        ...(this.ghost.text ? [{ id: 'christian', text: this.ghost.text, head: this.ghostHead() }] : []),
         ...this.sim.boombox.bubbles.map((b) => say(`boombox-${b.who.id}`, b.text, b.who)),
         ...this.sim.bonfire.bubbles.map((b) => say(`bonfire-${b.who.id}`, b.text, b.who)),
         ...this.sim.mail.bubbles.map((b) => say(`mail-${b.who.id}`, b.text, b.who)),

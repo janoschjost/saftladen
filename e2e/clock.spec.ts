@@ -1,3 +1,4 @@
+import { CYCLE_SECONDS } from '../src/game/TimeOfDay';
 import type { Page } from '@playwright/test';
 import type { Color } from 'three';
 import { expect, openGame, read, test, until } from './game';
@@ -44,11 +45,11 @@ test.describe('clock', () => {
     }
     // five real seconds at 25x: the clock and the whole simulation (game clock, who walks where) are 125 game seconds on
     const run = (seconds: number) =>
-      read(page, (g, n) => {
+      read(page, (g, [n, cycleSeconds]) => {
         const t0 = [g.clock, g.sim.tod.cycle];
         for (let i = 0; i < n * 4; i++) g.frame(0.25);
-        return [g.clock - t0[0], (g.sim.tod.cycle - t0[1]) * 600];
-      }, seconds);
+        return [g.clock - t0[0], (g.sim.tod.cycle - t0[1]) * cycleSeconds];
+      }, [seconds, CYCLE_SECONDS]); // (the function runs in the page: the constant goes in as an argument)
     const [simulated, clock] = await run(5);
     expect(simulated).toBeCloseTo(125, 3);
     expect(clock).toBeCloseTo(125, 3);

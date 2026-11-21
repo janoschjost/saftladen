@@ -1,14 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { cycleOf, hourOf, TimeOfDay } from './TimeOfDay';
-
-/** Real seconds for one day at 1x (as in TimeOfDay). */
-const CYCLE_SECONDS = 600;
+import { CYCLE_SECONDS, cycleOf, hourOf, NIGHT_SECONDS, TimeOfDay } from './TimeOfDay';
 
 describe('time of day', () => {
   it('time.cycle: cycleOf is the inverse of hourOf', () => {
     for (let h = 0; h < 24; h += 0.25) expect(hourOf(cycleOf(h))).toBeCloseTo(h, 9);
-    expect(cycleOf(8)).toBeCloseTo(0.2);
-    expect(cycleOf(18)).toBeCloseTo(0.74);
+    expect(cycleOf(8) * CYCLE_SECONDS).toBeCloseTo(144, 6); // 66 s of night, 78 s of morning
+    expect((cycleOf(18) - cycleOf(8)) * CYCLE_SECONDS).toBeCloseTo(324, 6); // the working day takes what it always took
     expect(cycleOf(-3)).toBe(0); // clamps outside 0..24
     expect(cycleOf(30)).toBe(1);
   });
@@ -23,6 +20,13 @@ describe('time of day', () => {
     const c = p.cycle;
     p.update(100);
     expect(p.cycle).toBe(c);
+  });
+
+  it('time.cycle: the night (21:00 to 05:00) takes NIGHT_SECONDS of the cycle at 1x, and the game starts at 10:00', () => {
+    expect((cycleOf(24) - cycleOf(21) + cycleOf(5)) * CYCLE_SECONDS).toBeCloseTo(NIGHT_SECONDS, 6);
+    expect(NIGHT_SECONDS).toBe(132);
+    expect(CYCLE_SECONDS).toBe(132 + 78 + 324 + 114); // the day parts are the old ones: only the night grew
+    expect(hourOf(new TimeOfDay().cycle)).toBeCloseTo(10, 6);
   });
 
   it('time.cycle: a pinned clock (?time=) stands still until it is let go', () => {

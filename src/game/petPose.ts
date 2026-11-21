@@ -119,7 +119,7 @@ function applyPetPose(w: Pick<Person, 'petting' | 'moving' | 'held' | 'sit' | 'p
 const hipAt = new THREE.Vector3();
 
 /** The upper body leans around the hips, not around the feet: keeps the torso on the legs however far it bends. */
-function hinge(r: PoseRig): void {
+export function hinge(r: PoseRig): void {
   hipAt.set(0, HIP_HEIGHT, 0).applyEuler(r.body.rotation);
   r.body.position.x -= hipAt.x;
   r.body.position.y += HIP_HEIGHT - hipAt.y;

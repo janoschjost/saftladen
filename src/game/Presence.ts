@@ -24,7 +24,7 @@ const HOME = [90, 220]; // seconds of working from home
 const HOMEBODY = { weight: 6, stay: 2, startHome: 0.75 };
 
 /** The working day rolls over at this hour: everybody gets a fresh plan. Hours after midnight count on (01:00 = 25). */
-const DAY_START = 4;
+export const DAY_START = 4;
 /** Random spread (hours, +/-) around each person's habitual times (TeamMember.schedule), rolled once per day. */
 const JITTER = { arrive: 0.4, leave: 0.55, lunch: 0.4 };
 /**

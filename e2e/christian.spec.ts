@@ -14,3 +14,15 @@ test('christian.model: ?event=christian-model stands him in the office at 2.1 m,
   expect(await read(page, (g) => g.sim.events.trigger('christian-model-end'))).toContain('nicht möglich');
   expect(errors).toEqual([]);
 });
+
+test('christian.ghost: ?event=christian lets him come through the wall and clean up; christian-end sends him away', async ({ page }) => {
+  const errors = await openGame(page, '', undefined, 'event=christian'); // the ghost glides in from the north wall (placing is checked in Vitest)
+  const start = await until(page, (g) => (g.ghost.at ? { mess: g.sim.mess.count() } : null));
+  expect(start.mess).toBeGreaterThan(0); // nothing lay around: the event filled the office first
+  await read(page, (g) => g.advance(40));
+  expect(await read(page, (g) => g.sim.mess.count())).toBeLessThan(start.mess);
+  expect(await read(page, (g) => g.sim.events.trigger('christian-end'))).toBe('Christian ist weg');
+  expect(await read(page, (g) => g.ghost.active)).toBe(false);
+  expect(await read(page, (g) => g.sim.events.trigger('christian-end'))).toContain('nicht möglich');
+  expect(errors).toEqual([]);
+});

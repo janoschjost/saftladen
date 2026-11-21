@@ -5,15 +5,13 @@ import type { NavGrid } from './NavGrid';
 import type { AwayKind, Person } from './Person';
 import { transformsOnLeave } from './AlterEgo';
 import { Presence } from './Presence';
-import { cycleOf, hourOf, TimeOfDay } from './TimeOfDay';
+import { CYCLE_SECONDS, cycleOf, hourOf, TimeOfDay } from './TimeOfDay';
 import type { Weather } from './Weather';
 import { setSeed } from './rng';
 
 const STEP = 1 / 60;
 /** Seconds a stand-in takes to walk to the door / back in from the porch. */
 const WALK = 4;
-/** Real seconds per 24 h cycle, as in TimeOfDay. */
-const CYCLE_SECONDS = 600;
 /** Seconds a returning person may wait outside for the door (spacing between arrivals) on top of their time away. */
 const QUEUE = 10;
 
