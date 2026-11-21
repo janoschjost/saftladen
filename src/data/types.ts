@@ -12,6 +12,10 @@ export interface Look {
   beardColor?: string; // defaults to the hair colour
   eyebrows?: boolean | 'thick';
   eyes?: 'narrow';
+  streaks?: string; // lighter strands in long hair (a highlight colour)
+  lipColor?: string; // lips, defaults to a muted red
+  blush?: string; // rosy cheeks: this colour, mixed into the skin
+  mouthDrop?: number; // mouth and cheeks sit this many metres lower on the face (a longer face)
   mouth?: 'full';
   smile?: boolean;
   thinGlasses?: boolean;
@@ -117,6 +121,7 @@ export interface TeamMember {
   cats?: Array<{ kind: 'tabby' | 'tortie'; name: string; visits?: PetVisits }>; // cats following this person
   adhd?: boolean; // restless: short idle/work spells, fidgets
   son?: Look; // little boy who now and then walks into the home office scene
+  partner?: Look; // wife who now and then comes into the home office scene to hug them (#281)
   homebody?: boolean; // works from home a lot and is never out on errands
   speed?: number; // walking speed override (default: random 1.15-1.725)
   schedule: Schedule; // habitual office hours

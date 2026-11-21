@@ -7,6 +7,7 @@ import { buildDog, type DogRig } from './dogBuilder';
 import { ball, box, cyl, merge, propMaterial } from './geo';
 import { SIT_DROP } from './officeBuilder';
 import { fxRandom, seeded } from '../game/rng';
+import { ARIANA_DAY_LINES, ARIANA_NIGHT_LINES, SPEAK_LEAD, arianaTimeline, arianaVisitAt, isNightHour } from '../data/arianaLines';
 import { SON_BYE, SON_LINES, sonTimeline } from '../data/sonLines';
 import { LAUNDRY, LAUNDRY_PICKS, RACK_SLOTS, laundryHung, laundryTime, laundryTrip } from './laundry';
 
@@ -985,6 +986,18 @@ const SIGNATURE_PICKS = 1;
 const SON = { walkIn: 1.6, walkOut: 1.6, gap: [25, 70] as [number, number] };
 /** which way Papa turns to look at the boy, which way the boy faces (mostly to Papa, a little to the webcam) */
 const SON_TURN = -1.2;
+/** when the bubbles are up in a visit, and for the wife's, when the hug is on (seconds after she stands next to him) */
+type VisitPlan = ReturnType<typeof sonTimeline> & { hugStart?: number; hugEnd?: number };
+/**
+ * Ariana's visit (#281): she walks in like the boy but stops beside Marco's chair (`x` m to the left, `z` m behind its
+ * start), so the chair does not roll into her; he swivels and rolls back (`roll` m), gets up and steps `meet` m to her,
+ * and they hug (she leans in `lean`, he keeps still). `turnFirst` / `backFirst`: how much of the turn and the roll happen
+ * while she speaks. `face` / `stand`: the way she and he face. `ease`: how long the arms take to close.
+ */
+const PARTNER = { x: 0.95, z: 0.3, meet: 0.5, face: 1.7, stand: 1.5, lean: 0.02, ease: 0.6, roll: 0.35, turnFirst: 0.35, backFirst: 0.55, walkIn: 4.5, walkOut: 3.6, gait: 5 };
+/** both arms hold alike: she round his waist (arms low), he round her, higher up */
+const HUG_HER: ArmPose = { x: -0.3, z: 0.35, e: -1.1, ez: 0 };
+const HUG_HIM: ArmPose = { x: -0.75, z: 0.12, e: -1.1, ez: 0 };
 const SON_FACE = 1.4;
 /**
  * Where the boy stands, per room (the webcams sit at different distances): beside Papa, behind the desk's back edge
@@ -992,6 +1005,8 @@ const SON_FACE = 1.4;
  * closer to Papa than `clear` m), his head at `head` m. Papa rolls his chair back `roll` m to face him.
  */
 const SON_SPOT = { z: -0.25, frame: 0.6, clear: 0.7, head: 1.05, frameTop: 0.94, roll: 0.3 };
+/** Marco's hands while he sits turned to his wife: in his lap, not in the desk in front of him */
+const PARTNER_LISTEN: ArmPose = { x: 0.0, z: 0.12, e: -0.5, ez: 0 };
 /** Papa's hands while he listens: off the keyboard, resting on the edge of the desk / in the lap */
 const SON_LISTEN: ArmPose = { x: -0.45, z: 0.12, e: -1.0, ez: 0 };
 /** where Papa's reply bubble's tail tip sits (x, world): above his head, which the swivel hardly moves */
@@ -1163,8 +1178,8 @@ interface Occupant {
   spray?: THREE.Object3D;
   /** the same person in swimwear, swapped in out of sight for a swim */
   swimRig?: CharacterRig;
-  /** a little child that now and then walks into the picture (TeamMember.son) */
-  son?: { rig: CharacterRig; bubble: THREE.Sprite; reply: THREE.Sprite };
+  /** somebody who now and then walks into the picture: a little child (TeamMember.son) or a wife who comes to hug (TeamMember.partner) */
+  visitor?: { kind: 'son' | 'partner'; rig: CharacterRig; bubble: THREE.Sprite; reply: THREE.Sprite };
   /** prop-holding arm poses solved for this person's shoulders */
   held: HeldPoses;
 }
@@ -1294,10 +1309,10 @@ function occupantOf(member: TeamMember, fresh = false): Occupant {
     rig.body.add(o.spray);
   }
   if (member.swimLook) o.swimRig = buildCharacter({ ...member.look, ...member.homeLook, ...member.swimLook });
-  if (member.son) {
-    const sonRig = buildCharacter(member.son);
+  if (member.son || member.partner) {
+    const sonRig = buildCharacter((member.son ?? member.partner)!);
     sonRig.root.visible = false;
-    o.son = { rig: sonRig, bubble: bubbleSprite(), reply: bubbleSprite() };
+    o.visitor = { kind: member.son ? 'son' : 'partner', rig: sonRig, bubble: bubbleSprite(), reply: bubbleSprite() };
   }
   rig.elbowL.add(o.mug);
   rig.body.add(o.gamepad, o.yawn, o.bundle);
@@ -1321,6 +1336,11 @@ function headset(): THREE.Object3D {
 }
 
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
+/** how far `x` is from `a` to `b` (0 .. 1), and three ways to ease such a share */
+const ramp = (x: number, a: number, b: number) => Math.min(1, Math.max(0, (x - a) / (b - a)));
+const inOut = (x: number) => x * x * (3 - 2 * x);
+const outQ = (x: number) => 1 - (1 - x) ** 3; // quick start, slow arrival
+const gentle = (x: number) => x * x * x * (x * (6 * x - 15) + 10); // slow start and end
 
 /** Shoulder swing / spread and elbow bend of one arm (see HomeOffice.update). */
 export interface ArmPose {
@@ -1502,14 +1522,23 @@ export class HomeOffice {
   private roundBase = 0;
   private roundSize = 0;
   /** seconds into the son's visit (negative: not here) and until the next one */
-  private sonT = -1;
-  private sonPlan = sonTimeline(SON_LINES[0]);
-  private sonNext = rand(SON.gap);
+  private visitT = -1;
+  private visitPlan: VisitPlan = sonTimeline(SON_LINES[0]);
+  /** how far into the hug they are (0 = not, 1 = holding each other) */
+  private hugK = 0;
+  /** how fast the visit runs (1; more when the dev ends it) */
+  private visitSpeed = 1;
+  /** the game's clock hour, for the night lines; set by the game each frame */
+  hour = 12;
+  private visitNext = rand(SON.gap);
   /** where the boy comes in (off the left edge of the frame) and stops, where his bubble sits and how big it is */
-  private sonOff = new THREE.Vector3();
-  private sonAt = new THREE.Vector3();
-  private sonView = new THREE.Vector2();
-  private sonTop = new THREE.Vector3();
+  private visitOff = new THREE.Vector3();
+  private visitAt = new THREE.Vector3();
+  private visitView = new THREE.Vector2();
+  private visitTop = new THREE.Vector3();
+  /** scratch points for his stand-up in the hug (from the rolled-back chair to her) */
+  private standFrom = new THREE.Vector3();
+  private standTo = new THREE.Vector3();
 
   constructor(readonly variant: number) {
     this.style = STYLES[variant];
@@ -1549,30 +1578,49 @@ export class HomeOffice {
     this.scene.add(screen);
   }
 
-  private get sonTotal(): number {
-    return SON.walkIn + this.sonPlan.talk + SON.walkOut;
+  /** how long the visitor walks in and out (the adult takes her time, the boy runs) */
+  private get walkIn(): number {
+    return this.occupant?.visitor?.kind === 'partner' ? PARTNER.walkIn : SON.walkIn;
   }
 
-  /** Whether the son is in the picture right now. */
-  get sonHere(): boolean {
-    return this.sonT >= 0;
+  private get walkOut(): number {
+    return this.occupant?.visitor?.kind === 'partner' ? PARTNER.walkOut : SON.walkOut;
   }
 
-  /** Which speech bubbles of the son's visit are up right now (the boy's and Papa's reply; never both). */
-  get sonBubbles(): { son: boolean; dad: boolean } {
-    const son = this.occupant?.son;
-    return { son: !!son?.bubble.visible, dad: !!son?.reply.visible };
+  private get visitTotal(): number {
+    return this.walkIn + this.visitPlan.talk + this.walkOut;
   }
 
-  /** Calls the son in at the next quiet moment. False when this room has no son. */
-  callSon(): boolean {
-    if (!this.occupant?.son) return false;
-    this.sonNext = Math.min(this.sonNext, 0);
+  /** Whether the visitor (son or wife) is in the picture right now. */
+  get visitorHere(): boolean {
+    return this.visitT >= 0;
+  }
+
+  /** Which speech bubbles of the visit are up right now (the visitor's and the occupant's reply; never both). */
+  get visitorBubbles(): { guest: boolean; host: boolean } {
+    const v = this.occupant?.visitor;
+    return { guest: !!v?.bubble.visible, host: !!v?.reply.visible };
+  }
+
+  /** Whether they hold each other right now (the wife's visit). */
+  get hugging(): boolean {
+    return this.hugK >= 1; // the arms are closed from `hugStart` to `hugEnd`
+  }
+
+  /** Calls the visitor in at the next quiet moment. False when this room has no visitor. */
+  callVisitor(): boolean {
+    if (!this.occupant?.visitor || this.visitT >= 0) return false; // one in the picture already: the call waits
+    this.visitNext = Math.min(this.visitNext, 0);
     return true;
   }
 
+  /** Dev: the visit runs on fast (everything in its order, nothing jumps) until the visitor has left. */
+  endVisit(): void {
+    if (this.visitT >= 0) this.visitSpeed = 5;
+  }
+
   get activityLabel(): string {
-    if (this.sonT >= 0) return 'Sohn will was';
+    if (this.visitT >= 0) return this.occupant?.visitor?.kind === 'partner' ? 'Marco wird umarmt' : 'Sohn will was';
     if (this.activity === 'sip' && this.style.drink === 'cocktail') return 'Cocktailpause';
     return ACTIVITY_LABEL[this.activity];
   }
@@ -1598,22 +1646,31 @@ export class HomeOffice {
     if (this.occupant) {
       this.scene.remove(this.occupant.rig.root);
       if (this.occupant.swimRig) this.scene.remove(this.occupant.swimRig.root);
-      if (this.occupant.son) {
+      if (this.occupant.visitor) {
         // the occupant is cached per person: a visit cut short must not come back with the next stay
-        this.occupant.son.rig.root.visible = this.occupant.son.bubble.visible = this.occupant.son.reply.visible = false;
-        this.scene.remove(this.occupant.son.rig.root, this.occupant.son.bubble, this.occupant.son.reply);
+        this.occupant.visitor.rig.root.visible = this.occupant.visitor.bubble.visible = this.occupant.visitor.reply.visible = false;
+        this.scene.remove(this.occupant.visitor.rig.root, this.occupant.visitor.bubble, this.occupant.visitor.reply);
       }
       for (const p of this.occupant.pets) this.scene.remove(p.rig.root);
       if (this.occupant.headset) this.occupant.rig.body.remove(this.occupant.headset);
       this.occupant.bundle.visible = false;
     }
+    const lastMember = this.member;
     this.member = member;
     this.hung = 0; // a new stay, a fresh rack
     this.pieces.forEach((m) => (m.visible = false));
     this.occupant = member ? occupantOf(member, fresh) : null;
     this.alter = !!this.occupant?.rig.setAlter && alter;
-    this.sonT = -1;
-    this.sonNext = rand(SON.gap);
+    // the same person again (Kurt and Marco swap places): the same stay, so the wife's chance is not drawn anew
+    const sameStay = !!member && member.id === lastMember?.id;
+    const cut = this.visitT >= 0;
+    this.visitT = -1;
+    this.visitSpeed = 1;
+    this.hugK = 0;
+    // the boy comes every so often; the wife about once in three stays, once (the dev event can call her again)
+    if (this.occupant?.visitor?.kind !== 'partner') this.visitNext = rand(SON.gap);
+    else if (!sameStay) this.visitNext = arianaVisitAt(fxRandom(), fxRandom());
+    else if (cut) this.visitNext = Infinity; // a visit cut short does not come back
     if (!this.occupant) return;
     const { rig, pets } = this.occupant;
     rig.setAlter?.(this.alter);
@@ -1637,7 +1694,7 @@ export class HomeOffice {
       this.occupant.headset ??= headset();
       rig.body.add(this.occupant.headset);
     }
-    if (this.occupant.son) this.scene.add(this.occupant.son.rig.root, this.occupant.son.bubble, this.occupant.son.reply);
+    if (this.occupant.visitor) this.scene.add(this.occupant.visitor.rig.root, this.occupant.visitor.bubble, this.occupant.visitor.reply);
     for (const p of pets) {
       p.rig.root.position.copy(p.spot);
       if (p.onDesk) p.rig.root.position.y = this.desk ?? p.spot.y; // on this room's desk top
@@ -1655,17 +1712,22 @@ export class HomeOffice {
    * different distances, feed tiles and the enlarged feed differ in shape): the webcams look along -z from in front of
    * the desk.
    */
-  private placeSon(son: NonNullable<Occupant['son']>): void {
+  private placeVisitor(visitor: NonNullable<Occupant['visitor']>): void {
     const cam = this.camera;
     cam.updateProjectionMatrix();
     cam.updateMatrixWorld();
-    const view = cam.getViewSize(Math.max(0.3, cam.position.z - SON_SPOT.z), this.sonView);
-    const x = -Math.max(SON_SPOT.clear, (view.x / 2) * SON_SPOT.frame);
-    this.sonAt.set(x, 0, SON_SPOT.z);
-    this.sonOff.set(-view.x / 2 - 0.6, 0, SON_SPOT.z);
-    this.placeBubble(son.bubble, x, SON_SPOT.head, view);
-    // Papa answers from his chair, the tail on his head
-    this.placeBubble(son.reply, SON_REPLY.x, this.occupant!.rig.headHeight - SIT_DROP, view);
+    const view = cam.getViewSize(Math.max(0.3, cam.position.z - SON_SPOT.z), this.visitView);
+    const partner = visitor.kind === 'partner';
+    // the boy stands well clear of Papa; the wife right beside the chair, close enough to hug
+    const x = partner ? -PARTNER.x : -Math.max(SON_SPOT.clear, (view.x / 2) * SON_SPOT.frame);
+    const head = partner ? visitor.rig.headHeight : SON_SPOT.head;
+    // the boy stands behind the desk's back edge; the wife beside the chair (so that it does not roll into her), he steps to her
+    const z = partner && this.chair ? this.seat.z - PARTNER.z : SON_SPOT.z;
+    this.visitAt.set(x, 0, z);
+    this.visitOff.set(-view.x / 2 - 0.6, 0, z);
+    this.placeBubble(visitor.bubble, x, head, view);
+    // the occupant answers from his chair, the tail on his head
+    this.placeBubble(visitor.reply, SON_REPLY.x, this.occupant!.rig.headHeight - SIT_DROP, view);
   }
 
   /** A speech bubble with its tail tip just above a head at (x, head). */
@@ -1677,68 +1739,114 @@ export class HomeOffice {
     bubble.scale.set(w, h, 1);
     bubble.position.set(x + (0.5 - BUBBLE_PX.tipX / BUBBLE_PX.w) * w, head + 0.04 + (BUBBLE_PX.tipY / BUBBLE_PX.h - 0.5) * h, SON_SPOT.z);
     // ... unless that pushes the bubble out of the top of the frame (the webcam looks down a little)
-    const top = this.sonTop.set(bubble.position.x, bubble.position.y + h / 2, SON_SPOT.z).project(cam).y;
+    const top = this.visitTop.set(bubble.position.x, bubble.position.y + h / 2, SON_SPOT.z).project(cam).y;
     if (top > SON_SPOT.frameTop) bubble.position.y -= ((top - SON_SPOT.frameTop) * view.y) / 2;
   }
 
   /** The son's visits: every so often (while Papa is just typing) he walks in, says something and leaves again. */
-  private updateSon(dt: number): void {
-    const son = this.occupant?.son;
+  private updateVisitor(dt: number): void {
+    const son = this.occupant?.visitor;
     if (!son) return;
-    if (this.sonT < 0) {
-      this.sonNext -= dt;
-      if (this.sonNext > 0 || this.activity !== 'type' || this.style.lapCam) return;
-      this.sonT = 0;
-      const line = SON_LINES[Math.floor(fxRandom() * SON_LINES.length)];
-      this.sonPlan = sonTimeline(line);
-      drawBubble(son.bubble, line.son);
-      drawBubble(son.reply, line.dad);
+    const partner = son.kind === 'partner';
+    if (this.visitT < 0) {
+      this.visitNext -= dt;
+      // the wife does not come while his alter ego sits there (Kurt, #32)
+      if (this.visitNext > 0 || this.activity !== 'type' || this.style.lapCam || (partner && this.alter)) return;
+      this.visitT = 0;
+      if (partner) {
+        const lines = isNightHour(this.hour) ? ARIANA_NIGHT_LINES : ARIANA_DAY_LINES;
+        const line = lines[Math.floor(fxRandom() * lines.length)];
+        this.visitPlan = arianaTimeline(line);
+        drawBubble(son.bubble, line.ari);
+        drawBubble(son.reply, line.marco);
+      } else {
+        const line = SON_LINES[Math.floor(fxRandom() * SON_LINES.length)];
+        this.visitPlan = sonTimeline(line);
+        drawBubble(son.bubble, line.son);
+        drawBubble(son.reply, line.dad);
+      }
       son.rig.root.visible = true;
-    } else if ((this.sonT += dt) >= this.sonTotal) {
-      this.sonT = -1;
-      this.sonNext = rand(SON.gap);
+    } else if ((this.visitT += dt * this.visitSpeed) >= this.visitTotal) {
+      this.visitT = -1;
+      this.visitSpeed = 1;
+      this.hugK = 0;
+      this.visitNext = partner ? Infinity : rand(SON.gap); // she comes once per stay
       son.rig.root.visible = false;
       son.bubble.visible = son.reply.visible = false;
       return;
     }
-    this.placeSon(son);
+    // the hug eases in and out (0 .. 1)
+    const hugAt = this.visitPlan.hugStart;
+    const u0 = this.visitT - this.walkIn;
+    this.hugK =
+      hugAt === undefined || u0 < hugAt - PARTNER.ease || u0 > this.visitPlan.hugEnd! + PARTNER.ease
+        ? 0
+        : Math.min(1, (u0 - (hugAt - PARTNER.ease)) / PARTNER.ease, (this.visitPlan.hugEnd! + PARTNER.ease - u0) / PARTNER.ease);
+    this.placeVisitor(son);
     const r = son.rig;
-    const T = this.sonT;
+    const T = this.visitT;
     const t = this.clock;
-    const plan = this.sonPlan;
-    const outAt = SON.walkIn + plan.talk;
-    const u = T - SON.walkIn; // seconds since he stands next to Papa
-    const walking = T < SON.walkIn || T >= outAt;
+    const plan = this.visitPlan;
+    const outAt = this.walkIn + plan.talk;
+    const u = T - this.walkIn; // seconds since he stands next to Papa
+    const walking = T < this.walkIn || T >= outAt;
     if (walking) {
-      const k = T < SON.walkIn ? T / SON.walkIn : 1 - (T - outAt) / SON.walkOut;
-      r.root.position.lerpVectors(this.sonOff, this.sonAt, k);
-      r.root.rotation.set(0, T < SON.walkIn ? Math.PI / 2 : -Math.PI / 2, 0);
-      const swing = Math.sin(t * 12) * 0.6;
+      const linear = T < this.walkIn ? T / this.walkIn : 1 - (T - outAt) / this.walkOut;
+      // the boy runs at one speed; she slows down coming up to him and sets off gently (easing both ways), and turns
+      // round on the spot before she walks out
+      const k = partner ? inOut(linear) : linear;
+      const pace = partner ? Math.min(1, 0.25 + 4 * linear * (1 - linear)) : 1;
+      r.root.position.lerpVectors(this.visitOff, this.visitAt, k);
+      const turnOut = partner ? Math.min(1, (T - outAt) / 0.7) : 1;
+      r.root.rotation.set(0, T < this.walkIn ? Math.PI / 2 : lerp(PARTNER.face, -Math.PI / 2, inOut(turnOut)), 0);
+      const gait = partner ? PARTNER.gait : 12;
+      const swing = Math.sin(t * gait) * (partner ? 0.35 : 0.6) * pace;
       r.legL.rotation.x = swing;
       r.legR.rotation.x = -swing;
       r.kneeL.rotation.x = r.kneeR.rotation.x = 0.15;
-      r.armL.rotation.set(-swing * 0.8, 0, 0);
-      r.armR.rotation.set(swing * 0.8, 0, 0);
+      const armSwing = partner ? 0.25 : 0.8; // a grown-up barely swings her arms, the boy does
+      r.armL.rotation.set(-swing * armSwing, 0, 0);
+      r.armR.rotation.set(swing * armSwing, 0, 0);
       r.elbowL.rotation.set(-0.2, 0, 0);
       r.elbowR.rotation.set(-0.2, 0, 0);
-      r.body.position.y = Math.abs(Math.sin(t * 12)) * 0.025;
+      r.body.position.y = Math.abs(Math.sin(t * gait)) * (partner ? 0.015 : 0.025);
       r.body.rotation.set(0, 0, 0);
     } else {
-      r.root.position.copy(this.sonAt);
-      r.root.rotation.set(0, SON_FACE, 0);
+      r.root.position.copy(this.visitAt);
+      r.root.rotation.set(0, partner ? PARTNER.face : SON_FACE, 0);
       r.legL.rotation.x = r.legR.rotation.x = 0;
       r.kneeL.rotation.x = r.kneeR.rotation.x = 0.05;
       // talks with a hand up towards Papa (tugging at his sleeve), then waves goodbye
-      const bye = u > plan.talk - SON_BYE;
-      r.armR.rotation.set(bye ? -0.3 : -1.1 + Math.sin(t * 7) * 0.18, 0, bye ? 1.2 : 0.15);
-      r.elbowR.rotation.set(bye ? 0 : -0.3, 0, bye ? 1.5 + Math.sin(t * 10) * 0.35 : 0);
+      const bye = !partner && u > plan.talk - SON_BYE;
+      if (partner) {
+        r.armR.rotation.set(0.05, 0, 0.1); // she stands with her arms down, no tugging at his sleeve
+        r.elbowR.rotation.set(-0.2, 0, 0);
+      } else {
+        r.armR.rotation.set(bye ? -0.3 : -1.1 + Math.sin(t * 7) * 0.18, 0, bye ? 1.2 : 0.15);
+        r.elbowR.rotation.set(bye ? 0 : -0.3, 0, bye ? 1.5 + Math.sin(t * 10) * 0.35 : 0);
+      }
       r.armL.rotation.set(0, 0, -0.08);
       r.elbowL.rotation.set(-0.1, 0, 0);
-      r.body.position.y = Math.abs(Math.sin(t * 5)) * 0.012;
-      r.body.rotation.set(0.05 + Math.sin(t * 3) * 0.03, 0, 0);
+      // the boy fidgets; she stands calmly, and holds still while they hug
+      const calm = partner ? 0.25 * (1 - this.hugK) : 1;
+      r.body.position.y = Math.abs(Math.sin(t * 5)) * 0.012 * calm;
+      r.body.rotation.set((partner ? 0.02 : 0.05) + Math.sin(t * 3) * 0.03 * calm, 0, 0);
+      if (this.hugK > 0) {
+        // arms round his neck and shoulders, leaning in
+        const k = this.hugK;
+        r.armL.rotation.set(lerp(r.armL.rotation.x, HUG_HER.x, k), 0, lerp(r.armL.rotation.z, -HUG_HER.z, k));
+        // her right hand pats his back a little
+        r.armR.rotation.set(lerp(r.armR.rotation.x, HUG_HER.x + Math.sin(t * 3) * 0.24, k), 0, lerp(r.armR.rotation.z, HUG_HER.z, k));
+        r.elbowL.rotation.set(lerp(r.elbowL.rotation.x, HUG_HER.e, k), 0, 0);
+        r.elbowR.rotation.set(lerp(r.elbowR.rotation.x, HUG_HER.e, k), 0, 0);
+        r.body.rotation.x += PARTNER.lean * k;
+      }
     }
-    // the boy speaks first, Papa answers once his bubble is gone, then the boy waves
-    son.bubble.visible = !walking && u < plan.sonEnd;
+    // the visitor speaks first, he answers once the bubble is gone (a wife's visit goes on with the hug), then the visitor waves
+    const speaking = partner ? u >= -SPEAK_LEAD && u < plan.sonEnd && T < outAt : !walking && u < plan.sonEnd;
+    // she starts to speak on her way in: the bubble walks with her
+    if (partner && speaking) this.placeBubble(son.bubble, r.root.position.x, r.headHeight, this.visitView);
+    son.bubble.visible = speaking;
     son.reply.visible = !walking && u >= plan.dadStart && u < plan.dadEnd;
   }
 
@@ -1786,8 +1894,8 @@ export class HomeOffice {
     this.clock += dt;
     this.actT += dt;
     this.actLeft -= dt;
-    this.updateSon(dt);
-    if (this.sonT >= 0) this.actLeft = Math.max(this.actLeft, 0.5); // he has Papa's full attention
+    this.updateVisitor(dt);
+    if (this.visitT >= 0) this.actLeft = Math.max(this.actLeft, 0.5); // he has Papa's full attention
     if (this.actLeft <= 0) {
       const skip: readonly string[] = this.member?.skipBreaks ?? [];
       const pool: Activity[] = ACTIVITIES.filter((b) => !skip.includes(b));
@@ -2059,18 +2167,60 @@ export class HomeOffice {
     }
     if (a !== 'laundry') o0.bundle.visible = false;
     for (const [i, m] of this.pieces.entries()) m.visible = i < this.hung;
-    if (this.sonT >= 0) {
-      // turns to the boy while he stands there, nods along
-      const near = Math.min(1, this.sonT / SON.walkIn, (this.sonTotal - this.sonT) / SON.walkOut);
+    if (this.visitT >= 0) {
+      const partner = this.occupant.visitor?.kind === 'partner';
+      // how far he has turned to the visitor, rolled back from the desk, got up, and put his hands down to listen (each 0 .. 1)
+      let turn: number, back: number, up = 0, arms: number;
+      let glance = 0; // a quick look over the shoulder before the chair turns (body twist)
+      let forward = 0; // leans forward to push himself up, and back again after sitting down
+      if (partner) {
+        // her visit, in order: she walks in and he keeps typing; he glances up; she stops and speaks, he has turned a little;
+        // he rolls back, answers and gets up; they hug; he sits down and rolls back to the desk while she walks out.
+        // Nothing moves linearly or all at once: every part has its own start, speed and ease
+        const u = this.visitT - this.walkIn;
+        const pl = this.visitPlan;
+        const hs = pl.hugStart!;
+        const he = pl.hugEnd!;
+        const sm = (a: number, b: number) => ramp(u, a, b);
+        const lead = -SPEAK_LEAD; // she starts to speak this many seconds before she stops
+        glance = outQ(sm(lead - 0.2, lead + 0.6)) * (1 - inOut(sm(-0.6, 0.4)));
+        turn =
+          PARTNER.turnFirst * outQ(sm(lead + 0.3, 0.9)) * (1 - gentle(sm(he + 0.6, he + 1.8))) +
+          (1 - PARTNER.turnFirst) * gentle(sm(-0.3, 1.4)) * (1 - gentle(sm(he + 0.4, he + 1.5)));
+        // the chair is pushed back with one shove while he starts to answer and glides on to where she stands
+        back =
+          PARTNER.backFirst * outQ(sm(-0.4, 0.9)) * (1 - gentle(sm(he + 0.7, he + 1.9))) +
+          (1 - PARTNER.backFirst) * inOut(sm(0.6, hs - 0.6)) * (1 - gentle(sm(he + 0.7, he + 1.9)));
+        // leans forward first, then pushes up (slowly, then quickly), and sits down more softly than he got up
+        forward = inOut(sm(hs - 1.9, hs - 1.2)) * (1 - inOut(sm(hs - 0.9, hs - 0.3))) + 0.6 * inOut(sm(he + 0.6, he + 1.0)) * (1 - inOut(sm(he + 1.0, he + 1.5)));
+        // the legs take a moment to push, then he shoots up and settles: a quick start, not a steady rise
+        const push = sm(hs - 1.0, hs - 0.15);
+        up = outQ(push) * (1 - inOut(sm(he + 0.3, he + 1.2)));
+        // his hands leave the keys as he glances over and stay off until he has sat down again
+        arms = outQ(sm(lead - 0.2, lead + 0.6)) * (1 - gentle(sm(he + 0.9, he + 2.0)));
+      } else {
+        // turns to the boy while he stands there, nods along
+        turn = back = arms = Math.min(1, this.visitT / this.walkIn, (this.visitTotal - this.visitT) / this.walkOut);
+      }
       if (this.chair && !recl && !stand) {
-        // rolls back from the desk and swivels round to him
-        chairTurn = SON_TURN * near;
-        chairBack = Math.max(chairBack, SON_SPOT.roll * near);
-      } else yaw = SON_TURN * near;
+        // rolls back from the desk and swivels round to her / him
+        chairTurn = SON_TURN * turn;
+        chairBack = Math.max(chairBack, (partner ? PARTNER.roll : SON_SPOT.roll) * back);
+      } else yaw = SON_TURN * turn;
+      yaw += SON_TURN * 0.3 * glance;
+      lean += 0.22 * forward;
+      if (partner && !recl && !stand) stand = up; // gets up for the hug (from the chair, the sofa, wherever he sits) and sits down again after
       // stops typing and listens
-      Object.assign(L, mixPose(L, SON_LISTEN, near));
-      Object.assign(R, mixPose(R, SON_LISTEN, near));
-      lean += 0.04 * near + Math.sin(t * 2.4) * 0.015 * near;
+      const listen = partner ? PARTNER_LISTEN : SON_LISTEN;
+      Object.assign(L, mixPose(L, listen, arms));
+      Object.assign(R, mixPose(R, listen, arms));
+      lean += 0.04 * arms + Math.sin(t * 2.4) * 0.015 * arms * (1 - this.hugK); // he holds still while they hug
+      if (this.hugK > 0) {
+        // holds her round the waist, leaning towards her
+        Object.assign(L, mixPose(L, HUG_HIM, this.hugK));
+        Object.assign(R, mixPose(R, HUG_HIM, this.hugK));
+        lean += 0.01 * this.hugK;
+      }
     }
     const tilt = recl;
     ease(this.poseL, L, k);
@@ -2115,6 +2265,13 @@ export class HomeOffice {
     }
     if (chairTurn) r.root.rotation.y = chairTurn;
     if (chairBack) r.root.position.z -= chairBack;
+    if (this.visitT >= 0 && this.occupant.visitor?.kind === 'partner' && stand > 0) {
+      // up out of the rolled-back chair, a step towards her, facing her
+      const from = this.standFrom.copy(this.seat).setZ(this.seat.z - chairBack);
+      const to = this.standTo.set(-PARTNER.x + PARTNER.meet, from.y, this.visitAt.z);
+      r.root.position.lerpVectors(from, to, stand);
+      r.root.rotation.y = lerp(chairTurn, -PARTNER.stand, stand);
+    }
     if (this.style.lapCam) this.aimLapCam(r);
 
     const o = this.occupant;

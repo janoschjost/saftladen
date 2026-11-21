@@ -172,8 +172,8 @@ export class Game {
   private glassSort = new GlassSort(this.scene);
   private bubbles = new Bubbles(this.scene, this.glassSort);
   private bubbleClock = 0;
-  /** dev: how many times the son was called into the home office (`HomeOffice.callSon` takes it from here) */
-  private sonCalls = 0;
+  /** dev: whose visitor (son, wife) was called into the home office; `HomeOffice.callVisitor` takes it from here */
+  private visitorCalls = new Set<string>();
   private keys = new Set<string>();
   /** Shift is down (fallback when the Shift keydown went missing, e.g. pressed before the window had focus) */
   private shift = false;
@@ -955,8 +955,40 @@ export class Game {
         // a remote day again: his plan sends him to the home office (a room is freed if need be), the son comes once he is there
         this.sim.presence.setVisit(p, false);
         this.release(p);
-        this.sonCalls++;
+        this.visitorCalls.add(p.id);
         return strings.presence.event.sonComes(first(p));
+      },
+    });
+    // Ariana's visit (#281): Marco is in a home-office room (sent there straight away if need be), she comes at the next quiet moment
+    this.sim.events.register({
+      id: 'ariana-hug',
+      group,
+      label: 'Ariana kommt zu Marco ins Homeoffice',
+      run: () => {
+        const p = this.sim.people.find((o) => o.member.partner);
+        if (!p || p.presence === 'leaving' || p.presence === 'returning') return null;
+        if (p.presence === 'in') {
+          if (!this.sim.presence.free(p) || !this.sim.presence.roomFor(p)) return null;
+          this.sim.drop(p);
+          this.release(p);
+          this.sim.presence.awayNow(p, 'home', 240);
+        } else if (p.awayKind !== 'home') return null;
+        p.homeAlter = false; // Marco himself, not Kurt
+        this.visitorCalls.add(p.id);
+        return `${first(p)} wird besucht`;
+      },
+    });
+    this.sim.events.register({
+      id: 'ariana-hug-end',
+      group,
+      label: 'Ariana geht wieder',
+      asIs: true,
+      run: () => {
+        const p = this.sim.people.find((o) => o.member.partner);
+        const home = this.homes.find((h) => h?.visitorHere && h.occupantId === p?.id);
+        if (!home) return null;
+        home.endVisit();
+        return 'Ariana geht wieder';
       },
     });
     // Christian's night visit (#255): the ghost cleans the mess; with none lying around he gets some. Starting him ends the model check, and the model check ends him
@@ -2329,8 +2361,9 @@ export class Game {
       const home = (this.homes[v] ??= new HomeOffice(v));
       if (who && (home.occupantId !== who.id || home.alter !== who.homeAlter)) home.setOccupant(who.member, false, who.homeAlter);
       else if (!who && home.occupied) home.setOccupant(null);
-      if (who && this.sonCalls > 0 && home.callSon()) this.sonCalls--;
+      if (who && this.visitorCalls.has(who.id) && home.callVisitor()) this.visitorCalls.delete(who.id);
       if (who) {
+        home.hour = this.sim.tod.hour;
         home.update(dt);
         this.feeds.setActivity(who.id, home.activityLabel);
       }

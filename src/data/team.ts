@@ -58,6 +58,11 @@ const sons: Record<string, Look> = {
   'zlatko-pesic': { skin: FAIR, hair: '#e9cf86', style: 'short', tee: true, shorts: true, top: '#d94b3a', bottom: JEANS, heightM: 1.05, build: 0.8 },
 };
 
+// Marco Rieser's wife Ariana (comes into his home office, #281): 1.65 m, blond hair to the shoulders, blue eyes
+const partners: Record<string, Look> = {
+  'marco-rieser': { skin: FAIR, hair: '#b7935a', streaks: '#c3a068', style: 'long', lipColor: '#c98079', blush: '#e88c86', mouthDrop: 0.025, smile: true, eyebrows: true, top: '#6d7650', bottom: '#3d5a80', heightM: 1.65, build: 0.9 },
+};
+
 const fallback: Look = { skin: LIGHT, hair: '#4a3426', style: 'short', top: '#9aa7b5', bottom: '#2b2e36' };
 
 // Dogs that appear in the portraits
@@ -116,6 +121,7 @@ const swimLooks: Record<string, Partial<Look>> = {
 const homeRooms: Record<string, HomeRoom> = {
   'marco-hefti': 'beach',
   'martin-fuchs': 'safari',
+  'marco-rieser': 'scandi', // a swivel chair and free floor beside it: Ariana's visit finds room (#281)
 };
 
 // signature moves in the home office (optional, happen now and then)
@@ -220,6 +226,7 @@ export const team: TeamMember[] = raw.map((p) => ({
   speed: speeds[p.id],
   adhd: adhd.has(p.id),
   son: sons[p.id],
+  partner: partners[p.id],
   homebody: homebodies.has(p.id),
   schedule: { ...CORE_HOURS, ...schedules[p.id] },
   alterEgo: alterEgos[p.id],
