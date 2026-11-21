@@ -37,6 +37,16 @@ const smooth = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 
+/** 0 = dark night .. 1 = full daylight at a clock hour (what `TimeOfDay.day` follows). */
+export function daylight(hour: number): number {
+  return smooth(5, 8, hour) * (1 - smooth(17.5, 21, hour));
+}
+
+/** The light of a place with the opposite day (a gag: Marco Hefti's beach room): the game's, 12 hours on. Read-only, no effect on the game. */
+export function oppositeDaylight(hour: number): number {
+  return daylight((((hour + 12) % 24) + 24) % 24);
+}
+
 export function hourOf(cycle: number): number {
   for (let i = 1; i < ANCHORS.length; i++) {
     const [c1, h1] = ANCHORS[i];
@@ -138,7 +148,7 @@ export class TimeOfDay {
 
   private refresh(): void {
     this.hour = hourOf(this.cycle);
-    this.day = smooth(5, 8, this.hour) * (1 - smooth(17.5, 21, this.hour));
+    this.day = daylight(this.hour);
     if (!this.night && this.day < 0.35) this.night = true;
     else if (this.night && this.day > 0.55) this.night = false;
     this.tired = 0.08 + 0.92 * (1 - this.day);
@@ -156,11 +166,11 @@ export interface SkyRig {
 const NIGHT_BG = new THREE.Color('#0f1329');
 const SUN_WHITE = new THREE.Color('#ffffff');
 const SUN_LOW = new THREE.Color('#ffb070');
-const MOON = new THREE.Color('#8fa8ff');
+export const MOON = new THREE.Color('#8fa8ff');
 const SKY_DAY = new THREE.Color('#ffffff');
-const SKY_NIGHT = new THREE.Color('#5a6fb8');
+export const SKY_NIGHT = new THREE.Color('#5a6fb8');
 const GROUND_DAY = new THREE.Color('#c9b8a4');
-const GROUND_NIGHT = new THREE.Color('#1b2036');
+export const GROUND_NIGHT = new THREE.Color('#1b2036');
 const tmp = new THREE.Color();
 const tmp2 = new THREE.Color();
 
