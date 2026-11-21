@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { ball, box, cyl, merge, propMaterial } from './geo';
 import { OFFICE_D } from './officeModel';
 import { WORLD } from './World';
+import { TREES } from '../game/xmasTrees';
 
 const BULB = 0.06;
 const PALETTE = ['#ff3b3b', '#ffd23f', '#3fb6ff', '#5cff7a', '#ff7ad9', '#ffffff'].map((c) => new THREE.Color(c));
@@ -11,12 +12,6 @@ interface Strand {
   to: THREE.Vector3;
   sag: number;
 }
-
-/** Where the christmas trees stand (game coordinates, x / z). */
-const TREES: Array<{ x: number; z: number; s: number }> = [
-  { x: 5.4, z: 12.6, s: 1.15 },
-  { x: 37.6, z: 11.6, s: 0.9 },
-];
 
 /** Christmas decorations: trees with presents, blinking light strands along the walls, wreaths. Built once, shown with `setVisible`. */
 export class XmasDecor {
