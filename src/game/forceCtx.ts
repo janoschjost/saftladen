@@ -18,7 +18,7 @@ export function simForceCtx(sim: Sim, release: (p: Person) => void): ForceCtx<Pe
       return true;
     },
     away: (p, kind) => {
-      if (p.presence !== 'in' || p.talk || (kind === 'home' && sim.presence.homeFull && !p.member.homebody)) return false;
+      if (p.presence !== 'in' || p.talk || (kind === 'home' && sim.presence.homeFull)) return false;
       release(p);
       sim.presence.send(p, kind, sim.nav);
       return p.presence !== 'in';

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { team } from '../data/team';
-import type { TeamMember } from '../data/types';
+import { HOME_ROOMS, type TeamMember } from '../data/types';
 import type { NavGrid } from './NavGrid';
 import type { AwayKind, Person } from './Person';
 import { transformsOnLeave } from './AlterEgo';
@@ -126,8 +126,8 @@ interface Sample {
   states: string;
 }
 
-/** Runs one working day from `from` to `to` o'clock with a fixed seed; samples every simulated second. */
-function runDay(seed: number, from = 5, to = 23, raining = false) {
+/** Runs one working day from `from` to `to` o'clock with a fixed seed; samples every simulated second, `each` sees every step. */
+function runDay(seed: number, from = 5, to = 23, raining = false, each?: (hour: number, people: Stub[], presence: Presence) => void) {
   setSeed(seed);
   let cycle = cycleAt(from);
   const clock = { hour: hourOf(cycle) };
@@ -143,6 +143,7 @@ function runDay(seed: number, from = 5, to = 23, raining = false) {
     for (const p of people) p.update(STEP);
     cycle += STEP / CYCLE_SECONDS;
     clock.hour = hourOf(cycle);
+    each?.(clock.hour, people, presence);
     if ((t += STEP) >= 1) {
       t -= 1;
       const home = people.filter((p) => p.awayKind === 'home' && p.presence === 'out');
@@ -158,6 +159,26 @@ function runDay(seed: number, from = 5, to = 23, raining = false) {
     }
   }
   return { samples, plans, people, presence, nav };
+}
+
+/** The whole team at home at `hour` on a stopped clock; `run(seconds)` steps the simulation. */
+function office(seed: number, hour: number) {
+  setSeed(seed);
+  const tod = new TimeOfDay();
+  tod.auto = false;
+  tod.setCycle(cycleOf(hour));
+  const people = team.map((m) => new Stub(m));
+  for (const p of people) p.startAway('off', 9999);
+  const presence = new Presence(people as unknown as Person[], tod, { raining: false } as Weather);
+  const nav = {} as NavGrid;
+  const run = (seconds: number) => {
+    for (let t = 0; t < seconds; t += STEP) {
+      presence.update(STEP, nav);
+      for (const p of people) p.update(STEP);
+    }
+  };
+  const plans = () => new Map(presence.schedule.map((s) => [s.id, s]));
+  return { tod, people, presence, run, plans };
 }
 
 describe('presence', () => {
@@ -229,7 +250,7 @@ describe('presence', () => {
       // before the first lunch, so every errand is a plain one (lunch ones are shorter: 22-45 s)
       const { people, plans } = runDay(seed, 5, 11.1);
       expect(Math.min(...[...plans.values()].map((p) => p.lunch))).toBeGreaterThan(11.1);
-      for (const { kind, seconds, cut } of people.filter((p) => !p.member.homebody).flatMap((p) => p.spells)) {
+      for (const { kind, seconds, cut } of people.flatMap((p) => p.spells)) {
         if (cut) continue; // called back early, held by the office cap or kept out: not the drawn length
         spells++;
         const [min, max] = kind === 'errand' ? [25, 70] : [90, 220];
@@ -291,7 +312,7 @@ describe('presence', () => {
 
   /** A day run to 11:00 (the clock then stands still) with exactly 15 in: whoever is missing to 15 is back at the desk already. */
   function fullOffice(seed: number) {
-    const { people, presence, nav } = runDay(seed, 5, 11);
+    const { people, presence, nav, plans } = runDay(seed, 5, 11);
     const step = () => {
       presence.update(STEP, nav);
       for (const p of people) p.update(STEP);
@@ -299,7 +320,8 @@ describe('presence', () => {
     const present = () => people.filter((p) => p.presence === 'in' || p.presence === 'returning').length;
     const left = () => people.reduce((n, p) => n + p.leaves.length, 0);
     for (const p of people) {
-      if (present() >= 15 || p.presence !== 'out' || p.awayKind === 'off') continue;
+      // a remote worker on a remote day is not put in: his plan would send him straight back to his home office
+      if (present() >= 15 || p.presence !== 'out' || p.awayKind === 'off' || plans.get(p.id)!.remote) continue;
       p.presence = 'in';
       p.awayKind = null;
     }
@@ -433,8 +455,76 @@ describe('presence', () => {
     // everybody else comes in every day
     for (const seed of [1, 2, 3]) {
       const { plans } = runDay(seed, 5, 5.1);
-      for (const [id, plan] of plans) if (id !== 'zlatko-pesic' && id !== 'martin-fuchs') expect(plan.remote, id).toBe(false);
+      for (const [id, plan] of plans) if (team.find((m) => m.id === id)!.schedule.visitChance === undefined) expect(plan.remote, id).toBe(false);
     }
+  });
+
+  describe('Marco Hefti (#283)', () => {
+    const id = 'marco-hefti';
+    const idx = team.findIndex((m) => m.id === id);
+    const at = (s: { states: string }) => s.states.slice(idx * 2, idx * 2 + 2);
+    /** his plan on the day rolled with `seed` (plans are rolled when Presence is built: no step needed) */
+    const planOf = (seed: number) => office(seed, 5).plans().get(id)!;
+    const seeds = Array.from({ length: 200 }, (_, i) => i + 1);
+
+    it('presence.remote-visit: in the office on about one day in twenty, working from 09:30 to about 03:30', () => {
+      expect(team[idx].schedule.visitChance).toBe(0.05);
+      const all = seeds.map(planOf);
+      const visits = all.filter((p) => !p.remote).length;
+      expect(visits).toBeGreaterThan(0);
+      expect(visits / all.length).toBeLessThan(0.12);
+      for (const p of all) {
+        expect(Math.abs(p.arrive - 9.5)).toBeLessThanOrEqual(0.4);
+        expect(Math.abs(p.end - 27.5)).toBeLessThanOrEqual(0.55);
+        expect(p.end).toBeLessThan(28); // over before the next day starts at 04:00
+      }
+    });
+
+    it('presence.remote-visit: a remote day is spent in his beach room for all of his hours, never through the door', () => {
+      const remoteSeed = seeds.find((s) => planOf(s).remote)!;
+      for (const seed of seeds.filter((s) => planOf(s).remote).slice(0, 2)) {
+        const { samples, plans } = runDay(seed, 5, 23.9);
+        const plan = plans.get(id)!;
+        const during = samples.filter((s) => s.hour > plan.arrive + 0.05);
+        expect(during.length).toBeGreaterThan(0);
+        for (const s of during) expect(at(s), `seed ${seed} at ${s.hour.toFixed(2)}`).toBe('oh');
+        for (const s of samples) expect(at(s)[0], `seed ${seed}`).not.toMatch(/[ir]/);
+      }
+      // after midnight he is still at it (01:00 = 25 on the working day's clock)
+      const { people, presence, run } = office(remoteSeed, 1);
+      expect(presence.schedule.find((o) => o.id === id)!.remote).toBe(true);
+      run(2);
+      const p = people[idx];
+      expect([p.presence, p.awayKind, p.homeVariant]).toEqual(['out', 'home', HOME_ROOMS.indexOf('beach')]);
+    });
+
+    it('presence.remote-visit + presence.remote-greet: on a visit day he comes in, is greeted once, works at his desk until the evening and then from his beach room', () => {
+      const visitSeed = seeds.find((s) => !planOf(s).remote)!;
+      expect(visitSeed).toBeDefined();
+      let inAt = -1;
+      let greetings = 0;
+      let homeAt = -1;
+      const { plans, people } = runDay(visitSeed, 5, 23.9, false, (hour, people, presence) => {
+        const p = people[idx];
+        if (p.presence === 'in' && inAt < 0) inAt = hour;
+        // the welcome is claimed the moment he walks in (as Welcome does), and only once
+        if (p.presence === 'in' && presence.claimGreeting(p as unknown as Person)) {
+          greetings++;
+          expect(hour - inAt).toBeLessThan(0.01);
+        }
+        if (inAt >= 0 && homeAt < 0 && p.presence === 'out' && p.awayKind === 'home') homeAt = hour;
+        if (homeAt >= 0) expect([p.presence, p.awayKind]).toEqual(['out', 'home']);
+      });
+      const plan = plans.get(id)!;
+      expect(plan.remote).toBe(false);
+      const p = people[idx];
+      expect(inAt).toBeGreaterThanOrEqual(plan.arrive);
+      expect(inAt).toBeLessThan(plan.arrive + 0.5);
+      expect(greetings).toBe(1);
+      expect(homeAt).toBeGreaterThanOrEqual(plan.leave);
+      expect(homeAt).toBeLessThan(plan.leave + 0.5);
+      expect(p.homeVariant).toBe(HOME_ROOMS.indexOf('beach'));
+    });
   });
 
   it('presence.remote-visit: Martin is mostly remote (more days at home than in the office) and works in the safari room', () => {
@@ -487,26 +577,6 @@ describe('presence', () => {
 });
 
 describe('time jumps', () => {
-  /** The whole team at home at `hour` on a stopped clock; `run(seconds)` steps the simulation. */
-  function office(seed: number, hour: number) {
-    setSeed(seed);
-    const tod = new TimeOfDay();
-    tod.auto = false;
-    tod.setCycle(cycleOf(hour));
-    const people = team.map((m) => new Stub(m));
-    for (const p of people) p.startAway('off', 9999);
-    const presence = new Presence(people as unknown as Person[], tod, { raining: false } as Weather);
-    const nav = {} as NavGrid;
-    const run = (seconds: number) => {
-      for (let t = 0; t < seconds; t += STEP) {
-        presence.update(STEP, nav);
-        for (const p of people) p.update(STEP);
-      }
-    };
-    const plans = () => new Map(presence.schedule.map((s) => [s.id, s]));
-    return { tod, people, presence, run, plans };
-  }
-
   it('time.jump: jumping into the working day brings the people on duty in through the door', () => {
     const { tod, people, run, plans } = office(1, 23.5);
     run(1);

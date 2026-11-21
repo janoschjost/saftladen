@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { installHeadlessDom } from '../test/headlessDom';
+import { hasOwnRoom } from '../data/homeAssignments';
 import { GROUP, office, run } from '../test/office';
 import type { Person } from './Person';
 import type { Sim } from './Sim';
@@ -75,8 +76,8 @@ describe('select.actions: Homeoffice / Rausschicken on the card while the person
   it('select.actions: the refusal says why: a scene holds them (busy), or no home office is free (homeFull), busy first', () => {
     const { sim, a } = two();
     expect(sim.presence.refusal(a, 'home')).toBeNull();
-    // every home office taken (by people who are away anyway)
-    for (const p of sim.people.filter((o) => o !== a).slice(0, 8)) sim.scenario.put(p.id, 'home', 'free');
+    // every regular home office taken (by people who are away anyway; an own room like the beach takes none of them)
+    for (const p of sim.people.filter((o) => o !== a && !hasOwnRoom(o.id)).slice(0, 8)) sim.scenario.put(p.id, 'home', 'free');
     expect(sim.presence.homeFull).toBe(true);
     expect(sim.presence.refusal(a, 'errand')).toBeNull();
     expect(sim.presence.refusal(a, 'home')).toBe('homeFull');
