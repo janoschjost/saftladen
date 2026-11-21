@@ -146,9 +146,6 @@ const snackers = new Set(['jan-hasler']);
 // step out onto the porch for a cigarette now and then (#169)
 const smokers = new Set(['jannik-stibi', 'sandro-hagen', 'ramon-lenherr', 'delya-kohler', 'jeerapat-wang']);
 
-// in the home office a lot, never out on errands
-const homebodies = new Set(['marco-hefti']);
-
 // people with ADHD: restless, short attention span (see Person.ts)
 const adhd = new Set(['delya-kohler', 'sandro-hagen']);
 
@@ -158,7 +155,9 @@ export const CORE_HOURS: Schedule = { arrive: 8, leave: 17.5, lunch: 12, nightOw
 // Habitual office hours per person (clock hours, 7.5 = 07:30); anything left out falls back to CORE_HOURS.
 // arrive / leave / lunch get a random jitter every day, nightOwlChance is the chance per day to stay on for a night shift.
 const schedules: Record<string, Partial<Schedule>> = {
-  'marco-hefti': { arrive: 9.5, leave: 18.5, lunch: 13 },
+  // lives in Thailand: works remotely, in the office on about one day in twenty (#283); about 18 hours a day, from
+  // 09:30 to 03:30 on the Swiss clock, on a visit day at the desk until the evening and then from his beach room
+  'marco-hefti': { arrive: 9.5, leave: 18.5, end: 27.5, lunch: 13, nightHome: true, visitChance: 0.05 },
   'donata-manser': { arrive: 8.5, leave: 17.5 },
   'marco-rieser': { arrive: 9, leave: 18, lunch: 12.5, nightOwlChance: 0.3, nightHome: true },
   'andrea-eichmann': { arrive: 7.5, leave: 17 },
@@ -227,7 +226,6 @@ export const team: TeamMember[] = raw.map((p) => ({
   adhd: adhd.has(p.id),
   son: sons[p.id],
   partner: partners[p.id],
-  homebody: homebodies.has(p.id),
   schedule: { ...CORE_HOURS, ...schedules[p.id] },
   alterEgo: alterEgos[p.id],
 }));

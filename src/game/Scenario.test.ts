@@ -74,7 +74,7 @@ describe('dev.scene', () => {
 
   it('dev.scene: somebody sent out is gone at once and stays out for 5 minutes, released they come back', () => {
     const sim = office();
-    const c = sim.people.find((p) => p.inOffice && !p.member.homebody)!;
+    const c = sim.people.find((p) => p.inOffice)!;
     sim.scenario.put(c.id, 'errand');
     expect(c.presence).toBe('out');
     expect(c.awayKind).toBe('errand');
@@ -123,7 +123,7 @@ describe('dev.scene', () => {
     const next = random();
 
     const sim = office(1, 10);
-    const inside = sim.people.filter((p) => p.inOffice && !p.member.homebody);
+    const inside = sim.people.filter((p) => p.inOffice);
     const [a, b, c] = [inside[0], sim.people.find((p) => p.presence === 'out')!, inside[1]];
     sim.scenario.put(a.id, 'desk');
     sim.scenario.put(b.id, 'desk', 'stay');

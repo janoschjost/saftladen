@@ -1,5 +1,5 @@
 import { HOME_COUNT } from '../render/homeOffice';
-import { homeRoomOf, reservedRooms } from '../data/homeAssignments';
+import { hasOwnRoom, homeRoomOf, reservedRooms } from '../data/homeAssignments';
 import { DOOR_LANES } from './Door';
 import type { NavGrid } from './NavGrid';
 import type { Person } from './Person';
@@ -20,8 +20,6 @@ const MAX_HOME = HOME_COUNT; // one live feed per home office variant
 const CHECK = [2, 6]; // seconds between departure decisions
 const ERRAND = [25, 70]; // seconds out for a coffee / parcel
 const HOME = [90, 220]; // seconds of working from home
-/** homebodies (see TeamMember.homebody): picked this much more often, stay this much longer, likely home at start */
-const HOMEBODY = { weight: 6, stay: 2, startHome: 0.75 };
 
 /** The working day rolls over at this hour: everybody gets a fresh plan. Hours after midnight count on (01:00 = 25). */
 export const DAY_START = 4;
@@ -159,8 +157,9 @@ export class Presence {
     return this.people.filter((p) => p.presence !== 'in');
   }
 
+  /** People in one of the regular (shared) home offices; own rooms (beach, safari) take none of them. */
   get homeCount(): number {
-    return this.people.filter((p) => p.awayKind === 'home').length;
+    return this.people.filter((p) => p.awayKind === 'home' && p.homeVariant < HOME_COUNT).length;
   }
 
   /** Today's hours of one person: their habitual times plus some jitter, now and then a night shift. */
@@ -169,9 +168,11 @@ export class Presence {
     const arrive = s.arrive + jitter(JITTER.arrive);
     const leave = Math.max(arrive + 2, s.leave + jitter(JITTER.leave));
     const remote = s.visitChance !== undefined && random() >= s.visitChance;
-    const lunch = p.member.homebody || remote || random() < LUNCH.skip ? Infinity : s.lunch + jitter(JITTER.lunch);
-    const night = !remote && random() < s.nightOwlChance;
-    return { arrive, leave, end: night ? Math.max(leave + 1, between(NIGHT_END)) : leave, lunch, lunched: false, night, remote, greeted: false };
+    const lunch = remote || random() < LUNCH.skip ? Infinity : s.lunch + jitter(JITTER.lunch);
+    // a long day every day (Schedule.end: from the home office after `leave`) counts as a night shift
+    const night = s.end !== undefined || (!remote && random() < s.nightOwlChance);
+    const late = () => (s.end !== undefined ? Math.min(s.end + jitter(JITTER.leave), DAY_START + 24 - 0.1) : between(NIGHT_END)); // done before 04:00
+    return { arrive, leave, end: night ? Math.max(leave + 1, late()) : leave, lunch, lunched: false, night, remote, greeted: false };
   }
 
   /** A new working day: fresh plans for everybody, on some days a crunch keeps a few more people in for the night. */
@@ -184,7 +185,7 @@ export class Presence {
     for (const p of this.people) this.plans.set(p, this.roll(p));
     this.rollPets();
     if (random() >= CRUNCH.chance) return;
-    const pool = this.people.filter((p) => !p.member.homebody && !this.plans.get(p)!.night && !this.plans.get(p)!.remote).sort(() => random() - 0.5);
+    const pool = this.people.filter((p) => !this.plans.get(p)!.night && !this.plans.get(p)!.remote).sort(() => random() - 0.5);
     for (const p of pool.slice(0, Math.round(between(CRUNCH.people)))) {
       const plan = this.plans.get(p)!;
       plan.night = true;
@@ -248,7 +249,9 @@ export class Presence {
     this.overridden.delete(p);
     // from now on, for a few hours at least
     plan.arrive = Math.min(plan.arrive, this.workHour - 0.01);
-    plan.end = plan.leave = Math.max(plan.leave, this.workHour + 3);
+    plan.leave = Math.max(plan.leave, this.workHour + 3);
+    // a day that runs on from the home office (Schedule.end: Marco Hefti) keeps its evening there; everybody else is done when they leave
+    plan.end = p.member.schedule.end !== undefined ? Math.max(plan.end, plan.leave) : plan.leave;
     plan.lunch = Infinity;
     if (visit) this.nightHomers.delete(p); // an ordinary return through the door, not a night shift ending
   }
@@ -261,11 +264,15 @@ export class Presence {
     });
   }
 
-  /** The person's own room (special or assigned), else a free one that nobody else has reserved, else any free one. */
+  /**
+   * The person's own room (special, or an assigned regular one nobody else sits in right now), else a free one that
+   * nobody else has reserved, else any free one. (Sent by hand they take their assigned room anyway: `send`.)
+   */
   private freeVariant(p: Person): number {
-    const own = homeRoomOf(p.id);
-    if (own !== null) return own; // their room from the team data or the character view (Marco: the beach in Thailand)
+    if (hasOwnRoom(p.id)) return homeRoomOf(p.id)!; // their own room (Marco Hefti: the beach in Thailand)
+    const own = homeRoomOf(p.id); // assigned in the team data or the character view
     const used = new Set(this.people.filter((o) => o !== p && o.awayKind === 'home').map((o) => o.homeVariant));
+    if (own !== null && !used.has(own)) return own;
     const reserved = reservedRooms(p.id);
     for (const skipReserved of [true, false]) {
       for (let i = 0; i < HOME_COUNT; i++) {
@@ -315,22 +322,17 @@ export class Presence {
     const onDuty = this.people.filter((p) => p.presence === 'in');
     this.onDuty = onDuty.length;
     if (hour < ERRANDS.from || hour >= ERRANDS.to) return; // early birds and the night shift sit at their desks
-    const homebodies = onDuty.filter((p) => p.member.homebody && random() < HOMEBODY.startHome);
-    for (const p of homebodies) {
-      p.homeVariant = this.freeVariant(p);
-      p.startAway('home', random() * HOME[1] * HOMEBODY.stay + 6);
-    }
-    const pool = onDuty.filter((p) => !p.member.homebody).sort(() => random() - 0.5);
-    const n = Math.round(this.target * 0.8) - homebodies.length;
-    for (const p of pool.slice(0, Math.max(0, n))) {
+    const pool = onDuty.sort(() => random() - 0.5).filter((p) => !this.isVisitor(p)); // a visitor came to see the team: no errand
+    for (const p of pool.slice(0, Math.round(this.target * 0.8))) {
       const kind = random() < HOME_SHARE && this.roomFree ? 'home' : 'errand';
       if (kind === 'home') p.homeVariant = this.freeVariant(p);
       p.startAway(kind, random() * (kind === 'home' ? HOME[1] : ERRAND[1]) + 6);
     }
-    // too many left in the office: the rest starts in the home office
-    const staying = this.people.filter((p) => p.presence === 'in').sort(() => random() - 0.5);
+    // too many left in the office: the rest starts in the home office (a visitor stays: he came to see the team)
+    const shuffled = this.people.filter((p) => p.presence === 'in').sort(() => random() - 0.5);
+    const staying = [...shuffled.filter((p) => this.isVisitor(p)), ...shuffled.filter((p) => !this.isVisitor(p))];
     for (const p of staying.slice(MAX_OFFICE)) {
-      const home = this.roomFree || p.member.homebody;
+      const home = this.roomFree;
       if (home) p.homeVariant = this.freeVariant(p);
       p.startAway(home ? 'home' : 'errand', random() * (home ? HOME[1] : ERRAND[1]) + 6);
     }
@@ -402,7 +404,7 @@ export class Presence {
     const candidates = this.people.filter((p) => this.sendable(p));
     if (!candidates.length) return false;
     const p = candidates[Math.floor(random() * candidates.length)];
-    const home = this.roomFree || p.member.homebody;
+    const home = this.roomFree;
     if (home) p.homeVariant = this.freeVariant(p);
     p.leaveOffice(nav, home ? 'home' : 'errand', home ? between(HOME) : between(ERRAND));
     return true;
@@ -414,21 +416,21 @@ export class Presence {
     let waiting = 0;
     for (const p of this.people) {
       const plan = this.planOf(p);
-      if (plan.remote && hour >= plan.arrive && hour < plan.end && p.awayKind !== 'home' && !this.overridden.has(p)) waiting++;
+      if (plan.remote && hour >= plan.arrive && hour < plan.end && p.awayKind !== 'home' && !this.overridden.has(p) && !hasOwnRoom(p.id)) waiting++;
     }
     return this.homeCount < MAX_HOME - waiting;
   }
 
   /**
    * Somebody in a shared home office who can give it up: ordinary home-office workers first (the one who would be
-   * back soonest), people sent home by hand (or by `#homes`) only when nobody else is there. Never homebodies or a
-   * night shift at home: their day is at home. Own rooms free none of the shared ones. Null: nobody can.
+   * back soonest), people sent home by hand (or by `#homes`) only when nobody else is there. Never a night shift
+   * at home: their day is at home. Own rooms free none of the shared ones. Null: nobody can.
    */
   private roomToFree(): Person | null {
     let best: Person | null = null;
     let bestKept = true;
     for (const x of this.people) {
-      if (x.presence !== 'out' || x.awayKind !== 'home' || x.homeVariant >= HOME_COUNT || x.member.homebody || this.nightHomers.has(x)) continue;
+      if (x.presence !== 'out' || x.awayKind !== 'home' || x.homeVariant >= HOME_COUNT || this.nightHomers.has(x)) continue;
       const kept = this.overridden.has(x);
       if (!best || (kept === bestKept ? x.awayLeft < best.awayLeft : !kept)) [best, bestKept] = [x, kept];
     }
@@ -467,8 +469,7 @@ export class Presence {
    */
   refusal(p: Person, kind: 'home' | 'errand', takeRoom = false): 'busy' | 'homeFull' | null {
     if (p.presence !== 'in' || p.held || this.kept.has(p) || this.removed.has(p)) return 'busy';
-    const home = kind === 'home' || p.member.homebody; // a homebody is never sent on an errand
-    return !takeRoom && home && this.homeFull && homeRoomOf(p.id) === null ? 'homeFull' : null;
+    return !takeRoom && kind === 'home' && this.homeFull && homeRoomOf(p.id) === null ? 'homeFull' : null;
   }
 
   /**
@@ -478,13 +479,12 @@ export class Presence {
    */
   send(p: Person, kind: 'home' | 'errand', nav: NavGrid, takeRoom = false): boolean {
     if (p.controlled || p.talk || this.refusal(p, kind, true)) return false;
-    if (p.member.homebody) kind = 'home'; // never out on errands
     if (kind === 'home') {
       if (this.homeFull && homeRoomOf(p.id) === null) {
         const o = takeRoom ? this.roomToFree() : null;
         if (!o) return false;
         this.moveInto(p, o.homeVariant);
-      } else this.moveInto(p, this.freeVariant(p));
+      } else this.moveInto(p, homeRoomOf(p.id) ?? this.freeVariant(p)); // their assigned room: its sitter comes back
     }
     if (this.duty(p, this.workHour) !== 'duty') this.overridden.add(p);
     p.leaveOffice(nav, kind, 600, true);
@@ -504,7 +504,7 @@ export class Presence {
     if (this.kept.has(p) || this.removed.has(p)) return;
     this.overridden.add(p);
     if (kind === 'home') {
-      this.moveInto(p, this.freeVariant(p));
+      this.moveInto(p, homeRoomOf(p.id) ?? this.freeVariant(p));
     }
     p.startAway(kind, seconds);
   }
@@ -677,8 +677,8 @@ export class Presence {
   private sendOff(p: Person, kind: 'off' | 'home', nav: NavGrid): void {
     if (p.onPorch) return this.stubOut(p); // on the porch: comes back in first, then goes
 
-    // a regular remote day needs a room: somebody makes room, he comes in as soon as it is free
-    if (kind === 'home' && p.awayKind !== 'home' && this.homeCount >= MAX_HOME && this.planOf(p).remote) {
+    // a regular remote day needs a room: somebody makes room, he comes in as soon as it is free (his own room is always free)
+    if (kind === 'home' && p.awayKind !== 'home' && this.homeFull && this.planOf(p).remote && !hasOwnRoom(p.id)) {
       this.makeRoom();
       return;
     }
@@ -704,16 +704,16 @@ export class Presence {
     this.lunchers.delete(p);
   }
 
-  /** Their day starts: in through the door, one after the other. With a full office (and for homebodies) the day starts away. */
+  /** Their day starts: in through the door, one after the other. With a full office the day starts away. */
   private arrive(p: Person): void {
     const coming = this.people.filter((o) => o.presence === 'out' && o.awayKind === 'off' && o.awayLeft < 600).length;
     const full = this.present + coming >= MAX_OFFICE;
-    if (p.member.homebody ? random() < HOMEBODY.startHome : full) {
-      // no room: the day starts in the home office, or out and about when all home rooms are taken
-      const home = p.member.homebody || this.roomFree;
+    if (full && !this.isVisitor(p)) {
+      // no room: the day starts in the home office (a visitor comes in anyway: he came to see the team, the cap sends somebody else), or out and about when all home rooms are taken
+      const home = this.roomFree;
       if (home) p.homeVariant = this.freeVariant(p);
       p.awayKind = home ? 'home' : 'errand';
-      p.awayLeft = home ? between(HOME) * (p.member.homebody ? HOMEBODY.stay : 1) : between(ERRAND);
+      p.awayLeft = home ? between(HOME) : between(ERRAND);
       return;
     }
     this.doorSlot = Math.max(this.doorSlot + between(DOOR_GAP), this.clock + random());
@@ -828,16 +828,8 @@ export class Presence {
       return this.duty(p, hour) === 'duty' && hour < plan.leave - ERRANDS.beforeLeave && (plan.lunched || hour < plan.lunch - 0.5);
     });
     if (!candidates.length) return;
-    // homebodies get several tickets in the draw
-    const draw = candidates.flatMap((c) => Array<Person>(c.member.homebody ? HOMEBODY.weight : 1).fill(c));
-    const p = draw[Math.floor(random() * draw.length)];
+    const p = candidates[Math.floor(random() * candidates.length)];
     const stretch = this.weather.raining ? RAIN.errandStretch : 1;
-    if (p.member.homebody) {
-      // own room, so a full set of regular home offices doesn't keep them in
-      p.homeVariant = this.freeVariant(p);
-      p.leaveOffice(nav, 'home', between(HOME) * HOMEBODY.stay);
-      return;
-    }
     const homeShare = this.weather.raining ? RAIN.homeShare : HOME_SHARE;
     const home = random() < homeShare && this.roomFree;
     if (home) p.homeVariant = this.freeVariant(p);

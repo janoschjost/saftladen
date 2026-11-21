@@ -94,8 +94,9 @@ describe('presence.smoke: smoke breaks on the porch', () => {
     // the first one goes in: the chat is over, nobody is left talking out there
     expect(run(sim, 70, () => !sim.smoke.chat)).toBe(true);
     expect(run(sim, 120, () => a.presence === 'in' && b.presence === 'in')).toBe(true);
-    expect(a.talk).toBeNull();
-    expect(b.talk).toBeNull();
+    // the porch chat is over for both (inside, a coffee break may already have them again)
+    expect(a.talk).not.toBe(chat);
+    expect(b.talk).not.toBe(chat);
   });
 
   it('presence.smoke: calling a smoker back ends the break at once: the cigarette is out and they come in', () => {
@@ -252,7 +253,8 @@ describe('presence.smoke: room on the porch', () => {
     sim.weather.set(rain);
     const smokers = atDesks(sim, SMOKERS);
     const seats = rain ? PORCH_SPOTS.filter((s) => s.rain).length : PORCH_SPOTS.length;
-    const taken = () => smokers.filter((p) => p.porchSpot).length;
+    // spots for a smoke (a smoker on a mail run stands at the mailboxes, on the porch too)
+    const taken = () => smokers.filter((p) => p.porchSpot && PORCH_SPOTS.includes(p.porchSpot)).length;
     let waited = false;
     const full = run(sim, 240, () => taken() === seats && (!hold || onPorch(sim).length === seats), () => {
       urge(sim, ...smokers.filter((p) => p.presence === 'in'));

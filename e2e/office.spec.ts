@@ -26,7 +26,7 @@ test('select.actions + keys.home: select, send home, call back', async ({ page }
     const cam = g.views.camera;
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const free = g.sim.people.filter((p) => p.presence === 'in' && !p.talk && !p.held && !p.meetJob && p.sit > 0.9 && !p.member.homebody);
+    const free = g.sim.people.filter((p) => p.presence === 'in' && !p.talk && !p.held && !p.meetJob && p.sit > 0.9);
     const spots = free.map((p) => {
       const v = p.root.position.clone();
       v.y += 1.0;

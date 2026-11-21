@@ -29,7 +29,8 @@ describe('presence.errand: the way through the door', () => {
       run(sim, 120, () => p.presence === 'out', () => {
         if (p.presence !== 'leaving') return;
         sawIn ||= Math.hypot(p.pos.x - lane().in.x, p.pos.z - lane().in.z) < 0.8;
-        sawGate ||= Math.abs(p.pos.x - lane().gate.x) < 0.1 && Math.abs(p.pos.z - lane().gate.z) < 0.3;
+        // near the middle of its 1 m wing (coming in at an angle, how far off depends on the walking speed)
+        sawGate ||= Math.abs(p.pos.x - lane().gate.x) < 0.2 && Math.abs(p.pos.z - lane().gate.z) < 0.3;
       }),
     ).toBe(true);
     expect(sawIn && sawGate).toBe(true);

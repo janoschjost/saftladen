@@ -81,6 +81,11 @@ export interface Schedule {
   /** does the night shift from the home office instead of the desk */
   nightHome?: boolean;
   /**
+   * Works this long every day (25.5 = 01:30, jittered like `leave`, always over before the 04:00 rollover): after
+   * `leave` on from the home office (with `nightHome`). Left out = done at `leave`, unless it is a night shift.
+   */
+  end?: number;
+  /**
    * Works remotely: only this share of the days (0..1) is spent in the office, on all other days the working day
    * is spent in the home office. Left out = comes in every day.
    */
@@ -122,7 +127,6 @@ export interface TeamMember {
   adhd?: boolean; // restless: short idle/work spells, fidgets
   son?: Look; // little boy who now and then walks into the home office scene
   partner?: Look; // wife who now and then comes into the home office scene to hug them (#281)
-  homebody?: boolean; // works from home a lot and is never out on errands
   speed?: number; // walking speed override (default: random 1.15-1.725)
   schedule: Schedule; // habitual office hours
   /** turns into this alter ego when going home (Kompensiertier Kurt, see src/game/AlterEgo.ts) */

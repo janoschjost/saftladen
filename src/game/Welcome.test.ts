@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as assignments from '../data/homeAssignments';
 import { installHeadlessDom } from '../test/headlessDom';
+import { office, run } from '../test/office';
 import { setSeed } from './rng';
 import { Sim } from './Sim';
 import { cycleOf } from './TimeOfDay';
@@ -31,6 +32,9 @@ describe('presence.remote-visit', () => {
     sim.presence.callBack(v);
     for (let i = 0; i < 90 * 60 && v.presence !== 'in'; i++) sim.step(1 / 60);
     expect(v.presence).toBe('in');
+    // his room went to nobody: somebody else takes it, so every regular home office is taken again
+    const other = sim.people.find((o) => o.presence === 'in' && o !== v && !assignments.hasOwnRoom(o.id))!;
+    sim.scenario.put(other.id, 'home', 'free');
     expect(sim.presence.homeFull).toBe(true);
     expect(sim.presence.roomFor(v)).toBe(true);
     sim.presence.setVisit(v, false); // a remote day again
@@ -82,7 +86,7 @@ describe('dev.events', () => {
     Walker.animate = true;
     for (let i = 0; i < 60; i++) sim.step(1 / 60);
     expect(sim.presence.homeFull).toBe(true);
-    const p = sim.people.find((o) => o.presence === 'in' && !o.task && !o.talk && !o.member.homebody)!;
+    const p = sim.people.find((o) => o.presence === 'in' && !o.task && !o.talk)!;
     const before = sim.people.filter((o) => o.awayKind === 'home' && o.presence === 'out');
     expect(sim.presence.send(p, 'home', sim.nav)).toBe(false); // the player's H: a full home office stays full
     expect(sim.presence.send(p, 'home', sim.nav, true)).toBe(true);
@@ -100,7 +104,7 @@ describe('presence.manual', () => {
     const sim = new Sim({ cycle: cycleOf(11), homes: true });
     Walker.animate = true;
     for (let i = 0; i < 60; i++) sim.step(1 / 60);
-    const p = sim.people.find((o) => o.presence === 'in' && !o.task && !o.talk && !o.member.homebody)!;
+    const p = sim.people.find((o) => o.presence === 'in' && !o.task && !o.talk)!;
     const room = 3;
     const sitter = sim.people.find((o) => o.awayKind === 'home' && o.homeVariant === room)!;
     expect(sitter).toBeDefined();
@@ -150,6 +154,20 @@ describe('presence.remote-greet', () => {
     for (let j = 0; j < 30 * 60; j++) {
       sim.step(1 / 60);
       expect(sim.welcome.call).toBeNull();
+    }
+  });
+
+  it('presence.remote-greet: Marco Hefti on a visit is welcomed like Zlatko and Martin (#283)', () => {
+    for (const seed of [1, 2]) {
+      const sim = office({}, seed);
+      const v = sim.person('marco-hefti');
+      sim.scenario.put(v.id, 'home', 'free'); // out, whatever the seed dealt; he comes in for a visit as the dev event calls him
+      sim.presence.setVisit(v, true);
+      sim.presence.callBack(v);
+      run(sim, 90, () => sim.welcome.call);
+      expect(v.presence, `seed ${seed}`).toBe('in');
+      expect(sim.welcome.call!.text).toBe('Marco! 🎉');
+      expect(sim.people.filter((p) => p !== v && p.scripted).length, `seed ${seed}`).toBeGreaterThan(0);
     }
   });
 
