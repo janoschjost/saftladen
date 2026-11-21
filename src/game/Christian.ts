@@ -1,12 +1,14 @@
 import * as THREE from 'three';
 import { christianLook } from '../data/christian';
+import { CHRISTIAN_FACTS } from '../data/christianFacts';
 import { CHRISTIAN_LINES, type LineKind } from '../data/christianLines';
 import { bubbleSeconds } from '../data/sonLines';
 import { buildCharacter, type CharacterRig } from '../render/characterBuilder';
-import { ghostify } from '../render/ghostFx';
+import { DAY_OPACITY, GHOST_OPACITY, ghostify } from '../render/ghostFx';
 import { solveArm, type ArmPose } from '../render/homeOffice';
 import { buildMop } from '../render/mopProp';
 import { PINCH } from '../render/smokeProps';
+import { chillCrossed } from './Chill';
 import type { MessItem } from './Mess';
 import type { Vec2 } from './NavGrid';
 import { DAY_START } from './Presence';
@@ -55,6 +57,20 @@ const FLOAT = 0.06;
 const EASE = 8;
 /** Seconds between two of his bubbles (min, plus up to extra). */
 const GAP = { min: 1.2, extra: 1.8 };
+
+/**
+ * The day wander (#256): every `WANDER_GAP` clock hours (3 to 5) in office hours he fades in at a free spot, glides about
+ * for `WANDER_TIME` seconds (25 to 45) at `WANDER_SPEED`, dropping a useless fact every ~`FACT_GAP` s, and fades out.
+ */
+const WANDER_FROM = 8.5;
+const WANDER_TO = 17;
+const WANDER_FIRST = { min: 8.5, extra: 1.5 };
+const WANDER_GAP = { min: 3, extra: 2 };
+const WANDER_TIME = { min: 25, extra: 20 };
+const WANDER_SPEED = 1.1;
+const FACT_GAP = 15;
+/** how long he takes to fade in and out (s) */
+const WANDER_FADE = 1.5;
 
 /** The lines that must not get lost when his bubble is busy. */
 const IMPORTANT: ReadonlySet<LineKind> = new Set(['lunchbox', 'bin', 'done']);
@@ -149,6 +165,12 @@ export class Christian {
   /** how much faster than normal he works (1 by day, more at night so he is done by `VISIT_DEADLINE_HOUR`) */
   rate = 1;
   private visitedDay = -1;
+  /** the running day wander: how long it lasts (s); null on a night visit or when he is not there */
+  private wander: { dur: number } | null = null;
+  private wanderDay = -1;
+  /** the clock hour the next day wander comes at */
+  private wanderAt = 0;
+  private factT = 0;
   /** the working day the running visit began on: a new one (04:00) ends it, the mess is cleared then anyway */
   private startDay = -1;
   private arriveDay = -1;
@@ -173,21 +195,17 @@ export class Christian {
     return this.rig ? { ...this.pos } : null;
   }
 
+  /** Whether he is on a day wander (not the night cleaning). */
+  get wandering(): boolean {
+    return this.wander !== null;
+  }
+
   /** A visit: false when there is nothing to clean (then he does not come). */
   start(): boolean {
     this.stop();
     const steps = this.plan();
     if (!steps.length) return false;
-    this.rig = buildCharacter(christianLook);
-    this.mop = buildMop();
-    this.mop.position.copy(MOP_BOTTOM);
-    this.mop.rotation.x = MOP_TILT;
-    this.mop.visible = false;
-    this.rig.body.add(this.mop);
-    this.ghost = ghostify(this.rig); // after the mop is on, so it turns into a ghost too
-    this.poses = solvePoses(this.rig);
-    this.scene.add(this.rig.root);
-    this.t = 0;
+    this.build(GHOST_OPACITY);
     this.startDay = this.sim.presence.days;
     if (hourOf(this.sim.tod.cycle) < ARRIVE_LATEST) this.visitedDay = this.startDay; // a visit in the small hours (the dev event too) is that night's one
     this.pos = { ...WALL_ENTRY };
@@ -204,7 +222,62 @@ export class Christian {
     return true;
   }
 
+  /**
+   * A day wander: at a free spot, fainter than at night, no mop. False when the office has no free spot.
+   * `first`: seconds to his first fact (short for a dev event, so it shows soon).
+   */
+  startWander(first = FACT_GAP / 3): boolean {
+    this.stop();
+    const from = this.freeSpot();
+    if (!from) return false;
+    this.build(DAY_OPACITY);
+    this.startDay = this.sim.presence.days;
+    this.wander = { dur: WANDER_TIME.min + this.rnd() * WANDER_TIME.extra };
+    this.factT = first;
+    this.pos = from;
+    this.yaw = this.rnd() * Math.PI * 2;
+    this.moving = 0;
+    this.phase = 0;
+    this.steps = [];
+    this.rate = 1;
+    this.pose = 'walk';
+    this.hold = 0;
+    this.textT = 0;
+    this.gapT = 0;
+    this.apply();
+    return true;
+  }
+
+  /** His rig as a ghost of the given strength, in the scene; the mop on his body (shown only while he mops). */
+  private build(opacity: number): void {
+    this.rig = buildCharacter(christianLook);
+    this.mop = buildMop();
+    this.mop.position.copy(MOP_BOTTOM);
+    this.mop.rotation.x = MOP_TILT;
+    this.mop.visible = false;
+    this.rig.body.add(this.mop);
+    this.ghost = ghostify(this.rig, opacity); // after the mop is on, so it turns into a ghost too
+    this.poses = solvePoses(this.rig);
+    this.scene.add(this.rig.root);
+    this.t = 0;
+  }
+
+  /** A random free floor cell (his own dice: the simulation's are not touched), null when there is none. */
+  private freeSpot(): Vec2 | null {
+    const nav = this.sim.nav;
+    for (let i = 0; i < 300; i++) {
+      const cx = Math.floor(this.rnd() * nav.cols);
+      const cz = Math.floor(this.rnd() * nav.rows);
+      if (nav.walkable(cx, cz)) return nav.center(cx, cz);
+    }
+    return null;
+  }
+
   stop(): void {
+    if (this.wander) {
+      this.wander = null;
+      this.wanderAt = hourOf(this.sim.tod.cycle) + WANDER_GAP.min + this.rnd() * WANDER_GAP.extra; // the next one, 3 to 5 clock hours on
+    }
     if (!this.rig) return;
     this.scene.remove(this.rig.root);
     this.rig.root.traverse((o) => {
@@ -307,6 +380,21 @@ export class Christian {
     return { to, wait: WORK_TIME, pose: item.kind === 'lunchbox' ? 'nose' : 'pick', say: kind, at: () => void this.sim.mess.take(item) };
   }
 
+  /** The next stretch of the wander: in a straight line to another free spot, through whatever is in between. */
+  private nextLeg(): Step | null {
+    const to = this.freeSpot();
+    return to ? { to, speed: WANDER_SPEED } : null;
+  }
+
+  /** One of his useless facts (not the one before), then about `FACT_GAP` s until the next. */
+  private sayFact(): void {
+    const facts = CHRISTIAN_FACTS.filter((f) => f !== this.lastLine);
+    const line = facts[Math.floor(this.rnd() * facts.length)];
+    this.text = this.lastLine = line;
+    this.textT = bubbleSeconds(line);
+    this.factT = FACT_GAP * (0.85 + this.rnd() * 0.3);
+  }
+
   /** A line of his, if his bubble is free. */
   private speak(kind: LineKind): void {
     if (this.text !== null || this.gapT > 0) {
@@ -328,8 +416,18 @@ export class Christian {
       this.arriveDay = day;
       this.arriveAt = ARRIVE_FROM + this.rnd() * (ARRIVE_TO - ARRIVE_FROM);
     }
-    if (this.visitedDay === day || !mess.count()) return; // the cheap checks first: this runs every frame
     const hour = hourOf(tod.cycle);
+    if (day !== this.wanderDay) {
+      this.wanderDay = day;
+      const first = WANDER_FIRST.min + this.rnd() * WANDER_FIRST.extra;
+      // a game opened (or a clock set) after that time: he does not jump out at once, the next one is 3 to 5 hours away
+      this.wanderAt = first < hour ? hour + WANDER_GAP.min + this.rnd() * WANDER_GAP.extra : first;
+    }
+    if (hour >= this.wanderAt && hour >= WANDER_FROM && hour < WANDER_TO) {
+      if (this.startWander()) return;
+      this.wanderAt = hour + 1; // no free spot just now: try again in an hour
+    }
+    if (this.visitedDay === day || !mess.count()) return; // the cheap checks first: this runs every frame
     if (hour < this.arriveAt || hour >= ARRIVE_LATEST) return;
     this.start();
   }
@@ -341,6 +439,8 @@ export class Christian {
     }
     if (this.sim.presence.days !== this.startDay) return this.stop(); // a new working day: he is gone
     this.t += dt;
+    if (this.wander && this.t >= this.wander.dur) return this.stop(); // faded out
+    if (this.wander && this.text === null && (this.factT -= dt) <= 0) this.sayFact();
     if (this.text !== null) {
       this.textT -= dt;
       if (this.textT <= 0) {
@@ -357,12 +457,12 @@ export class Christian {
     // one frame can finish a step and go on with the next: what is left of the frame is not lost (at 25× a frame is long)
     for (let guard = 0; ; guard++) {
       if (!this.cur) {
-        this.cur = this.steps.shift() ?? null;
+        this.cur = this.steps.shift() ?? (this.wander ? this.nextLeg() : null);
         if (!this.cur) return this.stop(); // back in the wall
         this.arrived = false;
         this.fired = false;
         // the clock may have been let go, sped up or resumed since he came: keep him on time for 04:00
-        this.rate = Math.max(this.rate, this.rateFor([this.cur, ...this.steps], this.pos));
+        if (!this.wander) this.rate = Math.max(this.rate, this.rateFor([this.cur, ...this.steps], this.pos));
         if (this.cur.say) this.speak(this.cur.say);
       }
       s = this.cur;
@@ -433,6 +533,11 @@ export class Christian {
       hinge(r); // the upper body leans around the hips, not around the feet
     }
     // he fades in as he steps out of the wall (and out as he goes back in): the glow must not show outside the building
-    this.ghost!.set(Math.min(1, Math.max(0, (this.pos.z - WALL_ENTRY.z) / WALL_FADE)), this.t);
+    // on the wander he fades in and out where he stands
+    const fade = this.wander
+      ? Math.min(this.t, this.wander.dur - this.t) / WANDER_FADE
+      : (this.pos.z - WALL_ENTRY.z) / WALL_FADE;
+    this.ghost!.set(Math.min(1, Math.max(0, fade)), this.t);
+    chillCrossed(this.sim.people, this.pos); // whoever he glides through shivers, by day and at night
   }
 }

@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
+import { CHRISTIAN_FACTS } from '../data/christianFacts';
 import { CHRISTIAN_LINES } from '../data/christianLines';
 import seats from '../data/seats.json';
 import { installHeadlessDom } from '../test/headlessDom';
 import { office, STEP } from '../test/office';
+import { CHILL_RANGE, CHILL_TIME } from './Chill';
 import { HIP_HEIGHT } from './petPose';
 import { MAX_FRAME } from './seams';
 import { ARRIVE_LATEST, Christian, VISIT_DEADLINE_HOUR, WALL_ENTRY } from './Christian';
@@ -238,5 +240,191 @@ describe('christian.night', () => {
       ghost.update(STEP);
       expect(ghost.active).toBe(false);
     }
+  });
+});
+
+/** A day wander is on: Christian at hour 11 on his own, started by hand. */
+function wander(hour = 11): { sim: Sim; ghost: Christian } {
+  const { sim, ghost } = stage(hour);
+  sim.mess.clear();
+  expect(ghost.startWander()).toBe(true);
+  return { sim, ghost };
+}
+
+/** The opacities of everything see-through on his rig: the body (his shared ghost material), the halo, the pool of light. */
+function opacities(ghost: Christian): number[] {
+  const out: number[] = [];
+  ghost.rig!.root.traverse((o) => {
+    const m = (o as THREE.Mesh).material as THREE.Material | undefined;
+    if (m?.transparent) out.push(m.opacity);
+  });
+  return out;
+}
+
+/** Just his body's see-through material (not the additive halo and pool). */
+function body(ghost: Christian): number[] {
+  const out: number[] = [];
+  ghost.rig!.root.traverse((o) => {
+    const m = (o as THREE.Mesh).material as THREE.Material | undefined;
+    if (m?.transparent && m.blending !== THREE.AdditiveBlending) out.push(m.opacity);
+  });
+  return out;
+}
+
+describe('christian.day', () => {
+  it('christian.day: he comes every 3 to 5 clock hours in office hours, wanders 25 to 45 s and fades out; not when he is opened at 11:00', () => {
+    const { sim, ghost } = stage(6);
+    sim.mess.clear();
+    ghost.update(STEP); // the new day: the first one is drawn for 08:30 to 10:00
+    expect(ghost.active).toBe(false);
+    sim.tod.setCycle(cycleOf(8.4));
+    ghost.update(STEP);
+    expect(ghost.active).toBe(false);
+    sim.tod.setCycle(cycleOf(10.1));
+    ghost.update(STEP);
+    expect(ghost.active).toBe(true);
+    expect(ghost.wandering).toBe(true);
+    const took = visit(ghost, 120);
+    expect(took).toBeGreaterThanOrEqual(25);
+    expect(took).toBeLessThanOrEqual(46);
+    expect(ghost.active).toBe(false);
+    // the next one is 3 to 5 clock hours later: not after 2.9, there after 5.1
+    sim.tod.setCycle(cycleOf(10.1 + 2.9));
+    ghost.update(STEP);
+    expect(ghost.active).toBe(false);
+    sim.tod.setCycle(cycleOf(10.1 + 5.1));
+    ghost.update(STEP);
+    expect(ghost.wandering).toBe(true);
+    // a game opened at 11:00 does not start with him
+    const late = stage(11);
+    late.sim.mess.clear();
+    late.ghost.update(STEP);
+    expect(late.ghost.active).toBe(false);
+  });
+
+  it('christian.day: none in the evening, and he does not clean by day: a wander leaves the mess alone', () => {
+    const { sim, ghost } = stage(6);
+    ghost.update(STEP);
+    sim.tod.setCycle(cycleOf(17.5));
+    ghost.update(STEP);
+    expect(ghost.active).toBe(false);
+    const w = wander();
+    w.sim.mess.fill();
+    const mess = w.sim.mess.count();
+    expect(mess).toBeGreaterThan(0);
+    visit(w.ghost, 120);
+    expect(w.sim.mess.count()).toBe(mess);
+  });
+
+  it('christian.day: he fades in at about 25% (the night ghost\'s look, fainter) and out again, with no mop', () => {
+    const { ghost } = wander();
+    expect(Math.max(...opacities(ghost))).toBe(0); // at the start nothing shows (nor the glow)
+    visit(ghost, 3);
+    expect(Math.max(...body(ghost))).toBeGreaterThan(0.05);
+    let max = 0;
+    let mop = false;
+    visit(ghost, 120, () => {
+      if (ghost.active) max = Math.max(max, ...body(ghost));
+      mop ||= ghost['mop']?.visible ?? false;
+    });
+    expect(max).toBeLessThanOrEqual(0.25);
+    expect(max).toBeGreaterThan(0.15); // at his faintest he is not gone: about a quarter
+    expect(mop).toBe(false);
+    const night = stage(23);
+    night.ghost.start();
+    visit(night.ghost, 20);
+    expect(Math.max(...body(night.ghost))).toBeGreaterThan(0.25); // the night ghost is stronger
+  });
+
+  it('christian.day: he glides at a steady pace, never jumps, and wanders over the floor of the office', () => {
+    const { sim, ghost } = wander();
+    let last = ghost.at!;
+    let far = 0;
+    let moved = 0;
+    visit(ghost, 120, () => {
+      const p = ghost.at;
+      if (!p) return;
+      const d = Math.hypot(p.x - last.x, p.z - last.z);
+      far = Math.max(far, d);
+      moved += d;
+      last = p;
+      expect(sim.nav.inside(sim.nav.toCell(p).cx, sim.nav.toCell(p).cz)).toBe(true);
+    });
+    expect(far).toBeLessThan(0.05); // never a jump
+    expect(moved).toBeGreaterThan(15); // 25 s or more at about 1 m/s
+  });
+
+  it('christian.day: about every 15 s he says one of his facts, one bubble at a time', () => {
+    const { ghost } = wander();
+    const said: Array<{ at: number; text: string }> = [];
+    let t = 0;
+    let shown: string | null = null;
+    visit(ghost, 120, () => {
+      t += STEP;
+      if (ghost.text !== shown) {
+        shown = ghost.text;
+        if (shown) said.push({ at: t, text: shown });
+      }
+    });
+    expect(said.length).toBeGreaterThanOrEqual(2);
+    for (const f of said) expect(CHRISTIAN_FACTS).toContain(f.text);
+    for (let i = 1; i < said.length; i++) {
+      expect(said[i].at - said[i - 1].at).toBeGreaterThan(11);
+      expect(said[i].at - said[i - 1].at).toBeLessThan(19);
+      expect(said[i].text).not.toBe(said[i - 1].text);
+    }
+  });
+
+  it('christian.day: a new working day (04:00) ends a wander that is still going', () => {
+    const { sim, ghost } = wander();
+    ghost.update(1);
+    expect(ghost.active).toBe(true);
+    sim.presence.days++;
+    ghost.update(STEP);
+    expect(ghost.active).toBe(false);
+  });
+});
+
+describe('christian.chill', () => {
+  it('christian.chill: somebody within 0.6 m of him shivers for 2 s, somebody farther does not; what they do is not touched', () => {
+    const { sim, ghost } = wander();
+    const at = ghost.at!;
+    sim.scenario.put('donata-manser', { x: at.x + CHILL_RANGE * 0.7, z: at.z }, 'pin');
+    sim.scenario.put('jannik-stibi', { x: at.x + CHILL_RANGE * 1.6, z: at.z }, 'pin');
+    const donata = sim.person('donata-manser');
+    const before = { ...donata.pos };
+    ghost.update(STEP);
+    expect(donata.chill).toBe(CHILL_TIME);
+    for (const p of sim.people) expect(p.chill > 0).toBe(!p.away && Math.hypot(p.pos.x - at.x, p.pos.z - at.z) <= CHILL_RANGE);
+    expect(sim.people.some((p) => p.chill === 0 && !p.away)).toBe(true);
+    ghost.stop(); // he is gone: the shiver runs out by itself
+    for (let i = 0; i < (CHILL_TIME + 0.1) / STEP; i++) sim.step(STEP);
+    expect(donata.chill).toBe(0);
+    expect(donata.pos.x).toBeCloseTo(before.x, 5);
+    expect(donata.presence).toBe('in');
+  });
+
+  it('christian.chill: somebody who is out of the office feels nothing', () => {
+    const { sim, ghost } = wander();
+    sim.scenario.put('donata-manser', 'home', 'pin');
+    ghost.update(STEP);
+    expect(sim.person('donata-manser').chill).toBe(0);
+  });
+
+  it('christian.chill: the night ghost makes a night owl at their desk shiver, who keeps sitting and working', () => {
+    const { sim, ghost } = stage(23);
+    const owl = sim.person('jannik-stibi'); // the night visit starts at his desk
+    sim.scenario.put(owl.id, 'desk', 'pin');
+    expect(owl.working).toBe(true);
+    ghost.start();
+    let shivered = false;
+    visit(ghost, 60, () => {
+      if (owl.chill > 0) {
+        shivered = true;
+        expect(owl.working).toBe(true); // nothing is interrupted
+      }
+      sim.step(STEP);
+    });
+    expect(shivered).toBe(true);
   });
 });
