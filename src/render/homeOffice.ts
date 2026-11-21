@@ -22,6 +22,9 @@ export const ROOM_COUNT = HOME_ROOMS.length;
 
 type Color = string;
 
+/** What a window shows over the day (`Room.tint`; its own colour is the day look): the low sun, then a dark blue night with a few stars (#293). */
+const WINDOW = { dusk: '#ffc890', night: '#16234f' };
+
 /** A value in each of the three looks, mixed by the weights of the light; without a dusk value it goes straight from night to day. */
 function blend(l: RoomLight, night: number, day: number, dusk?: number): number {
   return dusk === undefined ? night + (day - night) * l.day : night * l.night + dusk * l.dusk + day * l.bright;
@@ -153,6 +156,17 @@ function stars(s: Room, n: number, x: [number, number], y: [number, number], z: 
   const dice = seeded(11);
   const parts: THREE.BufferGeometry[] = [];
   for (let i = 0; i < n; i++) parts.push(box(0.08, 0.08, 0.02, x[0] + dice() * (x[1] - x[0]), y[0] + dice() * (y[1] - y[0]), z, dice() < 0.2 ? '#ffe9b0' : '#ffffff'));
+  atNight(s, parts);
+}
+
+/** Stars seen through a window, at night only: `at(u, v)` maps a spot of the pane (-0.5..0.5 each way) to the room, `size` is the star's box, `tilt` its slant. */
+function paneStars(s: Room, n: number, size: [number, number, number], at: (u: number, v: number) => [number, number, number], tilt = 0): void {
+  const dice = seeded(13);
+  const parts: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < n; i++) {
+    const [x, y, z] = at((dice() - 0.5) * 0.9, (dice() - 0.5) * 0.9);
+    parts.push(box(...size, 0, 0, 0, dice() < 0.25 ? '#ffe9b0' : '#ffffff').rotateZ(tilt).translate(x, y, z));
+  }
   atNight(s, parts);
 }
 
@@ -299,6 +313,8 @@ export interface HomeStyle {
   light?: FollowLight;
   /** the look at the low sun (dusk and dawn) of a room that follows the light; `bg`, `hemi` and `key` are then its day look */
   dusk?: { bg: Color; hemi: [Color, Color, number]; key: [Color, number] };
+  /** the look at night of a room that follows the light, where the default (cold, dark moonlight) does not fit: an indoor room with a window, a lamp lights it (#293) */
+  night?: { bg: Color; hemi: [Color, Color, number]; key: [Color, number] };
   /** has room for a drying rack beside the chair (laundry round) */
   rack?: boolean;
   build(s: Room): void;
@@ -338,7 +354,10 @@ const STYLES: HomeStyle[] = [
       frame(s, 0.45, 0.6, 0.55, 1.5, -1.97, '#2a2a2d', ['#f1e7d6', '#b5483a', '#d8b04a']);
       frame(s, 0.4, 0.5, 1.2, 1.9, -1.97, '#f7f7f4', ['#cfe0e8', '#4c7a8a']);
       stringLights(s, -2.6, 2.6, 2.35, -1.93, ['#ffd88a', '#ffb7c5', '#ffe9b0'], 0.18);
-      s.glow(0.9, 1.2, 0.04, -2.67, 0.85, 0.2, '#f3fbff', 0).rotation.y = Math.PI / 2; // window on the left wall
+      const pane = s.glow(0.9, 1.2, 0.04, -2.67, 0.85, 0.2, '#f3fbff', 0); // window on the left wall
+      pane.rotation.y = Math.PI / 2;
+      s.tint(pane, WINDOW);
+      paneStars(s, 7, [0.02, 0.05, 0.05], (u, v) => [-2.64, 1.45 + v * 1.2, 0.2 + u * 0.9]);
       s.point('#ffcf8a', 1.2, -0.45, 1.0, -1.6, 5);
       chair(s, '#d96f7d');
       desk(s, '#f6f4ee', '#c9c9c6');
@@ -361,7 +380,8 @@ const STYLES: HomeStyle[] = [
       for (let i = 0; i < 18; i++) for (let j = 0; j < 3; j++) s.bx(0.29, 0.29, 0.01, -2.55 + i * 0.3, 0.93 + j * 0.3, -1.96, (i + j) % 2 ? '#ffffff' : '#bcd6d4');
       // window
       s.bx(1.5, 1.1, 0.03, 0, 1.0, -1.95, '#7a5a3a');
-      s.glow(1.4, 1.0, 0.02, 0, 1.05, -1.93, '#cfeeff');
+      s.tint(s.glow(1.4, 1.0, 0.02, 0, 1.05, -1.93, '#cfeeff'), WINDOW);
+      paneStars(s, 7, [0.05, 0.05, 0.02], (u, v) => [u * 1.4, 1.55 + v * 1.0, -1.91]);
       s.bx(1.4, 0.04, 0.05, 0, 1.52, -1.92, '#7a5a3a');
       s.bx(0.04, 1.0, 0.05, 0, 1.05, -1.92, '#7a5a3a');
       plant(s, -0.4, -1.65, 0.3, '#e8e2d4', '#4c8a3a', 0.93);
@@ -584,6 +604,10 @@ const STYLES: HomeStyle[] = [
       // skylight in the right slope
       const sky = s.glow(1.2, 0.04, 1.0, 1.55, 2.0, -0.8, '#e2f3ff', -0.69);
       sky.position.set(1.7, 2.0, -0.8);
+      s.tint(sky, WINDOW);
+      // stars on the underside of the glass, along the slope
+      const [cos, sin] = [Math.cos(-0.69), Math.sin(-0.69)];
+      paneStars(s, 6, [0.05, 0.02, 0.05], (u, v) => [1.7 + u * 1.2 * cos + 0.03 * sin, 2.0 + u * 1.2 * sin - 0.03 * cos, -0.8 + v * 1.0], -0.69);
       // knee walls
       s.wall(0.1, 1.0, 6, -2.9, 0, -0.2, '#efe4d2');
       s.wall(0.1, 1.0, 6, 2.9, 0, -0.2, '#efe4d2');
@@ -616,7 +640,8 @@ const STYLES: HomeStyle[] = [
     key: ['#ffffff', 1.6, [-4, 5, 3]],
     build(s) {
       s.room('#f7f6f2', '#dcc7a5', '#ffffff');
-      s.glow(0.05, 1.9, 2.4, -2.68, 0.6, -0.3, '#ffffff');
+      s.tint(s.glow(0.05, 1.9, 2.4, -2.68, 0.6, -0.3, '#ffffff'), WINDOW);
+      paneStars(s, 9, [0.02, 0.05, 0.05], (u, v) => [-2.64, 1.55 + v * 1.9, -0.3 + u * 2.4]);
       s.bx(0.06, 2.0, 0.06, -2.66, 0.55, -0.3, '#2a2a2d');
       s.bx(0.06, 0.06, 2.5, -2.66, 1.6, -0.3, '#2a2a2d');
       s.bx(0.06, 0.06, 2.5, -2.66, 0.55, -0.3, '#2a2a2d');
@@ -1077,6 +1102,17 @@ const STYLES: HomeStyle[] = [
     },
   },
 ];
+
+/** The rooms with a window follow the office's light (#293). Theirs is the room's own light, a lamp lights it at night: a little dimmer and warmer, not the cold dark of the open air. */
+export const WINDOWED_ROOMS = [0, 1, 5, 6];
+for (const v of WINDOWED_ROOMS) {
+  const st = STYLES[v];
+  const [, ground, hi] = st.hemi;
+  const ki = st.key[1];
+  st.light = 'office';
+  st.dusk = { bg: st.bg, hemi: ['#ffe2c4', ground, hi * 0.9], key: ['#ffb27a', ki * 0.85] };
+  st.night = { bg: st.bg, hemi: ['#ffd9b0', ground, hi * 0.65], key: ['#ffc58a', ki * 0.55] };
+}
 
 export const HOME_LABELS = STYLES.map((s) => s.label);
 
@@ -1607,6 +1643,7 @@ const NIGHT_HEMI = 0.5;
 const NIGHT_KEY = 0.55;
 const tmpColor = new THREE.Color();
 const tmpDusk = new THREE.Color();
+const tmpNight = new THREE.Color();
 
 /** One home office scene (one of the eight variants) with whoever is currently working there. */
 export class HomeOffice {
@@ -1721,17 +1758,18 @@ export class HomeOffice {
     if (Math.abs(l.day - this.day) < 1e-3) return;
     this.day = l.day;
     const dusk = this.style.dusk;
+    const night = this.style.night;
     const [sky, ground, hi] = this.style.hemi;
     const [kc, ki] = this.style.key;
-    const colour = (out: THREE.Color, night: THREE.Color, day: Color, dusky?: Color) =>
-      mixLooks(out, night, dusky === undefined ? undefined : tmpDusk.set(dusky), tmpColor.set(day), l);
-    colour(lights.hemi.color, SKY_NIGHT, sky, dusk?.hemi[0]);
-    colour(lights.hemi.groundColor, GROUND_NIGHT, ground, dusk?.hemi[1]);
-    lights.hemi.intensity = blend(l, NIGHT_HEMI, hi, dusk?.hemi[2]);
-    colour(lights.key.color, MOON, kc, dusk?.key[0]);
-    lights.key.intensity = blend(l, NIGHT_KEY, ki, dusk?.key[1]);
+    const colour = (out: THREE.Color, nightly: THREE.Color | Color, day: Color, dusky?: Color) =>
+      mixLooks(out, tmpNight.set(nightly), dusky === undefined ? undefined : tmpDusk.set(dusky), tmpColor.set(day), l);
+    colour(lights.hemi.color, night?.hemi[0] ?? SKY_NIGHT, sky, dusk?.hemi[0]);
+    colour(lights.hemi.groundColor, night?.hemi[1] ?? GROUND_NIGHT, ground, dusk?.hemi[1]);
+    lights.hemi.intensity = blend(l, night?.hemi[2] ?? NIGHT_HEMI, hi, dusk?.hemi[2]);
+    colour(lights.key.color, night?.key[0] ?? MOON, kc, dusk?.key[0]);
+    lights.key.intensity = blend(l, night?.key[1] ?? NIGHT_KEY, ki, dusk?.key[1]);
     lights.screen.intensity = lerp(SCREEN_GLOW_NIGHT, SCREEN_GLOW, l.day); // he reads as awake in the dark
-    colour(this.scene.background as THREE.Color, NIGHT_BG, this.style.bg, dusk?.bg);
+    colour(this.scene.background as THREE.Color, night?.bg ?? NIGHT_BG, this.style.bg, dusk?.bg);
     for (const look of this.looks) look(l);
   }
 
