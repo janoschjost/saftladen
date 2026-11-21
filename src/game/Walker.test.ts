@@ -112,3 +112,25 @@ describe('move.passages', () => {
     }
   });
 });
+
+describe('move.passing (bystanders and re-plans)', () => {
+  it('move.passing a walker whose way stays blocked drops its route after 5 s, however often it re-plans (#273)', () => {
+    setSeed(1);
+    const nav = new NavGrid(40, 16, 0.5);
+    const w = new Goer('w', { x: 2, z: 4 }, { x: 16, z: 4 });
+    // a head-on stand-off: ORCA asks for full speed each step, but the other body pushes the walker straight back
+    (w as unknown as { avoidance: () => { x: number; z: number } }).avoidance = () => ({ x: w.speed, z: 0 });
+    const traffic = new Traffic(nav);
+    w.traffic = traffic;
+    const start = { ...w.pos };
+    let gaveUp = Infinity;
+    for (let t = 0; t < 12 && gaveUp === Infinity; t += STEP) {
+      traffic.update(STEP, [w]);
+      w.update(STEP, nav, [w]);
+      if (w.state === 'idle') gaveUp = t;
+      else w.pos.x = start.x;
+    }
+    expect(gaveUp).toBeGreaterThan(4.9);
+    expect(gaveUp).toBeLessThan(6.5);
+  });
+});
