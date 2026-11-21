@@ -3,7 +3,9 @@ import type { CharacterRig } from './characterBuilder';
 import { propMaterial } from './geo';
 
 /** How see-through the ghost is (0 invisible .. 1 solid). */
-const GHOST_OPACITY = 0.45;
+export const GHOST_OPACITY = 0.45;
+/** The day ghost (#256) is fainter: the same look (tint, flicker, halo, pool of light), all of it scaled down to this. */
+export const DAY_OPACITY = 0.25;
 /** Cool blue the rig's colours are multiplied with, and the glow that shows in the dark. */
 const TINT = '#a9c7ff';
 const GLOW = '#4f7fe0';
@@ -34,9 +36,10 @@ function blobTexture(): THREE.DataTexture {
 /**
  * Turns a person's rig into a ghost (#255): the shared prop material is swapped for a see-through, blue-tinted copy of its
  * own, that casts no shadow. `set(alpha, t)` fades it (0..1 of `GHOST_OPACITY`) and adds a soft flicker; `dispose` frees the
- * material, the halo and the pool of light (the rig's own geometry is the owner's to dispose).
+ * material, the halo and the pool of light (the rig's own geometry is the owner's to dispose). `opacity` is how solid he gets
+ * at most (`GHOST_OPACITY`; the halo and the pool follow in proportion).
  */
-export function ghostify(rig: CharacterRig): { set(alpha: number, t: number): void; dispose(): void } {
+export function ghostify(rig: CharacterRig, opacity = GHOST_OPACITY): { set(alpha: number, t: number): void; dispose(): void } {
   const mat = propMaterial.clone();
   mat.transparent = true;
   mat.depthWrite = false; // limbs do not cut holes in each other
@@ -65,9 +68,10 @@ export function ghostify(rig: CharacterRig): { set(alpha: number, t: number): vo
     set(alpha, t) {
       // a soft flicker: now and then he thins out for a moment
       const flicker = 1 - 0.28 * Math.max(0, Math.sin(t * 9.1) * Math.sin(t * 2.3 + 1));
-      mat.opacity = GHOST_OPACITY * alpha * flicker;
-      haloMat.opacity = HALO * alpha * flicker;
-      poolMat.opacity = POOL * alpha * flicker;
+      const k = (alpha * opacity) / GHOST_OPACITY; // 1 at the night ghost's full strength
+      mat.opacity = alpha * opacity * flicker;
+      haloMat.opacity = HALO * k * flicker;
+      poolMat.opacity = POOL * k * flicker;
     },
     dispose() {
       mat.dispose();

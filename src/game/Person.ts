@@ -352,6 +352,8 @@ export class Person extends Walker {
   callGestureAmt = 0;
   /** the wordless bubble over somebody on a call on foot (null between two) */
   callText: string | null = null;
+  /** seconds left of the shiver after Christian's ghost went through them (#256); a bubble and a shake, nothing else changes */
+  chill = 0;
   private callGestureIn = 0;
   private callBubbleIn = 0;
   private callBubbleLeft = 0;

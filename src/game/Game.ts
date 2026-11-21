@@ -970,6 +970,27 @@ export class Game {
         return this.ghost.start() ? 'Christian kommt durch die Wand' : null;
       },
     });
+    // Christian's day wander (#256): he does not keep anybody busy (no place, nobody pulled out of anything), so `makePossible` has no step for him
+    this.sim.events.register({
+      id: 'christian-fact',
+      group: 'Christian',
+      label: 'Ordnungsgeist: Christian geistert durchs Büro',
+      run: () => {
+        this.christian.stop();
+        return this.ghost.startWander(1.5) ? 'Christian geistert durchs Büro' : null;
+      },
+    });
+    this.sim.events.register({
+      id: 'christian-fact-end',
+      group: 'Christian',
+      label: 'Ordnungsgeist verschwindet',
+      asIs: true,
+      run: () => {
+        if (!this.ghost.wandering) return null;
+        this.ghost.stop();
+        return 'Christian ist weg';
+      },
+    });
     this.sim.events.register({
       id: 'christian-end',
       group: 'Christian',
@@ -1486,6 +1507,7 @@ export class Game {
     dy = Math.atan2(Math.sin(dy), Math.cos(dy));
     w.lift += ((w.held ? 0.45 : 0) - w.lift) * 0.25;
     w.root.position.set(x, w.lift + (w instanceof Person ? w.seatLift : 0), z);
+    if (w instanceof Person && w.chill > 0) w.root.position.x += Math.sin(this.clock * 70) * 0.025 * Math.min(1, w.chill * 2); // the ghost went through them (#256): a quick shake that dies down
     w.root.rotation.y = w.prevYaw + dy * alpha;
 
     const ph = THREE.MathUtils.lerp(w.prevPhase, w.phase, alpha);
@@ -2249,6 +2271,7 @@ export class Game {
         ...(this.easter.angry && !this.easter.angry.who.away ? [say(`angry-${this.easter.angry.who.id}`, this.easter.angry.text, this.easter.angry.who)] : []),
         ...(call && !call.who.away ? [say(`welcome-${call.who.id}`, call.text, call.who)] : []),
         ...(this.ghost.text ? [{ id: 'christian', text: this.ghost.text, head: this.ghostHead() }] : []),
+        ...this.sim.people.filter((p) => p.chill > 0 && !p.away).map((p) => say(`chill-${p.id}`, '🥶', p)),
         ...this.sim.boombox.bubbles.map((b) => say(`boombox-${b.who.id}`, b.text, b.who)),
         ...this.sim.bonfire.bubbles.map((b) => say(`bonfire-${b.who.id}`, b.text, b.who)),
         ...this.sim.mail.bubbles.map((b) => say(`mail-${b.who.id}`, b.text, b.who)),

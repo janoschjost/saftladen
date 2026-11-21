@@ -394,6 +394,7 @@ export class Sim {
     this.presence.update(dt, this.nav);
     this.smoke.update(dt, this.nav);
     this.traffic.update(dt, this.walkers);
+    for (const p of this.people) if (p.chill > 0) p.chill = Math.max(0, p.chill - dt);
     for (const w of this.walkers) {
       w.traffic ??= this.traffic;
       if (this.stands(w)) {
