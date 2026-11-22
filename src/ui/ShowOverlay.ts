@@ -45,6 +45,11 @@ export class ShowOverlay {
     if (seconds === 0) void this.fadeEl.offsetWidth; // flush: a cut to black paints before the fade back in starts
   }
 
+  /** The home office dock shows (or goes) while the film runs. */
+  setDock(on: boolean): void {
+    document.body.classList.toggle('is-show-feeds', on);
+  }
+
   setPaused(on: boolean): void {
     this.pause.hidden = !on;
     document.body.classList.toggle('is-show-paused', on);

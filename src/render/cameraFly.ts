@@ -90,3 +90,46 @@ export function shotFrom(pos: Vec3, target: Vec3): Shot {
   const dist = Math.max(1e-6, Math.hypot(dx, dy, dz));
   return { x: target.x, y: target.y, z: target.z, azimuth: Math.atan2(dx, dz), polar: Math.acos(Math.min(1, Math.max(-1, dy / dist))), dist };
 }
+
+/** a point of a camera path */
+export interface PathKey extends Shot {
+  t: number;
+}
+
+/**
+ * Where a camera is at second `t` on a path through `keys` (in time order): one smooth curve that passes every key
+ * without stopping there (Catmull-Rom, tangents from the neighbours), standing still at the first and the last. The
+ * azimuth takes the short way round between keys, the distance blends in log space.
+ */
+export function samplePath(keys: readonly PathKey[], t: number): Shot {
+  const first = keys[0];
+  const last = keys[keys.length - 1];
+  if (t <= first.t) return first;
+  if (t >= last.t) return last;
+  let i = 0;
+  while (keys[i + 1].t < t) i++;
+  // the azimuths unrolled, so a path may go round more than half a turn
+  const az = [keys[0].azimuth];
+  for (let k = 1; k < keys.length; k++) az.push(az[k - 1] + wrapAngle(keys[k].azimuth - keys[k - 1].azimuth));
+  const dt = keys[i + 1].t - keys[i].t;
+  const u = (t - keys[i].t) / dt;
+  const channel = (value: (k: number) => number): number => {
+    const slope = (k: number) => (k <= 0 || k >= keys.length - 1 ? 0 : (value(k + 1) - value(k - 1)) / (keys[k + 1].t - keys[k - 1].t));
+    const u2 = u * u;
+    const u3 = u2 * u;
+    return (
+      (2 * u3 - 3 * u2 + 1) * value(i) +
+      (u3 - 2 * u2 + u) * dt * slope(i) +
+      (-2 * u3 + 3 * u2) * value(i + 1) +
+      (u3 - u2) * dt * slope(i + 1)
+    );
+  };
+  return {
+    x: channel((k) => keys[k].x),
+    y: channel((k) => keys[k].y),
+    z: channel((k) => keys[k].z),
+    azimuth: channel((k) => az[k]),
+    polar: channel((k) => keys[k].polar),
+    dist: Math.exp(channel((k) => Math.log(keys[k].dist))),
+  };
+}

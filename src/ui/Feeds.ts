@@ -27,8 +27,8 @@ export class Feeds {
   private count = document.getElementById('feeds-count') as HTMLElement;
   private anims: Animation[] = [];
   private tilesEls = new Map<string, { el: HTMLElement; variant: number; activity: HTMLElement }>();
-  /** the show (#275): the person whose feed fills the screen */
-  private cinemaId: string | null = null;
+  /** the show (#275): whose tile is the big one */
+  private bigWanted: string | null = null;
 
   constructor() {
     makeCollapsible(this.root, this.root.querySelector('.m-feeds__title') as HTMLElement, 'saftladen.feeds.collapsed', 'dock', PHONE_FOLDED);
@@ -61,20 +61,20 @@ export class Feeds {
     }
     this.root.hidden = entries.length === 0;
     this.count.textContent = String(entries.length);
-    this.applyCinema();
+    this.applyBig();
   }
 
-  /** The show: one feed fills the screen (`body.is-show` styles it), `null` puts it away. Shows as soon as that person's tile exists. */
-  cinema(id: string | null): void {
-    this.cinemaId = id;
-    this.applyCinema();
+  /** The show: this tile is the big one (`null`: all small again); a tile that is not there yet gets it as soon as it is. */
+  enlarge(id: string | null): void {
+    this.bigWanted = id;
+    this.applyBig();
   }
 
-  private applyCinema(): void {
-    if (this.cinemaId === null && !this.root.classList.contains('is-cinema')) return; // normal play: nothing to undo
-    const on = this.cinemaId !== null && this.tilesEls.has(this.cinemaId);
-    this.root.classList.toggle('is-cinema', on);
-    for (const [id, t] of this.tilesEls) t.el.classList.toggle('is-cinema-focus', on && id === this.cinemaId);
+  private applyBig(): void {
+    const big = [...this.tilesEls].find(([, t]) => t.el.classList.contains('is-large'))?.[0] ?? null;
+    const want = this.bigWanted;
+    if (want === big || (want !== null && !this.tilesEls.has(want))) return;
+    this.focus((want ?? big)!); // focus toggles: the wanted tile grows, or the big one shrinks
   }
 
   /** Enlarge one tile (click again to shrink). The tiles and the panel glide to their new size (FLIP). */

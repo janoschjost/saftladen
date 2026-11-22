@@ -5,19 +5,20 @@ test('show.play: ?show starts the film: HUD away, letterbox bars up, the first s
   await expect(page.locator('body')).toHaveClass(/is-show/);
   await expect(page.locator('#show')).toBeVisible();
   await expect(page.locator('.l-hud')).toBeHidden();
-  expect(await read(page, (g) => g.show?.id)).toBe('coffee');
-  // the subtitle comes a second in, and goes
-  await read(page, (g) => g.advance(1.5));
+  expect(await read(page, (g) => g.show?.chapter)).toBe('coffee');
+  // the subtitle comes a few seconds in, with a plate for each of the people it is about
+  await read(page, (g) => g.advance(3.5));
   await expect(page.locator('#show-sub')).toHaveText('Ohne Kaffee kein Konzept.');
   await expect(page.locator('.m-show__plate')).toHaveCount(3);
-  await until(page, (g) => g.show?.id === 'printer', undefined, 30_000); // the next scene follows by itself
+  await until(page, (g) => g.show?.chapter === 'printer', undefined, 30_000); // the next chapter follows by itself, no cut
   expect(errors).toEqual([]);
 });
 
-test('show.script: the film plays from the first scene to the end without an error', async ({ page }) => {
-  test.slow(); // ~250 game seconds, a frame per half second
+test('show.script: the film plays from the first second to the end without an error, with no room or table label in sight', async ({ page }) => {
+  test.slow(); // ~300 game seconds, a frame per half second
   const errors = await boot(page, '/?test&seed=1&show');
-  expect(await read(page, (g) => g.show?.id)).toBe('night');
+  expect(await read(page, (g) => g.show?.chapter)).toBe('night');
+  expect(await read(page, (g) => [g.sim.model.rowLabels.visible, g.sim.model.roomLabels.visible])).toEqual([false, false]);
   await until(page, (g) => g.show?.finished, undefined, 320_000);
   expect(errors).toEqual([]);
 });

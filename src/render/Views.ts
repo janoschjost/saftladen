@@ -419,6 +419,13 @@ export class Views {
     this.fly = { from: this.orbitShot, to: goal, t: 0, dur: still ? 0 : duration, ease };
   }
 
+  /** The show puts the Orbit camera exactly here (a flight in progress ends). */
+  place(shot: Shot): void {
+    if (this.mode !== 'orbit') return;
+    this.fly = null;
+    this.applyShot(shot);
+  }
+
   /** The show takes the Orbit camera (true) or gives it back: while it has it, dragging and the wheel do nothing. */
   setDirected(on: boolean): void {
     this.directed = on;

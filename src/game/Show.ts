@@ -1,20 +1,16 @@
-import type { Ease } from '../render/cameraFly';
-
 /**
- * The Christmas show (#275): a film the game plays by itself. It is a list of scenes (`src/data/show.ts`); a scene says
- * who is where, what time it is and, on a timeline, which camera shot, dev event and subtitle come when. This file
- * only runs the timeline: what a cue does to the office is the host's job (`ShowDirector`), so it needs no browser.
+ * The Christmas show (#275): one uncut film the game plays by itself. It is a single camera path through the office
+ * and a timeline of cues (`src/data/show.ts`). Everybody stands at their place from the start of the day and the camera
+ * visits them one after the other; an event only runs when the camera gets there. This file runs the timeline: what a
+ * cue does to the office is the host's job (`ShowDirector`), so it needs no browser.
  */
 
-/** where a camera looks from and at; everything but one of `action`, `at`, `person` or `overview` is optional */
+/** where a camera looks from and at; everything but one of `action`, `at` or `overview` is optional */
 export interface ShotSpec {
   /** the place of an Aktionen card (`src/data/actions.ts`), with that card's angle and zoom unless given here */
   action?: string;
   /** a floor point: x, z in game metres */
   at?: [number, number];
-  /** a person, where they stand at the cue (or, with `follow`, wherever they walk) */
-  person?: string;
-  follow?: boolean;
   /** the whole office, as the Orbit view starts */
   overview?: boolean;
   /** degrees around the target: 0 looks from the front of the office (+z), positive turns towards +x, 180 from the back */
@@ -27,66 +23,81 @@ export interface ShotSpec {
   height?: number;
 }
 
+/** a point of the camera path: the camera is at this shot at second `t`, and moves smoothly through all of them */
+export interface CameraKey {
+  t: number;
+  shot: ShotSpec;
+}
+
+/** people who wait together: at a floor point (`at`), or at their desks without it */
+export interface Group {
+  who: string[];
+  at?: [number, number];
+}
+
+/** Who is where from now on. Everybody who is in none of the lists is out of the film. */
+export interface Stage {
+  /** who waits in the office, held where they stand until an event of theirs runs (an event's `cast` wakes them) */
+  groups?: Group[];
+  /** who works from home (their feeds show in the dock while a `feed` is on) */
+  home?: string[];
+  /** who is outside the door, waiting for an `arrive` cue */
+  outside?: string[];
+  /** clock hour the sky jumps to (later the sky runs on by itself, see `sky`) */
+  hour?: number;
+}
+
 export type CueBody =
   /** a subtitle line, with the people it is about (name and role show under it); gone after `hold` seconds (default: by its length) */
   | { say: string; who?: string[]; hold?: number }
   /** a title card over the picture */
   | { title: string; sub?: string; hold?: number }
-  /** the camera flies to a shot in `over` seconds (0: at once) */
-  | { shot: ShotSpec; over?: number; ease?: Ease }
-  /** a dev event (`dev.list()`); tried again for a few seconds when it cannot run yet */
-  | { event: string }
-  /** these people come in through the front door, `gap` seconds apart (they have to be in the scene's `outside`) */
+  /**
+   * a dev event (`dev.list()`); tried again for a few seconds when it cannot run yet. `cast`: only these people can be
+   * picked by it, they are woken from their places. `free`: they live on by the schedule's rules (smoke breaks, the post).
+   */
+  | { event: string; cast?: string[]; free?: true }
+  /** these people come in through the front door, `gap` seconds apart (they have to be `outside` in the stage) */
   | { arrive: string[]; gap?: number }
-  /** the sun runs on to this hour in `over` seconds */
-  | { sky: number; over: number }
-  /** a home office feed fills the screen (a person's id); null: back to the office */
-  | { feed: string | null };
+  /** the sun runs from one hour to another in `over` seconds */
+  | { sky: [number, number]; over: number }
+  /** the home office dock shows, this feed the big one (a person's id); null: the dock goes */
+  | { feed: string | null }
+  /** the picture goes to black (true) or comes back (false) in `over` seconds */
+  | { fade: boolean; over?: number }
+  /** the cast is put in place */
+  | { stage: Stage }
+  /** a chapter: `?show=<name>` starts here and the arrow keys jump between chapters */
+  | { mark: string };
 
 export type Cue = CueBody & { t: number };
 
-export interface Scene {
-  id: string;
-  /** seconds the scene lasts, cues included */
+export interface Film {
+  /** seconds the whole film lasts */
   length: number;
-  /** clock hour the sky stands at when it begins */
-  hour: number;
-  /** who is in the office (and stays there). Everybody who is in no list is out of the film. */
-  present?: string[];
-  /** who works from home (their feed tile shows when it is on screen) */
-  home?: string[];
-  /** where the people of `present` stand when the scene begins (x, z): a place where something is about to happen starts with its people there; without it they sit at their desks */
-  near?: [number, number];
-  /** the people of `present` are put there once and then live on by the simulation's rules, not held: the events that only pick people the schedule has (smoke breaks, the post) need it */
-  loose?: true;
-  /** who is outside the door, waiting for an `arrive` cue */
-  outside?: string[];
-  /** false: no dip to black from the scene before, the picture runs on (the camera and the people stay as they are) */
-  cut?: boolean;
+  camera: CameraKey[];
   cues: Cue[];
 }
 
-/** seconds the picture takes to go to black and back between two scenes */
-export const SHOW_FADE = 0.6;
 /** an event that cannot run yet is tried again every half second for this long */
 const RETRY_FOR = 6;
 const RETRY_EVERY = 0.5;
 
 /** What the show does to the world; `ShowDirector` is the real one. */
 export interface ShowHost {
-  /** a scene begins: put everybody where it wants them (`continuous`: nothing is reset, it runs on from the scene before) */
-  beginScene(scene: Scene, continuous: boolean): void;
-  shot(spec: ShotSpec, over: number, ease: Ease): void;
+  stage(stage: Stage): void;
   /** false: the event cannot run (yet) */
-  event(id: string): boolean;
+  event(id: string, cast: string[] | undefined, free: boolean): boolean;
   arrive(id: string): void;
-  sky(hour: number, over: number): void;
+  /** the sun runs from `from` to `to` in `over` seconds, `elapsed` of which are gone already (a jump into the film) */
+  sky(from: number, to: number, over: number, elapsed: number): void;
   feed(id: string | null): void;
   say(text: string | null, who: string[]): void;
   title(head: string | null, sub?: string): void;
-  /** the picture goes to black (true) or comes back (false) in `seconds` */
-  fade(black: boolean, seconds: number): void;
-  /** the last scene is over */
+  fade(black: boolean, over: number): void;
+  /** the camera is where the path is at second `t` */
+  camera(t: number): void;
+  /** the film is over */
   end(): void;
 }
 
@@ -95,7 +106,7 @@ export function holdFor(text: string): number {
   return Math.min(7, Math.max(2.5, 1.2 + text.length * 0.055));
 }
 
-/** Cues with an `arrive` list become one cue per person, `gap` seconds apart. */
+/** Cues with an `arrive` list become one cue per person, `gap` seconds apart; cues are in the order of their second. */
 export function expand(cues: readonly Cue[]): Cue[] {
   const out: Cue[] = [];
   for (const c of cues) {
@@ -105,67 +116,71 @@ export function expand(cues: readonly Cue[]): Cue[] {
   return out.sort((a, b) => a.t - b.t); // stable: cues at the same second stay in the order they were written
 }
 
-/** The whole film as the sum of its scenes, in seconds. */
-export const showLength = (scenes: readonly Scene[]): number => scenes.reduce((sum, s) => sum + s.length, 0);
-
-/** Plays the scenes one after the other, firing each cue when its second comes. */
+/** Plays the film: fires each cue when its second comes and keeps the camera on its path. */
 export class ShowRunner {
-  /** the scene that plays now (-1: not started) */
-  index = -1;
-  /** seconds into that scene */
+  /** seconds into the film */
   t = 0;
   finished = false;
-  private cues: Cue[] = [];
+  private cues: Cue[];
+  /** the chapters, in time order */
+  readonly marks: Array<{ name: string; t: number }>;
   private next = 0;
   private sayUntil = Infinity;
   private titleUntil = Infinity;
-  private retries: Array<{ id: string; until: number; at: number }> = [];
-  private dipped = false;
+  private retries: Array<{ id: string; cast?: string[]; free: boolean; until: number; at: number }> = [];
 
   constructor(
-    readonly scenes: readonly Scene[],
+    readonly film: Film,
     private host: ShowHost,
-  ) {}
-
-  /** Begins scene `index` (0 = the first); the one that was running ends where it is. */
-  start(index = 0): void {
-    const i = Math.min(this.scenes.length - 1, Math.max(0, index));
-    const scene = this.scenes[i];
-    // a scene that runs on from the one before only when it plays on in order; a jump always starts it clean
-    const prev = this.scenes[this.index];
-    const continuous = scene.cut === false && i === this.index + 1 && !this.finished && !!prev && this.t >= prev.length;
-    this.index = i;
-    this.t = 0;
-    this.finished = false;
-    this.cues = expand(scene.cues);
-    this.next = 0;
-    this.sayUntil = this.titleUntil = Infinity;
-    this.retries = [];
-    this.dipped = false;
-    this.host.beginScene(scene, continuous);
-    this.fire();
+  ) {
+    this.cues = expand(film.cues);
+    this.marks = this.cues.flatMap((c) => ('mark' in c ? [{ name: c.mark, t: c.t }] : []));
   }
 
-  /** The scene `by` further on (negative: back); past the last one the show ends. */
+  /** Starts at the film's beginning, or at a chapter (its name, or its number). */
+  start(from?: string): void {
+    const n = Number(from);
+    const mark = this.marks.find((m) => m.name === from) ?? (from !== undefined && from !== '' && Number.isInteger(n) ? this.marks[n] : undefined);
+    this.seek(mark?.t ?? 0);
+  }
+
+  /** The chapter `by` further on (negative: back); past the last one the film ends. */
   skip(by: number): void {
-    const to = this.index + by;
-    if (to >= this.scenes.length) return this.finish();
-    this.start(to);
+    const here = this.marks.filter((m) => m.t <= this.t + 0.01).length - 1;
+    const to = here + by;
+    if (to >= this.marks.length) {
+      this.t = this.film.length;
+      return this.finish();
+    }
+    this.seek(this.marks[Math.max(0, to)].t);
+  }
+
+  /** Jumps to second `t`: the cast, the sun and the dock are as the cues before it left them; events and lines before it are not replayed. */
+  seek(t: number): void {
+    this.t = t;
+    this.finished = false;
+    this.next = this.cues.findIndex((c) => c.t >= t);
+    if (this.next < 0) this.next = this.cues.length;
+    this.sayUntil = this.titleUntil = Infinity;
+    this.retries = [];
+    this.host.say(null, []);
+    this.host.title(null);
+    const before = this.cues.filter((c) => c.t < t);
+    const stage = before.filter((c) => 'stage' in c).at(-1);
+    if (stage && 'stage' in stage) this.host.stage(stage.stage);
+    for (const c of before) if ('arrive' in c) this.host.arrive(c.arrive[0]); // who came in through the door before is in
+    const sky = before.filter((c) => 'sky' in c).at(-1);
+    if (sky && 'sky' in sky) this.host.sky(sky.sky[0], sky.sky[1], sky.over, t - sky.t);
+    const feed = before.filter((c) => 'feed' in c).at(-1);
+    this.host.feed(feed && 'feed' in feed ? feed.feed : null);
+    this.fire();
   }
 
   update(dt: number): void {
-    if (this.index < 0 || this.finished) return;
+    if (this.finished) return;
     this.t += dt;
     this.fire();
-    const scene = this.scenes[this.index];
-    const following = this.scenes[this.index + 1];
-    if (following && following.cut !== false && !this.dipped && this.t >= scene.length - SHOW_FADE) {
-      this.dipped = true;
-      this.host.fade(true, SHOW_FADE);
-    }
-    if (this.t < scene.length) return;
-    if (following) this.start(this.index + 1);
-    else this.finish();
+    if (this.t >= this.film.length) this.finish();
   }
 
   private finish(): void {
@@ -178,7 +193,7 @@ export class ShowRunner {
     if (this.retries.length) {
       this.retries = this.retries.filter((r) => {
         if (this.t < r.at) return true;
-        if (this.host.event(r.id) || this.t >= r.until) return false;
+        if (this.host.event(r.id, r.cast, r.free) || this.t >= r.until) return false;
         r.at = this.t + RETRY_EVERY;
         return true;
       });
@@ -191,6 +206,7 @@ export class ShowRunner {
       this.titleUntil = Infinity;
       this.host.title(null);
     }
+    this.host.camera(this.t);
   }
 
   private run(c: Cue): void {
@@ -200,11 +216,13 @@ export class ShowRunner {
     } else if ('title' in c) {
       this.host.title(c.title, c.sub);
       this.titleUntil = this.t + (c.hold ?? 4);
-    } else if ('shot' in c) this.host.shot(c.shot, c.over ?? 0, c.ease ?? 'inOut');
-    else if ('event' in c) {
-      if (!this.host.event(c.event)) this.retries.push({ id: c.event, until: this.t + RETRY_FOR, at: this.t + RETRY_EVERY });
+    } else if ('event' in c) {
+      const free = !!c.free;
+      if (!this.host.event(c.event, c.cast, free)) this.retries.push({ id: c.event, cast: c.cast, free, until: this.t + RETRY_FOR, at: this.t + RETRY_EVERY });
     } else if ('arrive' in c) c.arrive.forEach((id) => this.host.arrive(id));
-    else if ('sky' in c) this.host.sky(c.sky, c.over);
+    else if ('sky' in c) this.host.sky(c.sky[0], c.sky[1], c.over, 0);
     else if ('feed' in c) this.host.feed(c.feed);
+    else if ('fade' in c) this.host.fade(c.fade, c.over ?? 1);
+    else if ('stage' in c) this.host.stage(c.stage);
   }
 }

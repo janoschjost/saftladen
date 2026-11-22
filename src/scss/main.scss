@@ -3663,7 +3663,7 @@
 }
 
 /*
- * The show (#275) hides the HUD and lets one home office feed fill the screen. Outside the layers on purpose: the phone
+ * The show (#275) hides the HUD; the home office dock only shows while its feeds are on. Outside the layers on purpose: the phone
  * rules above are unlayered too and would win over a layered rule.
  */
 body.is-show {
@@ -3689,59 +3689,7 @@ body.is-show {
         display: none !important;
     }
 
-    .l-dock {
-        inset: 0;
-        display: block;
-        pointer-events: none;
-    }
-
-    .m-feeds {
-        position: fixed;
-        inset: 0;
-        z-index: 3;
-        display: none;
-        width: auto;
-        max-height: none;
-        margin: 0;
-        padding: 0;
-        overflow: hidden;
-        pointer-events: none;
-
-        &.is-cinema {
-            display: grid;
-            place-items: center;
-        }
-
-        .m-feeds__title,
-        .m-feed {
-            display: none;
-        }
-
-        .m-feeds__grid {
-            display: block;
-        }
-
-        .m-feed.is-cinema-focus {
-            display: block;
-            width: min(88vw, calc((100vh - 2 * var(--show-bar)) * 1.6 - 4rem));
-            order: 0;
-            box-shadow: 0 0 0 100vmax black;
-            cursor: none;
-            animation: show-push 12s ease-out forwards;
-        }
-    }
-}
-
-body.is-show-paused .m-feed.is-cinema-focus {
-    animation-play-state: paused;
-}
-
-@keyframes show-push {
-    from {
-        transform: scale(1);
-    }
-
-    to {
-        transform: scale(1.08);
+    &:not(.is-show-feeds) .l-dock {
+        display: none !important;
     }
 }

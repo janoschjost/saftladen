@@ -748,10 +748,10 @@ export class Game {
       get meetingLight() {
         return g.meetingLight;
       },
-      /** the Christmas show, while it plays: scene number, seconds into it, over */
+      /** the Christmas show, while it plays: chapter, seconds into the film, over */
       get show() {
         const r = g.show?.runner;
-        return r ? { scene: r.index, id: r.scenes[r.index]?.id, t: r.t, finished: r.finished } : null;
+        return r ? { chapter: r.marks.filter((m) => m.t <= r.t).at(-1)?.name, t: r.t, finished: r.finished } : null;
       },
       /** the drawn home office rooms, by room number (null: not built yet) */
       get homes() {
@@ -1264,6 +1264,12 @@ export class Game {
       overlay,
       xmas: this.xmas,
       setRoof: (on) => this.setRoof(on),
+      hideLabels: () => {
+        this.sim.model.rowLabels.visible = false;
+        this.sim.model.roomLabels.visible = false;
+        this.seats.setLabelsVisible(false);
+        this.overlay.setNames(false);
+      },
       onEnd: () => undefined, // it stays on its last picture until Esc
     }));
     // capture: nothing but the show's keys reaches the game while it plays
