@@ -660,7 +660,7 @@ export function registerSimEvents(sim: Sim): void {
   events.register({
     id: 'oscar-tidy-end',
     group: 'Aktionen',
-    label: 'Oscar hört auf zu räumen',
+    label: 'Oscar hört auf aufzuräumen',
     asIs: true,
     run: () => {
       if (!sim.tidy.active) return null;
