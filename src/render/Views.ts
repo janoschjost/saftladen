@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { icon, type IconName } from '../ui/icons';
 import { Popover } from '../ui/Popover';
 import { walkFree, type WalkColliders } from '../game/walkCollision';
-import { blendShot, easeInOut, FLY_TIME, shotFrom, shotPosition, TRAIL, type Shot } from './cameraFly';
+import { blendShot, EASE, FLY_TIME, shotFrom, shotPosition, TRAIL, type Ease, type Shot } from './cameraFly';
 import { IsoCamera } from './IsoCamera';
 import { ax, az } from './officeModel';
 import { WORLD } from './World';
@@ -178,7 +178,9 @@ export class Views {
   private pressAt = { x: 0, y: 0 };
   private hint: HTMLElement | null;
   /** Orbit camera flight (Aktionen): from a shot to a fixed shot, or to a moving one it keeps trailing after arrival */
-  private fly: { from: Shot; to: Shot | (() => Shot); t: number; dur: number } | null = null;
+  private fly: { from: Shot; to: Shot | (() => Shot); t: number; dur: number; ease: Ease } | null = null;
+  /** the show's camera: the player's hands are off the Orbit camera (no drag, no wheel) */
+  private directed = false;
   /** the player grabbed the Orbit camera (drag, wheel, touch): a running flight stops first */
   onUserCamera: (() => void) | null = null;
 
@@ -284,7 +286,7 @@ export class Views {
   setMode(mode: ViewMode, keepCamera = false): void {
     this.mode = mode;
     this.iso.enabled = mode === 'iso';
-    this.orbit.enabled = mode === 'orbit';
+    this.orbit.enabled = mode === 'orbit' && !this.directed;
     this.planCtl.enabled = mode === 'plan';
     this.persp.rotation.order = mode === 'walk' ? 'YXZ' : 'XYZ';
     if (mode !== 'walk' && mode !== 'third') {
@@ -411,10 +413,23 @@ export class Views {
    * is a moving shot (a walking person): it is read every frame and trailed after arrival until `stopFly`.
    * Only in Orbit; with reduced motion the camera cuts instead.
    */
-  flyTo(goal: Shot | (() => Shot), duration = FLY_TIME): void {
+  flyTo(goal: Shot | (() => Shot), duration = FLY_TIME, ease: Ease = 'inOut'): void {
     if (this.mode !== 'orbit') return;
     const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    this.fly = { from: this.orbitShot, to: goal, t: 0, dur: still ? 0 : duration };
+    this.fly = { from: this.orbitShot, to: goal, t: 0, dur: still ? 0 : duration, ease };
+  }
+
+  /** The show puts the Orbit camera exactly here (a flight in progress ends). */
+  place(shot: Shot): void {
+    if (this.mode !== 'orbit') return;
+    this.fly = null;
+    this.applyShot(shot);
+  }
+
+  /** The show takes the Orbit camera (true) or gives it back: while it has it, dragging and the wheel do nothing. */
+  setDirected(on: boolean): void {
+    this.directed = on;
+    this.orbit.enabled = this.mode === 'orbit' && !on;
   }
 
   stopFly(): void {
@@ -426,7 +441,7 @@ export class Views {
     const goal = typeof f.to === 'function' ? f.to() : f.to;
     if (f.t < 1) {
       f.t = f.dur > 0 ? Math.min(1, f.t + dt / f.dur) : 1;
-      this.applyShot(blendShot(f.from, goal, easeInOut(f.t)));
+      this.applyShot(blendShot(f.from, goal, EASE[f.ease](f.t)));
     } else if (typeof f.to === 'function') {
       this.applyShot(blendShot(this.orbitShot, goal, 1 - Math.exp(-TRAIL * dt)));
     } else {

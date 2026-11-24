@@ -23,6 +23,9 @@ import { People } from '../ui/People';
 import { OFFICE_ACTIONS, type OfficeAction } from '../data/actions';
 import { ACTION_POLAR, ARRIVE_RADIUS, FOLLOW_ZOOM, type Shot } from '../render/cameraFly';
 import { Feeds } from '../ui/Feeds';
+import { ShowDebug } from '../ui/ShowDebug';
+import { ShowOverlay } from '../ui/ShowOverlay';
+import { ShowDirector } from './ShowDirector';
 import { Overlay } from '../ui/Overlay';
 import { Roster } from '../ui/Roster';
 import { rosterEntries } from './rosterEntries';
@@ -125,6 +128,11 @@ export class Game {
   private ghost!: Christian;
   private timeControl!: TimeControl;
   private feeds = new Feeds();
+  /** the Christmas show (#275), while it plays */
+  private show: ShowDirector | null = null;
+  /** `?show&debug`: how fast the film runs, and the strip that tests it */
+  private showSpeed = 1;
+  private showDebug: ShowDebug | null = null;
   private roster: Roster;
   private actions: Actions;
   private seats: Seats;
@@ -245,7 +253,9 @@ export class Game {
       // disco: everybody who is up stops and dances on the spot; an angry person stands and fumes
       stands: (w) => (this.easter.disco > 0.3 && w instanceof Person && w.inOffice && w.sit < 0.05 && !w.held && !w.controlled) || this.easter.angry?.who === w,
       // a dev event points at somebody: selected
-      point: (w) => (this.selected = w),
+      point: (w) => {
+        if (!this.show) this.selected = w; // the show aims the camera itself
+      },
       prepare: (m) => (this.editor = new RoomEditor(this.scene, m.items, WORLD, () => this.sim.relayout(), () => this.sim.blocked())),
     });
     const model = this.sim.model;
@@ -592,6 +602,13 @@ export class Game {
           this.settings.setOpen(!this.settings.isOpen);
           return;
         }
+        if (e.key.toLowerCase() === 'p' && !this.steered && !this.editor.active && !this.action?.owned) {
+          // the film starts on a fresh page, so nothing of what is going on is in its way; the other params stay
+          const q = new URLSearchParams(location.search);
+          q.delete('show');
+          location.assign(`${location.pathname}?${q.size ? `${q}&` : ''}show${location.hash}`);
+          return;
+        }
         // A steers left while a person is steered, and ends the Konami code
         if (e.key.toLowerCase() === 'a' && !this.steered && !konami && !this.editor.active) {
           this.sheet.toggle();
@@ -687,7 +704,7 @@ export class Game {
 
   /** Game seconds per real second the player picked: 0 while paused (or while the welcome card holds the game), else 1x / 10x / 25x. */
   private timeScale(): number {
-    return this.paused ? 0 : this.sim.tod.scale;
+    return this.paused ? 0 : this.sim.tod.scale * (this.show ? this.showSpeed : 1);
   }
 
   /**
@@ -749,6 +766,11 @@ export class Game {
       },
       get meetingLight() {
         return g.meetingLight;
+      },
+      /** the Christmas show, while it plays: chapter, seconds into the film, over */
+      get show() {
+        const r = g.show?.runner;
+        return r ? { chapter: r.marks.filter((m) => m.t <= r.t).at(-1)?.name, t: r.t, finished: r.finished } : null;
       },
       /** the drawn home office rooms, by room number (null: not built yet) */
       get homes() {
@@ -831,6 +853,7 @@ export class Game {
     this.updateDay(dt);
     this.updateSteer(dt);
     this.updateAction(dt);
+    this.show?.update(dt);
     this.sim.presence.applyJump(); // a jump made while paused: nothing steps then
     while (this.acc >= STEP) {
       this.sim.step(STEP);
@@ -859,7 +882,8 @@ export class Game {
   private stepView(dt: number): void {
     this.updateFollow(dt);
     this.timeControl.sync();
-    this.views.update(dt);
+    this.views.update(this.show && this.paused ? 0 : dt); // a paused film holds the camera too
+    if (this.show) this.showDebug?.sync(this.show.runner.t);
     this.updateAim();
     if (this.reply && (this.reply.t -= dt) <= 0) this.reply = null;
     if ((this.persistTimer -= dt) <= 0) {
@@ -919,6 +943,7 @@ export class Game {
 
   /** Remembers time of day, weekday, camera and selection for the next visit. */
   private saveSession(): void {
+    if (this.show) return; // the film is nobody's session: the next visit starts where the player left off
     saveState({ cycle: this.sim.tod.cycle, weekday: this.sim.tod.weekday, view: this.views.snapshot(), selected: this.selected instanceof Person ? this.selected.id : undefined });
   }
 
@@ -1315,6 +1340,70 @@ export class Game {
   /** Gear, Aktionen and their keys only exist outside the walk view, the day and the full-screen menus. */
   private get hudKeys(): boolean {
     return !this.day && this.views.mode !== 'walk' && this.views.mode !== 'third' && this.picker.hasAttribute('hidden') && this.dayMenu.hasAttribute('hidden');
+  }
+
+  /**
+   * The Christmas show (#275): a film that plays by itself (`src/data/show.ts`). `from` is a scene id or number to
+   * start at. Space pauses, ← → jump a scene, Esc leaves: the page reloads without `?show`, so the player's own
+   * office is back as they left it (the film never saves).
+   */
+  startShow(from?: string): void {
+    if (this.show) return;
+    this.endAction(false);
+    this.selected = this.followed = null;
+    this.release(this.steered);
+    this.paused = false;
+    const overlay = new ShowOverlay();
+    const show = (this.show = new ShowDirector({
+      sim: this.sim,
+      views: this.views,
+      feeds: this.feeds,
+      overlay,
+      xmas: this.xmas,
+      setRoof: (on) => this.setRoof(on),
+      hideLabels: () => {
+        this.sim.model.rowLabels.visible = false;
+        this.sim.model.roomLabels.visible = false;
+        this.seats.setLabelsVisible(false);
+        this.overlay.setNames(false);
+      },
+      onEnd: () => undefined, // it stays on its last picture until Esc
+    }));
+    // capture: nothing but the show's keys reaches the game while it plays
+    window.addEventListener(
+      'keydown',
+      (e) => {
+        e.stopImmediatePropagation();
+        if (e.repeat || e.altKey || e.ctrlKey || e.metaKey) return;
+        if (e.key === 'Escape') {
+          const q = new URLSearchParams(location.search);
+          q.delete('show');
+          location.assign(`${location.pathname}${q.size ? `?${q}` : ''}${location.hash}`);
+        }
+        else if (e.code === 'Space') {
+          e.preventDefault();
+          this.paused = !this.paused;
+          overlay.setPaused(this.paused);
+        } else if (e.key === 'ArrowRight') show.runner.skip(1);
+        else if (e.key === 'ArrowLeft') show.runner.skip(-1);
+      },
+      true,
+    );
+    if (new URLSearchParams(location.search).has('debug')) {
+      const { runner } = show;
+      this.showDebug = new ShowDebug({
+        length: runner.film.length,
+        chapters: runner.marks,
+        paused: () => this.paused,
+        togglePause: () => {
+          this.paused = !this.paused;
+          overlay.setPaused(this.paused);
+        },
+        setSpeed: (speed) => (this.showSpeed = speed),
+        seek: (t) => runner.seek(t),
+      });
+    }
+    show.begin(from);
   }
 
   /**

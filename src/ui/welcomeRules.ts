@@ -22,6 +22,6 @@ export function pickGreeter<T extends { role: string; portrait: string | null }>
 export function shouldShowWelcome(search: string, hash: string, seen: boolean): boolean {
   if (hash === '#welcome') return true;
   const q = new URLSearchParams(search);
-  if ((q.has('test') && q.get('welcome') !== '1') || q.get('welcome') === '0') return false;
+  if ((q.has('test') && q.get('welcome') !== '1') || q.get('welcome') === '0' || q.has('show')) return false;
   return !seen;
 }

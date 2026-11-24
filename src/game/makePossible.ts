@@ -19,11 +19,8 @@ const inside = (sim: Sim, p: Person) =>
   sim.nav.nearestWalkable(CORRIDOR_POINT, 6) ??
   CORRIDOR_POINT;
 
-/**
- * The things that can stand in the way of a dev event, mildest first: a place somebody uses, then somebody who is
- * not in the office. Each one returns false when there was nothing to do (so nothing changed).
- */
-function* obstacles(sim: Sim): Generator<() => boolean> {
+/** The places somebody uses, each emptied by the function it yields (false: nobody was there, nothing changed). */
+function* places(sim: Sim): Generator<() => boolean> {
   yield () =>
     !!sim.meetingRoom.current && (sim.meetingRoom.abort(sim.nav), true);
   yield () => !sim.kitchen.free && (sim.kitchen.abort(), true);
@@ -48,6 +45,19 @@ function* obstacles(sim: Sim): Generator<() => boolean> {
     talks.forEach((c) => c.members.slice().forEach((m) => sim.social.leave(m)));
     return talks.length > 0;
   };
+}
+
+/** Empties every place at once (meeting room, kitchen, pod, studio, a running scene ...): the show starts each scene clean. */
+export function clearPlaces(sim: Sim): void {
+  for (const clear of places(sim)) clear();
+}
+
+/**
+ * The things that can stand in the way of a dev event, mildest first: a place somebody uses, then somebody who is
+ * not in the office. Each one returns false when there was nothing to do (so nothing changed).
+ */
+function* obstacles(sim: Sim): Generator<() => boolean> {
+  yield* places(sim);
   // everybody who is away comes in one after the other, in no particular order; held by a scene they stay where they are
   const away = sim.people
     .filter((p) => p.presence !== "in")

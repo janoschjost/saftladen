@@ -30,6 +30,7 @@ try {
   });
   if (dev) void import('./game/debugParams').then((m) => m.applyDebugParams(game));
   if (dev) void import('./game/DevForce').then((m) => m.installForceState(game));
+  if (query.has('show')) game.startShow(query.get('show') ?? undefined); // the Christmas show, also in the production bundle
   new CharacterPicker();
   new DayMenu((id) => game.startDay(id));
   new Welcome((held) => (game.paused = held));
