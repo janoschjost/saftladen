@@ -22,6 +22,7 @@ import { People } from '../ui/People';
 import { OFFICE_ACTIONS, type OfficeAction } from '../data/actions';
 import { ACTION_POLAR, ARRIVE_RADIUS, FOLLOW_ZOOM, type Shot } from '../render/cameraFly';
 import { Feeds } from '../ui/Feeds';
+import { ShowDebug } from '../ui/ShowDebug';
 import { ShowOverlay } from '../ui/ShowOverlay';
 import { ShowDirector } from './ShowDirector';
 import { Overlay } from '../ui/Overlay';
@@ -120,6 +121,9 @@ export class Game {
   private feeds = new Feeds();
   /** the Christmas show (#275), while it plays */
   private show: ShowDirector | null = null;
+  /** `?show&debug`: how fast the film runs, and the strip that tests it */
+  private showSpeed = 1;
+  private showDebug: ShowDebug | null = null;
   private roster: Roster;
   private actions: Actions;
   private seats: Seats;
@@ -689,7 +693,7 @@ export class Game {
 
   /** Game seconds per real second the player picked: 0 while paused (or while the welcome card holds the game), else 1x / 10x / 25x. */
   private timeScale(): number {
-    return this.paused ? 0 : this.sim.tod.scale;
+    return this.paused ? 0 : this.sim.tod.scale * (this.show ? this.showSpeed : 1);
   }
 
   /**
@@ -863,6 +867,7 @@ export class Game {
     this.updateFollow(dt);
     this.timeControl.sync();
     this.views.update(this.show && this.paused ? 0 : dt); // a paused film holds the camera too
+    if (this.show) this.showDebug?.sync(this.show.runner.t);
     this.updateAim();
     if (this.reply && (this.reply.t -= dt) <= 0) this.reply = null;
     if ((this.persistTimer -= dt) <= 0) {
@@ -1292,6 +1297,20 @@ export class Game {
       },
       true,
     );
+    if (new URLSearchParams(location.search).has('debug')) {
+      const { runner } = show;
+      this.showDebug = new ShowDebug({
+        length: runner.film.length,
+        chapters: runner.marks,
+        paused: () => this.paused,
+        togglePause: () => {
+          this.paused = !this.paused;
+          overlay.setPaused(this.paused);
+        },
+        setSpeed: (speed) => (this.showSpeed = speed),
+        seek: (t) => runner.seek(t),
+      });
+    }
     show.begin(from);
   }
 

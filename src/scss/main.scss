@@ -3693,3 +3693,50 @@ body.is-show {
         display: none !important;
     }
 }
+
+/* the test strip of the show (?show&debug): over the picture, with a cursor */
+.m-show-debug {
+    position: fixed;
+    inset: auto 1rem 1rem;
+    z-index: 100;
+    display: grid;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    color: white;
+    background: rgb(0 0 0 / 0.78);
+    border-radius: 0.75rem;
+    cursor: default;
+    font-size: 0.75rem;
+
+    button {
+        padding: 0.25rem 0.5rem;
+        color: inherit;
+        background: rgb(255 255 255 / 0.12);
+        border: 0;
+        border-radius: 0.25rem;
+        cursor: pointer;
+
+        &.is-active {
+            color: black;
+            background: white;
+        }
+    }
+
+    input[type='range'] {
+        flex: 1;
+        min-width: 0;
+    }
+
+    &__row,
+    &__chapters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+        align-items: center;
+    }
+
+    &__time {
+        min-width: 5.5rem;
+        text-align: right;
+    }
+}

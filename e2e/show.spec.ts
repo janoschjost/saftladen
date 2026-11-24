@@ -28,3 +28,14 @@ test('show.keys: P in the game starts the film on a fresh page, the other params
   await page.keyboard.press('p');
   await expect(page).toHaveURL(/seed=1.*[?&]show$/);
 });
+
+test('show.debug: ?show&debug adds a strip to test the film: a button per chapter seeks, the speed buttons speed it up', async ({ page }) => {
+  await boot(page, '/?test&seed=1&show&debug');
+  await expect(page.locator('.m-show-debug')).toBeVisible();
+  await page.locator('.m-show-debug__chapters button', { hasText: 'meeting' }).click();
+  expect(await read(page, (g) => g.show?.chapter)).toBe('meeting');
+  await page.locator('.m-show-debug__row button', { hasText: '8×' }).click();
+  expect(await read(page, (g) => g.timeScale)).toBe(8);
+  await page.locator('.m-show-debug__row button').first().click(); // pause
+  expect(await read(page, (g) => g.timeScale)).toBe(0);
+});
