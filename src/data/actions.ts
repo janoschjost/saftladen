@@ -211,6 +211,17 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
     caption: 'Rauchpause vor der Tür',
     who: 'Ein Raucher',
   },
+  {
+    id: 'oscar-tidy',
+    label: 'Oscar räumt auf',
+    icon: 'broom',
+    eventId: 'oscar-tidy',
+    place: { name: 'Büro, bei Oscars Platz', x: 15.5, z: 10.5 },
+    angle: 30,
+    zoom: 2.4,
+    caption: 'Oscar räumt mit Polizeimütze auf',
+    who: 'Oscar',
+  },
 ];
 
 /** Problems of an action list: duplicate ids, unknown dev events, bad numbers. Empty when the list is fine. */
