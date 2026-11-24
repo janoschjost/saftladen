@@ -296,6 +296,12 @@ export class Person extends Walker {
   mailCarry: 'letter' | 'parcel' | null = null;
   mailAmt = 0;
   mailClock = 0;
+  /** Oscar's tidy outing (see OscarTidy.ts): bent down over a piece of mess, or a lunchbox held away from the nose; the eased pose, and the last frame time of the pose */
+  tidyPose: 'pick' | 'nose' | null = null;
+  tidyAmt = 0;
+  /** the last tidy pose, held while it eases out */
+  tidyLast: 'pick' | 'nose' = 'pick';
+  tidyClock = 0;
   /** back height (m) of the pet being stroked: sets how deep the crouch goes */
   petHeight = 0.4;
   /** last frame time of the pet pose (s), to ease it in real time */

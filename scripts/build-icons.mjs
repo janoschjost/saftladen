@@ -5,6 +5,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 /** name in the app -> name in Phosphor */
 const MAP = {
   back: 'arrow-left',
+  broom: 'broom',
   camera: 'camera',
   chat: 'chat-circle',
   chevron: 'caret-down',

@@ -45,6 +45,10 @@ export interface CharacterRig {
   /** camera held up to the face in both hands, lens forward (hidden until a photo shoot); `flash` is its flash head and the glow around it */
   camera: THREE.Object3D;
   cameraFlash: { head: THREE.MeshBasicMaterial; glow: THREE.Mesh };
+  /** only on looks with a `cap`: the cap, its own mesh (hidden while the police cap is on, see `setPoliceCap`) */
+  cap?: THREE.Object3D;
+  /** only with `addPoliceCap`: a police cap, hidden until `setPoliceCap` puts it on */
+  policeCap?: THREE.Object3D;
   /** the person's own look, one group per bone; an alter ego (see kurtBuilder.ts) hides them and shows its own */
   skin: THREE.Object3D[];
   /** only with an alter-ego skin added: shows it (true) or the person's own look (false) */
@@ -212,6 +216,21 @@ function policeCap(): THREE.BufferGeometry[] {
     box(0.3, 0.025, 0.14, 0, 1.745, 0.27, '#0b0b0e'), // visor
     ...starBadge(gold),
   ];
+}
+
+/** Adds a police cap to the rig, hidden until `setPoliceCap` puts it on (Oscar's tidy outings, #296). */
+export function addPoliceCap(rig: CharacterRig): void {
+  const m = mesh(policeCap());
+  m.visible = false;
+  rig.skin[0].add(m); // the body's look: head, torso, hair
+  rig.policeCap = m;
+}
+
+/** The police cap on (instead of the person's own cap) or off (the own cap back). */
+export function setPoliceCap(rig: CharacterRig, on: boolean): void {
+  if (!rig.policeCap) return;
+  rig.policeCap.visible = on;
+  if (rig.cap) rig.cap.visible = !on;
 }
 
 export function buildCharacter(look: Look): CharacterRig {
@@ -398,14 +417,12 @@ export function buildCharacter(look: Look): CharacterRig {
     torso.push(box(0.05, ft, ft, 0, 1.62, 0.2, fc));
   }
 
-  // cap
-  if (look.cap) {
-    torso.push(box(0.42, 0.12, 0.42, 0, 1.79, 0, look.cap));
-    torso.push(box(0.3, 0.025, 0.2, 0, 1.75, look.capBack ? -0.3 : 0.3, look.cap));
-  }
   if (look.policeCap) torso.push(...policeCap());
   const torsoMesh = mesh(torso);
   bodySkin.add(torsoMesh);
+  // cap: a mesh of its own, so it can be swapped for a police cap (`setPoliceCap`)
+  const cap = look.cap ? mesh([box(0.42, 0.12, 0.42, 0, 1.79, 0, look.cap), box(0.3, 0.025, 0.2, 0, 1.75, look.capBack ? -0.3 : 0.3, look.cap)]) : undefined;
+  if (cap) bodySkin.add(cap);
   bodySkin.add(buildPersonWear(look)); // christmas hat + scarf (hidden unless christmas mode is on)
   if (look.print) bodySkin.add(chestPrint(look.print.text, look.print.color, build));
 
@@ -671,5 +688,5 @@ export function buildCharacter(look: Look): CharacterRig {
   const h = look.heightM ? look.heightM / REF_HEIGHT_M : look.height ?? 1;
   root.scale.setScalar(h);
 
-  return { root, body, legL, legR, kneeL, kneeR, armL, armR, elbowL, elbowR, handset, gun, headHeight: 1.95 * h, setTired, setMood, vape, phone, cup, chips, chip, gameboy, gameboyScreen, camera, cameraFlash: { head: flashHead, glow }, skin: skinGroups };
+  return { root, body, legL, legR, kneeL, kneeR, armL, armR, elbowL, elbowR, handset, gun, headHeight: 1.95 * h, setTired, setMood, vape, phone, cup, chips, chip, gameboy, gameboyScreen, camera, cameraFlash: { head: flashHead, glow }, skin: skinGroups, cap };
 }

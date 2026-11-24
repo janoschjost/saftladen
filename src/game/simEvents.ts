@@ -4,6 +4,7 @@ import { ELIA } from './Bonfire';
 import { BOSS, DJ, free as freeForBoombox } from './Boombox';
 import { bringIn } from './makePossible';
 import { isCourier } from './Mail';
+import { TIDIER } from './OscarTidy';
 import type { Dog } from './Dog';
 import type { Vec2 } from './NavGrid';
 import type { Person } from './Person';
@@ -638,6 +639,33 @@ export function registerSimEvents(sim: Sim): void {
       if (!sim.mess.count()) return null;
       sim.mess.clear();
       return 'Alles aufgeräumt';
+    },
+  });
+  // Oscar tidies up in a police cap (#296): an outing at once; with nothing lying around the office is made messy first
+  events.register({
+    id: 'oscar-tidy',
+    group: 'Aktionen',
+    label: 'Oscar räumt auf',
+    run: () => {
+      const oscar = sim.person(TIDIER);
+      if (oscar.held || (oscar.controlled && !sim.tidy.active)) return null; // held: nobody is brought in for nothing
+      sim.tidy.abort(); // a running outing starts over
+      if (!oscar.inOffice) bringIn(sim, oscar);
+      if (!sim.mess.count()) sim.mess.fill();
+      if (!sim.tidy.start(true)) return null;
+      sim.point(oscar);
+      return `${first(oscar)} räumt auf`;
+    },
+  });
+  events.register({
+    id: 'oscar-tidy-end',
+    group: 'Aktionen',
+    label: 'Oscar hört auf aufzuräumen',
+    asIs: true,
+    run: () => {
+      if (!sim.tidy.active) return null;
+      sim.tidy.abort();
+      return `${first(sim.tidy.oscar)} hört auf`;
     },
   });
   events.register({

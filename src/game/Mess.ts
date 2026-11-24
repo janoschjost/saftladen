@@ -69,6 +69,7 @@ export const MESS_CHANCE = {
   /** …comes in (a coat slips off the stand) */
   jacket: 0.04,
 };
+export type MessChance = keyof typeof MESS_CHANCE;
 
 const dice = stream(0x6d657373);
 const pick = <T>(list: readonly T[]): T => list[Math.floor(dice() * list.length)];
@@ -95,6 +96,8 @@ export interface MessOffice {
   racks: () => Vec2[];
   /** the middle of the kitchen */
   kitchen: Vec2;
+  /** how much more mess people leave now (2 while Oscar is in, #296; the caps stay); 1 without it */
+  boost?: () => number;
 }
 
 interface Seen {
@@ -172,6 +175,11 @@ export class Mess {
   /** Where an item lies now (game coordinates; its furniture may have moved). */
   where(item: MessItem): Vec2 {
     return worldXZ(item.mesh);
+  }
+
+  /** The chance that something is left behind now: `MESS_CHANCE[k]` times the boost (Oscar in the office), at most 1. */
+  chance(k: MessChance): number {
+    return Math.min(1, MESS_CHANCE[k] * (this.office.boost?.() ?? 1));
   }
 
   /** Somebody cleans one item away. False when it is not (or no longer) there. */
@@ -408,32 +416,33 @@ export class Mess {
     const kitchen = this.office.kitchen;
     const at = { x: p.pos.x, z: p.pos.z };
     const roll = (chance: number) => dice() < chance;
+    const rolls = (k: MessChance) => roll(this.chance(k));
     // a cup that never made it to a desk: put down where they are (in the kitchen on the counter)
-    if (was.cup && !now.cup && !was.desk && !p.working && !p.drink && now.presence === 'in' && roll(MESS_CHANCE.cup)) {
+    if (was.cup && !now.cup && !was.desk && !p.working && !p.drink && now.presence === 'in' && rolls('cup')) {
       if (!(dist(at, kitchen) < 3.5 && this.leave('cup', pick(['bar', 'table'] as const), at))) this.leave('cup', 'floor', at);
     }
     // up from the desk: the coffee cup, a bottle, a ball of paper may stay
     // (not on a coffee or snack run: the desk is kept for them, they come back to it)
     if (was.desk && was.desk !== now.desk && p.run?.desk !== was.desk && !(p.task?.desk === was.desk && p.task.errand)) {
       const d = was.desk;
-      if (was.mug && roll(MESS_CHANCE.deskCup)) this.leave('cup', 'desk', undefined, d);
-      if (roll(MESS_CHANCE.deskBottle)) this.leave('bottle', 'desk', undefined, d);
-      if (roll(MESS_CHANCE.deskPaper)) this.leave('paper', roll(0.5) ? 'desk' : 'floor', d.seat, d);
+      if (was.mug && rolls('deskCup')) this.leave('cup', 'desk', undefined, d);
+      if (rolls('deskBottle')) this.leave('bottle', 'desk', undefined, d);
+      if (rolls('deskPaper')) this.leave('paper', roll(0.5) ? 'desk' : 'floor', d.seat, d);
     }
     if (was.printing && !now.printing && was.printLeft <= PRINT_DONE) {
       this.binFill++;
       if (this.binFill >= BIN_FULL) this.leave('bin', 'bin');
-      if (roll(this.binFill >= BIN_FULL ? MESS_CHANCE.printFull : MESS_CHANCE.print)) this.leave('paper', 'printer');
+      if (rolls(this.binFill >= BIN_FULL ? 'printFull' : 'print')) this.leave('paper', 'printer');
     }
-    if (was.snack && !now.snack && was.snackLeft <= SNACK_DONE && now.presence === 'in' && roll(MESS_CHANCE.chips)) this.leave('chips', 'floor', at);
+    if (was.snack && !now.snack && was.snackLeft <= SNACK_DONE && now.presence === 'in' && rolls('chips')) this.leave('chips', 'floor', at);
     if (was.table && !now.table) {
-      if (roll(MESS_CHANCE.plate)) this.leave('plate', 'table', at);
-      if (roll(MESS_CHANCE.tableLunchbox)) this.leave('lunchbox', pick(MESS_SURFACES.lunchbox), at);
+      if (rolls('plate')) this.leave('plate', 'table', at);
+      if (rolls('tableLunchbox')) this.leave('lunchbox', pick(MESS_SURFACES.lunchbox), at);
     }
     if ((was.presence === 'out' || was.presence === 'returning') && now.presence === 'in' && was.away !== 'smoke' && was.away !== 'mail') {
-      if (was.lunch && roll(MESS_CHANCE.lunchbox)) this.leave('lunchbox', pick(MESS_SURFACES.lunchbox), kitchen);
+      if (was.lunch && rolls('lunchbox')) this.leave('lunchbox', pick(MESS_SURFACES.lunchbox), kitchen);
       const racks = this.office.racks();
-      if (racks.length && roll(MESS_CHANCE.jacket)) this.leave('jacket', 'floor', pick(racks));
+      if (racks.length && rolls('jacket')) this.leave('jacket', 'floor', pick(racks));
     }
   }
 }

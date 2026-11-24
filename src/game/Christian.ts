@@ -31,7 +31,7 @@ const MOP_EXTRA = 5;
 const MOP_DESK_OWNER = 'jannik-stibi';
 const STROKE = { x: 0.9, z: 0.45 };
 /** Seconds he works on one piece of mess (the item goes at the half). */
-const WORK_TIME = 1.1;
+export const WORK_TIME = 1.1;
 /** Real seconds his last bubble takes before he may leave (it is up at least 3 s however fast he works): the speed-up leaves room for it. */
 const LAST_WORD = 3.5;
 /** Seconds he stands and says his last word before he leaves. */
@@ -88,7 +88,7 @@ interface Step {
 }
 
 /** The arm poses of his work, solved for his rig (body frame: head centre y 1.58, face front z 0.18). */
-interface Poses {
+export interface Poses {
   mopR: ArmPose;
   mopL: ArmPose;
   noseR: ArmPose;
@@ -103,7 +103,7 @@ const MOP_TILT = -0.36;
 /** Solved once per shoulder layout: his look is fixed, so every visit gets the same poses and the grid searches run once. */
 const solved = new Map<string, Poses>();
 
-function solvePoses(rig: CharacterRig): Poses {
+export function solvePoses(rig: CharacterRig): Poses {
   const sr = rig.armR.position.clone();
   const sl = rig.armL.position.clone();
   const key = `${sl.x.toFixed(3)}|${sr.x.toFixed(3)}|${sl.y.toFixed(3)}`;
@@ -131,6 +131,22 @@ function armTo(arm: THREE.Object3D, elbow: THREE.Object3D, p: ArmPose, k: number
   arm.rotation.z = lerp(0, p.z * side, k);
   elbow.rotation.x = lerp(0, p.e, k);
   elbow.rotation.z = lerp(0, p.ez * side, k);
+}
+
+/**
+ * Taking a piece of mess, `k` of the way from the pose the rig is in: bent down, the right hand reaching for it
+ * ('pick'), or a lunchbox: two fingers on the nose, the other arm held out, away from the smell ('nose'). The caller
+ * lets the upper body lean around the hips (`hinge`). Christian's, and Oscar's on his tidy outings (#296).
+ */
+export function workPose(r: CharacterRig, p: Poses, pose: 'pick' | 'nose', k: number): void {
+  if (pose === 'pick') {
+    armTo(r.armR, r.elbowR, p.reachR, k);
+    r.body.rotation.x = lerp(r.body.rotation.x, 0.6, k);
+  } else {
+    armTo(r.armR, r.elbowR, p.noseR, k);
+    armTo(r.armL, r.elbowL, p.holdL, k);
+    r.body.rotation.x = lerp(r.body.rotation.x, -0.12, k);
+  }
 }
 
 /**
@@ -522,14 +538,7 @@ export class Christian {
         armTo(r.armR, r.elbowR, p.mopR, k);
         armTo(r.armL, r.elbowL, p.mopL, k);
         r.body.rotation.x = 0.12 * k;
-      } else if (this.pose === 'pick') {
-        armTo(r.armR, r.elbowR, p.reachR, k);
-        r.body.rotation.x = 0.6 * k;
-      } else {
-        armTo(r.armR, r.elbowR, p.noseR, k); // two fingers on the nose
-        armTo(r.armL, r.elbowL, p.holdL, k); // the other arm held out, away from the smell
-        r.body.rotation.x = -0.12 * k;
-      }
+      } else if (this.pose !== 'walk') workPose(r, p, this.pose, k);
       hinge(r); // the upper body leans around the hips, not around the feet
     }
     // he fades in as he steps out of the wall (and out as he goes back in): the glow must not show outside the building

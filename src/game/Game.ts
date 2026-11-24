@@ -40,7 +40,7 @@ import type { Desk } from './Office';
 import { RoomLight } from './RoomLight';
 import { Easter } from './Easter';
 import { Dog } from './Dog';
-import { Christian } from './Christian';
+import { Christian, solvePoses, workPose, type Poses } from './Christian';
 import { ChristianModel } from './ChristianModel';
 import { Christmas } from './Christmas';
 import { RainFx } from '../render/rainFx';
@@ -1468,6 +1468,7 @@ export class Game {
     if (this.steered === p) return this.release(p);
     if (!p.inOffice) return;
     this.release(this.steered);
+    p.unpin(); // the player takes over: a scene that walked them somewhere lets go (it sees its pin gone)
     p.controlled = true;
     this.steered = p;
   }
@@ -1644,6 +1645,7 @@ export class Game {
         this.poseBoombox(w, r);
         this.poseBonfire(w, r);
         this.poseMail(w, r);
+        this.poseTidy(w, r);
         this.poseCup(w, r);
         this.poseSnack(w, r);
         this.poseEmote(w, r);
@@ -1920,6 +1922,23 @@ export class Game {
         elbow.rotation.x = lerp(elbow.rotation.x, -0.4, a);
       }
     }
+  }
+
+  /**
+   * Oscar's tidy outing (see OscarTidy.ts), like Christian at work (`workPose`): bent down over a piece of mess, or a
+   * lunchbox held away from the nose. Eases in and out like the other poses.
+   */
+  private tidyPoses: Poses | null = null;
+  private poseTidy(w: Person, r: Person['rig']): void {
+    const now = this.clock;
+    const dt = Math.max(0, now - w.tidyClock);
+    w.tidyClock = now;
+    if (w.tidyPose) w.tidyLast = w.tidyPose;
+    const on = !!w.tidyPose && !w.held && w.sit < 0.05;
+    w.tidyAmt = Math.min(1, Math.max(0, w.tidyAmt + (on ? 1 : -1) * (dt / 0.2)));
+    if (w.tidyAmt <= 0) return;
+    const k = smooth(w.tidyAmt);
+    workPose(r, (this.tidyPoses ??= solvePoses(r)), w.tidyLast, k); // only Oscar tidies: his poses, solved once; `poseFrame` hinges the lean
   }
 
   /**
@@ -2309,6 +2328,7 @@ export class Game {
         ...this.sim.boombox.bubbles.map((b) => say(`boombox-${b.who.id}`, b.text, b.who)),
         ...this.sim.bonfire.bubbles.map((b) => say(`bonfire-${b.who.id}`, b.text, b.who)),
         ...this.sim.mail.bubbles.map((b) => say(`mail-${b.who.id}`, b.text, b.who)),
+        ...this.sim.tidy.bubbles.map((b) => say(`tidy-${b.who.id}`, b.text, b.who)),
         ...(rep && !rep.who.away ? [say(`reply-${rep.who.id}`, rep.text, rep.who)] : []),
         ...this.sim.people.filter((p) => p.callText && !p.away).map((p) => say(`call-${p.id}`, p.callText!, p)),
         ...this.sim.social.active.filter((c) => c.phase !== 'gather' && c.text).map((c) => say(c.speaker.id, c.text, c.speaker)),
