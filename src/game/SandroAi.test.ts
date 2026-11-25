@@ -89,6 +89,21 @@ describe('play.sandro-ai', () => {
     expect(sandro.aiGesture).toBe(false);
   });
 
+  it('play.sandro-ai: a line ends when the player stops him for a word, and the gap does not run while he is away', () => {
+    const sim = stage();
+    const sandro = sim.person(DJ);
+    expect(sim.sandroAi.say()).toBe(true);
+    sandro.playerChat = { at: { x: 0, z: 0 }, t: 3, total: 3 } as typeof sandro.playerChat;
+    sim.step(1 / 60);
+    expect(sim.sandroAi.active).toBe(false);
+    sandro.playerChat = null;
+    sim.sandroAi.end();
+    sim.scenario.put(DJ, 'home', 'stay');
+    sim.sandroAi.timer = 100;
+    run(sim, 10);
+    expect(sim.sandroAi.timer).toBe(100);
+  });
+
   it('play.sandro-ai: somebody within 3 m answers wordless about every second time, somebody farther away never', () => {
     const sim = stage();
     const sandro = sim.person(DJ);

@@ -72,7 +72,7 @@ export class SandroAi {
    */
   canSpeak(starting = false): boolean {
     const p = this.sandro;
-    if (!p.inOffice || p.held || p.controlled || p.inMeeting || p.talk || p.boomPose || p.fireRole) return false;
+    if (!p.inOffice || p.held || p.controlled || p.inMeeting || p.talk || p.playerChat || p.phoneJob || p.boothCall || p.boomPose || p.fireRole) return false;
     return !starting || freeForScene(p);
   }
 
@@ -110,6 +110,7 @@ export class SandroAi {
       this.answers = this.answers.filter((a) => a.left > 0);
       return;
     }
+    if (!this.sandro.inOffice) return; // the gap counts his time in the office: no line the moment he arrives
     if ((this.timer -= dt) > 0) return;
     if (!this.say()) this.timer = RETRY;
   }
