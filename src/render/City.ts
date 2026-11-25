@@ -79,7 +79,7 @@ export class City {
       base: street,
       height: -street,
       h: 0,
-      geometry: groundFloor(foot, street, -street, PORCH.x + PORCH.w / 2),
+      geometry: groundFloor(foot, street, -street, PORCH.x + 4),
     });
     this.shown = new Float32Array(this.buildings.length).fill(1);
     this.applied = new Float32Array(this.buildings.length).fill(1);
