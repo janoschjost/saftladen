@@ -134,18 +134,22 @@ describe('window light (#293)', () => {
   });
 });
 
-/** The laptop's warm glow on the occupant: the intensity of its light after a frame at this clock hour (undefined: the room has none). */
+function laptopLights(room: HomeOffice) {
+  const lights: THREE.SpotLight[] = [];
+  room.scene.traverse((o) => {
+    if (o instanceof THREE.SpotLight && o.color.getHexString() === 'dff2ff') lights.push(o);
+  });
+  return lights;
+}
+
+/** The laptop's screen glow on the occupant: the intensity of its light after a frame at this clock hour (undefined: the room has none). */
 function laptopLightAt(variant: number, hour: number) {
   setSeed(1);
   const room = new HomeOffice(variant);
   room.setOccupant(TEAM.find((m) => m.id === 'marco-hefti') ?? TEAM[0]);
   room.hour = hour;
   room.update(0.05);
-  let found: THREE.PointLight | undefined;
-  room.scene.traverse((o) => {
-    if (o instanceof THREE.PointLight && o.color.getHexString() === 'ffb36b') found = o;
-  });
-  return found?.intensity;
+  return laptopLights(room)[0]?.intensity;
 }
 
 describe('laptop glow (#299)', () => {
@@ -163,10 +167,7 @@ describe('laptop glow (#299)', () => {
     const room = new HomeOffice(BEACH);
     room.setOccupant(TEAM.find((m) => m.id === 'marco-hefti') ?? TEAM[0]);
     room.hour = 12;
-    const lights: THREE.PointLight[] = [];
-    room.scene.traverse((o) => {
-      if (o instanceof THREE.PointLight && o.color.getHexString() === 'ffb36b') lights.push(o);
-    });
+    const lights = laptopLights(room);
     let most = 0;
     let least = Infinity;
     for (let t = 0; t < 3000; t += 0.1) {
