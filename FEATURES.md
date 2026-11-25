@@ -236,6 +236,8 @@ Rules:
 - `char.tattoos` Arm tattoos (vine, script, dark) — `src/render/tattoo.ts`
 - `char.eliana` Eliana Lipari, Praktikantin Beratung Strategie, 1.7 m: long brown hair, big black glasses, red short-sleeved blouse; core office hours, no pets — `src/data/team.ts`, `public/team/eliana-lipari.jpg`, url: `/?seed=4&time=11&day=eliana-lipari` (#238, #283)
 - `char.speed` Faster walkers: Sandro, Delya — `src/data/team.ts`
+- `char.slow` Slower walker: Jeerapat walks at 1.0 m/s, slower than anybody else (`speed` in the team data) — `src/data/team.ts`, test: `src/game/Nap.test.ts`, url: `/?seed=1&time=11` (#308)
+- `char.nap` Jeerapat (`napper` in the team data) now and then, after 8–20 s of walking (wandering, to a desk or a job), stops on the spot for 3–6 s with a 💤 bubble and walks on to the same goal; only on open floor, not in a doorway, passage or narrow lane (she nods off further on), never seated, in a chat, steered, held or leaving/arriving — `src/game/Person.ts`, `src/game/Game.ts`, `src/data/team.ts`, test: `src/game/Nap.test.ts`, url: `/?seed=1&time=11` (#308)
 - `char.picker` Character picker: list, turntable (drag, wheel zoom, auto-spin), counter, owner's pets, live home-office preview; keys `Esc` `↑↓` `←→` `Space` — `src/ui/CharacterPicker.ts`
 - `person.neckerchief` Elia always wears his Pfadi neckerchief, rolled like a real one: a cream tube lies round the neck and hangs down the chest in a V to a knot below the throat, the orange-red border wound round it as a spiral stripe, two short orange-red / cream tails below the knot; in the office and outdoors — `src/render/characterBuilder.ts`, `src/data/team.ts`, `src/data/types.ts`, test: `src/game/Bonfire.test.ts`, url: `/?seed=1&time=11&event=bonfire` (#251)
 

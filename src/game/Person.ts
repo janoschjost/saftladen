@@ -16,7 +16,7 @@ import type { Dog } from './Dog';
 import { DeskWork, type DeskActivity } from './DeskWork';
 import { Walker } from './Walker';
 import { KURT, rollHomeAlter, transformsOnLeave } from './AlterEgo';
-import { random } from './rng';
+import { random, stream } from './rng';
 import { DRAG_CYCLE, SMOKE, UMBRELLA_CLEAR, UMBRELLA_FOLD, dragAt, nextDragCycle, type PorchSpot } from './Smoke';
 
 const WORK_CHANCE = 0.75; // chance per decision to go sit down instead of wandering
@@ -71,6 +71,10 @@ const CUP_LIFE = 70; // seconds a carried cup lasts when it never makes it to a 
 const SEAT_DRINK_RATE = 0.14; // per second at the desk with coffee on it: chance to take a sip
 /** timeline of a sip at the desk (seconds): hand out to the mug, back to the body, sip, down to the desk, mug set down, hand back to the keys */
 const DRINK = { grab: 0.6, up: 1.1, sipEnd: 3.1, put: 3.6, end: 4.1 };
+const NAP_GAP = { min: 8, max: 20 }; // seconds of walking between two naps (#308)
+const NAP_TIME = { min: 3, max: 6 }; // seconds a nap lasts
+const napRandom = stream(0x4a50); // naps roll on a side stream, so they never shift the simulation's numbers
+const rollNapGap = () => NAP_GAP.min + napRandom() * (NAP_GAP.max - NAP_GAP.min);
 const EMOTE_GAP = { min: 12, max: 38 }; // seconds between two little gestures (yawn, stretch, ...)
 export type Emote = 'yawn' | 'stretch' | 'scratch' | 'look';
 const EMOTES: Array<[Emote, number, number]> = [
@@ -379,6 +383,9 @@ export class Person extends Walker {
   /** seconds left of the flinch after a clap of thunder (#298): a hop, a shake and what they say (`startleText`) */
   startle = 0;
   startleText = '';
+  /** seconds left of a nap on the spot while walking (#308), 0 awake; `napIn`: walking seconds until the next one */
+  nap = 0;
+  private napIn = NAP_GAP.max; // no random roll here: the other people's rolls must not shift
   private callGestureIn = 0;
   private callBubbleIn = 0;
   private callBubbleLeft = 0;
@@ -1629,6 +1636,7 @@ export class Person extends Walker {
   }
 
   protected override control(dt: number, nav: NavGrid): boolean {
+    if (this.presence !== 'in' || this.scripted) this.nap = 0;
     if (this.unstick(dt, nav)) return true;
     if (this.presence !== 'in') {
       this.petting = false;
@@ -1636,6 +1644,7 @@ export class Person extends Walker {
       return this.controlPresence(dt, nav);
     }
     if (this.scripted) return this.controlScripted(dt, nav);
+    if (this.napStep(dt, nav)) return true;
     const chat = this.playerChat;
     if (!chat) this.petting = this.nerfOn = false;
     if (chat) {
@@ -1780,6 +1789,26 @@ export class Person extends Walker {
         return true;
       }
     }
+  }
+
+  /** Somebody who dozes (`napper`) stops now and then while walking somewhere (wandering, to a desk, a job), sleeps a few seconds, then walks on. Returns true while asleep. */
+  private napStep(dt: number, nav: NavGrid): boolean {
+    if (!this.member.napper) return false;
+    const busy = this.controlled || this.held || this.playerChat || this.talk || this.sit > 0.01 || (this.task && this.task.phase !== 'approach');
+    if (this.nap > 0) {
+      this.nap = busy ? 0 : Math.max(0, this.nap - dt);
+      this.moving += (0 - this.moving) * Math.min(1, dt * 8);
+      return this.nap > 0;
+    }
+    if (busy || this.state !== 'walk' || this.moving < 0.5) return false;
+    if ((this.napIn -= dt) > 0) return false;
+    // not in a doorway, passage or narrow lane: everybody else would have to wait for the sleeper, so she nods off a bit further on
+    if (this.traffic && this.traffic.passages.at(this.pos) >= 0) return false;
+    const { cx, cz } = nav.toCell(this.pos);
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) if (!nav.walkable(cx + dx, cz + dz)) return false;
+    this.napIn = rollNapGap();
+    this.nap = NAP_TIME.min + napRandom() * (NAP_TIME.max - NAP_TIME.min);
+    return true;
   }
 
   /** Where standing up from this desk ends (`Office.exit`), picked once per stand-up (sitting down again forgets it). */

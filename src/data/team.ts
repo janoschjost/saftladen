@@ -104,6 +104,7 @@ const cats: Record<string, NonNullable<TeamMember['cats']>> = {
 const speeds: Record<string, number> = {
   'sandro-hagen': 3.4,
   'delya-kohler': 1.8,
+  'jeerapat-wang': 1.0, // slower than anybody (everyone else walks at 1.15 or more)
 };
 
 // what changes when they work from home
@@ -145,6 +146,9 @@ const snackers = new Set(['jan-hasler']);
 
 // step out onto the porch for a cigarette now and then (#169)
 const smokers = new Set(['jannik-stibi', 'sandro-hagen', 'ramon-lenherr', 'delya-kohler', 'jeerapat-wang']);
+
+// people who now and then doze off for a moment while walking (see Person.ts)
+const nappers = new Set(['jeerapat-wang']);
 
 // people with ADHD: restless, short attention span (see Person.ts)
 const adhd = new Set(['delya-kohler', 'sandro-hagen']);
@@ -224,6 +228,7 @@ export const team: TeamMember[] = raw.map((p) => ({
   cats: cats[p.id],
   speed: speeds[p.id],
   adhd: adhd.has(p.id),
+  napper: nappers.has(p.id),
   son: sons[p.id],
   partner: partners[p.id],
   schedule: { ...CORE_HOURS, ...schedules[p.id] },

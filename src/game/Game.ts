@@ -2384,6 +2384,7 @@ export class Game {
         ...(call && !call.who.away ? [say(`welcome-${call.who.id}`, call.text, call.who)] : []),
         ...(this.ghost.text ? [{ id: 'christian', text: this.ghost.text, head: this.ghostHead() }] : []),
         ...this.sim.people.filter((p) => p.chill > 0 && !p.away).map((p) => say(`chill-${p.id}`, '🥶', p)),
+        ...this.sim.people.filter((p) => p.nap > 0 && !p.away).map((p) => say(`nap-${p.id}`, '💤', p)),
         ...this.sim.people.filter((p) => p.startle > 0 && !p.away).map((p) => say(`thunder-${p.id}`, p.startleText, p)),
         ...this.sim.boombox.bubbles.map((b) => say(`boombox-${b.who.id}`, b.text, b.who)),
         ...this.sim.bonfire.bubbles.map((b) => say(`bonfire-${b.who.id}`, b.text, b.who)),
