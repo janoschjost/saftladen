@@ -29,7 +29,7 @@ const LIFT = 0.015; // above the paving, clear of z-fighting
 const RIPPLE = 1.1; // seconds one ripple takes
 
 /** A soft, uneven blob: dark wet stone in the middle, a pale rim where the water is thin. */
-function blobTexture(): THREE.CanvasTexture {
+export function blobTexture(): THREE.CanvasTexture {
   const size = 128;
   const c = document.createElement('canvas');
   c.width = c.height = size;
@@ -66,7 +66,7 @@ function ringTexture(): THREE.CanvasTexture {
   return new THREE.CanvasTexture(c);
 }
 
-const smooth = (v: number) => {
+export const smooth = (v: number) => {
   const x = Math.min(1, Math.max(0, v));
   return x * x * (3 - 2 * x);
 };

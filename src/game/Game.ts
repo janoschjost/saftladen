@@ -44,6 +44,9 @@ import { Christian, solvePoses, workPose, type Poses } from './Christian';
 import { ChristianModel } from './ChristianModel';
 import { Christmas } from './Christmas';
 import { RainFx } from '../render/rainFx';
+import { SnowCoverFx } from '../render/snowCoverFx';
+import { SEASON_PROFILE, SEASONS, resolveSeason, type Season } from './Season';
+import { STARTLE_TIME } from './Thunder';
 import { PuddleFx } from '../render/puddleFx';
 import { SpawnFx } from '../render/spawnFx';
 import { loadState, saveState } from '../ui/persist';
@@ -75,6 +78,10 @@ const BUSY_ANSWERS = ['Grad keine Zeit!', 'Später…', 'Bin im Fokus.', 'Psst, 
 const SEATS_KEY = 'saftladen.seats';
 const STEER_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
 const OVERCAST = new THREE.Color('#8c95a3'); // sky colour in the rain
+const SEASON_LABEL: Record<Season, string> = { spring: 'Frühling', summer: 'Sommer', autumn: 'Herbst', winter: 'Winter' };
+const STORM_SKY = new THREE.Color('#4a5366'); // sky colour in a thunderstorm
+const FLASH_SKY = new THREE.Color('#e6eeff'); // sky colour at the peak of a lightning flash
+const SEASON_TINT = Object.fromEntries(SEASONS.map((s) => [s, new THREE.Color(SEASON_PROFILE[s].tint)])) as Record<Season, THREE.Color>;
 const ACTION_MAX = 240; // seconds: an action's chip and camera give up after this long at the latest
 const ACTION_NO_LEAD = 6; // seconds the chip stays for an action that moves nobody (e.g. rain)
 
@@ -101,6 +108,7 @@ export class Game {
   private kurtScreens = new Map<Person, Desk>();
   private rainFx!: RainFx;
   private puddleFx!: PuddleFx;
+  private snowCoverFx!: SnowCoverFx;
   private spawnFx!: SpawnFx;
   private xmas!: Christmas;
   private settings!: Settings;
@@ -230,6 +238,7 @@ export class Game {
     const saved = loadState();
     this.rainFx = new RainFx(this.scene);
     this.puddleFx = new PuddleFx(this.scene);
+    this.snowCoverFx = new SnowCoverFx(this.scene);
     this.spawnFx = new SpawnFx(this.scene);
     this.xmas = new Christmas(this.scene);
     this.restoreSeats();
@@ -301,7 +310,9 @@ export class Game {
         model.rowLabels.visible = state.tables;
         model.roomLabels.visible = state.rooms;
         this.seats.setLabelsVisible(state.seats);
-        this.sim.weather.mode = state.xmas ? 'sun' : state.weather; // it snows instead of raining
+        // with Christmas mode on it snows instead of raining (the other chips stay as they are)
+        this.sim.weather.mode = state.xmas && (state.weather === 'auto' || state.weather === 'rain') ? 'sun' : state.weather;
+        this.sim.weather.season = resolveSeason(state.season);
         this.xmas.set(state.xmas);
         this.sim.setXmas(state.xmas);
       },
@@ -309,6 +320,8 @@ export class Game {
       onNames: (on) => this.overlay.setNames(on),
     });
     this.settings.setView(this.views.mode);
+    // an event that forces the weather (snow, storm: `simEvents.ts`) moves the chip with it
+    this.sim.weather.onForce = () => this.settings.setWeather(this.sim.weather.mode);
     this.peoplePanel = new People();
 
     this.ring = new THREE.Mesh(
@@ -922,17 +935,40 @@ export class Game {
     saveState({ cycle: this.sim.tod.cycle, weekday: this.sim.tod.weekday, view: this.views.snapshot(), selected: this.selected instanceof Person ? this.selected.id : undefined });
   }
 
-  /** Showers: rain streaks and a greyer, darker light. */
+  /** Showers, snow and storms: streaks and flakes, white porch, a greyer, darker light, lightning, and the season's tint. */
   private updateWeather(dt: number): void {
-    this.sim.weather.update(dt);
-    const r = this.sim.weather.rain;
-    this.rainFx.update(dt, r, 1 - this.sim.tod.day);
-    this.puddleFx.update(dt, this.sim.weather.wet, r, this.sim.tod.day);
-    this.xmas.update(dt, this.sim.tod.day, this.scene.background as THREE.Color, this.sky.sun);
+    const w = this.sim.weather;
+    w.update(dt);
+    const day = this.sim.tod.day;
+    const sky = this.scene.background as THREE.Color;
+    const r = w.rain;
+    this.rainFx.update(dt, r, 1 - day, w.storm);
+    this.puddleFx.update(dt, w.wet, r, day);
+    this.snowCoverFx.update(w.cover, day);
+    this.xmas.update(dt, day, sky, this.sky.sun, w.snow);
+    if (w.season) {
+      sky.lerp(SEASON_TINT[w.season], SEASON_PROFILE[w.season].tintAmount * day);
+    }
     if (r > 0) {
       this.sky.sun.intensity *= 1 - 0.45 * r;
       this.sky.hemi.intensity *= 1 - 0.1 * r;
-      (this.scene.background as THREE.Color).lerp(OVERCAST, 0.45 * r * this.sim.tod.day);
+      sky.lerp(OVERCAST, 0.45 * r * day);
+    }
+    if (w.storm > 0) {
+      // darker than plain rain, between the flashes
+      this.sky.sun.intensity *= 1 - 0.3 * w.storm;
+      sky.lerp(STORM_SKY, 0.5 * w.storm * (0.35 + 0.65 * day));
+    }
+    if (w.flash > 0) {
+      // lightning: the sky and the office light up for a moment
+      sky.lerp(FLASH_SKY, 0.85 * w.flash);
+      this.sky.hemi.intensity += 1.6 * w.flash;
+      this.sky.sun.intensity += 0.8 * w.flash;
+    }
+    if (w.lightsOut) {
+      // a strong strike: the office lights blink
+      this.sky.hemi.intensity *= 0.5;
+      this.sky.sun.intensity *= 0.7;
     }
   }
 
@@ -1073,11 +1109,23 @@ export class Game {
       group: 'Wetter',
       label: 'Regen an / aus',
       run: () => {
-        this.sim.weather.set(!this.sim.weather.raining);
+        if (this.sim.weather.foul) this.sim.weather.stop();
+        else this.sim.weather.start('rain');
         this.settings.setWeather(this.sim.weather.mode);
         return this.sim.weather.raining ? 'Es regnet' : 'Der Regen hört auf';
       },
     });
+    for (const season of SEASONS) {
+      this.sim.events.register({
+        id: `season-${season}`,
+        group: 'Wetter',
+        label: `Jahreszeit: ${SEASON_LABEL[season]}`,
+        run: () => {
+          this.settings.setSeason(season);
+          return `Jahreszeit: ${SEASON_LABEL[season]}`;
+        },
+      });
+    }
   }
 
   /**
@@ -1543,6 +1591,12 @@ export class Game {
     w.lift += ((w.held ? 0.45 : 0) - w.lift) * 0.25;
     w.root.position.set(x, w.lift + (w instanceof Person ? w.seatLift : 0), z);
     if (w instanceof Person && w.chill > 0) w.root.position.x += Math.sin(this.clock * 70) * 0.025 * Math.min(1, w.chill * 2); // the ghost went through them (#256): a quick shake that dies down
+    if (w instanceof Person && w.startle > 0) {
+      // a clap of thunder (#298): a quick hop, then a shake that dies down
+      const since = STARTLE_TIME - w.startle;
+      w.root.position.y += since < 0.25 ? Math.sin((since / 0.25) * Math.PI) * 0.08 : 0;
+      w.root.position.x += Math.sin(this.clock * 60) * 0.02 * Math.min(1, w.startle);
+    }
     w.root.rotation.y = w.prevYaw + dy * alpha;
 
     const ph = THREE.MathUtils.lerp(w.prevPhase, w.phase, alpha);
@@ -2325,6 +2379,7 @@ export class Game {
         ...(call && !call.who.away ? [say(`welcome-${call.who.id}`, call.text, call.who)] : []),
         ...(this.ghost.text ? [{ id: 'christian', text: this.ghost.text, head: this.ghostHead() }] : []),
         ...this.sim.people.filter((p) => p.chill > 0 && !p.away).map((p) => say(`chill-${p.id}`, '🥶', p)),
+        ...this.sim.people.filter((p) => p.startle > 0 && !p.away).map((p) => say(`thunder-${p.id}`, p.startleText, p)),
         ...this.sim.boombox.bubbles.map((b) => say(`boombox-${b.who.id}`, b.text, b.who)),
         ...this.sim.bonfire.bubbles.map((b) => say(`bonfire-${b.who.id}`, b.text, b.who)),
         ...this.sim.mail.bubbles.map((b) => say(`mail-${b.who.id}`, b.text, b.who)),

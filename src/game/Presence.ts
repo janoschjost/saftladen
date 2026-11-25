@@ -150,7 +150,7 @@ export class Presence {
   }
 
   get target(): number {
-    return Math.round(this.onDuty * ABSENT_SHARE * (this.weather.raining ? RAIN.share : 1));
+    return Math.round(this.onDuty * ABSENT_SHARE * (this.weather.foul ? RAIN.share : 1));
   }
 
   get absent(): Person[] {
@@ -733,7 +733,7 @@ export class Presence {
     this.exit(p);
     plan.lunched = true;
     this.lunchers.add(p);
-    p.leaveOffice(nav, 'errand', between(LUNCH.errand) * (this.weather.raining ? RAIN.errandStretch : 1));
+    p.leaveOffice(nav, 'errand', between(LUNCH.errand) * (this.weather.foul ? RAIN.errandStretch : 1));
   }
 
   /** Holds everybody to today's plan: arrivals, lunch, going home, night shifts. */
@@ -829,8 +829,8 @@ export class Presence {
     });
     if (!candidates.length) return;
     const p = candidates[Math.floor(random() * candidates.length)];
-    const stretch = this.weather.raining ? RAIN.errandStretch : 1;
-    const homeShare = this.weather.raining ? RAIN.homeShare : HOME_SHARE;
+    const stretch = this.weather.foul ? RAIN.errandStretch : 1;
+    const homeShare = this.weather.foul ? RAIN.homeShare : HOME_SHARE;
     const home = random() < homeShare && this.roomFree;
     if (home) p.homeVariant = this.freeVariant(p);
     p.leaveOffice(nav, home ? 'home' : 'errand', home ? between(HOME) : between(ERRAND) * stretch);

@@ -1,4 +1,5 @@
 import type { WeatherMode } from '../game/Weather';
+import { SEASON_SETTINGS, type SeasonSetting } from '../game/Season';
 
 /** localStorage key of the settings popover (labels, weather, Christmas, camera follow). */
 export const SETTINGS_KEY = 'saftladen.settings';
@@ -11,16 +12,18 @@ export interface SettingsState {
   /** room numbers */
   rooms: boolean;
   weather: WeatherMode;
+  /** the season Auto weather follows: one of them, or the calendar month */
+  season: SeasonSetting;
   xmas: boolean;
   /** "Kamera folgt bei Aktionen": the camera trails the lead person of an action */
   follow: boolean;
 }
 
-export const WEATHER_MODES: readonly WeatherMode[] = ['auto', 'sun', 'rain'];
+export const WEATHER_MODES: readonly WeatherMode[] = ['auto', 'sun', 'rain', 'snow', 'storm'];
 
 /** Defaults: all labels off, auto weather, camera follows; Christmas only in December. */
 export function defaultSettings(now = new Date()): SettingsState {
-  return { tables: false, seats: false, rooms: false, weather: 'auto', xmas: now.getMonth() === 11, follow: true };
+  return { tables: false, seats: false, rooms: false, weather: 'auto', season: 'auto', xmas: now.getMonth() === 11, follow: true };
 }
 
 /** Reads the stored JSON; anything missing, of the wrong type or unreadable falls back to the default. */
@@ -39,11 +42,12 @@ export function parseSettings(raw: string | null, now = new Date()): SettingsSta
     seats: bool('seats', d.seats),
     rooms: bool('rooms', d.rooms),
     weather: WEATHER_MODES.includes(saved.weather as WeatherMode) ? (saved.weather as WeatherMode) : d.weather,
+    season: SEASON_SETTINGS.includes(saved.season as SeasonSetting) ? (saved.season as SeasonSetting) : d.season,
     xmas: bool('xmas', d.xmas),
     follow: bool('follow', d.follow),
   };
 }
 
 export function serializeSettings(s: SettingsState): string {
-  return JSON.stringify({ tables: s.tables, seats: s.seats, rooms: s.rooms, weather: s.weather, xmas: s.xmas, follow: s.follow });
+  return JSON.stringify({ tables: s.tables, seats: s.seats, rooms: s.rooms, weather: s.weather, season: s.season, xmas: s.xmas, follow: s.follow });
 }

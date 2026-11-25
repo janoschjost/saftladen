@@ -360,6 +360,9 @@ export class Person extends Walker {
   callText: string | null = null;
   /** seconds left of the shiver after Christian's ghost went through them (#256); a bubble and a shake, nothing else changes */
   chill = 0;
+  /** seconds left of the flinch after a clap of thunder (#298): a hop, a shake and what they say (`startleText`) */
+  startle = 0;
+  startleText = '';
   private callGestureIn = 0;
   private callBubbleIn = 0;
   private callBubbleLeft = 0;

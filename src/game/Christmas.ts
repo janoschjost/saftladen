@@ -25,14 +25,16 @@ export class Christmas {
     this.decor.setVisible(on); // decorations switch at once, only the snow and sky fade
   }
 
-  update(dt: number, day: number, sky: THREE.Color, sun: THREE.DirectionalLight): void {
+  /** `weatherSnow` 0..1: snow that falls by the weather chip, with or without Christmas mode (it shares the flakes and the cold sky). */
+  update(dt: number, day: number, sky: THREE.Color, sun: THREE.DirectionalLight, weatherSnow = 0): void {
     this.amount += ((this.on ? 1 : 0) - this.amount) * Math.min(1, dt * 0.8);
     if (this.amount < 0.002) this.amount = 0;
-    this.snow.update(dt, this.amount, 1 - day);
+    const snowing = Math.max(this.amount, weatherSnow);
+    this.snow.update(dt, snowing, 1 - day);
     this.decor.update(dt, this.on);
-    if (this.amount > 0) {
-      sky.lerp(FROST, 0.35 * this.amount * day);
-      sun.intensity *= 1 - 0.12 * this.amount;
+    if (snowing > 0) {
+      sky.lerp(FROST, 0.35 * snowing * day);
+      sun.intensity *= 1 - 0.12 * snowing;
     }
   }
 }

@@ -41,16 +41,17 @@ export class RainFx {
     this.y[i] = scatter ? this.floor[i] + fxRandom() * (TOP - this.floor[i]) : TOP + fxRandom() * 2;
   }
 
-  /** `amount` 0..1 (weather.rain). Hidden entirely while dry. */
-  update(dt: number, amount: number, night: number): void {
+  /** `amount` 0..1 (weather.rain), `storm` 0..1 (weather.storm: heavier, faster, steeper). Hidden entirely while dry. */
+  update(dt: number, amount: number, night: number, storm = 0): void {
     this.object.visible = amount > 0.01;
     if (!this.object.visible) return;
-    this.material.opacity = 0.5 * amount * (0.55 + 0.45 * night);
+    this.material.opacity = (0.5 + 0.25 * storm) * amount * (0.55 + 0.45 * night);
     const live = Math.ceil(DROPS * Math.min(1, 0.25 + amount));
     this.object.geometry.setDrawRange(0, live * 2);
+    const fall = FALL * (1 + 0.35 * storm);
     for (let i = 0; i < live; i++) {
-      this.y[i] -= FALL * dt;
-      this.x[i] -= FALL * dt * SLANT;
+      this.y[i] -= fall * dt;
+      this.x[i] -= fall * dt * SLANT * (1 + storm);
       const inside = this.x[i] > 0 && this.x[i] < WORLD.width && this.z[i] > 0 && this.z[i] < WORLD.depth;
       this.floor[i] = inside ? ROOF_Y : 0;
       if (this.y[i] < this.floor[i]) this.respawn(i, false);

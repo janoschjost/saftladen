@@ -785,4 +785,33 @@ export function registerSimEvents(sim: Sim): void {
       return ev.allReturn;
     },
   });
+
+  // snow and storm (#298): the event starts it at any time, "-end" stops it ("nicht möglich" when it is not that weather)
+  const weather = sim.weather;
+  const precip = [
+    { kind: 'snow', label: 'Schnee', on: 'Es schneit', off: 'Der Schnee hört auf', is: () => weather.snowing },
+    { kind: 'storm', label: 'Gewitter', on: 'Es gewittert', off: 'Das Gewitter zieht ab', is: () => weather.stormy && weather.raining },
+  ] as const;
+  for (const { kind, label, on, off, is } of precip) {
+    events.register({
+      id: kind,
+      group: 'Wetter',
+      label: `${label} an`,
+      run: () => {
+        weather.start(kind);
+        return on;
+      },
+    });
+    events.register({
+      id: `${kind}-end`,
+      group: 'Wetter',
+      label: `${label} aus`,
+      asIs: true,
+      run: () => {
+        if (!is()) return null;
+        weather.stop();
+        return off;
+      },
+    });
+  }
 }

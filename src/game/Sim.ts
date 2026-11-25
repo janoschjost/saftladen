@@ -47,6 +47,7 @@ import type { WalkColliders } from './walkCollision';
 import { Weather } from './Weather';
 import { Welcome } from './Welcome';
 import { random } from './rng';
+import { thunderClap } from './Thunder';
 
 export interface SimOptions {
   /** the scene the office and everybody in it are built into; a view draws it, a test ignores it */
@@ -420,7 +421,11 @@ export class Sim {
     this.presence.update(dt, this.nav);
     this.smoke.update(dt, this.nav);
     this.traffic.update(dt, this.walkers);
-    for (const p of this.people) if (p.chill > 0) p.chill = Math.max(0, p.chill - dt);
+    for (const p of this.people) {
+      if (p.chill > 0) p.chill = Math.max(0, p.chill - dt);
+      if (p.startle > 0) p.startle = Math.max(0, p.startle - dt);
+    }
+    if (this.weather.takeThunder()) thunderClap(this.people);
     for (const w of this.walkers) {
       w.traffic ??= this.traffic;
       if (this.stands(w)) {

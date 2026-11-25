@@ -37,6 +37,8 @@ describe('actions.list', () => {
       ['Paket', 'mail-parcel'],
       ['Rauchpause', 'smoke'],
       ['Oscar räumt auf', 'oscar-tidy'],
+      ['Schneefall', 'snow'],
+      ['Gewitter', 'storm'],
     ]);
   });
 
