@@ -153,7 +153,6 @@ test('actions.sheet + actions.search: A toggles the sheet, previews, number keys
   await expect
     .poll(() => page.evaluate(() => [...document.querySelectorAll<HTMLImageElement>('#action-cards img')].filter((i) => i.complete && i.naturalWidth > 0).length), { timeout: 30_000 })
     .toBe(17);
-
   await expect(page.locator('#action-cards .m-card__icon')).toHaveCount(0); // every card has a still
   // Esc closes the sheet and does nothing else
   await page.keyboard.press('Escape');
