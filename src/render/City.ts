@@ -10,12 +10,12 @@ import { WORLD } from './World';
 /** The fill of the neighbourhood: a very light grey (the office is the only thing in real colours). */
 const FILL_COLOR = '#e8e8e6';
 /** The hairline edges of every building, like the blueprint hologram on /credits, in a quiet grey. */
-const LINE = '#6d6e72';
+const LINE = '#a3a4a8';
 /** How much of the fill shows: the rest lets the edges behind it and the ground through. */
-const FILL = 0.35;
-const GROUND = '#d6d6d3';
+const FILL = 0.18;
+const GROUND = '#dcdcda';
 /** The roads: lighter than the ground. */
-const ROAD = '#f4f4f2';
+const ROAD = '#e8e8e6';
 
 /** Haze: it starts this far behind the office and the city is gone in it `far` metres beyond (measured from the office, not the camera). */
 const HAZE = { near: 30, far: 240 };
