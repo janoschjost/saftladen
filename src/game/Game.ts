@@ -20,7 +20,7 @@ import { Actions } from '../ui/Actions';
 import { ActionSheet, type SheetPick } from '../ui/ActionSheet';
 import { NowChip } from '../ui/NowChip';
 import { People } from '../ui/People';
-import { OFFICE_ACTIONS, type OfficeAction } from '../data/actions';
+import { OFFICE_ACTIONS, isPlaced, type OfficeAction, type PlacedAction } from '../data/actions';
 import { ACTION_POLAR, ARRIVE_RADIUS, FOLLOW_ZOOM, type Shot } from '../render/cameraFly';
 import { Feeds } from '../ui/Feeds';
 import { Overlay } from '../ui/Overlay';
@@ -1409,7 +1409,7 @@ export class Game {
   }
 
   /** The camera shot of an action's place: its angle and zoom. */
-  private placeShot(def: OfficeAction): Shot {
+  private placeShot(def: PlacedAction): Shot {
     return { x: def.place.x, y: 0.6, z: def.place.z, azimuth: THREE.MathUtils.degToRad(def.angle), polar: ACTION_POLAR, dist: this.views.overviewShot().dist / def.zoom };
   }
 
@@ -1420,7 +1420,7 @@ export class Game {
   }
 
   private arrived(a: NonNullable<Game['action']>): boolean {
-    return !!a.def && !!a.lead && Math.hypot(a.lead.pos.x - a.def.place.x, a.lead.pos.z - a.def.place.z) < ARRIVE_RADIUS;
+    return isPlaced(a.def) && !!a.lead && Math.hypot(a.lead.pos.x - a.def.place.x, a.lead.pos.z - a.def.place.z) < ARRIVE_RADIUS;
   }
 
   /** Points the camera for the running action: trail the walking lead (if "Kamera folgt bei Aktionen"), else the place. */
@@ -1430,7 +1430,7 @@ export class Game {
     if (a.lead && this.settings.followActions && !this.arrived(a)) {
       a.settled = false;
       this.views.flyTo(() => this.leadShot(a));
-    } else if (a.def) {
+    } else if (isPlaced(a.def)) {
       a.settled = true;
       this.views.flyTo(this.placeShot(a.def));
     } else if (a.lead) {
@@ -1446,7 +1446,7 @@ export class Game {
     const lead = a.lead;
     const busy = !!lead && !lead.away && leadState(lead).some((v, i) => a.keys.includes(i) && v !== null);
     if ((lead ? !busy : a.age > ACTION_NO_LEAD) || a.age > ACTION_MAX) return this.endAction(a.owned);
-    if (a.owned && !a.settled && a.def && this.settings.followActions && this.arrived(a)) {
+    if (a.owned && !a.settled && isPlaced(a.def) && this.settings.followActions && this.arrived(a)) {
       a.settled = true;
       this.views.flyTo(this.placeShot(a.def));
     }

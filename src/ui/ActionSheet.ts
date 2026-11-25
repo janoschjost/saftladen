@@ -2,7 +2,7 @@ import { icon } from './icons';
 import { OFFICE_ACTIONS, validateActions, type OfficeAction } from '../data/actions';
 import type { DevEvents } from '../game/DevEvents';
 
-/** What the sheet hands to the game when something is picked: a curated card, or a plain dev event from the search. */
+/** What the sheet hands to the game when a card is picked. `action` is null for a dev event started by `?event=` or the dev panel. */
 export interface SheetPick {
   eventId: string;
   label: string;
@@ -21,16 +21,14 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, te
   Object.assign(document.createElement(tag), { className }, text === undefined ? {} : { textContent: text });
 
 /**
- * Aktionen sheet (`A` or the button bottom centre): slides up with a card per curated action (`src/data/actions.ts`),
- * each with a live preview of its place, followed by every other dev event as a plain list. The search filters both. Number keys 1-9 start the
- * matching card while it is open; Esc, the scrim or the close button close it.
+ * Aktionen sheet (`A` or the button bottom centre): slides up with one card per action (`src/data/actions.ts`), each with a
+ * still of the people doing it, and nothing else. The search filters the cards. Number keys 1-9 start the matching card while
+ * it is open; Esc, the scrim or the close button close it.
  */
 export class ActionSheet {
   private root = document.getElementById('action-sheet') as HTMLElement;
   private button = document.getElementById('open-actions') as HTMLButtonElement;
   private cardsEl = document.getElementById('action-cards') as HTMLElement;
-  private moreEl = document.getElementById('action-more') as HTMLElement;
-  private moreHead = document.getElementById('action-more-head') as HTMLElement;
   private emptyEl = document.getElementById('action-empty') as HTMLElement;
   private search = document.getElementById('action-search') as HTMLInputElement;
   private cards: Array<{ action: OfficeAction; li: HTMLLIElement; button: HTMLButtonElement; key: HTMLElement }> = [];
@@ -51,13 +49,20 @@ export class ActionSheet {
       const button = el('button', 'm-card');
       button.type = 'button';
       button.dataset.action = action.id;
-      // a still of the people doing it, taken in the running game: public/actions/<id>.webp
-      const preview = el('img', 'm-card__preview');
-      preview.src = `${import.meta.env.BASE_URL}actions/${action.id}.webp`;
-      preview.alt = '';
-      preview.width = 800;
-      preview.height = 450;
-      preview.loading = 'lazy';
+      // a still of the people doing it, taken in the running game: public/actions/<id>.webp; without one the icon stands in
+      let preview: HTMLElement;
+      if (action.still === false) {
+        preview = el('span', 'm-card__icon');
+        preview.innerHTML = icon(action.icon, 40);
+      } else {
+        const img = el('img', 'm-card__preview');
+        img.src = `${import.meta.env.BASE_URL}actions/${action.id}.webp`;
+        img.alt = '';
+        img.width = 800;
+        img.height = 450;
+        img.loading = 'lazy';
+        preview = img;
+      }
       const key = el('kbd', 'm-card__key');
       const label = el('span', 'm-card__label');
       label.innerHTML = icon(action.icon);
@@ -143,27 +148,12 @@ export class ActionSheet {
     return this.cards.filter((c) => !c.li.hidden);
   }
 
-  /** Cards whose label, caption or place match, then every other dev event that matches (plain entries). Without a query: all of them. */
+  /** Cards whose label, caption or place match. Without a query: all of them. */
   private filter(): void {
     const q = this.search.value.trim().toLowerCase();
     const has = (...texts: string[]) => !q || texts.some((t) => t.toLowerCase().includes(q));
-    for (const c of this.cards) c.li.hidden = !has(c.action.label, c.action.caption, c.action.place.name, c.action.eventId);
+    for (const c of this.cards) c.li.hidden = !has(c.action.label, c.action.caption, c.action.place?.name ?? '', c.action.eventId);
     this.visibleCards().forEach((c, i) => (c.key.textContent = i < 9 ? String(i + 1) : ''));
-    const curated = new Set(this.cards.map((c) => c.action.eventId));
-    const more = this.events.list().filter((e) => !curated.has(e.id) && has(e.label, e.id, e.group));
-    this.moreEl.replaceChildren(
-      ...more.map((e) => {
-        const li = el('li', 'm-sheet__more-item');
-        const b = el('button', 'm-sheet__entry', e.label);
-        b.type = 'button';
-        b.dataset.event = e.id;
-        b.append(el('small', 'm-sheet__entry-group', e.group));
-        b.addEventListener('click', () => this.pick({ eventId: e.id, label: e.label, action: null }));
-        li.append(b);
-        return li;
-      }),
-    );
-    this.moreEl.hidden = this.moreHead.hidden = more.length === 0;
-    this.emptyEl.hidden = this.visibleCards().length > 0 || more.length > 0;
+    this.emptyEl.hidden = this.visibleCards().length > 0;
   }
 }

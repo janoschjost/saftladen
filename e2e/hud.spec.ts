@@ -144,15 +144,17 @@ test('actions.sheet + actions.search: A toggles the sheet, previews, number keys
   await expect(sheet).toBeVisible();
   await expect(sheet).toHaveClass(/is-open/);
   await expect(page.locator('#open-actions')).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.locator('#action-cards .m-card')).toHaveCount(20);
+  await expect(page.locator('#action-cards .m-card')).toHaveCount(17);
   await expect(page.locator('#action-cards .m-card').first()).toContainText('Drucken');
   await expect(page.locator('#action-cards .m-card__key').first()).toHaveText('1');
-  // every other dev event is listed without typing anything
-  await expect(page.locator('#action-more [data-event="rain"]')).toBeVisible();
-  // every card has its still: the image of the people doing the action loaded
+  // only cards: no list of dev events, no start/end pairs
+  await expect(page.locator('#action-more')).toHaveCount(0);
+  // every card with a still has it: the image of the people doing the action loaded
   await expect
     .poll(() => page.evaluate(() => [...document.querySelectorAll<HTMLImageElement>('#action-cards img')].filter((i) => i.complete && i.naturalWidth > 0).length), { timeout: 30_000 })
-    .toBe(20);
+    .toBe(17);
+
+  await expect(page.locator('#action-cards .m-card__icon')).toHaveCount(0); // every card has a still
   // Esc closes the sheet and does nothing else
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
@@ -162,19 +164,15 @@ test('actions.sheet + actions.search: A toggles the sheet, previews, number keys
   await page.locator('#action-sheet-close').click();
   await expect(sheet).toBeHidden();
 
-  // search: filters the cards, lists the other dev events, a pick runs it
+  // search: filters the cards, says so when none is left
   await page.keyboard.press('a');
   await page.locator('#action-search').fill('kick');
   await expect(page.locator('#action-cards .m-card:visible')).toHaveCount(1);
   await page.locator('#action-search').fill('regen');
   await expect(page.locator('#action-cards .m-card:visible')).toHaveCount(0);
-  const entry = page.locator('#action-more [data-event="rain"]');
-  await expect(entry).toBeVisible();
-  const before = await read(page, (g) => g.sim.weather.raining);
-  await entry.click();
+  await expect(page.locator('#action-empty')).toBeVisible();
+  await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
-  expect(await read(page, (g) => g.sim.weather.raining)).toBe(!before);
-  await expect(page.locator('#now')).toBeVisible();
 
   // number keys start cards instead of switching the view
   await page.keyboard.press('a');
@@ -246,17 +244,17 @@ test('actions.fail: an action that cannot run (everybody held by a scene) says s
   const everybody = await read(page, (g) => g.sim.people.map((p) => p.id));
   await scene(page, (s, ids) => ids.forEach((id) => s.put(id, 'errand')), everybody);
   await page.keyboard.press('a');
-  await page.locator('#action-cards .m-card[data-action="pod"]').click();
+  await page.locator('#action-cards .m-card[data-action="coffee"]').click();
   await expect(page.locator('#now')).toBeVisible();
-  await expect(page.locator('#now-caption')).toHaveText('Holzhaus: nicht möglich');
+  await expect(page.locator('#now-caption')).toHaveText('Kaffee: nicht möglich');
   expect(await read(page, (g) => [g.views.mode, g.action, g.views.flying])).toEqual(['iso', null, false]);
 });
 
 test('actions.force: an action asked for happens: a taken place is cleared, a dev who is away comes in', async ({ page }) => {
-  await openGame(page, 'iso', undefined, 'event=pod');
-  await until(page, (g) => g.sim.pod.current);
+  await openGame(page, 'iso', undefined, 'event=coffee');
+  await until(page, (g) => g.sim.kitchen.current);
   await page.keyboard.press('a');
-  await page.locator('#action-cards .m-card[data-action="pod"]').click();
+  await page.locator('#action-cards .m-card[data-action="coffee"]').click();
   await expect(page.locator('#now-caption')).not.toContainText('nicht möglich');
   // no dev in the office: one comes in to fix the rack
   await page.keyboard.press('Escape');

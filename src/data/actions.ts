@@ -2,7 +2,8 @@ import type { IconName } from '../ui/icons';
 /**
  * The curated cards of the Aktionen sheet (`A`): things that can happen in the office, each one an existing dev event
  * (`sim.events`, registered in `src/game/simEvents.ts`). Picking a card runs the event and flies the Orbit camera to `place`.
- * The sheet's search also lists every other dev event; this list only decides which ones get a card with a preview.
+ * Every main action is a card, and the sheet shows nothing else: one card per thing that happens, never a start and an end
+ * (`…-end` events, status reads and events that only set up a test situation have none; they stay in the dev panel).
  */
 export interface OfficeAction {
   id: string;
@@ -11,17 +12,23 @@ export interface OfficeAction {
   icon: IconName;
   /** id of the dev event that runs (`dev.list()` in the console) */
   eventId: string;
-  /** where it happens: the camera settles on this floor point (game metres) */
-  place: { name: string; x: number; z: number };
+  /** where it happens: the camera settles on this floor point (game metres). Without `place` (and `angle`, `zoom`) the camera only follows the first person it moves */
+  place?: { name: string; x: number; z: number };
   /** camera azimuth in degrees around the place: 0 looks from the front of the office (+z), positive turns towards +x */
-  angle: number;
+  angle?: number;
   /** how much closer than the overview the camera settles (2 = half the distance) */
-  zoom: number;
+  zoom?: number;
+  /** `false`: no still of the people doing it yet (`public/actions/<id>.webp`), the card shows its icon instead */
+  still?: false;
   /** what the "Gerade passiert" chip says */
   caption: string;
   /** who goes, shown on the card */
   who: string;
 }
+
+/** An action that has a place to fly to. */
+export type PlacedAction = OfficeAction & Required<Pick<OfficeAction, 'place' | 'angle' | 'zoom'>>;
+export const isPlaced = (a: OfficeAction | null | undefined): a is PlacedAction => !!a && !!a.place && a.angle !== undefined && a.zoom !== undefined;
 
 export const OFFICE_ACTIONS: OfficeAction[] = [
   {
@@ -80,17 +87,6 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
     who: 'Zwei Leute',
   },
   {
-    id: 'pod',
-    label: 'Holzhaus',
-    icon: 'home',
-    eventId: 'pod',
-    place: { name: 'Lounge, Holzhaus', x: 6.7, z: 9.1 },
-    angle: 25,
-    zoom: 3,
-    caption: 'Zwei ziehen sich ins Holzhaus zurück',
-    who: 'Zwei Leute',
-  },
-  {
     id: 'kart',
     label: 'Mariokart',
     icon: 'gamepad',
@@ -111,17 +107,6 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
     zoom: 3.4,
     caption: 'Jemand geht aufs WC',
     who: 'Eine freie Person',
-  },
-  {
-    id: 'chat',
-    label: 'Gespräch',
-    icon: 'chat',
-    eventId: 'meeting-chat',
-    place: { name: 'Flur', x: 21.5, z: 6.6 },
-    angle: 15,
-    zoom: 3,
-    caption: 'Zwei unterhalten sich im Flur',
-    who: 'Zwei Leute',
   },
   {
     id: 'nerf',
@@ -179,28 +164,6 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
     who: 'Elia (und wer mit dem Feuerlöscher kommt)',
   },
   {
-    id: 'mail-letter',
-    label: 'Brief',
-    icon: 'mail',
-    eventId: 'mail-letter',
-    place: { name: 'Briefkästen am Eingang', x: 7.65, z: 16.2 },
-    angle: 15,
-    zoom: 3.4,
-    caption: 'Eine Taube bringt einen Brief',
-    who: 'Eine Taube und ein Lernender',
-  },
-  {
-    id: 'mail-parcel',
-    label: 'Paket',
-    icon: 'package',
-    eventId: 'mail-parcel',
-    place: { name: 'Briefkästen am Eingang', x: 7.65, z: 16.2 },
-    angle: -15,
-    zoom: 3.4,
-    caption: 'Eine Drohne liefert ein Paket',
-    who: 'Eine Drohne und ein Lernender',
-  },
-  {
     id: 'smoke',
     label: 'Rauchpause',
     icon: 'smoke',
@@ -244,6 +207,17 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
     caption: 'Gewitter über dem Büro',
     who: 'Alle am Fenster und draussen',
   },
+  {
+    id: 'mess',
+    label: 'Chaos',
+    icon: 'zap',
+    eventId: 'mess',
+    place: { name: 'Büro, offene Fläche', x: 20, z: 8 },
+    angle: 20,
+    zoom: 3,
+    caption: 'Überall liegt Zeug herum',
+    who: 'Alle zusammen',
+  },
 ];
 
 /** Problems of an action list: duplicate ids, unknown dev events, bad numbers. Empty when the list is fine. */
@@ -255,9 +229,14 @@ export function validateActions(actions: readonly OfficeAction[], eventIds: Iter
     if (!a.id || seen.has(a.id)) problems.push(`duplicate or empty id "${a.id}"`);
     seen.add(a.id);
     if (!known.has(a.eventId)) problems.push(`${a.id}: no dev event "${a.eventId}"`);
-    if (!a.label || !a.caption || !a.icon || !a.place.name) problems.push(`${a.id}: label, caption, icon and place name are required`);
-    if (![a.place.x, a.place.z, a.angle].every(Number.isFinite)) problems.push(`${a.id}: place and angle must be numbers`);
-    if (!(a.zoom > 0)) problems.push(`${a.id}: zoom must be > 0`);
+    if (!a.label || !a.caption || !a.icon) problems.push(`${a.id}: label, caption and icon are required`);
+    const shot = [a.place, a.angle, a.zoom].filter((v) => v !== undefined).length;
+    if (shot !== 0 && shot !== 3) problems.push(`${a.id}: place, angle and zoom come together`);
+    else if (isPlaced(a)) {
+      if (!a.place.name) problems.push(`${a.id}: place needs a name`);
+      if (![a.place.x, a.place.z, a.angle].every(Number.isFinite)) problems.push(`${a.id}: place and angle must be numbers`);
+      if (!(a.zoom > 0)) problems.push(`${a.id}: zoom must be > 0`);
+    }
   }
   return problems;
 }
