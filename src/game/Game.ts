@@ -15,6 +15,7 @@ import { GlassSort } from '../render/glassSort';
 import { DayHud } from '../ui/DayHud';
 import { DAY_STORIES } from '../data/dayStories';
 import { formatTime, type DayCtx, type DayTask } from './Day';
+import { City } from '../render/City';
 import { buildWorld, WORLD } from '../render/World';
 import { Actions } from '../ui/Actions';
 import { ActionSheet, type SheetPick } from '../ui/ActionSheet';
@@ -111,6 +112,8 @@ export class Game {
   private snowCoverFx!: SnowCoverFx;
   private spawnFx!: SpawnFx;
   private xmas!: Christmas;
+  /** the quiet city around the office (#291) */
+  private city!: City;
   private settings!: Settings;
   private sheet!: ActionSheet;
   private now!: NowChip;
@@ -234,6 +237,7 @@ export class Game {
     this.scene.background = new THREE.Color(stageColor);
 
     const { sun, hemi } = buildWorld(this.scene);
+    this.city = new City(this.scene, { x0: 0, z0: 0, x1: WORLD.width, z1: WORLD.depth });
     this.sky = { scene: this.scene, sun, hemi, dayBackground: new THREE.Color(stageColor) };
     const saved = loadState();
     this.rainFx = new RainFx(this.scene);
@@ -869,6 +873,7 @@ export class Game {
     this.ghost.update(dt);
     this.updateSpawnFx(dt);
     this.updateWeather(dt);
+    this.city.update(dt, this.views.camera, this.views.mode); // after the weather: its haze takes the background's colour
     this.updateArrivals();
     this.deskLights.update(dt);
     this.updateAlterEgos(dt);

@@ -11,19 +11,37 @@ interface Spot {
   rot: number;
 }
 
-const rel = (x: number, z: number, rx: number, rz: number, from: number, rot: number): Spot => ({ x: PORCH.x + x, z: PORCH.z + z, rx, rz, from, rot });
-/** Fixed puddles on the porch's paving, the first ones to form are in the lowest spots, the last ones only after a long shower. */
-const SPOTS: Spot[] = [
-  rel(5.07, 2.8, 0.55, 0.38, 0, 0.3),
-  rel(1.56, 2.9, 0.4, 0.28, 0.1, -0.5),
-  rel(6.76, 1.6, 0.5, 0.34, 0.2, 0.8),
-  rel(3.64, 1.3, 0.38, 0.3, 0.3, 0.1),
-  rel(0.72, 1.2, 0.3, 0.22, 0.4, 1.2),
-  rel(5.98, 2.2, 0.32, 0.46, 0.5, -0.2),
-  rel(4.16, 3.1, 0.26, 0.2, 0.6, 0.9),
-  rel(7.41, 0.7, 0.34, 0.24, 0.7, -0.7),
-  rel(2.47, 2.1, 0.28, 0.2, 0.8, 0.4),
+/** The pattern of puddles of one 8 m stretch of paving (relative to the porch's west end): x, z, radii, how soaked it must be, rotation. */
+const STRETCH: ReadonlyArray<readonly [number, number, number, number, number, number]> = [
+  [5.07, 2.8, 0.55, 0.38, 0, 0.3],
+  [1.56, 2.9, 0.4, 0.28, 0.1, -0.5],
+  [6.76, 1.6, 0.5, 0.34, 0.2, 0.8],
+  [3.64, 1.3, 0.38, 0.3, 0.3, 0.1],
+  [0.72, 1.2, 0.3, 0.22, 0.4, 1.2],
+  [5.98, 2.2, 0.32, 0.46, 0.5, -0.2],
+  [4.16, 3.1, 0.26, 0.2, 0.6, 0.9],
+  [7.41, 0.7, 0.34, 0.24, 0.7, -0.7],
+  [2.47, 2.1, 0.28, 0.2, 0.8, 0.4],
 ];
+const STRETCH_W = 8;
+
+/**
+ * Fixed puddles on the porch's paving, along its whole width: the first stretch is the original pattern, every further
+ * one repeats it with its z mirrored on every other stretch and turned a little, so the porch does not look tiled. The first ones to form are in the lowest
+ * spots, the last ones only after a long shower.
+ */
+export const PUDDLE_SPOTS: Spot[] = Array.from({ length: Math.ceil(PORCH.w / STRETCH_W) }, (_, k) =>
+  STRETCH.map(([x, z, rx, rz, from, rot]): Spot => ({
+    x: PORCH.x + x + k * STRETCH_W,
+    z: PORCH.z + (k % 2 ? PORCH.d - z : z),
+    rx,
+    rz,
+    from: Math.min(0.95, from + k * 0.04),
+    rot: rot + k,
+  })),
+)
+  .flat()
+  .filter((s) => s.x + s.rx < PORCH.x + PORCH.w - 0.1);
 
 const LIFT = 0.015; // above the paving, clear of z-fighting
 const RIPPLE = 1.1; // seconds one ripple takes
@@ -82,7 +100,7 @@ export class PuddleFx {
   constructor(scene: THREE.Scene) {
     const plane = new THREE.PlaneGeometry(2, 2);
     plane.rotateX(-Math.PI / 2);
-    SPOTS.forEach((spot, i) => {
+    PUDDLE_SPOTS.forEach((spot, i) => {
       const body = new THREE.Mesh(plane, this.water);
       const sheen = new THREE.Mesh(plane, this.shine);
       const ringMat = new THREE.MeshBasicMaterial({ map: this.ringTex, color: '#e8f1fa', transparent: true, opacity: 0, depthWrite: false });
