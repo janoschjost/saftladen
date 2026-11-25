@@ -668,6 +668,20 @@ export function registerSimEvents(sim: Sim): void {
       return `${first(sim.tidy.oscar)} hört auf`;
     },
   });
+  // Sandro drops an AI line (#306): a speech bubble and a raised hand at once, no card
+  events.register({
+    id: 'sandro-ai',
+    group: 'Aktionen',
+    label: 'Sandro schwärmt von KI',
+    run: () => {
+      const sandro = sim.person(DJ);
+      if (sandro.held || sandro.controlled) return null; // held: nobody is brought in for nothing
+      if (!sandro.inOffice) bringIn(sim, sandro);
+      if (!sim.sandroAi.say(true)) return null;
+      sim.point(sandro);
+      return `${first(sandro)} schwärmt von KI`;
+    },
+  });
   events.register({
     id: 'door-lettering',
     group: 'Aktionen',

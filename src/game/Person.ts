@@ -316,6 +316,10 @@ export class Person extends Walker {
   mailCarry: 'letter' | 'parcel' | null = null;
   mailAmt = 0;
   mailClock = 0;
+  /** Sandro's AI line is up (see SandroAi.ts): he raises a hand in a small gesture; the eased pose, and the last frame time of the pose */
+  aiGesture = false;
+  aiAmt = 0;
+  aiClock = 0;
   /** Oscar's tidy outing (see OscarTidy.ts): bent down over a piece of mess, or a lunchbox held away from the nose; the eased pose, and the last frame time of the pose */
   tidyPose: 'pick' | 'nose' | null = null;
   tidyAmt = 0;
