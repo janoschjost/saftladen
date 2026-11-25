@@ -369,11 +369,19 @@ export class Game {
     Walker.animate = true; // from now on arrivals and departures get a show
     this.bind();
     this.resize();
-    // back to where the last visit ended (a deep link in the URL wins over the saved camera)
-    if (!location.hash && saved.view) this.views.restore(saved.view, true);
+    // a deep link in the URL wins; else the game opens in Orbit, flying in to the overview (dev and test URLs cut straight to it)
+    const intro = !location.hash && !location.search;
+    if (!location.hash && saved.view) {
+      const { mode: _mode, orbit: _orbit, ...cameras } = saved.view;
+      this.views.restore(cameras, false);
+    }
+    if (intro) this.views.flyIn();
     if (saved.selected) {
       const p = this.sim.people.find((o) => o.id === saved.selected);
-      if (p && p.inOffice) this.selected = this.followed = p;
+      if (p && p.inOffice) {
+        this.selected = p;
+        if (!intro) this.followed = p;
+      }
     }
     window.addEventListener('pagehide', () => this.saveSession());
     this.overlay.initLabels(this.sim.people.map((p) => ({ id: p.id, name: p.member.name })));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blendShot, easeInOut, lerpAngle, shotFrom, shotPosition, wrapAngle, type Shot } from './cameraFly';
+import { blendShot, easeInOut, introShot, lerpAngle, shotFrom, shotPosition, wrapAngle, type Shot } from './cameraFly';
 
 const deg = (d: number) => (d * Math.PI) / 180;
 
@@ -60,5 +60,17 @@ describe('actions.camera', () => {
     const front = shotPosition({ ...s, azimuth: 0 });
     expect(front.z).toBeGreaterThan(s.z);
     expect(front.x).toBeCloseTo(s.x, 6);
+  });
+});
+
+describe('view.intro', () => {
+  it('view.intro starts farther away, higher and turned, around the same target', () => {
+    const o: Shot = { x: 10, y: 0, z: 5, azimuth: 0.2, polar: 0.9, dist: 30 };
+    const i = introShot(o);
+    expect([i.x, i.y, i.z]).toEqual([10, 0, 5]);
+    expect(i.dist).toBeGreaterThan(o.dist);
+    expect(i.polar).toBeLessThan(o.polar);
+    expect(i.azimuth).not.toBe(o.azimuth);
+    expect(shotPosition(i).y).toBeGreaterThan(shotPosition(o).y);
   });
 });
