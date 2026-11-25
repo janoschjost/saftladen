@@ -81,6 +81,11 @@ export function roomLight(follow: FollowLight, hour: number): RoomLight {
   return lookOf(followedDaylight(follow, hour));
 }
 
+/** How strongly a laptop lights its owner's face at a room light (`RoomLight.day`): 1 in the dark, fading out through dusk and dawn, 0 in bright daylight (#299). */
+export function laptopGlow(day: number): number {
+  return 1 - smooth(0.15, 0.8, day);
+}
+
 export function hourOf(cycle: number): number {
   for (let i = 1; i < ANCHORS.length; i++) {
     const [c1, h1] = ANCHORS[i];
