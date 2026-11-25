@@ -1,4 +1,5 @@
-import { seeded, type Rng } from '../game/rng';
+import type * as THREE from 'three';
+import { BUILDINGS, TERRAIN } from './cityData';
 
 /** An axis-aligned rectangle on the ground (game metres, x / z). */
 export interface Rect {
@@ -8,120 +9,147 @@ export interface Rect {
   z1: number;
 }
 
-/** A kind of building: a facade style and a number of floors (the drawing is `cityBuildings.ts`). */
-export interface Kind {
-  style: 'ribbon' | 'slit' | 'saw';
-  floors: number;
-}
-
+/** A building of the neighbourhood: its footprint (game metres, x / z pairs), where it stands and how high it is. */
 export interface Building {
-  /** the footprint: centre and size (the buildings of the city touch, there are no streets) */
+  /** the footprint corners, x then z */
+  p: number[];
+  /** the centre of the footprint */
   x: number;
   z: number;
-  w: number;
-  d: number;
-  /** index into `KINDS` */
-  kind: number;
-  /** a wall tone (index into the palette of the drawing) */
-  tone: number;
+  /** the ground at its lowest corner, and the height of its walls above that */
+  base: number;
+  /** the roof's height above the office's floor (m) */
+  h: number;
+  height: number;
+  /** a ready-made drawing instead of the plain block (the ground floor under the office) */
+  geometry?: THREE.BufferGeometry;
 }
 
 export const CITY = {
-  /** how far the city reaches beyond the footprint: sideways, to the north, and to the south past the entrance */
-  reach: { side: 240, north: 200, south: 240 },
-  /** open ground kept at the office's two window ends (west and east), so the windows have light and a view (m) */
-  windowGap: 4,
-  /** a cell of the city: no smaller, and larger ones are split */
-  min: 12,
-  max: 30,
-  /** the same city on every load */
-  seed: 0x0c17,
+  /** the office is on the first floor: its floor lies this far above the street (m), with a ground-floor building below it */
+  storey: 3.5,
   /** one floor (m); the office's roof is 3.8 to 5.5 m */
   floor: 3.2,
-  /** the floors by distance from the office: one floor up to this far, then another floor per `step` metres */
-  near: 20,
-  step: 24,
   /** the camera's sector (radians, each side) in which tall buildings are hidden */
   sector: (62 * Math.PI) / 180,
+  /** the hill is levelled to the office's floor at the footprint and rises to its real height this far out (m) */
+  levelled: 45,
 };
-
-/** The kinds of building. Index = what `Building.kind` says. */
-/** The numbers of floors a building comes with: up to the skyscrapers far out. */
-export const FLOORS = [1, 2, 3, 4, 6, 8, 12, 18, 26] as const;
-
-export const KINDS: readonly Kind[] = [
-  ...FLOORS.map((floors): Kind => ({ style: 'ribbon', floors })),
-  ...FLOORS.map((floors): Kind => ({ style: 'slit', floors })),
-  { style: 'saw', floors: 1 },
-];
-
-/** How high a building of this kind stands (walls, roof slab and plant room). */
-export const heightOf = (k: Kind): number => k.floors * CITY.floor + 2;
 
 /** The distance of a point from a rectangle (0 inside it). */
 function distance(r: Rect, x: number, z: number): number {
   return Math.hypot(Math.max(r.x0 - x, x - r.x1, 0), Math.max(r.z0 - z, z - r.z1, 0));
 }
 
-/** Splits a region into cells that touch (no streets): halves along the longer side until every cell is small enough. */
-function subdivide(r: Rect, rnd: Rng, out: Rect[]): void {
-  const w = r.x1 - r.x0;
-  const d = r.z1 - r.z0;
-  if (w <= 0 || d <= 0) return;
-  const tooBig = w > CITY.max || d > CITY.max;
-  if (!tooBig && (w < 2 * CITY.min || d < 2 * CITY.min || rnd() < 0.55)) return void out.push(r);
-  const alongX = w >= d;
-  const len = alongX ? w : d;
-  if (len < 2 * CITY.min) return void out.push(r);
-  const at = (alongX ? r.x0 : r.z0) + CITY.min + rnd() * (len - 2 * CITY.min);
-  if (alongX) {
-    subdivide({ ...r, x1: at }, rnd, out);
-    subdivide({ ...r, x0: at }, rnd, out);
-  } else {
-    subdivide({ ...r, z1: at }, rnd, out);
-    subdivide({ ...r, z0: at }, rnd, out);
-  }
+/**
+ * The ground at a point, relative to the office's floor (the street lies `CITY.storey` below it): the real terrain of St. Gallen (bilinear between the grid
+ * points), levelled around the office so nothing pokes through its floor. `origin` is where the data's centre
+ * stands in the game (the middle of the office's main body).
+ */
+export function groundAt(foot: Rect, origin: { x: number; z: number }, x: number, z: number): number {
+  const { half, step, n, heights } = TERRAIN;
+  const gx = Math.min(n - 1.001, Math.max(0, (x - origin.x + half) / step));
+  const gz = Math.min(n - 1.001, Math.max(0, (z - origin.z + half) / step));
+  const i = Math.floor(gx);
+  const j = Math.floor(gz);
+  const fx = gx - i;
+  const fz = gz - j;
+  const at = (a: number, b: number) => heights[b * n + a];
+  const raw = (at(i, j) * (1 - fx) + at(i + 1, j) * fx) * (1 - fz) + (at(i, j + 1) * (1 - fx) + at(i + 1, j + 1) * fx) * fz;
+  const k = Math.min(1, distance(foot, x, z) / CITY.levelled);
+  return raw * k * k * (3 - 2 * k) - CITY.storey;
 }
 
-/** The floors of a building by its distance from the office: low against its walls, higher further out, now and then a skyscraper. */
-function floorsAt(dist: number, rnd: Rng): number {
-  if (dist < CITY.near) return rnd() < 0.3 ? 2 : 1;
-  if (dist > 60 && rnd() < 0.14 + dist / 1500) return FLOORS[6 + Math.floor(rnd() * 3)]; // 12, 18 or 26
-  const want = 2 + (dist - CITY.near) / CITY.step + (rnd() - 0.5) * 4;
-  let best: number = FLOORS[0];
-  for (const f of FLOORS) if (f <= Math.max(2, Math.min(8, want))) best = f;
-  return best;
+/** Whether a footprint (x, z pairs) and a rectangle share ground: a corner of one inside the other, or their outlines crossing. */
+export function overlaps(p: number[], rect: Rect): boolean {
+  const e = 1e-6; // only touching along the side is no overlap
+  const r = { x0: rect.x0 + e, z0: rect.z0 + e, x1: rect.x1 - e, z1: rect.z1 - e };
+  const n = p.length / 2;
+  const inside = (x: number, z: number) => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1;
+  const inPoly = (x: number, z: number) => {
+    let c = false;
+    for (let i = 0, j = n - 1; i < n; j = i++) {
+      const zi = p[i * 2 + 1];
+      const zj = p[j * 2 + 1];
+      if (zi > z !== zj > z && x < ((p[j * 2] - p[i * 2]) * (z - zi)) / (zj - zi) + p[i * 2]) c = !c;
+    }
+    return c;
+  };
+  for (let i = 0; i < n; i++) if (inside(p[i * 2], p[i * 2 + 1])) return true;
+  if ([[r.x0, r.z0], [r.x1, r.z0], [r.x1, r.z1], [r.x0, r.z1]].some(([x, z]) => inPoly(x, z))) return true;
+  // a side of the footprint crossing the rectangle (clip the segment to it)
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    let t0 = 0;
+    let t1 = 1;
+    const dx = p[j * 2] - p[i * 2];
+    const dz = p[j * 2 + 1] - p[i * 2 + 1];
+    const edges: Array<[number, number]> = [[-dx, p[i * 2] - r.x0], [dx, r.x1 - p[i * 2]], [-dz, p[i * 2 + 1] - r.z0], [dz, r.z1 - p[i * 2 + 1]]];
+    let cut = false;
+    for (const [d, q] of edges) {
+      if (d === 0) {
+        if (q <= 0) cut = true; // parallel and outside, or just along the side: only touching
+      } else {
+        const t = q / d;
+        if (d < 0) t0 = Math.max(t0, t);
+        else t1 = Math.min(t1, t);
+      }
+    }
+    if (!cut && t0 < t1) return true;
+  }
+  return false;
+}
+
+/** The part of a footprint (x, z pairs) on one side of a line: `keep(x, z)` is positive inside, `cut(a, b)` the crossing of a side with the line. */
+function clip(p: number[], inside: (x: number, z: number) => number, cross: (x0: number, z0: number, x1: number, z1: number) => [number, number]): number[] {
+  const out: number[] = [];
+  const n = p.length / 2;
+  for (let i = 0; i < n; i++) {
+    const j = (i + n - 1) % n;
+    const a = [p[j * 2], p[j * 2 + 1]] as const;
+    const b = [p[i * 2], p[i * 2 + 1]] as const;
+    const ain = inside(...a) >= 0;
+    const bin = inside(...b) >= 0;
+    if (bin !== ain) out.push(...cross(...a, ...b));
+    if (bin) out.push(...b);
+  }
+  return out;
+}
+
+/** What is left of a footprint when the rectangle is taken out of it: up to four pieces (west, east, north and south of it). */
+export function without(p: number[], r: Rect): number[][] {
+  const atX = (x: number) => (x0: number, z0: number, x1: number, z1: number): [number, number] => [x, z0 + ((z1 - z0) * (x - x0)) / (x1 - x0)];
+  const atZ = (z: number) => (x0: number, z0: number, x1: number, z1: number): [number, number] => [x0 + ((x1 - x0) * (z - z0)) / (z1 - z0), z];
+  const middle = clip(clip(p, (x) => x - r.x0, atX(r.x0)), (x) => r.x1 - x, atX(r.x1));
+  return [
+    clip(p, (x) => r.x0 - x, atX(r.x0)),
+    clip(p, (x) => x - r.x1, atX(r.x1)),
+    clip(middle, (_, z) => r.z0 - z, atZ(r.z0)),
+    clip(middle, (_, z) => z - r.z1, atZ(r.z1)),
+  ].filter((q) => q.length >= 6);
 }
 
 /**
- * The city around `foot`: one continuous mass of buildings that touch each other and the office's walls, low next to
- * the office and rising outwards. Only the entrance lane in front of the porch (`lane`: its x range) stays open.
- * Deterministic.
+ * The buildings of the real neighbourhood (`cityData.ts`) placed around the office (`origin`: where the data's centre, the centre of the real building, stands: the middle of the office's main body), with what lies inside the
+ * office's footprint cut away (the real building itself is not in the data). Deterministic: the data is fixed.
  */
-export function cityLayout(foot: Rect, lane: { x0: number; x1: number }): Building[] {
-  const rnd = seeded(CITY.seed);
-  const R: Rect = { x0: foot.x0 - CITY.reach.side, x1: foot.x1 + CITY.reach.side, z0: foot.z0 - CITY.reach.north, z1: foot.z1 + CITY.reach.south };
-  // the ground around the footprint in regions that meet it flush: north, west, east, and the south on both sides of the lane
-  const regions: Rect[] = [
-    { x0: R.x0, z0: R.z0, x1: R.x1, z1: foot.z0 },
-    { x0: R.x0, z0: foot.z0, x1: foot.x0 - CITY.windowGap, z1: foot.z1 },
-    { x0: foot.x1 + CITY.windowGap, z0: foot.z0, x1: R.x1, z1: foot.z1 },
-    { x0: R.x0, z0: foot.z1, x1: lane.x0, z1: R.z1 },
-    { x0: lane.x1, z0: foot.z1, x1: R.x1, z1: R.z1 },
-  ];
-  const cells: Rect[] = [];
-  for (const r of regions) subdivide(r, rnd, cells);
+export function cityLayout(foot: Rect, origin: { x: number; z: number }): Building[] {
   const out: Building[] = [];
-  for (const c of cells) {
-    const x = (c.x0 + c.x1) / 2;
-    const z = (c.z0 + c.z1) / 2;
-    const dist = distance(foot, x, z);
-    // a low saw-tooth hall now and then close to the office, the way the office has one
-    const hall = dist < 70 && rnd() < 0.18;
-    const floors = hall ? 1 : floorsAt(dist, rnd);
-    const style: Kind['style'] = hall ? 'saw' : rnd() < 0.65 ? 'ribbon' : 'slit';
-    const kind = KINDS.findIndex((k) => k.style === style && k.floors === floors);
-    out.push({ x, z, w: c.x1 - c.x0, d: c.z1 - c.z0, kind, tone: Math.floor(rnd() * 6) });
+  for (const b of BUILDINGS) {
+    const whole: number[] = [];
+    for (let k = 0; k < b.p.length; k += 2) whole.push(b.p[k] + origin.x, b.p[k + 1] + origin.z);
+    // a neighbour that reaches into the office keeps what lies outside its footprint
+    for (const p of overlaps(whole, foot) ? without(whole, foot) : [whole]) {
+      let x = 0;
+      let z = 0;
+      let base = Infinity;
+      for (let k = 0; k < p.length; k += 2) {
+        x += p[k];
+        z += p[k + 1];
+        base = Math.min(base, groundAt(foot, origin, p[k], p[k + 1]));
+      }
+      out.push({ p, x: (x * 2) / p.length, z: (z * 2) / p.length, base, height: b.h, h: base + b.h });
+    }
   }
   return out;
 }
@@ -145,7 +173,7 @@ export function viewOf(cam: { x: number; z: number }, dir: { x: number; y: numbe
 
 /**
  * Whether a building stands in the way of the camera's view of the office, so it should fade: it is within `CITY.sector`
- * of the camera's side of the office, nearer than the camera, and taller than the line of sight over it. Low buildings
+ * of the camera's side of the office, nearer than the camera, and taller than the line of sight over it. Low buildings (up to two floors)
  * against the office's walls stay; only the ones that would hide it go. `reach` is how far the office extends from its
  * centre towards the camera (m). It follows the camera's view direction, so it holds when the view is panned.
  */
@@ -156,6 +184,6 @@ export function blocksTheView(b: { x: number; z: number; h: number }, centre: { 
   const along = bdx * view.x + bdz * view.z;
   if (bl < 1e-6 || along <= 0 || along > view.along) return false; // beside or behind the office, or behind the camera
   if (Math.acos(Math.min(1, along / bl)) >= CITY.sector) return false;
-  const sight = Math.max(CITY.floor, (along - reach) * Math.max(0, view.rise) * 0.85);
+  const sight = Math.max(2 * CITY.floor + 2, (along - reach) * Math.max(0, view.rise) * 0.85);
   return b.h > sight;
 }

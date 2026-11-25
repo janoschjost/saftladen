@@ -1,110 +1,79 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { CITY, type Kind } from './cityLayout';
+import type { Building } from './cityLayout';
 
-const NOMINAL_DEPTH = 13;
-
-/**
- * Near-neutral parts, tinted per building by its wall tone (the instance colour multiplies these), so the whole city
- * stays a dimmed grey next to the office's own colours: white walls, glass a shade bluer, dark slits, a lighter roof.
- */
-const WALL = '#ffffff';
-const SLAB = '#f4f4f2';
-const GLASS = '#b4bec7';
-const DARK = '#9ea2a8';
-const ROOF = '#e2e2df';
-
-/** The nominal footprint of a building: both sizes are scaled per instance to the cell it stands in. */
-export const NOMINAL_W = 12;
-export const NOMINAL_D = NOMINAL_DEPTH;
-
-const F = CITY.floor;
-const D = NOMINAL_D;
-
-type Part = THREE.BufferGeometry;
-
-/** A box standing on `y`, painted one colour (vertex colours, so a whole building is one geometry). */
-function box(w: number, h: number, d: number, x: number, y: number, z: number, color: string): Part {
-  return paint(new THREE.BoxGeometry(w, h, d).translate(x, y + h / 2, z), color);
-}
-
-function paint(g: Part, color: string): Part {
-  const c = new THREE.Color(color);
-  const n = g.getAttribute('position').count;
-  const a = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) a.set([c.r, c.g, c.b], i * 3);
-  g.setAttribute('color', new THREE.BufferAttribute(a, 3));
+/** A building as a plain block: its footprint extruded from the ground at its lowest corner up to its roof. Quiet: no detail, the edges are drawn separately. */
+export function buildBlock(b: Building): THREE.BufferGeometry {
+  const shape = new THREE.Shape();
+  for (let k = 0; k < b.p.length; k += 2) {
+    // after the turn below, shape y is -z
+    if (k === 0) shape.moveTo(b.p[k], -b.p[k + 1]);
+    else shape.lineTo(b.p[k], -b.p[k + 1]);
+  }
+  const g = new THREE.ExtrudeGeometry(shape, { depth: b.height, bevelEnabled: false });
+  g.rotateX(-Math.PI / 2);
+  g.translate(0, b.base, 0);
+  g.deleteAttribute('uv');
   return g;
 }
 
-/** A saw-tooth roof like the office's: `n` right-angled prisms along x, rising from `y`. */
-function sawtooth(w: number, d: number, n: number, rise: number, y: number, color: string): Part[] {
-  const tw = w / n;
-  const out: Part[] = [];
-  for (let k = 0; k < n; k++) {
-    const x0 = -w / 2 + k * tw;
-    const x1 = x0 + tw;
-    const a = [x0, y, -d / 2], b = [x1, y, -d / 2], c = [x1, y + rise, -d / 2];
-    const a2 = [x0, y, d / 2], b2 = [x1, y, d / 2], c2 = [x1, y + rise, d / 2];
-    const pos = [
-      ...a, ...c, ...b, // front face
-      ...a2, ...b2, ...c2, // back face
-      ...a, ...a2, ...c2, ...a, ...c2, ...c, // slope
-      ...b, ...c, ...c2, ...b, ...c2, ...b2, // tall end
-      ...a, ...b2, ...a2, ...a, ...b, ...b2, // underside
-    ];
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    g.computeVertexNormals();
-    out.push(paint(g, color));
-  }
-  return out;
-}
+/** A box from its corners (x0..x1, y0..y1, z0..z1). */
+const slab = (x0: number, x1: number, y0: number, y1: number, z0: number, z1: number): THREE.BufferGeometry =>
+  new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0).translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
 
-/** Glass ribbons: a core, a band of glass on every floor, light slab edges, a parapet. It sits flush with its neighbours. */
-function ribbon(floors: number): Part[] {
-  const h = floors * F;
-  const out: Part[] = [box(NOMINAL_W, h, D, 0, 0, 0, WALL)];
-  for (let f = 0; f < floors; f++) {
-    out.push(box(NOMINAL_W + 0.02, 1.9, D + 0.3, 0, f * F + 0.9, 0, GLASS)); // front and back faces: the sides touch the neighbours
-    out.push(box(NOMINAL_W + 0.02, 0.35, D + 0.45, 0, f * F, 0, SLAB));
-  }
-  // vertical fins on the long faces: a rhythm to the front
-  for (let k = 0; k < 4; k++) {
-    const x = -NOMINAL_W / 2 + ((k + 0.5) * NOMINAL_W) / 4;
-    out.push(box(0.35, h, 0.35, x, 0, D / 2 + 0.25, SLAB), box(0.35, h, 0.35, x, 0, -D / 2 - 0.25, SLAB));
-  }
-  out.push(box(NOMINAL_W + 0.02, 0.6, D + 0.45, 0, h, 0, SLAB));
-  out.push(box(NOMINAL_W * 0.4, 1.4, D * 0.4, 1, h + 0.6, -1, ROOF)); // a plant room
-  if (floors >= 12) out.push(box(NOMINAL_W * 0.7, 2.6, D * 0.7, 0, h + 0.6, 0, ROOF)); // a crown on the towers
-  return out;
-}
-
-/** A concrete front with slit windows. */
-function slit(floors: number): Part[] {
-  const h = floors * F;
-  const out: Part[] = [box(NOMINAL_W, h, D, 0, 0, 0, WALL)];
-  for (let f = 0; f < floors; f++) out.push(box(NOMINAL_W + 0.02, 0.6, D + 0.3, 0, f * F + 1.5, 0, DARK));
-  out.push(box(NOMINAL_W + 0.02, 0.55, D + 0.4, 0, h, 0, SLAB), box(NOMINAL_W * 0.3, 1.3, D * 0.5, -2, h + 0.55, 0, ROOF));
-  return out;
-}
-
-/** The office's own hall: white walls, a clerestory band of glass and a saw-tooth roof. */
-function saw(): Part[] {
-  const out: Part[] = [box(NOMINAL_W, 3.2, D, 0, 0, 0, WALL), box(NOMINAL_W + 0.02, 1.5, D + 0.3, 0, 1.0, 0, GLASS), box(NOMINAL_W + 0.02, 0.3, D + 0.4, 0, 3.2, 0, SLAB)];
-  out.push(...sawtooth(NOMINAL_W, D, 3, 1.9, 3.5, ROOF));
-  return out;
-}
-
-/** The geometry of one kind of building, centred on its footprint and standing on y = 0. */
-export function buildKind(k: Kind): THREE.BufferGeometry {
-  const parts = k.style === 'saw' ? saw() : k.style === 'slit' ? slit(k.floors) : ribbon(k.floors);
-  // every part brings position and normal (and uv, for a box): keep what all share
-  for (const p of parts) p.deleteAttribute('uv');
-  const merged = mergeGeometries(
-    parts.map((p) => (p.index ? p.toNonIndexed() : p)),
-    false,
-  );
-  parts.forEach((p) => p.dispose());
+/**
+ * The ground floor under the office: a plain block of its footprint from the street (`base`) up `height`, with a band of
+ * windows in bays along every side and an entrance with a canopy at `doorX` on the south side. All boxes, so their edges
+ * draw it like a sketch.
+ */
+export function groundFloor(foot: { x0: number; z0: number; x1: number; z1: number }, base: number, height: number, doorX: number): THREE.BufferGeometry {
+  const bay = 3;
+  const win = { y0: base + 1, y1: base + 2.8, depth: 0.15 };
+  const parts: THREE.BufferGeometry[] = [slab(foot.x0, foot.x1, base, base + height, foot.z0, foot.z1)];
+  const along = (from: number, to: number, put: (a: number, b: number) => THREE.BufferGeometry | null) => {
+    const n = Math.floor((to - from) / bay);
+    const pad = (to - from - n * bay) / 2;
+    for (let i = 0; i < n; i++) {
+      const part = put(from + pad + i * bay + 0.3, from + pad + (i + 1) * bay - 0.3);
+      if (part) parts.push(part);
+    }
+  };
+  for (const z of [foot.z0, foot.z1]) along(foot.x0, foot.x1, (a, b) => (z === foot.z1 && doorX > a - 1.5 && doorX < b + 1.5 ? null : slab(a, b, win.y0, win.y1, z - win.depth, z + win.depth)));
+  for (const x of [foot.x0, foot.x1]) along(foot.z0, foot.z1, (a, b) => slab(x - win.depth, x + win.depth, win.y0, win.y1, a, b));
+  // the entrance: a door in the south wall and a canopy over it
+  parts.push(slab(doorX - 1.2, doorX + 1.2, base, base + 2.8, foot.z1 - 0.2, foot.z1 + 0.2), slab(doorX - 2.5, doorX + 2.5, base + 3, base + 3.2, foot.z1, foot.z1 + 1.6));
+  const merged = mergeGeometries(parts.map((g) => g.toNonIndexed()))!;
+  for (const g of parts) g.dispose();
+  merged.deleteAttribute('uv');
   return merged;
+}
+
+/** A road as a flat ribbon on the ground: its centre line cut every 4 m and lifted to the terrain (`ground(x, z)`), `w` wide. */
+export function roadStrip(p: readonly number[], w: number, ground: (x: number, z: number) => number): THREE.BufferGeometry {
+  const pts: Array<[number, number]> = [];
+  for (let k = 0; k < p.length; k += 2) {
+    const [x1, z1] = [p[k], p[k + 1]];
+    if (k === 0) pts.push([x1, z1]);
+    else {
+      const [x0, z0] = pts[pts.length - 1];
+      const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 4));
+      for (let i = 1; i <= n; i++) pts.push([x0 + ((x1 - x0) * i) / n, z0 + ((z1 - z0) * i) / n]);
+    }
+  }
+  const pos: number[] = [];
+  const idx: number[] = [];
+  pts.forEach(([x, z], i) => {
+    const [ax, az] = pts[Math.max(0, i - 1)];
+    const [bx, bz] = pts[Math.min(pts.length - 1, i + 1)];
+    const len = Math.hypot(bx - ax, bz - az) || 1;
+    const nx = (-(bz - az) / len) * (w / 2); // sideways, perpendicular to the road
+    const nz = ((bx - ax) / len) * (w / 2);
+    pos.push(x + nx, ground(x + nx, z + nz), z + nz, x - nx, ground(x - nx, z - nz), z - nz);
+    if (i) idx.push(i * 2 - 2, i * 2, i * 2 - 1, i * 2 - 1, i * 2, i * 2 + 1);
+  });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
 }
