@@ -14,6 +14,8 @@ const LINE = '#a3a4a8';
 /** How much of the fill shows: the rest lets the edges behind it and the ground through. */
 const FILL = 0.18;
 const GROUND = '#dcdcda';
+/** Everything of the neighbourhood sits this far below y = 0, under the office's floor slab. */
+const SINK = -WORLD.slab - 0.01;
 /** The roads: lighter than the ground. */
 const ROAD = '#e8e8e6';
 
@@ -54,35 +56,32 @@ function fadeable(material: THREE.Material, dim: number, opacity: number): void 
 export class City {
   private buildings: Building[];
   private shown: Float32Array;
-  private applied: Float32Array;
   /** the vertices of each building in the fill's and the edges' fade attributes: [from, count] */
   private fillRange: Array<[number, number]> = [];
   private edgeRange: Array<[number, number]> = [];
   private fillFade: THREE.BufferAttribute;
   private edgeFade: THREE.BufferAttribute;
   private centre: THREE.Vector3;
-  private origin: { x: number; z: number };
   private look = new THREE.Vector3();
   private fog = new THREE.Fog('#ffffff', 100, 400);
-  private lineMaterial = new THREE.LineBasicMaterial({ color: LINE });
+  /** nothing is fading and no building is in the way: `update` has nothing to do until a view applies again */
+  private settled = true;
 
   constructor(private scene: THREE.Scene, foot: Rect) {
     this.centre = new THREE.Vector3((foot.x0 + foot.x1) / 2, 0, (foot.z0 + foot.z1) / 2);
-    this.origin = { x: OFFICE_W / 2, z: OFFICE_D / 2 }; // the real building's centre: the middle of the main body, the annex hangs out of it
-    this.buildings = cityLayout(foot, this.origin);
+    const origin = { x: OFFICE_W / 2, z: OFFICE_D / 2 }; // the real building's centre: the middle of the main body, the annex hangs out of it
+    this.buildings = cityLayout(foot, origin);
     // the ground floor under the office: a plain block of its footprint from the street up to the slab, drawn like the rest
-    const street = groundAt(foot, this.origin, this.centre.x, this.centre.z);
+    const street = groundAt(foot, origin, this.centre.x, this.centre.z);
     this.buildings.push({
       p: [foot.x0, foot.z0, foot.x1, foot.z0, foot.x1, foot.z1, foot.x0, foot.z1],
       x: this.centre.x,
       z: this.centre.z,
       base: street,
-      height: -street,
       h: 0,
-      geometry: groundFloor(foot, street, -street, PORCH.x + 4),
+      geometry: groundFloor(foot, street, PORCH.x + 4),
     });
     this.shown = new Float32Array(this.buildings.length).fill(1);
-    this.applied = new Float32Array(this.buildings.length).fill(1);
 
     // the terrain: the hills of St. Gallen, levelled around the office
     const { half } = TERRAIN;
@@ -90,15 +89,15 @@ export class City {
     const ground = new THREE.PlaneGeometry(2 * half, 2 * half, seg, seg).rotateX(-Math.PI / 2);
     const gp = ground.getAttribute('position');
     for (let i = 0; i < gp.count; i++) {
-      const x = gp.getX(i) + this.origin.x;
-      const z = gp.getZ(i) + this.origin.z;
-      gp.setXYZ(i, x, groundAt(foot, this.origin, x, z) - WORLD.slab - 0.01, z);
+      const x = gp.getX(i) + origin.x;
+      const z = gp.getZ(i) + origin.z;
+      gp.setXYZ(i, x, groundAt(foot, origin, x, z) + SINK, z);
     }
     ground.computeVertexNormals();
     scene.add(new THREE.Mesh(ground, new THREE.MeshLambertMaterial({ color: GROUND })));
     // the main roads: stylised light ribbons on the terrain, a hair above it
-    const lift = -WORLD.slab - 0.01 + 0.4; // well above the terrain mesh, which cuts the corners of the heights the road follows
-    const roads = mergeGeometries(ROADS.map((r) => roadStrip(r.p, r.w, (x, z) => groundAt(foot, this.origin, x, z) + lift)));
+    const lift = SINK + 0.4; // well above the terrain mesh, which cuts the corners of the heights the road follows
+    const roads = mergeGeometries(ROADS.map((r) => roadStrip(r.p, r.w, (x, z) => groundAt(foot, origin, x, z) + lift)));
     const roadMesh = new THREE.Mesh(roads, new THREE.MeshLambertMaterial({ color: ROAD, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, depthWrite: false }));
     roadMesh.renderOrder = 1; // after the ground, and the strips of crossing roads do not fight each other
     scene.add(roadMesh);
@@ -110,7 +109,7 @@ export class City {
     let fromEdge = 0;
     for (const b of this.buildings) {
       const block = b.geometry ?? buildBlock(b);
-      block.translate(0, -WORLD.slab - 0.01, 0);
+      block.translate(0, SINK, 0);
       const edges = new THREE.EdgesGeometry(block, 30);
       this.fillRange.push([fromFill, block.getAttribute('position').count]);
       this.edgeRange.push([fromEdge, edges.getAttribute('position').count]);
@@ -121,13 +120,14 @@ export class City {
     }
     this.fillFade = new THREE.BufferAttribute(new Float32Array(fromFill).fill(1), 1).setUsage(THREE.DynamicDrawUsage);
     this.edgeFade = new THREE.BufferAttribute(new Float32Array(fromEdge).fill(1), 1).setUsage(THREE.DynamicDrawUsage);
-    const fill = mergeGeometries(fills.map((g) => (g.index ? g.toNonIndexed() : g)))!.setAttribute('aFade', this.fillFade);
+    const fill = mergeGeometries(fills)!.setAttribute('aFade', this.fillFade);
     const outline = mergeGeometries(lines)!.setAttribute('aFade', this.edgeFade);
     // the fill is see-through like the blueprint on /credits: it blends and writes no depth, so the edges behind it show
+    const lineMaterial = new THREE.LineBasicMaterial({ color: LINE });
     const material = new THREE.MeshLambertMaterial({ color: FILL_COLOR, transparent: true, depthWrite: false });
     fadeable(material, DIM, FILL);
-    fadeable(this.lineMaterial, 0, 1); // the lines keep their contrast; the haze still fades them with distance
-    for (const o of [new THREE.Mesh(fill, material), new THREE.LineSegments(outline, this.lineMaterial)]) {
+    fadeable(lineMaterial, 0, 1); // the lines keep their contrast; the haze still fades them with distance
+    for (const o of [new THREE.Mesh(fill, material), new THREE.LineSegments(outline, lineMaterial)]) {
       o.frustumCulled = false;
       scene.add(o);
     }
@@ -145,20 +145,24 @@ export class City {
     this.fog.near = away + HAZE.near;
     this.fog.far = away + HAZE.far;
     const view = mode === 'iso' || mode === 'orbit' ? viewOf(cam, camera.getWorldDirection(this.look), this.centre) : null;
+    if (!view && this.settled) return;
     const step = Math.min(1, dt * FADE);
     let changed = false;
+    let moving = false;
     this.buildings.forEach((b, i) => {
       const target = view && blocksTheView(b, this.centre, view) ? GHOST : 1;
-      this.shown[i] += (target - this.shown[i]) * step;
+      const before = this.shown[i];
+      this.shown[i] += (target - before) * step;
       if (Math.abs(this.shown[i] - target) < 0.005) this.shown[i] = target;
-      if (this.shown[i] === this.applied[i]) return;
-      this.applied[i] = this.shown[i];
+      if (this.shown[i] !== target) moving = true;
+      if (this.shown[i] === before) return;
       const [fillFrom, fillCount] = this.fillRange[i];
       const [edgeFrom, edgeCount] = this.edgeRange[i];
       this.fillFade.array.fill(this.shown[i], fillFrom, fillFrom + fillCount);
       this.edgeFade.array.fill(GHOST_EDGES + (1 - GHOST_EDGES) * this.shown[i], edgeFrom, edgeFrom + edgeCount);
       changed = true;
     });
+    this.settled = !view && !moving;
     if (changed) this.fillFade.needsUpdate = this.edgeFade.needsUpdate = true;
   }
 }

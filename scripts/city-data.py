@@ -3,7 +3,9 @@
 
 Buildings: OpenStreetMap (Overpass). Heights of the ground: swisstopo height service. Game coordinates: x east,
 z south, metres. The data is turned by the angle of 7a's footprint (its smallest bounding rectangle) so that rectangle lies
-axis-aligned like the office, and is centred on the rectangle: the office's main body goes there, 1:1 (the office is in real metres). Usage: python3 scripts/city-data.py [overpass.json]  (a saved Overpass answer skips the download when that server is busy)
+axis-aligned like the office, and is centred on the rectangle: the office's main body goes there, 1:1 (the office is in real metres).
+
+Usage: python3 scripts/city-data.py [overpass.json]  (a saved Overpass answer skips the download when that server is busy)
 """
 import json, math, sys, urllib.parse, urllib.request
 from concurrent.futures import ThreadPoolExecutor

@@ -16,11 +16,10 @@ export interface Building {
   /** the centre of the footprint */
   x: number;
   z: number;
-  /** the ground at its lowest corner, and the height of its walls above that */
+  /** the ground at its lowest corner (m, relative to the office's floor) */
   base: number;
   /** the roof's height above the office's floor (m) */
   h: number;
-  height: number;
   /** a ready-made drawing instead of the plain block (the ground floor under the office) */
   geometry?: THREE.BufferGeometry;
 }
@@ -100,7 +99,7 @@ export function overlaps(p: number[], rect: Rect): boolean {
   return false;
 }
 
-/** The part of a footprint (x, z pairs) on one side of a line: `keep(x, z)` is positive inside, `cut(a, b)` the crossing of a side with the line. */
+/** The part of a footprint (x, z pairs) on one side of a line: `inside(x, z)` is positive on the kept side, `cross(a, b)` the crossing of a side with the line. */
 function clip(p: number[], inside: (x: number, z: number) => number, cross: (x0: number, z0: number, x1: number, z1: number) => [number, number]): number[] {
   const out: number[] = [];
   const n = p.length / 2;
@@ -148,7 +147,7 @@ export function cityLayout(foot: Rect, origin: { x: number; z: number }): Buildi
         z += p[k + 1];
         base = Math.min(base, groundAt(foot, origin, p[k], p[k + 1]));
       }
-      out.push({ p, x: (x * 2) / p.length, z: (z * 2) / p.length, base, height: b.h, h: base + b.h });
+      out.push({ p, x: (x * 2) / p.length, z: (z * 2) / p.length, base, h: base + b.h });
     }
   }
   return out;

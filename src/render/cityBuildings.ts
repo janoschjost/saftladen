@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import type { Building } from './cityLayout';
+import type { Building, Rect } from './cityLayout';
 
 /** A building as a plain block: its footprint extruded from the ground at its lowest corner up to its roof. Quiet: no detail, the edges are drawn separately. */
 export function buildBlock(b: Building): THREE.BufferGeometry {
@@ -10,7 +10,7 @@ export function buildBlock(b: Building): THREE.BufferGeometry {
     if (k === 0) shape.moveTo(b.p[k], -b.p[k + 1]);
     else shape.lineTo(b.p[k], -b.p[k + 1]);
   }
-  const g = new THREE.ExtrudeGeometry(shape, { depth: b.height, bevelEnabled: false });
+  const g = new THREE.ExtrudeGeometry(shape, { depth: b.h - b.base, bevelEnabled: false });
   g.rotateX(-Math.PI / 2);
   g.translate(0, b.base, 0);
   g.deleteAttribute('uv');
@@ -22,14 +22,14 @@ const slab = (x0: number, x1: number, y0: number, y1: number, z0: number, z1: nu
   new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0).translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
 
 /**
- * The ground floor under the office: a plain block of its footprint from the street (`base`) up `height`, with a band of
+ * The ground floor under the office: a plain block of its footprint from the street (`base`) up to the office's floor, with a band of
  * windows in bays along every side and an entrance with a canopy at `doorX` on the south side. All boxes, so their edges
  * draw it like a sketch.
  */
-export function groundFloor(foot: { x0: number; z0: number; x1: number; z1: number }, base: number, height: number, doorX: number): THREE.BufferGeometry {
+export function groundFloor(foot: Rect, base: number, doorX: number): THREE.BufferGeometry {
   const bay = 3;
   const win = { y0: base + 1, y1: base + 2.8, depth: 0.15 };
-  const parts: THREE.BufferGeometry[] = [slab(foot.x0, foot.x1, base, base + height, foot.z0, foot.z1)];
+  const parts: THREE.BufferGeometry[] = [slab(foot.x0, foot.x1, base, 0, foot.z0, foot.z1)];
   const along = (from: number, to: number, put: (a: number, b: number) => THREE.BufferGeometry | null) => {
     const n = Math.floor((to - from) / bay);
     const pad = (to - from - n * bay) / 2;

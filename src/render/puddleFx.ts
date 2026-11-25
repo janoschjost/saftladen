@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { PORCH } from './officeModel';
 
 /** A puddle: where, how big when full, how soaked the ground must be before it shows up. */
-export interface Spot {
+interface Spot {
   x: number;
   z: number;
   rx: number;
@@ -27,7 +27,7 @@ const STRETCH_W = 8;
 
 /**
  * Fixed puddles on the porch's paving, along its whole width: the first stretch is the original pattern, every further
- * one repeats it mirrored and turned a little, so the porch does not look tiled. The first ones to form are in the lowest
+ * one repeats it with its z mirrored on every other stretch and turned a little, so the porch does not look tiled. The first ones to form are in the lowest
  * spots, the last ones only after a long shower.
  */
 export const PUDDLE_SPOTS: Spot[] = Array.from({ length: Math.ceil(PORCH.w / STRETCH_W) }, (_, k) =>
