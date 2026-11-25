@@ -133,3 +133,53 @@ describe('window light (#293)', () => {
     expect(windowAt(room, 12)).toEqual(windowAt(room, 1));
   });
 });
+
+function laptopLights(room: HomeOffice) {
+  const lights: THREE.SpotLight[] = [];
+  room.scene.traverse((o) => {
+    if (o instanceof THREE.SpotLight && o.color.getHexString() === 'dff2ff') lights.push(o);
+  });
+  return lights;
+}
+
+/** The laptop's screen glow on the occupant: the intensity of its light after a frame at this clock hour (undefined: the room has none). */
+function laptopLightAt(variant: number, hour: number) {
+  setSeed(1);
+  const room = new HomeOffice(variant);
+  room.setOccupant(TEAM.find((m) => m.id === 'marco-hefti') ?? TEAM[0]);
+  room.hour = hour;
+  room.update(0.05);
+  return laptopLights(room)[0]?.intensity;
+}
+
+describe('laptop glow (#299)', () => {
+  it('home.beach: the laptop lights him while the beach room is dark, fades at dusk and dawn, none in beach daylight', () => {
+    const dark = laptopLightAt(BEACH, 12) ?? NaN;
+    expect(dark).toBeGreaterThan(0);
+    expect(laptopLightAt(BEACH, 0)).toBe(0);
+    const dusk = laptopLightAt(BEACH, 18.5) ?? NaN;
+    expect(dusk).toBeGreaterThan(0);
+    expect(dusk).toBeLessThan(dark);
+  });
+
+  it('home.beach: no glow on him while the laptop lies in the sand for a swim', () => {
+    setSeed(1);
+    const room = new HomeOffice(BEACH);
+    room.setOccupant(TEAM.find((m) => m.id === 'marco-hefti') ?? TEAM[0]);
+    room.hour = 12;
+    const lights = laptopLights(room);
+    let most = 0;
+    let least = Infinity;
+    for (let t = 0; t < 3000; t += 0.1) {
+      room.update(0.1);
+      most = Math.max(most, lights[0].intensity);
+      least = Math.min(least, lights[0].intensity);
+    }
+    expect(most).toBeGreaterThan(0); // on while he types
+    expect(least).toBe(0); // out while the laptop lies in the sand (he swims now and then)
+  });
+
+  it.each([...WINDOWED, ...WINDOWLESS, SAFARI, BALCONY])('home.beach: room %i has no laptop glow', (room) => {
+    expect(laptopLightAt(room, 12)).toBeUndefined();
+  });
+});

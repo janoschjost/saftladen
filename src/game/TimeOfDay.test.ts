@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CYCLE_SECONDS, cycleOf, daylight, followedDaylight, hourOf, lookOf, NIGHT_SECONDS, oppositeDaylight, roomLight, TimeOfDay } from './TimeOfDay';
+import { CYCLE_SECONDS, cycleOf, daylight, followedDaylight, hourOf, laptopGlow, lookOf, NIGHT_SECONDS, oppositeDaylight, roomLight, TimeOfDay } from './TimeOfDay';
 
 describe('time of day', () => {
   it('time.cycle: cycleOf is the inverse of hourOf', () => {
@@ -106,5 +106,20 @@ describe('time of day', () => {
       expect(Math.abs(next.night - l.night) + Math.abs(next.dusk - l.dusk) + Math.abs(next.bright - l.bright)).toBeLessThan(0.25); // no jumps
     }
     expect(lookOf(0.5).dusk).toBeLessThan(1);
+  });
+
+  it('home.beach: the laptop glow is full in the dark, fades through dusk and dawn and is out in daylight', () => {
+    const at = (hour: number) => laptopGlow(roomLight('opposite', hour).day);
+    expect(at(12)).toBe(1); // Swiss noon: dark at the beach
+    expect(at(0)).toBe(0); // Swiss midnight: bright at the beach
+    expect(at(18.5)).toBeGreaterThan(0); // the beach's dusk
+    expect(at(18.5)).toBeLessThan(1);
+    expect(at(7)).toBeGreaterThan(0); // its dawn
+    expect(at(7)).toBeLessThan(1);
+    let last = at(0);
+    for (let h = 0.05; h <= 24; h += 0.05) {
+      expect(Math.abs(at(h) - last)).toBeLessThan(0.1); // smooth
+      last = at(h);
+    }
   });
 });

@@ -7,7 +7,7 @@ import { buildDog, type DogRig } from './dogBuilder';
 import { ball, box, cyl, merge, propMaterial } from './geo';
 import { SIT_DROP } from './officeBuilder';
 import { fxRandom, seeded } from '../game/rng';
-import { GROUND_NIGHT, MOON, SKY_NIGHT, roomLight, type FollowLight, type RoomLight } from '../game/TimeOfDay';
+import { GROUND_NIGHT, MOON, SKY_NIGHT, laptopGlow, roomLight, type FollowLight, type RoomLight } from '../game/TimeOfDay';
 import { ARIANA_DAY_LINES, ARIANA_NIGHT_LINES, SPEAK_LEAD, arianaTimeline, arianaVisitAt, isNightHour } from '../data/arianaLines';
 import { SON_BYE, SON_LINES, sonTimeline } from '../data/sonLines';
 import { LAUNDRY, LAUNDRY_PICKS, RACK_SLOTS, laundryHung, laundryTime, laundryTrip } from './laundry';
@@ -305,6 +305,8 @@ export interface HomeStyle {
   recline?: number;
   /** the webcam is the laptop on a stand over the occupant's lap: framed on them, dropped in the sand for a swim */
   lapCam?: boolean;
+  /** the laptop lights its owner's face and hands with a cool screen glow while the room is dark (needs `lapCam` and `light`, #299) */
+  lapGlow?: boolean;
   /** what the drink break is: coffee (default) or a cocktail */
   drink?: 'coffee' | 'cocktail';
   /** there is sea to swim in (signature move 'swim') */
@@ -745,6 +747,7 @@ const STYLES: HomeStyle[] = [
     key: ['#fff1c8', 2.6, [-3, 6, 4]],
     recline: -0.75,
     lapCam: true,
+    lapGlow: true,
     drink: 'cocktail',
     sea: true,
     light: 'opposite',
@@ -1639,6 +1642,8 @@ const rand = ([a, b]: [number, number]) => a + fxRandom() * (b - a);
 const NIGHT_BG = new THREE.Color('#0b1430');
 const SCREEN_GLOW = 0.9;
 const SCREEN_GLOW_NIGHT = 1.6;
+/** the cool screen light of a laptop on its owner's face, as the screens in the credits scene light theirs in a dark room (#299) */
+const LAP_GLOW = 3;
 const NIGHT_HEMI = 0.5;
 const NIGHT_KEY = 0.55;
 const tmpColor = new THREE.Color();
@@ -1671,6 +1676,9 @@ export class HomeOffice {
   private lights: { hemi: THREE.HemisphereLight; key: THREE.DirectionalLight; screen: THREE.PointLight } | null = null;
   /** the light the room was last set to (NaN: not yet) */
   private day = NaN;
+  /** a laptop on the lap that lights its owner when the room is dark (`HomeStyle.lapGlow`): the light, and how strong the room's dark wants it (0..1) */
+  private lapLight: THREE.SpotLight | null = null;
+  private lapDark = 0;
   private push: ArmPose = { x: -1.4, z: 0, e: -0.2, ez: 0 };
   /** which of the desk cats walks into the picture next */
   private catTurn = 0;
@@ -1747,6 +1755,11 @@ export class HomeOffice {
     screen.position.set(set.webcam.pos[0], set.webcam.pos[1], set.webcam.pos[2] - 0.1);
     this.scene.add(screen);
     if (this.style.light) this.lights = { hemi, key, screen };
+    if (this.style.lapGlow) {
+      // a cone from the screen onto him, soft at its edge: face, hands and shirt, not the whole room
+      this.lapLight = new THREE.SpotLight('#dff2ff', 0, 4, 0.8, 1, 2);
+      this.scene.add(this.lapLight, this.lapLight.target);
+    }
   }
 
   /** The light of a room that follows the game's light (`HomeStyle.light`): lights, sky and the room's own looks follow it, the laptop's glow stays (#284, #292). */
@@ -1757,6 +1770,7 @@ export class HomeOffice {
     const l = roomLight(follow, this.hour);
     if (Math.abs(l.day - this.day) < 1e-3) return;
     this.day = l.day;
+    this.lapDark = laptopGlow(l.day);
     const dusk = this.style.dusk;
     const night = this.style.night;
     const [sky, ground, hi] = this.style.hemi;
@@ -2600,6 +2614,13 @@ export class HomeOffice {
     this.camera.position.lerpVectors(this.lapPos, sand, k);
     this.camera.lookAt(new THREE.Vector3().lerpVectors(this.lapLook, sea, k));
     this.camera.rotateZ(0.14 * k); // landed a bit crooked
+    // the laptop's glow on him: from the laptop, so it goes out with it in the sand
+    if (this.lapLight) {
+      this.lapLight.position.copy(this.camera.position);
+      this.lapLight.target.position.lerpVectors(this.lapLook, sea, k);
+      this.lapLight.target.position.y += 0.12 * (1 - k); // a little high: the face as much as the shirt
+      this.lapLight.intensity = LAP_GLOW * this.lapDark * (1 - k);
+    }
   }
 
   /**
