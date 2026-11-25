@@ -339,21 +339,21 @@
         <div class="m-settings__field">
           <div class="m-settings__field-head"><span id="weather-label">Wetter</span></div>
           <div class="m-settings__segments m-settings__segments--5" role="radiogroup" aria-labelledby="weather-label">
-            <label class="m-settings__segment" title="Auto"><input type="radio" name="setting-weather" value="auto" aria-label="Auto" checked /><span><icon name="weather" size="20" /></span></label>
-            <label class="m-settings__segment" title="Trocken"><input type="radio" name="setting-weather" value="sun" aria-label="Trocken" /><span><icon name="day" size="20" /></span></label>
-            <label class="m-settings__segment" title="Regen"><input type="radio" name="setting-weather" value="rain" aria-label="Regen" /><span><icon name="rain" size="20" /></span></label>
-            <label class="m-settings__segment" title="Schnee"><input type="radio" name="setting-weather" value="snow" aria-label="Schnee" /><span><icon name="snow" size="20" /></span></label>
-            <label class="m-settings__segment" title="Gewitter"><input type="radio" name="setting-weather" value="storm" aria-label="Gewitter" /><span><icon name="storm" size="20" /></span></label>
+            <label class="m-settings__segment" data-label="Auto" data-cycle="weather,day,rain,snow,storm"><input type="radio" name="setting-weather" value="auto" aria-label="Auto" checked /><span><icon name="weather" size="20" /></span></label>
+            <label class="m-settings__segment" data-label="Trocken"><input type="radio" name="setting-weather" value="sun" aria-label="Trocken" /><span><icon name="day" size="20" /></span></label>
+            <label class="m-settings__segment" data-label="Regen"><input type="radio" name="setting-weather" value="rain" aria-label="Regen" /><span><icon name="rain" size="20" /></span></label>
+            <label class="m-settings__segment" data-label="Schnee"><input type="radio" name="setting-weather" value="snow" aria-label="Schnee" /><span><icon name="snow" size="20" /></span></label>
+            <label class="m-settings__segment" data-label="Gewitter"><input type="radio" name="setting-weather" value="storm" aria-label="Gewitter" /><span><icon name="storm" size="20" /></span></label>
           </div>
         </div>
         <div class="m-settings__field">
           <div class="m-settings__field-head"><span id="season-label">Jahreszeit</span></div>
           <div class="m-settings__segments m-settings__segments--5" role="radiogroup" aria-labelledby="season-label">
-            <label class="m-settings__segment" title="Auto"><input type="radio" name="setting-season" value="auto" aria-label="Auto" checked /><span><icon name="calendar" size="20" /></span></label>
-            <label class="m-settings__segment" title="Frühling"><input type="radio" name="setting-season" value="spring" aria-label="Frühling" /><span><icon name="spring" size="20" /></span></label>
-            <label class="m-settings__segment" title="Sommer"><input type="radio" name="setting-season" value="summer" aria-label="Sommer" /><span><icon name="summer" size="20" /></span></label>
-            <label class="m-settings__segment" title="Herbst"><input type="radio" name="setting-season" value="autumn" aria-label="Herbst" /><span><icon name="autumn" size="20" /></span></label>
-            <label class="m-settings__segment" title="Winter"><input type="radio" name="setting-season" value="winter" aria-label="Winter" /><span><icon name="winter" size="20" /></span></label>
+            <label class="m-settings__segment" data-label="Auto" data-cycle="calendar,spring,summer,autumn,winter"><input type="radio" name="setting-season" value="auto" aria-label="Auto" checked /><span><icon name="calendar" size="20" /></span></label>
+            <label class="m-settings__segment" data-label="Frühling"><input type="radio" name="setting-season" value="spring" aria-label="Frühling" /><span><icon name="spring" size="20" /></span></label>
+            <label class="m-settings__segment" data-label="Sommer"><input type="radio" name="setting-season" value="summer" aria-label="Sommer" /><span><icon name="summer" size="20" /></span></label>
+            <label class="m-settings__segment" data-label="Herbst"><input type="radio" name="setting-season" value="autumn" aria-label="Herbst" /><span><icon name="autumn" size="20" /></span></label>
+            <label class="m-settings__segment" data-label="Winter"><input type="radio" name="setting-season" value="winter" aria-label="Winter" /><span><icon name="winter" size="20" /></span></label>
           </div>
         </div>
         <div class="m-settings__field m-time" id="time" data-sky="day">

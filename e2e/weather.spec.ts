@@ -41,3 +41,19 @@ test('weather.season: the Jahreszeit chips set the season of the weather, rememb
   await expect(page.locator('#env input[name="setting-season"][value="summer"]')).toBeChecked();
   expect(errors).toEqual([]);
 });
+
+test('hud.environment: the Auto chips of weather and season show an icon of their row (random), every chip names itself on hover', async ({ page }) => {
+  const errors = await openGame(page);
+  await page.locator('#open-env').click();
+  const weather = page.locator('#env label[data-cycle^="weather"]');
+  const season = page.locator('#env label[data-cycle^="calendar"]');
+  expect(['weather', 'day', 'rain', 'snow', 'storm']).toContain(await weather.getAttribute('data-icon'));
+  expect(['calendar', 'spring', 'summer', 'autumn', 'winter']).toContain(await season.getAttribute('data-icon'));
+  await expect(weather.locator('svg')).toHaveCount(1);
+  const chips = page.locator('#env label.m-settings__segment[data-label]');
+  await expect(chips).toHaveCount(10);
+  await page.locator('#env label[data-label="Gewitter"]').hover();
+  const label = await page.locator('#env label[data-label="Gewitter"]').evaluate((el) => getComputedStyle(el, '::after').content);
+  expect(label).toBe('"Gewitter"');
+  expect(errors).toEqual([]);
+});

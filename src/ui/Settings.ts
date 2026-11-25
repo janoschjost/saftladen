@@ -2,6 +2,7 @@ import { storage } from '../game/storage';
 import type { WeatherMode } from '../game/Weather';
 import type { SeasonSetting } from '../game/Season';
 import type { ViewMode } from '../render/Views';
+import { cycleIcons } from './iconCycle';
 import { Popover } from './Popover';
 import { parseSettings, serializeSettings, SETTINGS_KEY, type SettingsState } from './settingsState';
 
@@ -62,6 +63,8 @@ export class Settings {
       close: document.getElementById('env-close'),
       onOpen: () => this.pop.setOpen(false),
     });
+    // the Auto chips show a random icon of their row and swap it now and then, while the popover is open
+    for (const chip of document.querySelectorAll<HTMLElement>('#env [data-cycle]')) cycleIcons(chip, () => this.env.isOpen);
     for (const input of [this.tables, this.seats, this.rooms, this.xmas, this.follow, ...this.weather, ...this.seasons]) {
       input.addEventListener('change', () => this.apply());
     }
