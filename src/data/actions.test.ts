@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { installHeadlessDom } from '../test/headlessDom';
 import { office } from '../test/office';
-import { OFFICE_ACTIONS, validateActions, type OfficeAction } from './actions';
+import { OFFICE_ACTIONS, isPlaced, validateActions, type OfficeAction } from './actions';
 
 installHeadlessDom();
 
@@ -24,26 +24,27 @@ describe('actions.list', () => {
       ['Kaffee', 'coffee'],
       ['Telefonbox', 'phone-booth'],
       ['Kicker', 'foosball'],
-      ['Holzhaus', 'pod'],
       ['Mariokart', 'meeting-kart'],
       ['WC', 'toilet'],
-      ['Gespräch', 'meeting-chat'],
       ['Nerf-Gefecht', 'nerf'],
       ['Fotoshooting', 'photo-shoot'],
       ['Serverschrank', 'server-rack'],
       ['Boombox', 'boombox'],
       ['Lagerfeuer', 'bonfire'],
-      ['Brief', 'mail-letter'],
-      ['Paket', 'mail-parcel'],
       ['Rauchpause', 'smoke'],
       ['Oscar räumt auf', 'oscar-tidy'],
       ['Schneefall', 'snow'],
       ['Gewitter', 'storm'],
+      ['Chaos', 'mess'],
     ]);
   });
 
+  it('is one card per action: no end, status or set-up events', () => {
+    for (const a of OFFICE_ACTIONS) expect(a.eventId, a.id).not.toMatch(/-end$|-status$|^(crowd|talk-join|passage-meeting|pet-passage|desks-full|all-back)$/);
+  });
+
   it('places lie inside the office (41 x 15 m plus walls)', () => {
-    for (const a of OFFICE_ACTIONS) {
+    for (const a of OFFICE_ACTIONS.filter(isPlaced)) {
       expect(a.place.x).toBeGreaterThan(0);
       expect(a.place.x).toBeLessThan(43);
       expect(a.place.z).toBeGreaterThan(0);

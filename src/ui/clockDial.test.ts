@@ -1,22 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { dialAngle, dialHour, dialSlice, stepHour } from './clockDial';
+import { stepHour, trackHour } from './clockDial';
 
-describe('clock dial', () => {
-  it('time.clock: midnight at the top, 06:00 right, noon at the bottom, 18:00 left', () => {
-    expect(dialHour(0, -10)).toBe(0);
-    expect(dialHour(10, 0)).toBe(6);
-    expect(dialHour(0, 10)).toBe(12);
-    expect(dialHour(-10, 0)).toBe(18);
-    expect(dialHour(-0.01, -10)).toBe(0); // just left of the top snaps back to midnight, not 24
-    for (const h of [0, 3.25, 11, 17.5, 22.75]) {
-      const a = (dialAngle(h) * Math.PI) / 180;
-      expect(dialHour(Math.sin(a) * 20, -Math.cos(a) * 20)).toBeCloseTo(h, 9);
-    }
+describe('clock bar', () => {
+  it('time.clock: midnight at the left end, noon in the middle, the right end wraps to midnight', () => {
+    expect(trackHour(0)).toBe(0);
+    expect(trackHour(0.25)).toBe(6);
+    expect(trackHour(0.5)).toBe(12);
+    expect(trackHour(0.75)).toBe(18);
+    expect(trackHour(1)).toBe(0);
+    expect(trackHour(-3)).toBe(0); // dragging past the ends stays on the ends
+    expect(trackHour(4)).toBe(0);
   });
 
   it('time.jump: dragging snaps to 5 minutes', () => {
-    const a = ((10 + 7 / 60) / 24) * 2 * Math.PI; // 10:07
-    expect(dialHour(Math.sin(a), -Math.cos(a)) * 60).toBeCloseTo(10 * 60 + 5, 6);
+    expect(trackHour((10 + 7 / 60) / 24) * 60).toBeCloseTo(10 * 60 + 5, 6);
   });
 
   it('time.jump: arrow keys step 15 minutes and wrap around midnight', () => {
@@ -25,10 +22,5 @@ describe('clock dial', () => {
     expect(stepHour(23.75, 15)).toBe(0);
     expect(stepHour(0, -15)).toBe(23.75);
     expect(stepHour(0.5, -60)).toBe(23.5);
-  });
-
-  it('time.clock: the night slice spans 21:00 to 05:00 clockwise over the top', () => {
-    expect(dialSlice(21, 5, 48)).toMatch(/A48 48 0 0 1 /);
-    expect(dialSlice(5, 21, 48)).toMatch(/A48 48 0 1 1 /);
   });
 });

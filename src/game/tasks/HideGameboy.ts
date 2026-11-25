@@ -16,7 +16,7 @@ const SHOWN = 0.35; // console counts as out while its eased amount is above thi
 const GATHER_TIMEOUT = 20;
 const WARN_LINES = ['Hmm …', 'Was war das?', 'Moment …', 'Jeerapat?', '*räusper*'];
 const CAUGHT_LINES = ['Jeerapat! Arbeiten!', 'Erwischt!', 'Schon wieder der Gameboy?!', 'Gib her das Ding!'];
-const MOODS = { safe: new THREE.Color('#8cf6c9'), warn: new THREE.Color('#f5c518'), danger: new THREE.Color('#e6563c') };
+const MOODS = { safe: new THREE.Color('#84d0ff'), warn: new THREE.Color('#f5c518'), danger: new THREE.Color('#e6563c') };
 
 type Phase = 'gather' | 'away' | 'warn' | 'look';
 

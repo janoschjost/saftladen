@@ -17,8 +17,8 @@ const BAGS: Array<[string, string]> = [
   ['#8a4fc7', '#f2d37a'],
 ];
 
-const beamMaterial = new THREE.MeshBasicMaterial({ color: '#8cf6c9', transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide });
-const ringMaterial = new THREE.MeshBasicMaterial({ color: '#8cf6c9', transparent: true, opacity: 0.8, depthWrite: false });
+const beamMaterial = new THREE.MeshBasicMaterial({ color: '#84d0ff', transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide });
+const ringMaterial = new THREE.MeshBasicMaterial({ color: '#84d0ff', transparent: true, opacity: 0.8, depthWrite: false });
 
 interface Pickup {
   group: THREE.Group;

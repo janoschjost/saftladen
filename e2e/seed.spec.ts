@@ -52,7 +52,7 @@ test('dev.seed: ?seed starts like a fresh profile, ignores saved state and saves
   await page.locator('#open-env').click();
   await page.locator('#env label:has(input[value="sun"])').click();
   expect(await read(page, (g) => g.sim.weather.mode)).toBe('sun');
-  await page.locator('#clock [data-speed="0"]').click();
+  await page.locator('#clock-slower').click(); // 1x -> pause
   await page.keyboard.press('Escape');
   expect(errors).toEqual([]);
   await page.goto('/favicon.svg'); // leaving the page saves the session (pagehide)

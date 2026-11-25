@@ -22,7 +22,7 @@
       :root {
         --loader-bg: white;
         --loader-ink: black;
-        --loader-accent: #8cf6c9;
+        --loader-accent: #84d0ff;
         --loader-accent-mid: #5fd8a8;
         --loader-accent-deep: #34b085;
         --loader-accent-soft: #d4fbe9;
@@ -270,26 +270,20 @@
         </div>
       </div>
       <div class="m-clock" id="clock" role="group" aria-label="Uhr">
-          <svg class="m-clock__dial" id="clock-dial" viewBox="-50 -50 100 100" role="slider" tabindex="0" aria-label="Uhrzeit (ziehen zum Springen)" aria-valuemin="0" aria-valuemax="1439" aria-valuenow="600" aria-valuetext="10:00">
-            <circle class="m-clock__face" r="48" />
-            <path class="m-clock__night" id="clock-night" d="" />
-            <g class="m-clock__ticks" id="clock-ticks"></g>
-            <line class="m-clock__hand" id="clock-hand" x1="0" y1="8" x2="0" y2="-38" />
-            <circle class="m-clock__pin" r="4.5" />
-          </svg>
-          <div class="m-clock__body">
-            <div class="m-clock__read">
-              <select class="m-clock__day" id="clock-day" aria-label="Wochentag"></select>
-              <output class="m-clock__time" id="clock-time" for="clock-dial">10:00</output>
-            </div>
-            <div class="m-clock__speeds" role="group" aria-label="Tempo">
-              <button class="m-clock__speed" type="button" data-speed="0" aria-pressed="false" aria-label="Pause" title="Pause"><icon name="pause" size="14" /></button>
-              <button class="m-clock__speed" type="button" data-speed="1" aria-pressed="true">1×</button>
-              <button class="m-clock__speed" type="button" data-speed="10" aria-pressed="false">10×</button>
-              <button class="m-clock__speed" type="button" data-speed="25" aria-pressed="false">25×</button>
-            </div>
+        <span class="m-clock__icon m-clock__icon--day" aria-hidden="true"><icon name="day" size="22" /></span>
+        <span class="m-clock__icon m-clock__icon--night" aria-hidden="true"><icon name="night" size="22" /></span>
+        <div class="m-clock__body">
+          <output class="m-clock__time" id="clock-time" for="clock-dial">10:00</output>
+          <div class="m-clock__track" id="clock-dial" role="slider" tabindex="0" aria-label="Uhrzeit (ziehen zum Springen)" aria-valuemin="0" aria-valuemax="1439" aria-valuenow="600" aria-valuetext="10:00">
+            <span class="m-clock__bar"><span class="m-clock__fill"></span></span>
           </div>
         </div>
+        <div class="m-clock__speed" role="group" aria-label="Tempo">
+          <button class="m-clock__step" id="clock-slower" type="button" aria-label="Langsamer">&minus;</button>
+          <output class="m-clock__rate" id="clock-rate" aria-live="polite">1×</output>
+          <button class="m-clock__step" id="clock-faster" type="button" aria-label="Schneller">+</button>
+        </div>
+      </div>
     </header>
     <div class="m-hud-tools">
         <button class="m-gear" id="open-help" type="button" aria-label="Steuerung" aria-expanded="false" aria-controls="help"><icon name="help" size="24" class="m-gear__icon" /></button>
@@ -425,8 +419,6 @@
         </header>
         <div class="m-sheet__body">
           <ul class="m-sheet__cards" id="action-cards"></ul>
-          <h3 class="m-sheet__subhead" id="action-more-head" hidden>Alle Aktionen</h3>
-          <ul class="m-sheet__more" id="action-more" hidden></ul>
           <p class="m-sheet__empty" id="action-empty" hidden>Nichts gefunden.</p>
         </div>
       </div>
