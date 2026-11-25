@@ -15,7 +15,7 @@ test('perf.idle: losing focus slows the loop down, focus and input bring the ful
   expect(back.woke).toBeGreaterThan(before);
 
   // paused: input wakes it, each kind of it
-  await page.locator('#clock [data-speed="0"]').click();
+  await page.locator('#clock-slower').click(); // 1x -> pause
   expect(await read(page, (g) => g.timeScale)).toBe(0);
   let woke = await read(page, (g) => g.pace.woke);
   const inputs: [string, () => Promise<void>][] = [

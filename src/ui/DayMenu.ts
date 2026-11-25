@@ -327,7 +327,7 @@ export class DayMenu {
     this.lastTime = t;
     this.clock += dt;
     const k = Math.min(1, dt * 7);
-    const accent = new THREE.Color('#8cf6c9');
+    const accent = new THREE.Color('#84d0ff');
     this.nextEmote -= dt;
     const chosen = this.slots[this.index];
     if (this.nextEmote <= 0 && chosen && !chosen.emote) {
