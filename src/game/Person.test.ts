@@ -81,4 +81,27 @@ describe('kurt.behavior: Person', () => {
     r.leaveAs('off');
     expect(r.spin).toBe(0);
   });
+
+  it('keys.steer: Space jumps a steered person about half a metre, only from the ground, and they land', () => {
+    const p = marcoAtDoor();
+    p.jump();
+    run(p, 0.2);
+    expect(p.hop).toBe(0); // not steered: no jump
+    p.controlled = true;
+    p.jump();
+    let top = 0;
+    run(p, 1, () => ((top = Math.max(top, p.hop)), false));
+    expect(top).toBeGreaterThan(0.4);
+    expect(top).toBeLessThan(0.6);
+    expect(p.hop).toBe(0); // landed
+    p.jump();
+    run(p, 0.2);
+    const mid = p.hop;
+    p.jump(); // in the air: no second jump
+    run(p, 0.05);
+    expect(p.hop).toBeGreaterThan(0);
+    expect(mid).toBeGreaterThan(0);
+    p.land();
+    expect(p.hop).toBe(0);
+  });
 });

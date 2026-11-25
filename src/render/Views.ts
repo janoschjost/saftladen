@@ -46,7 +46,7 @@ const wasd = (arrows = false): Hint[] => [
 ];
 const PERSON: HintGroup = {
   title: 'Ausgewählte Person',
-  items: [{ keys: ['F'], text: 'Folgen' }, { keys: ['C'], text: 'Steuern' }, ...wasd(), { keys: ['Shift'], text: 'Rennen' }],
+  items: [{ keys: ['F'], text: 'Folgen' }, { keys: ['C'], text: 'Steuern' }, ...wasd(), { keys: ['Shift'], text: 'Rennen' }, { keys: ['Leertaste'], text: 'Springen (beim Steuern)' }],
 };
 const HINTS: Record<ViewMode, HintGroup[]> = {
   iso: [
@@ -86,7 +86,7 @@ const HINTS: Record<ViewMode, HintGroup[]> = {
     PERSON,
   ],
   walk: [
-    { title: 'Bewegen', items: [...wasd(true), { keys: ['Shift'], text: 'Rennen' }] },
+    { title: 'Bewegen', items: [...wasd(true), { keys: ['Shift'], text: 'Rennen' }, { keys: ['Leertaste'], text: 'Springen' }] },
     { title: 'Maus', items: [{ icon: 'look', text: 'Umschauen (Klick fängt die Maus, Esc löst sie)', how: 'Maus bewegen' }, { icon: 'click', text: 'Tür öffnen, Person ansprechen', how: 'Klick' }] },
     { title: 'Ansicht', items: [{ keys: ['E'], text: 'Tür öffnen, Person ansprechen' }, { keys: ['N'], text: 'Namen' }] },
   ],
@@ -131,6 +131,8 @@ const EYE = 1.65;
 const WALK_SPEED = 2.2;
 const RUN_SPEED = 5;
 const WALK_RADIUS = 0.3;
+const JUMP_SPEED = 3.1; // m/s upwards at take-off of a jump in walk mode (about half a metre)
+const GRAVITY = 9.8;
 const ACCEL = 14; // m/s²: how fast the walk speed follows the keys (start and stop ease instead of snapping)
 const FOV_WALK = 60;
 const FOV_RUN = 68;
@@ -162,6 +164,9 @@ export class Views {
   private roll = 0;
   private fov = FOV_WALK;
   private walkPos = new THREE.Vector3(ax(-4.2), EYE, az(1.1));
+  /** walk mode: height of the jump above the floor and its climb speed */
+  private hop = 0;
+  private hopSpeed = 0;
   private look: { id: number } | null = null;
   /** third-person camera: where it looks (smoothed), the mouse targets, the smoothed angles and the distance */
   private thirdGoal = new THREE.Vector3();
@@ -445,6 +450,7 @@ export class Views {
     this.viewYaw = this.yaw;
     this.viewPitch = this.pitch;
     this.vel.x = this.vel.z = 0;
+    this.hop = this.hopSpeed = 0;
     this.persp.position.copy(this.walkPos);
     this.persp.rotation.set(this.pitch, this.yaw, 0);
   }
@@ -461,6 +467,11 @@ export class Views {
     const s = (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
     if (k.has('ArrowLeft')) this.yaw += 1.6 * dt;
     if (k.has('ArrowRight')) this.yaw -= 1.6 * dt;
+    if (this.hopSpeed > 0 || this.hop > 0) {
+      this.hop += this.hopSpeed * dt;
+      this.hopSpeed -= GRAVITY * dt;
+      if (this.hop <= 0) this.hop = this.hopSpeed = 0;
+    }
 
     // wish direction -> eased velocity (diagonals no faster, backing up slower)
     const len = Math.hypot(f, s) || 1;
@@ -495,7 +506,7 @@ export class Views {
     }
     this.persp.position.set(
       this.walkPos.x,
-      EYE + Math.sin(this.bob * 2) * 0.022 * this.bobAmp,
+      EYE + this.hop + Math.sin(this.bob * 2) * 0.022 * this.bobAmp,
       this.walkPos.z,
     );
     this.persp.rotation.set(this.viewPitch + Math.sin(this.bob * 2 + 1) * 0.004 * this.bobAmp, this.viewYaw, this.roll + Math.sin(this.bob) * 0.004 * this.bobAmp);
@@ -515,6 +526,10 @@ export class Views {
       if (i >= 0) this.setMode(modes[i]);
       if (e.code === 'Escape' && this.mode === 'walk') this.setMode(DEFAULT_MODE);
       if (this.mode === 'walk' && e.code.startsWith('Arrow')) e.preventDefault();
+      if (this.mode === 'walk' && e.code === 'Space') {
+        e.preventDefault(); // no scrolling, no focused button pressed
+        if (!e.repeat && this.hop === 0) this.hopSpeed = JUMP_SPEED;
+      }
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => this.keys.clear());
