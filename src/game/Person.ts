@@ -25,6 +25,8 @@ const PRINT_CHANCE = 0.12; // chance per decision to walk to the printer
 const PRINT_TIME = { min: 4, max: 9 }; // seconds spent at the printer
 const STEER_WALK = 2.2; // m/s while steered with the keyboard
 const STEER_RUN = 5.4;
+const JUMP_SPEED = 3.1; // m/s upwards at take-off: about half a metre high, half a second in the air
+const GRAVITY = 9.8;
 const RUSH = 2; // running is this much faster than walking
 const HURRY_MAX = 3; // a pinned walker with a deadline (`pinTo` `arriveIn`) runs at most this much faster than their pace
 const SLUMP = 0.55; // walking slumped (sad, see Boombox.ts) is this much slower
@@ -239,6 +241,20 @@ export class Person extends Walker {
   controlled = false;
   /** steering input in world space (direction on the floor, not normalised) */
   readonly steer = { x: 0, z: 0, run: false };
+  /** height of a steered person's jump above the floor (metres), the last step's, and the climb speed */
+  hop = 0;
+  prevHop = 0;
+  private hopSpeed = 0;
+
+  /** Space while steered: a hop, only from the ground. */
+  jump(): void {
+    if (this.controlled && !this.held && this.hop === 0) this.hopSpeed = JUMP_SPEED;
+  }
+
+  /** Ends a jump at once (the steering ends, or the player is picked up). */
+  land(): void {
+    this.hop = this.prevHop = this.hopSpeed = 0;
+  }
   /** a day task pins this person: they stand (or sit) exactly there and turn to `yaw`; they are `controlled` meanwhile, so nothing else picks them up */
   scripted: { at: Vec2; yaw: number; sit: boolean; turn: number; arrived: boolean; tries: number; arriveIn?: number } | null = null;
   /** a day task has the handheld console out (see `gameboy` for the eased amount) */
@@ -1908,6 +1924,12 @@ export class Person extends Walker {
   /** Keyboard-steered movement; wall and furniture collisions are resolved by the game's separation pass. */
   private steerStep(dt: number): boolean {
     if (this.held) return false;
+    this.prevHop = this.hop;
+    if (this.hopSpeed > 0 || this.hop > 0) {
+      this.hop += this.hopSpeed * dt;
+      this.hopSpeed -= GRAVITY * dt;
+      if (this.hop <= 0) this.land();
+    }
     this.sit = Math.max(0, this.sit - dt * 4);
     this.path = [];
     this.state = 'idle';

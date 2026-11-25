@@ -619,6 +619,10 @@ export class Game {
       this.keys.add(e.code);
       this.shift = e.shiftKey;
       if (this.steered && STEER_KEYS.includes(e.code)) e.preventDefault();
+      if (e.code === 'Space' && this.steered && !this.day && this.views.mode !== 'walk') {
+        e.preventDefault(); // no scrolling, no focused button pressed
+        if (!e.repeat) this.steered.jump(); // walk mode: the camera jumps itself
+      }
       if (e.key.toLowerCase() === 'c' && this.selected instanceof Person) this.toggleSteer(this.selected);
       if (e.key.toLowerCase() === 'e' && this.views.mode === 'walk') this.interact();
       if (e.key.toLowerCase() === 'f') this.toggleFollow();
@@ -1524,6 +1528,7 @@ export class Game {
   private release(p: Person | null): void {
     if (!p || this.steered !== p) return;
     p.controlled = false;
+    p.land();
     p.steer.x = p.steer.z = 0;
     p.timer = 0.5;
     this.steered = null;
@@ -1589,7 +1594,7 @@ export class Game {
     let dy = w.yaw - w.prevYaw;
     dy = Math.atan2(Math.sin(dy), Math.cos(dy));
     w.lift += ((w.held ? 0.45 : 0) - w.lift) * 0.25;
-    w.root.position.set(x, w.lift + (w instanceof Person ? w.seatLift : 0), z);
+    w.root.position.set(x, w.lift + (w instanceof Person ? w.seatLift + (w.held ? 0 : THREE.MathUtils.lerp(w.prevHop, w.hop, alpha)) : 0), z);
     if (w instanceof Person && w.chill > 0) w.root.position.x += Math.sin(this.clock * 70) * 0.025 * Math.min(1, w.chill * 2); // the ghost went through them (#256): a quick shake that dies down
     if (w instanceof Person && w.startle > 0) {
       // a clap of thunder (#298): a quick hop, then a shake that dies down
