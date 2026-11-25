@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { buildBlock, groundFloor, roadStrip } from './cityBuildings';
-import { blocksTheView, cityLayout, groundAt, viewOf, type Building, type Rect } from './cityLayout';
-import { ROADS, TERRAIN } from './cityData';
+import { blocksTheView, builtOn, cityLayout, groundAt, roadsAt, viewOf, type Building, type Rect } from './cityLayout';
+import { TERRAIN } from './cityData';
 import { OFFICE_D, OFFICE_W, PORCH } from './officeModel';
 import type { ViewMode } from './Views';
 import { WORLD } from './World';
@@ -97,7 +97,9 @@ export class City {
     scene.add(new THREE.Mesh(ground, new THREE.MeshLambertMaterial({ color: GROUND })));
     // the main roads: stylised light ribbons on the terrain, a hair above it
     const lift = SINK + 0.4; // well above the terrain mesh, which cuts the corners of the heights the road follows
-    const roads = mergeGeometries(ROADS.map((r) => roadStrip(r.p, r.w, (x, z) => groundAt(foot, origin, x, z) + lift)));
+    const built = builtOn(this.buildings.map((b) => b.p));
+    const strips = roadsAt(origin).map((r) => roadStrip(r.p, r.w, (x, z) => groundAt(foot, origin, x, z) + lift, built));
+    const roads = mergeGeometries(strips.filter((g) => g.getIndex()!.count > 0))!;
     const roadMesh = new THREE.Mesh(roads, new THREE.MeshLambertMaterial({ color: ROAD, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, depthWrite: false }));
     roadMesh.renderOrder = 1; // after the ground, and the strips of crossing roads do not fight each other
     scene.add(roadMesh);

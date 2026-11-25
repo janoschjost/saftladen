@@ -48,28 +48,48 @@ export function groundFloor(foot: Rect, base: number, doorX: number): THREE.Buff
   return merged;
 }
 
-/** A road as a flat ribbon on the ground: its centre line cut every 4 m and lifted to the terrain (`ground(x, z)`), `w` wide. */
-export function roadStrip(p: readonly number[], w: number, ground: (x: number, z: number) => number): THREE.BufferGeometry {
+/**
+ * A road as a flat ribbon on the ground: its centre line cut every 2 m and lifted to the terrain (`ground(x, z)`), `w` wide.
+ * It stops at what `blocked(x, z)` says is built on (a building's footprint): each side is only as wide as the free ground
+ * next to the centre line, and a piece whose centre line is built on is left out, so road and buildings never overlap.
+ */
+export function roadStrip(
+  p: readonly number[],
+  w: number,
+  ground: (x: number, z: number) => number,
+  blocked: (x: number, z: number) => boolean = () => false,
+): THREE.BufferGeometry {
   const pts: Array<[number, number]> = [];
   for (let k = 0; k < p.length; k += 2) {
     const [x1, z1] = [p[k], p[k + 1]];
     if (k === 0) pts.push([x1, z1]);
     else {
       const [x0, z0] = pts[pts.length - 1];
-      const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 4));
+      const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 2));
       for (let i = 1; i <= n; i++) pts.push([x0 + ((x1 - x0) * i) / n, z0 + ((z1 - z0) * i) / n]);
     }
   }
+  // how far the free ground reaches from the centre line towards (dx, dz), at most `w / 2`
+  const reach = (x: number, z: number, dx: number, dz: number) => {
+    let d = 0;
+    while (d < w / 2 && !blocked(x + dx * (d + 0.25), z + dz * (d + 0.25))) d += 0.25;
+    return d;
+  };
   const pos: number[] = [];
   const idx: number[] = [];
+  const open: boolean[] = []; // the section has a free centre
   pts.forEach(([x, z], i) => {
     const [ax, az] = pts[Math.max(0, i - 1)];
     const [bx, bz] = pts[Math.min(pts.length - 1, i + 1)];
     const len = Math.hypot(bx - ax, bz - az) || 1;
-    const nx = (-(bz - az) / len) * (w / 2); // sideways, perpendicular to the road
-    const nz = ((bx - ax) / len) * (w / 2);
-    pos.push(x + nx, ground(x + nx, z + nz), z + nz, x - nx, ground(x - nx, z - nz), z - nz);
-    if (i) idx.push(i * 2 - 2, i * 2, i * 2 - 1, i * 2 - 1, i * 2, i * 2 + 1);
+    const ux = -(bz - az) / len; // sideways, perpendicular to the road
+    const uz = (bx - ax) / len;
+    const free = !blocked(x, z);
+    open.push(free);
+    const l = free ? reach(x, z, ux, uz) : 0;
+    const r = free ? reach(x, z, -ux, -uz) : 0;
+    pos.push(x + ux * l, ground(x + ux * l, z + uz * l), z + uz * l, x - ux * r, ground(x - ux * r, z - uz * r), z - uz * r);
+    if (i && open[i - 1] && free) idx.push(i * 2 - 2, i * 2, i * 2 - 1, i * 2 - 1, i * 2, i * 2 + 1);
   });
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));

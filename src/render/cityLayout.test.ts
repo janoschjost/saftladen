@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { blocksTheView, CITY, cityLayout, groundAt, overlaps, viewOf, without } from './cityLayout';
+import { blocksTheView, builtOn, CITY, cityLayout, groundAt, inFootprint, overlaps, roadsAt, viewOf, without } from './cityLayout';
+import { roadStrip } from './cityBuildings';
 
 const foot = { x0: 0, z0: 0, x1: 60, z1: 20 };
 const centre = { x: 30, z: 10 };
@@ -35,6 +36,34 @@ describe('view.city layout', () => {
     expect(groundAt(foot, centre, 0, 0)).toBe(-CITY.storey);
     const far = [-250, 250].flatMap((dx) => [-250, 250].map((dz) => groundAt(foot, centre, centre.x + dx, centre.z + dz)));
     expect(Math.max(...far) - Math.min(...far)).toBeGreaterThan(10);
+  });
+});
+
+describe('view.city roads', () => {
+  it('view.city: a point inside a footprint is built on, one beside it is not', () => {
+    const l = [0, 0, 10, 0, 10, 4, 4, 4, 4, 10, 0, 10];
+    expect(inFootprint(l, 2, 8)).toBe(true);
+    expect(inFootprint(l, 8, 8)).toBe(false);
+    expect(builtOn([l])(8, 2)).toBe(true);
+    expect(builtOn([l])(20, 2)).toBe(false);
+  });
+
+  it('view.city: roads sit where the buildings are (same frame), and none runs through a footprint', () => {
+    const built = builtOn(city.map((b) => b.p));
+    for (const r of roadsAt(centre)) {
+      const g = roadStrip(r.p, r.w, () => 0, built);
+      const pos = g.getAttribute('position');
+      const index = g.getIndex()!;
+      for (let k = 0; k < index.count; k++) expect(built(pos.getX(index.getX(k)), pos.getZ(index.getX(k)))).toBe(false);
+    }
+  });
+
+  it('view.city: a road stops at a building beside it and leaves out what lies under one', () => {
+    const wall = builtOn([[-100, 1, 100, 1, 100, 50, -100, 50]]);
+    const g = roadStrip([0, 0, 20, 0], 8, () => 0, wall);
+    const pos = g.getAttribute('position');
+    for (let i = 0; i < pos.count; i++) expect(pos.getZ(i)).toBeLessThanOrEqual(1);
+    expect(roadStrip([0, 10, 20, 10], 8, () => 0, wall).getIndex()!.count).toBe(0);
   });
 });
 

@@ -1,5 +1,5 @@
 import type * as THREE from 'three';
-import { BUILDINGS, TERRAIN } from './cityData';
+import { BUILDINGS, ROADS, TERRAIN } from './cityData';
 
 /** An axis-aligned rectangle on the ground (game metres, x / z). */
 export interface Rect {
@@ -151,6 +151,32 @@ export function cityLayout(foot: Rect, origin: { x: number; z: number }): Buildi
     }
   }
   return out;
+}
+
+/** Whether a point lies inside a footprint (x, z pairs). */
+export function inFootprint(p: readonly number[], x: number, z: number): boolean {
+  let c = false;
+  for (let i = 0, j = p.length / 2 - 1; i < p.length / 2; j = i++) {
+    const zi = p[i * 2 + 1];
+    const zj = p[j * 2 + 1];
+    if (zi > z !== zj > z && x < ((p[j * 2] - p[i * 2]) * (z - zi)) / (zj - zi) + p[i * 2]) c = !c;
+  }
+  return c;
+}
+
+/** A test for "is built on": whether a point lies inside any of the footprints (checked against each one's bounding box first). */
+export function builtOn(footprints: ReadonlyArray<readonly number[]>): (x: number, z: number) => boolean {
+  const boxes = footprints.map((p) => {
+    const xs = p.filter((_, k) => k % 2 === 0);
+    const zs = p.filter((_, k) => k % 2 === 1);
+    return { p, x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) };
+  });
+  return (x, z) => boxes.some((b) => x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1 && inFootprint(b.p, x, z));
+}
+
+/** The roads in game metres: the data is relative to the real building's centre (`origin`), like the buildings. */
+export function roadsAt(origin: { x: number; z: number }): Array<{ w: number; p: number[] }> {
+  return ROADS.map((r) => ({ w: r.w, p: r.p.map((v, k) => v + (k % 2 ? origin.z : origin.x)) }));
 }
 
 /** How the camera looks at the office: a unit vector on the ground from the office towards the camera, the tangent of the elevation, and how far the camera is along it. */
