@@ -124,6 +124,7 @@ export interface TeamMember {
   /** which days the dog comes along (default: every day) */
   dogVisits?: PetVisits;
   cats?: Array<{ kind: 'tabby' | 'tortie'; name: string; visits?: PetVisits }>; // cats following this person
+  napper?: boolean; // now and then stops while walking and dozes off for a few seconds (#308)
   adhd?: boolean; // restless: short idle/work spells, fidgets
   son?: Look; // little boy who now and then walks into the home office scene
   partner?: Look; // wife who now and then comes into the home office scene to hug them (#281)
