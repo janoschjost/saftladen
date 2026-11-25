@@ -127,13 +127,13 @@ interface Sample {
 }
 
 /** Runs one working day from `from` to `to` o'clock with a fixed seed; samples every simulated second, `each` sees every step. */
-function runDay(seed: number, from = 5, to = 23, raining = false, each?: (hour: number, people: Stub[], presence: Presence) => void) {
+function runDay(seed: number, from = 5, to = 23, raining: boolean | Partial<Weather> = false, each?: (hour: number, people: Stub[], presence: Presence) => void) {
   setSeed(seed);
   let cycle = cycleAt(from);
   const clock = { hour: hourOf(cycle) };
   const people = team.map((m) => new Stub(m));
   for (const p of people) p.startAway('off', 9999); // night before: everybody at home
-  const presence = new Presence(people as unknown as Person[], clock as unknown as TimeOfDay, { raining } as Weather);
+  const presence = new Presence(people as unknown as Person[], clock as unknown as TimeOfDay, (typeof raining === 'boolean' ? { raining, foul: raining } : raining) as Weather);
   const plans = new Map(presence.schedule.map((s) => [s.id, s]));
   const nav = {} as NavGrid;
   const samples: Sample[] = [];
@@ -262,8 +262,8 @@ describe('presence', () => {
     expect(spells).toBeGreaterThan(10);
   });
 
-  it('presence.rain: with rain fewer leave, errands take longer, more of the time away is home office', () => {
-    const tally = (raining: boolean) => {
+  it('presence.rain: with rain or snow fewer leave, errands take longer, more of the time away is home office', () => {
+    const tally = (raining: boolean | Partial<Weather>) => {
       let leaves = 0;
       let errands = 0;
       let errandSeconds = 0;
@@ -288,10 +288,11 @@ describe('presence', () => {
       return { leaves, errandMean: errandSeconds / errands, homeShare: homeTime / awayTime };
     };
     const dry = tally(false);
-    const wet = tally(true);
-    expect(wet.leaves).toBeLessThan(dry.leaves);
-    expect(wet.errandMean).toBeGreaterThan(dry.errandMean);
-    expect(wet.homeShare).toBeGreaterThan(dry.homeShare);
+    for (const wet of [tally(true), tally({ raining: false, snowing: true, foul: true })]) {
+      expect(wet.leaves).toBeLessThan(dry.leaves);
+      expect(wet.errandMean).toBeGreaterThan(dry.errandMean);
+      expect(wet.homeShare).toBeGreaterThan(dry.homeShare);
+    }
   });
 
   it('presence.share: during core hours a good part of the team is out', () => {

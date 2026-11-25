@@ -214,7 +214,7 @@ export class Mail {
     if ((this.timer -= dt) > 0) return;
     this.timer = between(GAP);
     // by itself: dry, and somebody to fetch it (on duty, free)
-    if (this.weather.raining || !this.couriers().length) return void (this.timer = 5);
+    if (this.weather.foul || !this.couriers().length) return void (this.timer = 5);
     this.start(mailDice() < PARCEL_SHARE ? 'parcel' : 'letter');
   }
 
@@ -271,7 +271,7 @@ export class Mail {
 
   /** Looks for somebody to fetch what lies there; the first who is free and may use the door goes. */
   private send(j: Job, nav: NavGrid): void {
-    if (!j.dropped || (!j.asked && this.weather.raining)) return; // by itself, only in the dry
+    if (!j.dropped || (!j.asked && this.weather.foul)) return; // by itself, only in the dry
     const free = this.couriers(j.asked);
     const first = Math.floor(mailDice() * free.length); // who is asked first, rolled on the post's own dice
     for (const p of [...free.slice(first), ...free.slice(0, first)]) {

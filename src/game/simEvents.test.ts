@@ -674,3 +674,29 @@ describe('dev events on the Sim', () => {
     refused(empty, 'passage-meeting');
   });
 });
+
+describe('weather.snow + weather.storm: the dev events start and end the weather', () => {
+  it('weather.snow + weather.storm: snow and storm start at once and their -end events stop them; with nothing to stop they say "nicht möglich"', () => {
+    const sim = office();
+    expect(sim.events.trigger('snow-end')).toMatch(/nicht möglich$/);
+    expect(sim.events.trigger('snow')).toBe('Es schneit');
+    expect(sim.weather.snowing).toBe(true);
+    expect(sim.events.trigger('storm-end')).toMatch(/nicht möglich$/); // a snowfall is not a storm
+    expect(sim.events.trigger('storm')).toBe('Es gewittert');
+    expect(sim.weather.stormy && sim.weather.raining && !sim.weather.snowing).toBe(true);
+    expect(sim.events.trigger('storm-end')).toBe('Das Gewitter zieht ab');
+    expect(sim.weather.foul).toBe(false);
+  });
+
+  it('weather.snow: an event that moves a forced chip tells the settings, an Auto chip stays', () => {
+    const sim = office();
+    const seen: string[] = [];
+    sim.weather.onForce = () => seen.push(sim.weather.mode);
+    sim.events.trigger('snow'); // Auto: the spell starts, the chip stays Auto
+    expect(seen).toEqual([]);
+    sim.weather.mode = 'sun';
+    sim.events.trigger('storm');
+    sim.events.trigger('storm-end');
+    expect(seen).toEqual(['storm', 'sun']);
+  });
+});

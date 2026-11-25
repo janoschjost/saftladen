@@ -338,10 +338,22 @@
       <section class="m-settings__group" aria-labelledby="env-title">
         <div class="m-settings__field">
           <div class="m-settings__field-head"><span id="weather-label">Wetter</span></div>
-          <div class="m-settings__segments" role="radiogroup" aria-labelledby="weather-label">
+          <div class="m-settings__segments m-settings__segments--5" role="radiogroup" aria-labelledby="weather-label">
             <label class="m-settings__segment"><input type="radio" name="setting-weather" value="auto" checked /><span>Auto</span></label>
             <label class="m-settings__segment"><input type="radio" name="setting-weather" value="sun" /><span>Trocken</span></label>
             <label class="m-settings__segment"><input type="radio" name="setting-weather" value="rain" /><span>Regen</span></label>
+            <label class="m-settings__segment"><input type="radio" name="setting-weather" value="snow" /><span>Schnee</span></label>
+            <label class="m-settings__segment"><input type="radio" name="setting-weather" value="storm" /><span>Gewitter</span></label>
+          </div>
+        </div>
+        <div class="m-settings__field">
+          <div class="m-settings__field-head"><span id="season-label">Jahreszeit</span></div>
+          <div class="m-settings__segments m-settings__segments--5" role="radiogroup" aria-labelledby="season-label">
+            <label class="m-settings__segment"><input type="radio" name="setting-season" value="auto" checked /><span>Auto</span></label>
+            <label class="m-settings__segment"><input type="radio" name="setting-season" value="spring" /><span>Frühling</span></label>
+            <label class="m-settings__segment"><input type="radio" name="setting-season" value="summer" /><span>Sommer</span></label>
+            <label class="m-settings__segment"><input type="radio" name="setting-season" value="autumn" /><span>Herbst</span></label>
+            <label class="m-settings__segment"><input type="radio" name="setting-season" value="winter" /><span>Winter</span></label>
           </div>
         </div>
         <div class="m-settings__field m-time" id="time" data-sky="day">

@@ -222,6 +222,28 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
     caption: 'Oscar räumt mit Polizeimütze auf',
     who: 'Oscar',
   },
+  {
+    id: 'snow',
+    label: 'Schneefall',
+    icon: 'snow',
+    eventId: 'snow',
+    place: { name: 'Vordach am Eingang', x: 6.25, z: 17 },
+    angle: 20,
+    zoom: 2.4,
+    caption: 'Es schneit vor dem Büro',
+    who: 'Alle draussen',
+  },
+  {
+    id: 'storm',
+    label: 'Gewitter',
+    icon: 'storm',
+    eventId: 'storm',
+    place: { name: 'Vordach am Eingang', x: 6.25, z: 17 },
+    angle: -20,
+    zoom: 2.4,
+    caption: 'Gewitter über dem Büro',
+    who: 'Alle am Fenster und draussen',
+  },
 ];
 
 /** Problems of an action list: duplicate ids, unknown dev events, bad numbers. Empty when the list is fine. */

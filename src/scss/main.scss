@@ -1639,6 +1639,14 @@
             &--4 {
                 grid-template-columns: repeat(4, minmax(0, 1fr));
             }
+
+            &--5 {
+                grid-template-columns: repeat(5, minmax(0, 1fr));
+
+                span {
+                    font-size: 0.75rem;
+                }
+            }
         }
 
         &__segment {

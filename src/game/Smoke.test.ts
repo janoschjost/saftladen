@@ -143,6 +143,19 @@ describe('presence.smoke: smoke breaks on the porch', () => {
     expect(sim.people.some((p) => p.umbrella)).toBe(false);
   });
 
+  it('weather.snow: in the snow nobody holds an umbrella, in a storm everybody outdoors does', () => {
+    const sim = office();
+    const [smoker] = atDesks(sim, [SANDRO]);
+    sim.weather.start('snow');
+    urge(sim, smoker);
+    expect(run(sim, 60, () => smoker.atPorchSpot && smoker.outdoors)).toBe(true);
+    run(sim, 3);
+    expect(smoker.umbrella).toBe(false);
+    sim.weather.start('storm');
+    run(sim, 3);
+    expect(smoker.umbrella).toBe(true);
+  });
+
   it('weather.umbrella: in the rain nobody passes the doorframe with an open umbrella: it opens clear of the frame on the way out and is shut before it on the way in', () => {
     const sim = office();
     const [smoker, walker] = atDesks(sim, [SANDRO, GROUP[0]]);

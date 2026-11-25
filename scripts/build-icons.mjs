@@ -35,6 +35,8 @@ const MAP = {
   server: 'hard-drives',
   settings: 'gear',
   smoke: 'cigarette',
+  snow: 'cloud-snow',
+  storm: 'cloud-lightning',
   speaker: 'speaker-high',
   campfire: 'campfire',
   toilet: 'toilet',

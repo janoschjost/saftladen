@@ -1,5 +1,6 @@
 import { storage } from '../game/storage';
 import type { WeatherMode } from '../game/Weather';
+import type { SeasonSetting } from '../game/Season';
 import type { ViewMode } from '../render/Views';
 import { Popover } from './Popover';
 import { parseSettings, serializeSettings, SETTINGS_KEY, type SettingsState } from './settingsState';
@@ -32,6 +33,7 @@ export class Settings {
   private follow = document.getElementById('setting-follow') as HTMLInputElement;
   private names = document.getElementById('setting-names') as HTMLInputElement;
   private weather = Array.from(document.querySelectorAll<HTMLInputElement>('input[name="setting-weather"]'));
+  private seasons = Array.from(document.querySelectorAll<HTMLInputElement>('input[name="setting-season"]'));
   private views = Array.from(document.querySelectorAll<HTMLInputElement>('input[name="setting-view"]'));
   private state: SettingsState;
 
@@ -49,6 +51,7 @@ export class Settings {
     this.xmas.checked = this.state.xmas;
     this.follow.checked = this.state.follow;
     this.setWeatherValue(this.state.weather);
+    this.setSeasonValue(this.state.season);
 
     this.pop = new Popover(this.root, document.getElementById('open-settings') as HTMLButtonElement, {
       close: document.getElementById('settings-close'),
@@ -59,7 +62,7 @@ export class Settings {
       close: document.getElementById('env-close'),
       onOpen: () => this.pop.setOpen(false),
     });
-    for (const input of [this.tables, this.seats, this.rooms, this.xmas, this.follow, ...this.weather]) {
+    for (const input of [this.tables, this.seats, this.rooms, this.xmas, this.follow, ...this.weather, ...this.seasons]) {
       input.addEventListener('change', () => this.apply());
     }
     for (const input of this.views) input.addEventListener('change', () => input.checked && hooks.onView(input.value as ViewMode));
@@ -107,6 +110,20 @@ export class Settings {
     for (const input of this.weather) input.checked = input.value === mode;
   }
 
+  /** Set the season segment from outside (dev events). */
+  setSeason(season: SeasonSetting): void {
+    this.setSeasonValue(season);
+    this.apply();
+  }
+
+  private setSeasonValue(season: SeasonSetting): void {
+    for (const input of this.seasons) input.checked = input.value === season;
+  }
+
+  private getSeason(): SeasonSetting {
+    return (this.seasons.find((i) => i.checked)?.value as SeasonSetting) ?? 'auto';
+  }
+
   private getWeather(): WeatherMode {
     return (this.weather.find((i) => i.checked)?.value as WeatherMode) ?? 'auto';
   }
@@ -117,6 +134,7 @@ export class Settings {
       seats: this.seats.checked,
       rooms: this.rooms.checked,
       weather: this.getWeather(),
+      season: this.getSeason(),
       xmas: this.xmas.checked,
       follow: this.follow.checked,
     };
