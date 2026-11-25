@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { icon, type IconName } from '../ui/icons';
 import { Popover } from '../ui/Popover';
 import { walkFree, type WalkColliders } from '../game/walkCollision';
-import { blendShot, easeInOut, FLY_TIME, shotFrom, shotPosition, TRAIL, type Shot } from './cameraFly';
+import { blendShot, easeInOut, FLY_TIME, INTRO_TIME, introShot, shotFrom, shotPosition, TRAIL, type Shot } from './cameraFly';
 import { IsoCamera } from './IsoCamera';
 import { ax, az } from './officeModel';
 import { WORLD } from './World';
@@ -420,6 +420,15 @@ export class Views {
     if (this.mode !== 'orbit') return;
     const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.fly = { from: this.orbitShot, to: goal, t: 0, dur: still ? 0 : duration };
+  }
+
+  /** Reload: jumps to a far, high shot and flies to the neutral overview. Orbit only. */
+  flyIn(): void {
+    if (this.mode !== 'orbit') return;
+    const to = this.overviewShot();
+    this.applyShot(introShot(to));
+    this.orbit.update();
+    this.flyTo(to, INTRO_TIME);
   }
 
   stopFly(): void {

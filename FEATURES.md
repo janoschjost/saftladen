@@ -16,7 +16,8 @@ Rules:
 - `view.walk-reticle` Walk mode crosshair with prompt; `E` or click opens/closes doors and talks to people — `src/ui/Overlay.ts`, `src/game/Game.ts`, url: `/#walk` (#38)
 - `view.third` Over-the-shoulder camera for day mode: mouse turns, wheel zooms 2.2–9 m, no view segment in the settings — `src/render/Views.ts`, url: `/?day` (#38, #98)
 - `view.deeplinks` Hash deep links `#iso` `#orbit` `#plan` `#walk` `#walk@x,z,yaw`; the hash wins over the saved view — `src/render/Views.ts`, e2e: `e2e/smoke.spec.ts`, url: `/#walk@20,7,1.57` (#34, #38)
-- `view.persist` Camera of all views, view mode, time and selection are restored next visit (`saftladen.state`) — `src/ui/persist.ts`
+- `view.persist` Camera of Iso, Grundriss and Rundgang, time and selection are restored next visit (`saftladen.state`); the Orbit camera and the view mode are not — `src/ui/persist.ts`, `src/game/Game.ts` (#312)
+- `view.intro` A plain reload (no hash, no query) opens in Orbit and the camera flies in (2.8 s, eased) from a farther, higher, turned shot to the overview; dragging or scrolling hands it back; reduced motion cuts. Deep links and dev/test URLs skip the fly-in — `src/render/Views.ts`, `src/render/cameraFly.ts`, test: `src/render/cameraFly.test.ts`, url: `/` (#312)
 - `view.help` Controls list (desktop only): a round ? button bottom left, next to the sun and gear, toggles a popup above it with the keys `A` Aktionen, `,` Einstellungen, `Esc` Zurück and the controls of the current view, grouped per mode with mouse icons and keycaps — `src/render/Views.ts`, e2e: `e2e/hud.spec.ts`, url: `/?seed=1&time=11` (#98)
 
 ## HUD and Aktionen

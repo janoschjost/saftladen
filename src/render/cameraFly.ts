@@ -6,6 +6,13 @@
 
 /** seconds a flight to a place, a person or the overview takes */
 export const FLY_TIME = 1.4;
+/** seconds the fly-in after a reload takes */
+export const INTRO_TIME = 2.8;
+
+/** The shot a reload starts from: the overview seen from farther away, higher up and a quarter turn round. */
+export function introShot(overview: Shot): Shot {
+  return { ...overview, azimuth: overview.azimuth + 1.1, polar: overview.polar * 0.45, dist: overview.dist * 1.9 };
+}
 /** while following the lead person of an action the camera is this many times closer than the overview */
 export const FOLLOW_ZOOM = 2;
 /** polar angle (radians from straight down) of action shots: steep enough to look over the interior walls */
