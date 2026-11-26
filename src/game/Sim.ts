@@ -23,6 +23,7 @@ import { MeetingRoom } from './Meeting';
 import { Benches } from './Benches';
 import { NavGrid } from './NavGrid';
 import { Office, type Desk } from './Office';
+import { LiviaLines } from './LiviaLines';
 import { OscarTidy, TIDIER } from './OscarTidy';
 import { SandroAi } from './SandroAi';
 import { Person } from './Person';
@@ -111,6 +112,8 @@ export class Sim {
   readonly tidy: OscarTidy;
   /** Sandro's AI hype lines in a speech bubble (#306) */
   readonly sandroAi: SandroAi;
+  /** Livia's lines in Walliser Deutsch now and then (#309) */
+  readonly livia: LiviaLines;
   readonly tod = new TimeOfDay();
   readonly weather = new Weather();
   readonly petCare = new PetCare();
@@ -186,6 +189,7 @@ export class Sim {
     });
     this.tidy = new OscarTidy(this);
     this.sandroAi = new SandroAi(this);
+    this.livia = new LiviaLines(this);
     for (const pet of this.pets) if (pet.owner.presence === 'out' || !pet.comesToday) pet.sendAway(); // pets of people who start away, and pets that stay home today
     this.coatRacks.update();
     this.events.forcer = (run) => makePossible(this, run);
@@ -448,6 +452,7 @@ export class Sim {
     this.mess.update(dt, this.presence.days, this.people, this.presence);
     this.tidy.update(dt);
     this.sandroAi.update(dt);
+    this.livia.update(dt);
     this.meetingRoom.update(dt, this.people, this.nav, this.tod.hour);
     this.office.benches?.update(dt, this.people);
     this.pod.update(dt, this.people, this.nav);

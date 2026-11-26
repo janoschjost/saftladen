@@ -2421,6 +2421,7 @@ export class Game {
         ...this.sim.mail.bubbles.map((b) => say(`mail-${b.who.id}`, b.text, b.who)),
         ...this.sim.tidy.bubbles.map((b) => say(`tidy-${b.who.id}`, b.text, b.who)),
         ...this.sim.sandroAi.bubbles.map((b) => say(`sandro-ai-${b.who.id}`, b.text, b.who)),
+        ...this.sim.livia.bubbles.map((b) => say(`livia-${b.who.id}`, b.text, b.who)),
         ...(rep && !rep.who.away ? [say(`reply-${rep.who.id}`, rep.text, rep.who)] : []),
         ...this.sim.people.filter((p) => p.callText && !p.away).map((p) => say(`call-${p.id}`, p.callText!, p)),
         ...this.sim.social.active.filter((c) => c.phase !== 'gather' && c.text).map((c) => say(c.speaker.id, c.text, c.speaker)),
