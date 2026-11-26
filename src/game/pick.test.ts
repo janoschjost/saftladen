@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { distToSegment, hitColumn, nearestHit, nearestOnScreen, type Column, type Ray3 } from './pick';
+import { distToSegment, hitColumn, ghostColumn, nearestHit, nearestOnScreen, type Column, type Ray3 } from './pick';
 
 const norm = (x: number, y: number, z: number) => {
   const l = Math.hypot(x, y, z);
@@ -42,5 +42,14 @@ describe('select.click', () => {
     expect(nearestOnScreen({ x: 75, y: 150 }, bodies, 20)).toBe(0);
     // above the head counts by the distance to the head
     expect(distToSegment({ x: 100, y: 85 }, bodies[0].feet, bodies[0].head)).toBeCloseTo(15, 6);
+  });
+});
+
+describe('christian.hover', () => {
+  it('hits the ghost column at his height and misses above it and beside it', () => {
+    const c = ghostColumn({ x: 0, z: 0 }, 2.1);
+    expect(hitColumn(ray([-5, 2.2, 0], [1, 0, 0]), c)).not.toBeNull();
+    expect(hitColumn(ray([-5, 2.5, 0], [1, 0, 0]), c)).toBeNull();
+    expect(hitColumn(ray([-5, 1, 0.5], [1, 0, 0]), c)).toBeNull();
   });
 });

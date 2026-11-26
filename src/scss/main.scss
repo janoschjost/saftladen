@@ -267,28 +267,41 @@
             font-variant-numeric: tabular-nums;
         }
 
-        /* a taller hit area around the thin bar */
+        /* a taller hit area around the bar; the thumb and the hour labels live inside it */
         &__track {
-            padding-block: 0.375rem;
-            margin-block: -0.375rem;
-            cursor: pointer;
+            position: relative;
+            padding-block: 0.375rem 1rem;
+            margin-block: -0.375rem 0;
+            cursor: grab;
             touch-action: none;
             user-select: none;
 
+            &:active {
+                cursor: grabbing;
+            }
+
             &:focus-visible {
                 outline: 2px solid var(--color-accent);
-                outline-offset: 2px;
-                border-radius: 999px;
+                outline-offset: 0.5rem;
+                border-radius: 0.5rem;
             }
         }
 
+        /* the day from midnight to midnight: darker at night, lighter by day (06-20) */
         &__bar {
             position: relative;
             display: block;
             height: 0.5rem;
             overflow: hidden;
             border-radius: 999px;
-            background: var(--color-ink-soft);
+            background: linear-gradient(
+                to right,
+                var(--color-ink-soft) 0%,
+                var(--color-ink-soft) 25%,
+                color-mix(in srgb, var(--color-ink-soft), white 18%) 30%,
+                color-mix(in srgb, var(--color-ink-soft), white 18%) 80%,
+                var(--color-ink-soft) 85%
+            );
         }
 
         /* filled up to now */
@@ -297,6 +310,66 @@
             inset: 0;
             clip-path: inset(0 calc(100% - var(--at) * 100%) 0 0);
             background: var(--color-accent);
+        }
+
+        /* the handle: a round grip knob at now, grows on hover and while dragging */
+        &__thumb {
+            position: absolute;
+            top: 0.625rem;
+            left: calc(var(--at) * 100%);
+            display: grid;
+            place-items: center;
+            width: 1.25rem;
+            height: 1.25rem;
+            border-radius: 50%;
+            background: white;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+            transform: translate(-50%, -50%);
+            transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+            pointer-events: none;
+
+            &::before {
+                content: '';
+                width: 0.25rem;
+                height: 0.5rem;
+                border-inline: 1px solid var(--color-ink);
+            }
+        }
+
+        &__track:hover &__thumb,
+        &__track:focus-visible &__thumb {
+            transform: translate(-50%, -50%) scale(1.2);
+            box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent), transparent 60%);
+        }
+
+        &__track:active &__thumb {
+            transform: translate(-50%, -50%) scale(1.35);
+            box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-accent), transparent 40%);
+        }
+
+        /* hour labels under the bar */
+        &__ticks {
+            position: absolute;
+            inset: 1.125rem 0 0;
+            pointer-events: none;
+
+            span {
+                position: absolute;
+                left: calc(var(--h) / 24 * 100%);
+                color: color-mix(in srgb, white, transparent 40%);
+                font-size: 0.625rem;
+                font-variant-numeric: tabular-nums;
+                line-height: 1;
+                transform: translateX(-50%);
+            }
+
+            span:first-child {
+                transform: none;
+            }
+
+            span:last-child {
+                transform: translateX(-100%);
+            }
         }
 
         &__speed {
@@ -2513,15 +2586,9 @@
         max-height: calc(100vh - 16rem);
         margin: 0 -1rem -1rem 0;
         padding: 0 1rem 1rem 0;
-        overflow-y: auto;
-        // scrollable, but no visible scrollbar; `none` (not `contain`) also drops the rubber-band bounce, which moves the DOM
-        // overlays but not the scenes drawn into the canvas behind them
-        overscroll-behavior: none;
-        scrollbar-width: none;
-
-        &::-webkit-scrollbar {
-            display: none;
-        }
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
 
         // transparent: the scenes are drawn into the canvas behind the tiles
         background: transparent;
@@ -2533,6 +2600,7 @@
 
         &__title {
             @include panel-title;
+            flex: none;
             margin-bottom: 0.75rem;
             border-radius: 1.5rem;
             background: var(--color-ink);
@@ -2556,6 +2624,17 @@
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 0.75rem;
+            // only the tiles scroll, the title stays put; scrollable, but no visible scrollbar; `none` (not `contain`) also
+            // drops the rubber-band bounce, which moves the DOM overlays but not the scenes drawn into the canvas behind them
+            flex: 0 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            overscroll-behavior: none;
+            scrollbar-width: none;
+
+            &::-webkit-scrollbar {
+                display: none;
+            }
         }
     }
 
@@ -3107,6 +3186,20 @@
             font-size: 0.875rem;
             opacity: 0.8;
             white-space: nowrap;
+        }
+
+        /* a card without a portrait, smaller than a person's (the ghost, #328) */
+        &--small {
+            gap: 0.5rem;
+            padding: 0.375rem 0.75rem;
+
+            .m-tooltip__name {
+                font-size: 0.875rem;
+            }
+
+            .m-tooltip__role {
+                font-size: 0.75rem;
+            }
         }
     }
     /* welcome card for first-time visitors */

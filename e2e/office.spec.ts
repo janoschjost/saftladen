@@ -12,9 +12,9 @@ test('presence.homes-hash', async ({ page }) => {
 
 test('home.feeds: the feed list does not bounce past its ends (the overlays would leave their videos behind)', async ({ page }) => {
   const errors = await openGame(page, 'homes');
-  const feeds = page.locator('#feeds');
-  await expect(feeds).toBeVisible();
-  expect(await feeds.evaluate((el) => getComputedStyle(el).overscrollBehaviorY)).toBe('none');
+  await expect(page.locator('#feeds')).toBeVisible();
+  const list = page.locator('#feeds .m-feeds__grid');
+  expect(await list.evaluate((el) => getComputedStyle(el).overscrollBehaviorY)).toBe('none');
   expect(errors).toEqual([]);
 });
 

@@ -67,7 +67,8 @@ export class Overlay {
     }
   }
 
-  showTooltip(name: string, role: string, portrait: string | null, at: { x: number; y: number }): void {
+  showTooltip(name: string, role: string, portrait: string | null, at: { x: number; y: number }, small = false): void {
+    this.tooltip.classList.toggle('m-tooltip--small', small);
     if (this.tooltip.hidden) this.tooltip.hidden = false;
     if (this.tipName.textContent !== name) {
       this.tipName.textContent = name;
