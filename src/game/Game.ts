@@ -1718,6 +1718,7 @@ export class Game {
         this.poseBonfire(w, r);
         this.poseMail(w, r);
         this.poseTidy(w, r);
+        this.poseAi(w, r);
         this.poseCup(w, r);
         this.poseSnack(w, r);
         this.poseEmote(w, r);
@@ -2011,6 +2012,21 @@ export class Game {
     if (w.tidyAmt <= 0) return;
     const k = smooth(w.tidyAmt);
     workPose(r, (this.tidyPoses ??= solvePoses(r)), w.tidyLast, k); // only Oscar tidies: his poses, solved once; `poseFrame` hinges the lean
+  }
+
+  /** Sandro's AI line (see SandroAi.ts): the right hand goes up, a small wave with the point of the finger. Eases in and out like the other poses. */
+  private poseAi(w: Person, r: Person['rig']): void {
+    const now = this.clock;
+    const dt = Math.max(0, now - w.aiClock);
+    w.aiClock = now;
+    const on = w.aiGesture && !w.held;
+    w.aiAmt = Math.min(1, Math.max(0, w.aiAmt + (on ? 1 : -1) * (dt / 0.25)));
+    if (w.aiAmt <= 0) return;
+    const a = smooth(w.aiAmt);
+    const lerp = THREE.MathUtils.lerp;
+    r.armR.rotation.x = lerp(r.armR.rotation.x, -0.3, a);
+    r.armR.rotation.z = lerp(r.armR.rotation.z, 2.3 + Math.sin(now * 6) * 0.12, a);
+    r.elbowR.rotation.x = lerp(r.elbowR.rotation.x, -0.9, a);
   }
 
   /**
@@ -2403,6 +2419,7 @@ export class Game {
         ...this.sim.bonfire.bubbles.map((b) => say(`bonfire-${b.who.id}`, b.text, b.who)),
         ...this.sim.mail.bubbles.map((b) => say(`mail-${b.who.id}`, b.text, b.who)),
         ...this.sim.tidy.bubbles.map((b) => say(`tidy-${b.who.id}`, b.text, b.who)),
+        ...this.sim.sandroAi.bubbles.map((b) => say(`sandro-ai-${b.who.id}`, b.text, b.who)),
         ...(rep && !rep.who.away ? [say(`reply-${rep.who.id}`, rep.text, rep.who)] : []),
         ...this.sim.people.filter((p) => p.callText && !p.away).map((p) => say(`call-${p.id}`, p.callText!, p)),
         ...this.sim.social.active.filter((c) => c.phase !== 'gather' && c.text).map((c) => say(c.speaker.id, c.text, c.speaker)),
