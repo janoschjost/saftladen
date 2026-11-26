@@ -1185,7 +1185,7 @@ export class Game {
     this.aim = null;
     this.raycaster.setFromCamera(this.centre, this.views.camera);
     const hits = this.raycaster.intersectObjects(
-      this.sim.people.filter((p) => !p.away && p.inOffice).map((p) => p.root),
+      this.sim.people.filter((p) => !p.away && (p.inOffice || p.beforeDoor)).map((p) => p.root),
       true,
     );
     if (hits.length && hits[0].distance < TALK_REACH) {

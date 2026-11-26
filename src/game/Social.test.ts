@@ -328,6 +328,27 @@ describe('talks and groups', () => {
     expect(run(sim, 10, () => p.moving > 0.5)).toBe(true);
   });
 
+  it('social.walk-talk: talked to on their way out of the office, somebody stops, turns to the player and answers, then goes on leaving', () => {
+    const sim = office();
+    const [p] = only(sim, [[GROUP[0], at(-4, 0)]]);
+    p.leaveOffice(sim.nav, 'errand', 60);
+    expect(run(sim, 5, () => p.moving > 0.5)).toBe(true);
+    expect(p.beforeDoor).toBe(true);
+    const eye = { x: p.pos.x, z: p.pos.z - 1.5 };
+    expect(p.talkTo(eye, 4)).toBe(true);
+    expect(p.speaking).toBe(true);
+    run(sim, 1.5);
+    expect(p.presence).toBe('leaving');
+    expect(p.moving).toBeLessThan(0.05);
+    const face = Math.atan2(eye.x - p.pos.x, eye.z - p.pos.z);
+    expect(Math.abs(wrapAngle(p.yaw - face))).toBeLessThan(0.1);
+    expect(run(sim, 4, () => !p.playerChat)).toBe(true);
+    expect(p.speaking).toBe(false);
+    // after the chat they walk on to the door and out
+    expect(run(sim, 5, () => p.moving > 0.5)).toBe(true);
+    expect(run(sim, 60, () => p.presence === 'out')).toBe(true);
+  });
+
   it('social.walk-talk: somebody working at their desk answers from the chair: stays seated, swivels to the player, works on at the same desk afterwards', () => {
     const sim = office();
     sim.scenario.clear('printer', 'coffee', 'kitchen', 'meeting', 'wc');
