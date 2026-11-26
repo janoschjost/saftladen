@@ -2,7 +2,7 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Saftladen</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preload" href="/fonts/ApercuBold.woff2" as="font" type="font/woff2" crossorigin />
@@ -292,6 +292,8 @@
         <button class="m-gear" id="open-env" type="button" aria-label="Wetter und Tageszeit" aria-expanded="false" aria-controls="env"><icon name="day" size="24" class="m-gear__icon" /></button>
         <button class="m-gear" id="open-picker" type="button" aria-label="Figuren"><icon name="person" size="24" class="m-gear__icon" /></button>
         <button class="m-gear" id="open-settings" type="button" aria-label="Einstellungen" aria-expanded="false" aria-controls="settings"><icon name="settings" size="24" class="m-gear__icon" /></button>
+        <button class="m-gear m-gear--view" id="cycle-view" type="button" aria-label="Ansicht wechseln"><icon name="camera" size="24" class="m-gear__icon" /></button>
+        <button class="m-action-button" id="open-actions" type="button" aria-expanded="false" aria-controls="action-sheet"><icon name="zap" size="22" class="m-action-button__icon" /><span>Aktionen</span><kbd class="m-action-button__key">A</kbd></button>
     </div>
     <aside class="m-settings" id="settings" role="dialog" aria-labelledby="settings-title" hidden>
       <div class="m-settings__head">
@@ -404,7 +406,6 @@
       <button class="m-button" id="actions-back" type="button" hidden></button>
       <p class="m-actions__note" id="actions-note" role="status" hidden></p>
     </div>
-    <button class="m-action-button" id="open-actions" type="button" aria-expanded="false" aria-controls="action-sheet"><icon name="zap" size="22" class="m-action-button__icon" /><span>Aktionen</span><kbd class="m-action-button__key">A</kbd></button>
     <button class="m-walk-exit" id="walk-exit" type="button">Rundgang verlassen <kbd class="m-walk-exit__key">Esc</kbd></button>
     <section class="m-sheet" id="action-sheet" role="dialog" aria-labelledby="action-sheet-title" hidden>
       <div class="m-sheet__scrim" id="action-sheet-scrim"></div>

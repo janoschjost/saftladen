@@ -2,9 +2,10 @@ import { awayStatus, strings, type AwayPhase } from '../i18n/strings';
 import { shownName } from '../game/rosterEntries';
 import { icon } from './icons';
 import { makeCollapsible } from './collapsible';
+import { isPhone } from './device';
 
 /** On a phone the dock starts folded (an open feed grid would cover the office); a remembered state wins. */
-const PHONE_FOLDED = matchMedia('(max-width: 840px)').matches;
+const PHONE_FOLDED = isPhone();
 
 export interface AwayEntry {
   id: string;
