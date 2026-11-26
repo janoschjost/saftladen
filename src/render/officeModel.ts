@@ -345,7 +345,6 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     cardboard: L(0xb89468),
     crate: L(0x8d9499),
     lampWarm: new THREE.MeshBasicMaterial({ color: 0xffd98a }),
-    cage: L(0xe2b84f),
   };
 
   /* ---------- textures ---------- */
@@ -832,10 +831,10 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   }
   const pendantCords = new Map<string, PendantCord>();
   /** `ceil` = top of the cord with the roof on; `ceilNoRoof` (if different) = top with the roof off, as a second cord that swaps with the first. */
-  function pendant(x: number, z: number, type: 'steel' | 'black' | 'cage' = 'steel', bottom = 2.0, ceil = 3.6, ceilNoRoof = ceil): void {
-    item('pendant', at('pendant', x, z), 'Hängelampe', () => pendantParts(x, z, type, bottom, ceil, ceilNoRoof));
+  function pendant(x: number, z: number, bottom = 2.0, ceil = 3.6, ceilNoRoof = ceil): void {
+    item('pendant', at('pendant', x, z), 'Hängelampe', () => pendantParts(x, z, bottom, ceil, ceilNoRoof));
   }
-  function pendantParts(x: number, z: number, type: 'steel' | 'black' | 'cage' = 'steel', bottom = 2.0, ceil = 3.6, ceilNoRoof = ceil): void {
+  function pendantParts(x: number, z: number, bottom = 2.0, ceil = 3.6, ceilNoRoof = ceil): void {
     const cord = (top: number) => {
       const m = cyl(0.008, 0.008, EXACT ? top - bottom - 0.3 : Math.min(top - bottom - 0.3, 0.8), x, bottom + 0.3, z, mat.black, world, 4);
       if (ceilNoRoof !== ceil) m.userData.keep = true; // toggled with the roof, so mergeStatic leaves it a mesh of its own
@@ -847,9 +846,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       entry.noRoof.visible = false;
     }
     pendantCords.set(`${x},${z}`, entry);
-    if (type === 'steel') cyl(0.06, 0.2, 0.3, x, bottom, z, mat.steel);
-    if (type === 'black') cyl(0.05, 0.28, 0.3, x, bottom, z, mat.black);
-    if (type === 'cage') cyl(0.06, 0.17, 0.3, x, bottom, z, mat.cage);
+    cyl(0.06, 0.2, 0.3, x, bottom, z, mat.steel); // every lamp: the same grey shade
     const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), mat.lampWarm);
     bulb.position.set(gx(x), bottom + 0.05, gz(z));
     world.add(bulb);
@@ -1239,7 +1236,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       box(TL, 0.05, 0.35, TX, 0.42, -3.6 + sz, mat.black);
       for (const sx of [-LX, LX]) box(0.07, 0.42, 0.3, TX + sx, 0, -3.6 + sz, mat.lightgrey);
     }
-    for (const x of [7.3, 8.57, 9.85]) pendant(x, -3.6, 'black', 1.55, 2.9);
+    for (const x of [7.3, 8.57, 9.85]) pendant(x, -3.6, 1.55, 2.9);
     // sitting spots on both benches, facing the table (game coordinates)
     const mid = { x: gx(TX), z: gz(-3.6) };
     for (const sz of [-0.85, 0.85]) {
@@ -2061,8 +2058,8 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       desk(-8.3, z0 - 0.41, Math.PI);
       desk(-8.3, z0 + 0.41, 0);
       shelf(-7.25, z0, 1.6, 1.15, 0.4, Math.PI / 2);
-      pendant(-8.3, z0, 'cage', 1.95, 2.8);
-      plant(-9.1, z0 + 1.5, 0.9, 0.85);
+      pendant(-8.3, z0, 1.95, 2.8);
+      plant(-9.1, z0 + 1.5, 1.5);
     });
   }
   desk(-7.6, -4.9, 0, { white: true }); // desk 7, flipped 180°
@@ -2163,7 +2160,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     });
   armchair(1, MX - 1.25, TZ, Math.PI / 2 - 0.45);
   armchair(2, MX + 1.25, TZ, -Math.PI / 2 + 0.45);
-  pendant(MX, TZ, 'steel', 1.85, H_LOW); // industrial glass pendant above the table
+  pendant(MX, TZ, 1.85, H_LOW); // industrial glass pendant above the table
   shelf(B.x0 + 0.9, B.z1 + 0.35, 1.2, 1.0, 0.35, 0); // low white shelf by the door side
   plant(-5.6, -3.5, 1.5, 0, false, { x1: -5.06 }); // west of the lounge partition (x -5)
 
@@ -2327,22 +2324,22 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
   within(7.1, 6.1, () => {
     deskRowZ(2.72, ROW3, 1, ROW3_OPT); // flipped, back against the reception counter (face x=2.3)
     box(0.84, 1.3, 6.45, 5.486, 0, 6.125, mat.white); // white divider units, double depth, desk-side face unchanged (x 5.906)
-    for (const z of [4.5, 7.2]) pendant(3.0, z, 'steel', 2.1, roofHeightAt(3.0, z), PENDANT_FLAT);
+    for (const z of [4.5, 7.2]) pendant(3.0, z, 2.1, roofHeightAt(3.0, z), PENDANT_FLAT);
   }, 'Trennmöbel Himbeeren');
   // Kreative Kiwis (x 9.7..12.483)
   within(9.08, 5.9, () => {
     deskRowZ(8.672, ROW3, -1, ROW3_OPT);
     deskRowZ(9.492, ROW3, 1, ROW3_OPT);
     shelf(9.08, 2.65, 2.0, 1.3, 0.4);
-    for (const z of [4.6, 7.0]) pendant(9.08, z, 'steel', 2.1, roofHeightAt(9.08, z), PENDANT_FLAT);
+    for (const z of [4.6, 7.0]) pendant(9.08, z, 2.1, roofHeightAt(9.08, z), PENDANT_FLAT);
   });
   // Digitale Birnen (x 14.7..19.5)
   within(15.884, 6.1, () => {
     deskRowZ(15.474, ROW3, -1, ROW3_OPT);
     deskRowZ(16.294, ROW3, 1, ROW3_OPT);
     shelf(15.884, 2.65, 2.4, 1.3, 0.4);
-    for (const z of [4.8, 7.2]) pendant(15.884, z, 'steel', 2.1, roofHeightAt(15.884, z), PENDANT_FLAT);
-    plant(18.6, 8.9, 1.0, 0.85);
+    for (const z of [4.8, 7.2]) pendant(15.884, z, 2.1, roofHeightAt(15.884, z), PENDANT_FLAT);
+    plant(18.6, 8.9, 1.5);
   });
   // planter / divider wall between Kreative Kiwis (graphic) and Digitale Birnen (digital): an item of its own, built in
   // game coordinates so it always spans the whole desk zone (corridor line .. window wall), also when the plan is scaled.
@@ -2545,18 +2542,18 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
       deskRowX(zc + 0.41, EAST_XS, 1, { ...SS, w: ROW_W });
       desk(29.15, zc, -Math.PI / 2, SS); // head desk, flush against the row desks (x 29.55): chair on the west side, faces the east windows
       shelf(31.65, zc, 1.6, 1.1, 0.35, Math.PI / 2); // open shelf closing the group towards the walkway
-      pendant(30.2, zc, 'black', 1.95, 2.8);
-      pendant(28.4, zc, 'black', 1.95, 2.8);
+      pendant(30.2, zc, 1.95, 2.8);
+      pendant(28.4, zc, 1.95, 2.8);
     });
   }
-  plant(32.1, 5.9, 0.8, 0.85); // sill plant between the two groups
+  plant(32.1, 5.9, 1.3); // floor plant between the two groups
   item('cabinet', at('cabinet', 32.05, 2.9), 'Sideboard', () => box(0.45, 0.7, 1.2, 32.05, 0, 2.9, mat.white)); // low white cabinet under the east windows
   // tables 10 + 11: centred in the room (x 27.1..32.35) and pushed against the north wall (inner face z = -5.35)
   within(29.7, -3.7, () => {
     const NW = 1.85; // tables 10 + 11: desks 1.85 wide (was 1.6), first one against the north wall
     deskRowZ(29.3, [-5.3 + NW / 2, -5.3 + NW * 1.5], -1, { ...SS, w: NW });
     deskRowZ(30.1, [-5.3 + NW / 2, -5.3 + NW * 1.5], 1, { ...SS, w: NW });
-    pendant(29.7, -3.7, 'black', 1.95, 2.8);
+    pendant(29.7, -3.7, 1.95, 2.8);
   });
   coatRack(11.72, 3.0); // next to the white planter divider, south of its column (as in the photo)
   coatRack(26.8, 1.8); // east end of the hallway: at the corner of the glass room
