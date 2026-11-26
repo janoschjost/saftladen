@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { cityColours, outerSpot, streetAt, WEATHER_HALF } from './cityWeather';
+import * as THREE from 'three';
+import { cityColours, outerSpot, pointSize, SKY, streetAt, WEATHER_HALF } from './cityWeather';
 import { WORLD } from './World';
 
 describe('weather.city', () => {
@@ -29,5 +30,15 @@ describe('weather.city', () => {
       expect(Math.abs(o.x - WORLD.width / 2)).toBeLessThanOrEqual(WEATHER_HALF);
       expect(o.floor).toBe(streetAt(o.x, o.z));
     }
+  });
+
+  it('weather.city: flakes keep a visible size in the orthographic Iso camera and start in the sky', () => {
+    const persp = new THREE.PerspectiveCamera();
+    expect(pointSize(persp, 0.14, 1000)).toBe(0.14);
+    const iso = new THREE.OrthographicCamera(-1, 1, 12, -12, -100, 200);
+    expect(pointSize(iso, 0.14, 1200)).toBeCloseTo((0.14 * 1200) / 24, 5);
+    iso.zoom = 0.1; // zoomed far out: never below a pixel and a half
+    expect(pointSize(iso, 0.14, 1200)).toBe(1.5);
+    expect(SKY).toBeGreaterThanOrEqual(30);
   });
 });

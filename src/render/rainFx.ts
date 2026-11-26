@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { WORLD } from './World';
 import { fxRandom } from '../game/rng';
-import { outerSpot } from './cityWeather';
+import { outerSpot, SKY } from './cityWeather';
 
-const DROPS = 6000;
+const DROPS = 12000; // twice as many: they start twice as high, and the density near the ground stays
 /** About one drop in four falls over the office (the same density as before); the rest over the city around it, much thinner. */
 const core = (i: number): boolean => (i * 7) % 13 < 3;
-const TOP = 16;
+const TOP = SKY;
 const ROOF_Y = 3.3; // drops that fall over the building stop at roof height
 const MARGIN = 7;
 const FALL = 17; // m/s

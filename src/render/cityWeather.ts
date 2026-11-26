@@ -11,6 +11,16 @@ export const CITY_ORIGIN = { x: OFFICE_W / 2, z: OFFICE_D / 2 };
 /** Rain and snow reach this far from the office centre (m, each side): the city beyond fades into the haze anyway. */
 export const WEATHER_HALF = 110;
 
+/** How high above the floor rain and snow start (m): high enough to come out of the sky, out of sight in the haze, in Orbit and Iso. */
+export const SKY = 32;
+
+/** On-screen size (px) of a point of `world` metres: a perspective camera scales it itself, an orthographic one (Iso, Plan) does not, so it is worked out from the view's height here. */
+export function pointSize(camera: THREE.Camera, world: number, drawingHeight: number): number {
+  if (!(camera as THREE.OrthographicCamera).isOrthographicCamera) return world;
+  const o = camera as THREE.OrthographicCamera;
+  return Math.max(1.5, (world * drawingHeight * o.zoom) / (o.top - o.bottom));
+}
+
 /** The street (m, relative to the office's floor) at a point of the city, where rain and snow land. */
 export function streetAt(x: number, z: number): number {
   return groundAt(CITY_FOOT, CITY_ORIGIN, x, z);

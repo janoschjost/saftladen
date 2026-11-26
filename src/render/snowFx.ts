@@ -1,15 +1,16 @@
 import * as THREE from 'three';
 import { WORLD } from './World';
 import { fxRandom } from '../game/rng';
-import { outerSpot } from './cityWeather';
+import { outerSpot, pointSize, SKY } from './cityWeather';
 
-const FLAKES = 14600;
+const FLAKES = 14600 * 2; // twice as many: they start twice as high, and the density near the ground stays
 /** About one flake in six falls over the office (the same density as before); the rest over the city around it, much thinner. */
 const core = (i: number): boolean => i % 28 < 5;
-const TOP = 14;
+const TOP = SKY;
 const ROOF_Y = 3.3; // flakes that fall over the building stop at roof height (like the rain)
 const MARGIN = 8;
 const FALL = 1.15; // m/s
+const SIZE = 0.14; // m
 
 function flakeTexture(): THREE.CanvasTexture {
   const c = document.createElement('canvas');
@@ -32,10 +33,11 @@ export class SnowFx {
   private speed = new Float32Array(FLAKES);
   private floor = new Float32Array(FLAKES);
   private time = 0;
+  private buffer = new THREE.Vector2();
   private material = new THREE.PointsMaterial({
     map: flakeTexture(),
     color: '#ffffff',
-    size: 0.14,
+    size: SIZE,
     sizeAttenuation: true,
     transparent: true,
     opacity: 0,
@@ -49,6 +51,9 @@ export class SnowFx {
     this.object.frustumCulled = false;
     this.object.visible = false;
     this.object.renderOrder = 5;
+    this.object.onBeforeRender = (renderer, _scene, camera) => {
+      this.material.size = pointSize(camera, SIZE, renderer.getDrawingBufferSize(this.buffer).y);
+    };
     for (let i = 0; i < FLAKES; i++) this.respawn(i, true);
     scene.add(this.object);
   }
