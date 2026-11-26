@@ -113,19 +113,25 @@ test.describe('hud.settings', () => {
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('saftladen.settings') ?? '{}'));
     expect(saved).toMatchObject({ weather: 'rain', follow: false });
 
-    // the links open the panels that stay, the popover makes room
-    for (const [link, panel] of [
-      ['#open-seats', '#seats'],
-      ['#open-dev', '#dev'],
-      ['#open-editor', '#editor'],
-      ['#open-picker', '#picker'],
-    ]) {
-      if (!(await pop.isVisible())) await gear.click();
-      await page.locator(link).click();
-      await expect(pop).toBeHidden();
-      await expect(page.locator(panel)).toBeVisible();
-    }
+    // no label switches and no panel links in the popover; Figuren has its own button next to the gear
+    await expect(page.locator('#setting-tables')).toHaveCount(0);
+    await expect(page.locator('#settings .m-settings__link:visible')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await page.locator('#open-picker').click();
+    await expect(page.locator('#picker')).toBeVisible();
+    await expect(page.locator('#picker-home')).toBeHidden();
+    await expect(page.locator('#picker-spin')).toHaveAttribute('aria-pressed', 'false');
   });
+});
+
+test('office.labels: the dev panel has the label switches, all off at start', async ({ page }) => {
+  await openGame(page);
+  await page.keyboard.press('`');
+  const switches = page.locator('#dev [data-labels]');
+  await expect(switches).toHaveCount(3);
+  for (const b of await switches.all()) await expect(b).toHaveAttribute('aria-pressed', 'false');
+  await page.locator('#dev [data-labels="rooms"]').click();
+  await expect(page.locator('#dev [data-labels="rooms"]')).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('keys.dev: the dev panel has a close button', async ({ page }) => {
@@ -293,7 +299,7 @@ test.describe('actions.touch', () => {
     await page.locator('#open-settings').click();
     const pop = (await page.locator('#settings').boundingBox())!;
     expect([Math.round(pop.y + pop.height), Math.round(pop.width)]).toEqual([844, 390]); // docked to the bottom, full width
-    for (const sel of ['#settings-close', '#settings label:has(input[value="iso"]) span', '#open-seats']) {
+    for (const sel of ['#settings-close', '#settings label:has(input[value="iso"]) span']) {
       expect((await page.locator(sel).boundingBox())!.height).toBeGreaterThanOrEqual(44);
     }
     await page.locator('#settings-close').click();

@@ -288,6 +288,7 @@
     <div class="m-hud-tools">
         <button class="m-gear" id="open-help" type="button" aria-label="Steuerung" aria-expanded="false" aria-controls="help"><icon name="help" size="24" class="m-gear__icon" /></button>
         <button class="m-gear" id="open-env" type="button" aria-label="Wetter und Tageszeit" aria-expanded="false" aria-controls="env"><icon name="day" size="24" class="m-gear__icon" /></button>
+        <button class="m-gear" id="open-picker" type="button" aria-label="Figuren"><icon name="person" size="24" class="m-gear__icon" /></button>
         <button class="m-gear" id="open-settings" type="button" aria-label="Einstellungen" aria-expanded="false" aria-controls="settings"><icon name="settings" size="24" class="m-gear__icon" /></button>
     </div>
     <aside class="m-settings" id="settings" role="dialog" aria-labelledby="settings-title" hidden>
@@ -306,19 +307,12 @@
         <label class="m-settings__row"><span>Namen <kbd class="m-settings__key">N</kbd></span><input class="m-settings__switch" type="checkbox" role="switch" id="setting-names" /></label>
         <label class="m-settings__row"><span>Kamera folgt bei Aktionen</span><input class="m-settings__switch" type="checkbox" role="switch" id="setting-follow" checked /></label>
       </section>
-      <section class="m-settings__group" aria-labelledby="settings-labels">
-        <h3 class="m-settings__heading" id="settings-labels">Beschriftungen</h3>
-        <label class="m-settings__row"><span>Tische <small>Reihennummern</small></span><input class="m-settings__switch" type="checkbox" role="switch" id="setting-tables" /></label>
-        <label class="m-settings__row"><span>Plätze <small>Platznummern</small></span><input class="m-settings__switch" type="checkbox" role="switch" id="setting-seats" /></label>
-        <label class="m-settings__row"><span>Räume <small>Raumnummern</small></span><input class="m-settings__switch" type="checkbox" role="switch" id="setting-rooms" /></label>
-      </section>
-      <section class="m-settings__group" aria-labelledby="settings-panels">
+      <section class="m-settings__group" aria-labelledby="settings-panels" hidden>
         <h3 class="m-settings__heading" id="settings-panels">Panels</h3>
         <div class="m-settings__links">
           <button class="m-settings__link" id="open-seats" type="button" aria-pressed="false">Plätze</button>
           <button class="m-settings__link" id="open-editor" type="button" aria-pressed="false">Raum bearbeiten <kbd class="m-settings__key">E</kbd></button>
-          <button class="m-settings__link" id="open-picker" type="button">Figuren</button>
-          <button class="m-settings__link" id="open-day" type="button">Ein Tag im Leben</button>
+                    <button class="m-settings__link" id="open-day" type="button" hidden>Ein Tag im Leben</button>
           <button class="m-settings__link" id="open-dev" type="button" aria-pressed="false">Dev-Events <kbd class="m-settings__key">`</kbd></button>
           <button class="m-settings__link" id="open-welcome" type="button">Hilfe</button>
         </div>
@@ -514,7 +508,7 @@
           <figure class="m-picker__reference" id="picker-reference">
             <figcaption class="m-picker__reference-caption" id="picker-home-caption">Homeoffice</figcaption>
             <div class="m-picker__reference-stage" id="picker-home-stage"></div>
-            <label class="m-picker__home">
+            <label class="m-picker__home" hidden>
               <span class="m-picker__home-label">Homeoffice wählen</span>
               <span class="m-picker__home-wrap">
                 <select class="m-picker__home-select" id="picker-home"></select>

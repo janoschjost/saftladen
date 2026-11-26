@@ -45,7 +45,7 @@ export class CharacterPicker {
   private yaw = START_YAW;
   private pitch = 0.12;
   private zoom = 1;
-  private autoSpin = true;
+  private autoSpin = false;
   private dragging = false;
   private lastX = 0;
   private lastY = 0;
@@ -310,7 +310,7 @@ export class CharacterPicker {
     }
     this.yaw = START_YAW;
     this.zoom = 1;
-    this.setAutoSpin(true);
+    this.setAutoSpin(false);
     this.select(this.index);
     this.resize();
     this.lastTime = performance.now();
@@ -320,7 +320,7 @@ export class CharacterPicker {
   close(): void {
     this.root.hidden = true;
     cancelAnimationFrame(this.raf);
-    document.getElementById('open-settings')?.focus(); // the picker was opened from the settings popover
+    this.openBtn.focus();
   }
 
   private resize(): void {

@@ -13,8 +13,7 @@ test('egg.konami', async ({ page }) => {
 
 test('day.menu + day.flow: play a day as Jan', async ({ page }) => {
   await openGame(page);
-  await page.locator('#open-settings').click();
-  await page.locator('#open-day').click();
+  await page.locator('#open-day').dispatchEvent('click'); // the day is not reachable from the UI for now (hidden), the menu still works
   await expect(page.locator('#day-menu')).toBeVisible();
   await expect(page.locator('#day-menu-name')).toHaveText('Jan Hasler');
   await page.locator('#day-menu-start').click();

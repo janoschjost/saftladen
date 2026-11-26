@@ -9,7 +9,7 @@ import { parseSettings, serializeSettings, SETTINGS_KEY, type SettingsState } fr
 export type { SettingsState } from './settingsState';
 
 export interface SettingsHooks {
-  /** labels, weather, Christmas or the follow switch changed (also once at start) */
+  /** weather, Christmas or the follow switch changed (also once at start) */
   onChange: (state: SettingsState) => void;
   /** a view segment was picked */
   onView: (mode: ViewMode) => void;
@@ -18,8 +18,7 @@ export interface SettingsHooks {
 }
 
 /**
- * The gear button (top right, key `,`) with its popover (view, names, camera follow, labels, links to the other
- * panels) and the sun button next to it with the environment popover (weather, time, Christmas). Esc, a click outside
+ * The gear button (top right, key `,`) with its popover (view, names, camera follow) and the sun button next to it with the environment popover (weather, time, Christmas). Esc, a click outside
  * or the close button closes them; only one is open at a time. Values are remembered in localStorage
  * (`saftladen.settings`); under 840 px the popovers are bottom sheets (CSS).
  */
@@ -27,9 +26,6 @@ export class Settings {
   private pop: Popover;
   private env: Popover;
   private root = document.getElementById('settings') as HTMLElement;
-  private tables = document.getElementById('setting-tables') as HTMLInputElement;
-  private seats = document.getElementById('setting-seats') as HTMLInputElement;
-  private rooms = document.getElementById('setting-rooms') as HTMLInputElement;
   private xmas = document.getElementById('setting-xmas') as HTMLInputElement;
   private follow = document.getElementById('setting-follow') as HTMLInputElement;
   private names = document.getElementById('setting-names') as HTMLInputElement;
@@ -46,9 +42,6 @@ export class Settings {
       /* storage may be unavailable */
     }
     this.state = parseSettings(raw);
-    this.tables.checked = this.state.tables;
-    this.seats.checked = this.state.seats;
-    this.rooms.checked = this.state.rooms;
     this.xmas.checked = this.state.xmas;
     this.follow.checked = this.state.follow;
     this.setWeatherValue(this.state.weather);
@@ -65,7 +58,7 @@ export class Settings {
     });
     // the Auto chips show a random icon of their row and swap it now and then, while the popover is open
     for (const chip of document.querySelectorAll<HTMLElement>('#env [data-cycle]')) cycleIcons(chip, () => this.env.isOpen);
-    for (const input of [this.tables, this.seats, this.rooms, this.xmas, this.follow, ...this.weather, ...this.seasons]) {
+    for (const input of [this.xmas, this.follow, ...this.weather, ...this.seasons]) {
       input.addEventListener('change', () => this.apply());
     }
     for (const input of this.views) input.addEventListener('change', () => input.checked && hooks.onView(input.value as ViewMode));
@@ -133,9 +126,6 @@ export class Settings {
 
   private apply(): void {
     this.state = {
-      tables: this.tables.checked,
-      seats: this.seats.checked,
-      rooms: this.rooms.checked,
       weather: this.getWeather(),
       season: this.getSeason(),
       xmas: this.xmas.checked,
