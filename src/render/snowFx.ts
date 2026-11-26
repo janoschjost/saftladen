@@ -1,8 +1,11 @@
 import * as THREE from 'three';
 import { WORLD } from './World';
 import { fxRandom } from '../game/rng';
+import { outerSpot } from './cityWeather';
 
-const FLAKES = 2600;
+const FLAKES = 14600;
+/** About one flake in six falls over the office (the same density as before); the rest over the city around it, much thinner. */
+const core = (i: number): boolean => i % 28 < 5;
 const TOP = 14;
 const ROOF_Y = 3.3; // flakes that fall over the building stop at roof height (like the rain)
 const MARGIN = 8;
@@ -51,6 +54,16 @@ export class SnowFx {
   }
 
   private respawn(i: number, scatter: boolean): void {
+    if (!core(i)) {
+      const o = outerSpot(MARGIN);
+      this.floor[i] = o.floor;
+      this.phase[i] = fxRandom() * Math.PI * 2;
+      this.speed[i] = 0.6 + fxRandom() * 0.8;
+      this.pos[i * 3] = o.x;
+      this.pos[i * 3 + 1] = scatter ? o.floor + fxRandom() * TOP : o.floor + TOP + fxRandom() * 2;
+      this.pos[i * 3 + 2] = o.z;
+      return;
+    }
     const x = -MARGIN + fxRandom() * (WORLD.width + MARGIN * 2);
     const z = -MARGIN + fxRandom() * (WORLD.depth + MARGIN * 2);
     const inside = x > 0 && x < WORLD.width && z > 0 && z < WORLD.depth;
@@ -75,10 +88,12 @@ export class SnowFx {
       this.pos[o + 1] -= FALL * this.speed[i] * dt;
       this.pos[o] += Math.sin(this.time * 0.8 + this.phase[i]) * 0.35 * dt + 0.08 * dt;
       this.pos[o + 2] += Math.cos(this.time * 0.6 + this.phase[i] * 1.7) * 0.3 * dt;
-      const x = this.pos[o];
-      const z = this.pos[o + 2];
-      const inside = x > 0 && x < WORLD.width && z > 0 && z < WORLD.depth;
-      this.floor[i] = inside ? ROOF_Y : 0;
+      if (core(i)) {
+        const x = this.pos[o];
+        const z = this.pos[o + 2];
+        const inside = x > 0 && x < WORLD.width && z > 0 && z < WORLD.depth;
+        this.floor[i] = inside ? ROOF_Y : 0;
+      }
       if (this.pos[o + 1] < this.floor[i]) this.respawn(i, false);
     }
     this.object.geometry.attributes.position.needsUpdate = true;

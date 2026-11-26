@@ -16,6 +16,7 @@ import { DayHud } from '../ui/DayHud';
 import { DAY_STORIES } from '../data/dayStories';
 import { formatTime, type DayCtx, type DayTask } from './Day';
 import { City } from '../render/City';
+import { CITY_FOOT } from '../render/cityWeather';
 import { buildWorld, WORLD } from '../render/World';
 import { Actions } from '../ui/Actions';
 import { ActionSheet, type SheetPick } from '../ui/ActionSheet';
@@ -237,7 +238,7 @@ export class Game {
     this.scene.background = new THREE.Color(stageColor);
 
     const { sun, hemi } = buildWorld(this.scene);
-    this.city = new City(this.scene, { x0: 0, z0: 0, x1: WORLD.width, z1: WORLD.depth });
+    this.city = new City(this.scene, CITY_FOOT);
     this.sky = { scene: this.scene, sun, hemi, dayBackground: new THREE.Color(stageColor) };
     const saved = loadState();
     this.rainFx = new RainFx(this.scene);
@@ -962,6 +963,7 @@ export class Game {
     this.rainFx.update(dt, r, 1 - day, w.storm);
     this.puddleFx.update(dt, w.wet, r, day);
     this.snowCoverFx.update(w.cover, day);
+    this.city.weather(w.wet, w.cover);
     this.xmas.update(dt, day, sky, this.sky.sun, w.snow);
     if (w.season) {
       sky.lerp(SEASON_TINT[w.season], SEASON_PROFILE[w.season].tintAmount * day);
