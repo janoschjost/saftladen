@@ -1,19 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { team } from '../data/team';
-import { LIVIA_LINES, MAX_LIVIA_LINE } from '../data/liviaLines';
+import { LIVIA_LINES } from '../data/liviaLines';
+import { bubbleSeconds } from '../data/sonLines';
 import { installHeadlessDom } from '../test/headlessDom';
-import { GROUP, STEP, office, run } from '../test/office';
+import { GROUP, STEP, office, only, run } from '../test/office';
 import { cycleOf } from './TimeOfDay';
-import { LINE_GAP, LINE_SECONDS, LIVIA, RETRY } from './LiviaLines';
+import { LINE_GAP, LIVIA, RETRY } from './LiviaLines';
 import type { Sim } from './Sim';
 import { GAME_HOUR } from './Smoke';
 
 installHeadlessDom();
-
-/** The office holds only these people, everybody else is out. */
-function only(sim: Sim, ids: readonly string[]) {
-  for (const p of sim.people) if (!ids.includes(p.id)) sim.scenario.put(p.id, 'errand');
-}
 
 /** Every line she starts while the office runs `seconds`: when (game seconds) and which. Also checks one bubble at a time. */
 function lines(sim: Sim, seconds: number): Array<{ at: number; text: string; up: number }> {
@@ -56,8 +52,7 @@ describe('livia.lines: Livia says a line in Walliser Deutsch now and then', () =
       'Hüere Tubel!',
       'Siänta miessend sumi wirkli Seich macho!',
     ]);
-    expect(MAX_LIVIA_LINE).toBe(40);
-    for (const line of LIVIA_LINES) expect(line.length).toBeLessThanOrEqual(MAX_LIVIA_LINE);
+    for (const line of LIVIA_LINES) expect(line.length).toBeLessThanOrEqual(40);
   });
 
   it('livia.lines: at her desk a line every 1–2 clock hours, up about 3 s, never the same twice in a row; nobody else says one', () => {
@@ -73,7 +68,7 @@ describe('livia.lines: Livia says a line in Walliser Deutsch now and then', () =
       expect(gap).toBeLessThanOrEqual((LINE_GAP.min + LINE_GAP.extra) * GAME_HOUR + RETRY);
       expect(said[i].text).not.toBe(said[i - 1].text);
     }
-    for (const s of said.slice(0, -1)) expect(s.up).toBeCloseTo(LINE_SECONDS, 1);
+    for (const s of said.slice(0, -1)) expect(s.up).toBeCloseTo(bubbleSeconds(s.text), 1); // about 3 s
     for (const s of said) expect(LIVIA_LINES).toContain(s.text);
     expect(sim.livia.bubbles.every((b) => b.who.id === LIVIA)).toBe(true);
   });

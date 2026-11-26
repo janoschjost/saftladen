@@ -1,4 +1,5 @@
 import { LIVIA_LINES } from '../data/liviaLines';
+import { bubbleSeconds } from '../data/sonLines';
 import type { Person } from './Person';
 import { stream } from './rng';
 import type { Sim } from './Sim';
@@ -8,8 +9,6 @@ import { GAME_HOUR } from './Smoke';
 export const LIVIA = 'livia-in-albon';
 /** Clock hours between two lines, drawn per line (also from her arrival to the first). */
 export const LINE_GAP = { min: 1, extra: 1 };
-/** Seconds a line is up. */
-export const LINE_SECONDS = 3;
 /** Game seconds before she tries again when it was not the moment (not at her desk or walking, in a meeting, …). */
 export const RETRY = 5;
 
@@ -24,7 +23,7 @@ export class LiviaLines {
   /** game seconds until the next line while she is in; null: not in yet today */
   nextIn: number | null = null;
   /** the line she said last (none twice in a row) */
-  lastLine = '';
+  private lastLine = '';
   private textT = 0;
   private days: number;
   private readonly rnd = stream(0x1171a);
@@ -48,7 +47,7 @@ export class LiviaLines {
   }
 
   /** The moment for a line of her own: free and off the phone, at her desk or walking, and not at night. */
-  get canSpeak(): boolean {
+  private get canSpeak(): boolean {
     const p = this.livia;
     return this.free && !p.phoneJob && !this.sim.tod.night && (p.working || p.state === 'walk');
   }
@@ -84,9 +83,9 @@ export class LiviaLines {
 
   private say(): string {
     const lines = LIVIA_LINES.filter((l) => l !== this.lastLine);
-    const line = lines[Math.floor(this.rnd() * lines.length)] ?? lines[0];
+    const line = lines[Math.floor(this.rnd() * lines.length)];
     this.text = this.lastLine = line;
-    this.textT = LINE_SECONDS;
+    this.textT = bubbleSeconds(line); // about 3 s, like every speech bubble
     this.nextIn = this.gap();
     return line;
   }

@@ -514,7 +514,7 @@ export class Person extends Walker {
     return !!this.task && this.task.phase !== 'approach';
   }
 
-  /** Kneeling to stroke a pet: stays where they knelt down. */
+  /** Kneeling to stroke a pet, or dozing off on the spot: stays where they are. */
   override get steady(): boolean {
     return this.petting || this.nap > 0; // a sleeper stays on her spot: whoever bumps into her goes round (#308)
   }

@@ -12,6 +12,3 @@ export const LIVIA_LINES: readonly string[] = [
   'Hüere Tubel!',
   'Siänta miessend sumi wirkli Seich macho!',
 ];
-
-/** The longest a line may be (characters): a speech bubble is small. */
-export const MAX_LIVIA_LINE = 40;

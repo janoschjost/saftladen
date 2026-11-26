@@ -1,17 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { team as TEAM } from '../data/team';
 import { installHeadlessDom } from '../test/headlessDom';
-import { STEP, office, run } from '../test/office';
-import type { Sim } from './Sim';
+import { STEP, office, only, run } from '../test/office';
 
 installHeadlessDom();
 
 const NAPPER = 'jeerapat-wang';
-
-/** The office holds only these people, everybody else is out. */
-function only(sim: Sim, ids: readonly string[]) {
-  for (const p of sim.people) if (!ids.includes(p.id)) sim.scenario.put(p.id, 'errand');
-}
 
 describe('char.nap: Jeerapat walks slowest and now and then dozes off on the spot', () => {
   it('char.slow: she walks slower than everybody else', () => {

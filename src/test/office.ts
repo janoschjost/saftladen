@@ -17,6 +17,11 @@ export function office(options: SimOptions = {}, seed = 1): Sim {
   return sim;
 }
 
+/** The office holds only these people: everybody else is put out (on an errand). */
+export function only(sim: Sim, ids: readonly string[]): void {
+  for (const p of sim.people) if (!ids.includes(p.id)) sim.scenario.put(p.id, 'errand');
+}
+
 /** Gives `id` a desk of their own if the seed left them without, so a scene can rely on `deskFor`. */
 export function ownDesk(sim: Sim, id: string): void {
   const p = sim.person(id);
