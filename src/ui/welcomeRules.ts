@@ -15,13 +15,11 @@ export function pickGreeter<T extends { role: string; portrait: string | null }>
 }
 
 /**
- * Whether the welcome card shows on load. `#welcome` always shows it (replay); `?test` and `?welcome=0` never do
- * (so the e2e specs are not blocked), except `?test&welcome=1`, which the card's own spec opts in with; otherwise only a
- * visitor who has not dismissed it before sees it.
+ * Whether the welcome card shows on load. Off by default (#319): a visitor lands straight in the office. `#welcome`
+ * always shows it (replay); `?welcome=1` opts in to the first-visit card, which shows until it was dismissed once
+ * (the card's own e2e spec uses it with `?test`).
  */
 export function shouldShowWelcome(search: string, hash: string, seen: boolean): boolean {
   if (hash === '#welcome') return true;
-  const q = new URLSearchParams(search);
-  if ((q.has('test') && q.get('welcome') !== '1') || q.get('welcome') === '0') return false;
-  return !seen;
+  return new URLSearchParams(search).get('welcome') === '1' && !seen;
 }

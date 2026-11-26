@@ -24,9 +24,8 @@ const markSeen = (): void => {
 };
 
 /**
- * Welcome card for first-time visitors: a random Geschäftsleitung member greets you. The game is held while it is
- * open. Shown on the first visit, on `#welcome` and from the Hilfe link in the settings; never with `?test` (unless
- * `&welcome=1`, for its own e2e spec) or `?welcome=0`.
+ * Welcome card: a random Geschäftsleitung member greets you. The game is held while it is open. Off by default
+ * (#319): shown on `#welcome`, from the Hilfe link in the settings and, until dismissed once, with `?welcome=1`.
  */
 export class Welcome {
   private root = document.getElementById('welcome') as HTMLElement;
