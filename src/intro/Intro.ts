@@ -116,7 +116,7 @@ export function playIntro(root: HTMLElement, host: IntroHost): () => void {
   let before = performance.now();
   renderer.setAnimationLoop(() => {
     const now = performance.now();
-    const dt = Math.min(0.1, (now - before) / 1000);
+    const dt = Math.min(0.5, (now - before) / 1000); // the story keeps its pace on a slow machine; only a long gap (a hidden tab) is cut
     before = now;
     t += dt;
     // reduced motion: no flight into the blueprint and no crossfade, the office cuts in after the last sentence

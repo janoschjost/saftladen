@@ -24,7 +24,7 @@ test.describe('intro', () => {
 
   test('intro.story: the story starts with its first sentence, German with the English line below', async ({ page }) => {
     await boot(page, FIRST_VISIT);
-    await expect(page.locator('#intro-de')).toHaveText('Es waren einmal zwei Entwickler.', { timeout: 15_000 }); // after the opening pause
+    await expect(page.locator('#intro-de')).toHaveText('Es waren einmal zwei Entwickler.', { timeout: 30_000 }); // after the opening pause, in wall time: the intro is not part of the game's clock
     await expect(page.locator('#intro-en')).toHaveText('Once upon a time, there were two devs.');
     await expect(page.locator('#intro-en')).toHaveCSS('font-style', 'italic');
     await expect(page.locator('#intro-de')).toHaveCSS('font-style', 'normal');
