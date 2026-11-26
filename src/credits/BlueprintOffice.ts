@@ -250,6 +250,12 @@ export class BlueprintOffice {
     this.tick(0);
   }
 
+  /** Shows the blueprint built up to `built` (0 nothing .. 1 complete) with the pad lit to `pad` (0..1), for a scene that runs its own clock instead of `tick`. */
+  show(built: number, pad: number): void {
+    this.progress.value = built * (1 + RISE);
+    this.pad.opacity = pad * 0.9;
+  }
+
   tick(dt: number): void {
     this.clock = (this.clock + dt) % TOTAL;
     const t = this.clock;
