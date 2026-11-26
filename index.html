@@ -317,6 +317,7 @@
                     <button class="m-settings__link" id="open-day" type="button" hidden>Ein Tag im Leben</button>
           <button class="m-settings__link" id="open-dev" type="button" aria-pressed="false">Dev-Events <kbd class="m-settings__key">`</kbd></button>
           <button class="m-settings__link" id="open-welcome" type="button">Hilfe</button>
+          <button class="m-settings__link" id="open-intro" type="button"></button>
         </div>
       </section>
     </aside>
@@ -469,6 +470,14 @@
         <p class="m-tooltip__role" id="tooltip-role"></p>
       </div>
     </aside>
+    <section class="m-intro" id="intro" hidden>
+      <div class="m-intro__stage" id="intro-stage"></div>
+      <div class="m-intro__text" id="intro-text" aria-live="polite">
+        <p class="m-intro__line" id="intro-de"></p>
+        <p class="m-intro__line m-intro__line--en" id="intro-en" lang="en"></p>
+      </div>
+      <button class="m-intro__skip" id="intro-skip" type="button"></button>
+    </section>
     <section class="m-welcome" id="welcome" role="dialog" aria-modal="true" aria-labelledby="welcome-title" hidden>
       <div class="m-welcome__card">
         <h2 class="m-welcome__title" id="welcome-title"></h2>

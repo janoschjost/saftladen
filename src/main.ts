@@ -5,6 +5,7 @@ import { applySeedParam } from './game/debugParams';
 import { CharacterPicker } from './ui/CharacterPicker';
 import { DayMenu } from './ui/DayMenu';
 import { Welcome } from './ui/Welcome';
+import { installIntro } from './intro/gate';
 
 const hideLoader = (): void => {
   const loader = document.getElementById('loader');
@@ -37,6 +38,7 @@ try {
   new CharacterPicker();
   new DayMenu((id) => game.startDay(id));
   new Welcome((held) => (game.paused = held));
+  installIntro(game);
 } finally {
   const fontsReady = document.fonts ? document.fonts.ready : Promise.resolve();
   void fontsReady.then(() => requestAnimationFrame(() => requestAnimationFrame(hideLoader)));

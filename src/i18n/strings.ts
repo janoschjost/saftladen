@@ -25,6 +25,23 @@ export const strings = {
     ],
   },
 
+  /** the origin-story intro on the first visit (#322): one sentence at a time, German with the English line below it */
+  intro: {
+    label: 'Wie alles begann',
+    skip: 'Überspringen',
+    lines: [
+      { de: 'Es waren einmal zwei Entwickler.', en: 'Once upon a time, there were two devs.' },
+      { de: 'Sie träumten davon, VITAMIN 2 als Simulation zu erschaffen.', en: 'They dreamed of bringing VITAMIN 2 to life as a simulation.' },
+      { de: 'Mit all ihren liebenswerten Kolleginnen und Kollegen und all deren Eigenheiten.', en: 'With all their beloved co-workers and every one of their quirks.' },
+      { de: 'Vor langer Zeit, als Lehrling bei DACHCOM, war der Ältere an solch dunkler Magie gescheitert.', en: 'Long ago, as an apprentice at DACHCOM, the elder had failed at such dark magic.' },
+      { de: 'Der Jüngere aber war ein mächtiger Magier, der das Viben beherrschte.', en: 'But the younger was a mighty wizard who had mastered the art of vibing.' },
+      { de: 'Er lehrte den Älteren alles, was er wusste.', en: 'He taught the elder all he knew.' },
+      { de: 'So vereinten sie ihre Kräfte und schworen einen Eid: nicht zu ruhen, bis es vollbracht sei.', en: 'So they joined forces and swore an oath: never to rest until it was done.' },
+      { de: 'Sie beschworen den allmächtigen Claudius, Zerstörer aller Kreativität, und machten sich ans Werk.', en: 'They summoned the almighty Claudius, Destroyer of All Creativity, and set to work.' },
+      { de: 'Keiner wagte, sich auszumalen, wie viele Jahre sie auf dem Weg zur Vollendung noch vergeuden würden.', en: 'No one dared imagine how many years they would yet squander on the road to perfection.' },
+    ],
+  },
+
   presence: {
     /** the "not in the office" list */
     panel: {
