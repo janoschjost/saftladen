@@ -38,13 +38,13 @@ const mix = (a: Pose, b: Pose, u: number): Pose => ({ pos: a.pos.clone().lerp(b.
  * The origin-story intro (#322): Marco and Janosch at their desks in the credits' room, the story sentence by sentence,
  * Claudius summoned in a puff, the blueprint building up, then the camera moves into the blueprint and the picture
  * fades to the real office, which flies in from the same framing. The camera is scripted: no input reaches the scene.
+ * Returns what ends it at once (skip).
  */
-export function playIntro(root: HTMLElement, host: IntroHost): void {
+export function playIntro(root: HTMLElement, host: IntroHost): () => void {
   const stage = root.querySelector<HTMLElement>('#intro-stage')!;
   const text = root.querySelector<HTMLElement>('#intro-text')!;
   const de = root.querySelector<HTMLElement>('#intro-de')!;
   const en = root.querySelector<HTMLElement>('#intro-en')!;
-  const skip = root.querySelector<HTMLButtonElement>('#intro-skip')!;
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const lines = strings.intro.lines;
   const tl = timeline(lines);
@@ -105,8 +105,6 @@ export function playIntro(root: HTMLElement, host: IntroHost): void {
     handOver();
     renderer.setAnimationLoop(null);
     sized.disconnect();
-    window.removeEventListener('keydown', onKey, true);
-    skip.removeEventListener('click', finish);
     renderer.dispose();
     renderer.forceContextLoss();
     renderer.domElement.remove();
@@ -115,17 +113,6 @@ export function playIntro(root: HTMLElement, host: IntroHost): void {
     root.style.opacity = text.style.opacity = '';
     host.done();
   };
-  // capture: while the intro runs no key reaches the game; Enter and Esc skip it
-  const onKey = (e: KeyboardEvent): void => {
-    if (e.key === 'Tab') return;
-    e.stopImmediatePropagation();
-    e.preventDefault();
-    if (e.key === 'Enter' || e.key === 'Escape') finish();
-  };
-  window.addEventListener('keydown', onKey, true);
-  skip.addEventListener('click', finish);
-  skip.focus();
-
   let before = performance.now();
   renderer.setAnimationLoop(() => {
     const now = performance.now();
@@ -147,4 +134,5 @@ export function playIntro(root: HTMLElement, host: IntroHost): void {
     camera.lookAt(p.target);
     renderer.render(world.scene, camera);
   });
+  return finish;
 }

@@ -33,27 +33,48 @@ export function installIntro(game: Game): void {
   link.textContent = strings.intro.label;
   skip.textContent = strings.intro.skip;
 
+  const welcome = document.getElementById('welcome') as HTMLElement;
+  /** ends the scene at once, once it is there */
+  let finish: (() => void) | null = null;
+
+  const letGo = (): void => {
+    game.paused = false;
+    game.flyIn();
+  };
   const ended = (): void => {
+    finish = null;
+    window.removeEventListener('keydown', onKey, true);
     markSeen();
     if (location.hash === '#intro') history.replaceState(null, '', location.pathname + location.search);
   };
+  /** Skip, also while the scene is still loading (or could not be loaded: no chunk, no WebGL context): straight to the office. */
+  const stop = (): void => {
+    if (root.hidden) return;
+    if (finish) return finish();
+    root.hidden = true;
+    letGo();
+    ended();
+  };
+  // capture: from the moment the intro covers the office no key reaches the game; Enter and Esc skip it
+  const onKey = (e: KeyboardEvent): void => {
+    if (e.key === 'Tab') return;
+    e.stopImmediatePropagation();
+    e.preventDefault();
+    if (e.key === 'Enter' || e.key === 'Escape') stop();
+  };
   const play = (): void => {
-    if (!root.hidden) return;
+    if (!root.hidden || !welcome.hidden) return; // one at a time: the welcome card holds the game too
     root.hidden = false; // the dark stage covers the office at once, the scene follows
     game.paused = true;
-    const letGo = (): void => {
-      game.paused = false;
-      game.flyIn();
-    };
+    window.addEventListener('keydown', onKey, true);
+    skip.focus();
     import('./Intro')
-      .then((m) => m.playIntro(root, { start: game.flyInStart, handOver: letGo, done: ended }))
-      .catch(() => {
-        // no scene (chunk not loaded, no WebGL context): straight to the office
-        root.hidden = true;
-        letGo();
-        ended();
-      });
+      .then((m) => {
+        if (!root.hidden) finish = m.playIntro(root, { start: game.flyInStart, handOver: letGo, done: ended }); // not skipped meanwhile
+      })
+      .catch(stop);
   };
+  skip.addEventListener('click', stop);
   link.addEventListener('click', play);
   window.addEventListener('hashchange', () => location.hash === '#intro' && play());
   if (shouldPlayIntro(location.search, location.hash, wasSeen())) play();
