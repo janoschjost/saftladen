@@ -14,6 +14,11 @@ export interface Column {
   y1: number;
 }
 
+/** The hit volume of Christian's ghost (#328): a person's column, as tall as he is (`heightM`), floating a few cm above the floor. */
+export function ghostColumn(at: { x: number; z: number }, heightM: number): Column {
+  return { x: at.x, z: at.z, r: 0.4, y0: 0, y1: heightM + 0.15 };
+}
+
 /** Ray distance at which `ray` enters `c` (0 when it starts inside), or null when it misses. */
 export function hitColumn(ray: Ray3, c: Column): number | null {
   const { origin: o, direction: d } = ray;

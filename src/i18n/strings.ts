@@ -86,6 +86,8 @@ export const strings = {
       arriving: (firsts: string[]) => `${firsts.join(' und ')} ${firsts.length > 1 ? 'kommen' : 'kommt'} gleich ins Büro …`,
     },
   },
+  /** Christian Davatz, the ghost of the Ordnungskreis: his hover card (#328) */
+  christian: { name: 'Christian Davatz', role: 'Ordnungshüter' },
   /** Kompensiertier Kurt, Marco's alter ego (#32) */
   alterEgo: {
     role: 'Kompensiertier',

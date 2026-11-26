@@ -9,7 +9,8 @@ import { PoofFx } from '../render/poofFx';
 import { petPortrait } from '../render/petPortrait';
 import { SIT_DROP } from '../render/officeBuilder';
 import { CLICK_SLOP, Views, type ViewMode } from '../render/Views';
-import { nearestHit, nearestOnScreen, type Column } from './pick';
+import { ghostColumn, hitColumn, nearestHit, nearestOnScreen, type Column } from './pick';
+import { christianLook } from '../data/christian';
 import { Bubbles } from '../render/Bubbles';
 import { GlassSort } from '../render/glassSort';
 import { DayHud } from '../ui/DayHud';
@@ -149,6 +150,8 @@ export class Game {
   private centre = new THREE.Vector2(0, 0);
   private pointerInside = false;
   private hovered: Walker | null = null;
+  /** the pointer is on Christian's ghost (hover card, #328) */
+  private ghostHovered = false;
   /** who a click would select now (hand cursor, hover ring), see `updateHover` */
   private over: Walker | null = null;
   private selected: Walker | null = null;
@@ -2345,10 +2348,18 @@ export class Game {
     return this.raycaster.ray.intersectPlane(this.groundPlane, new THREE.Vector3());
   }
 
+  private hitsGhost(): boolean {
+    const at = this.ghost.at;
+    if (!at) return false;
+    this.raycaster.setFromCamera(this.pointer, this.views.camera);
+    return hitColumn(this.raycaster.ray, ghostColumn(at, christianLook.heightM ?? 1.75)) !== null;
+  }
+
   private updateHover(): void {
     this.hovered = this.dragged ?? (this.pointerInside && this.views.mode !== 'third' ? this.pick(this.pointer, this.views.mode !== 'walk') : null);
     // who a click would select: hand cursor and a ring on the floor (`updateOverlay`); not in walk mode, nor the editor (pick is null there)
     this.over = this.hovered && !this.dragged && this.views.mode !== 'walk' ? this.hovered : null;
+    this.ghostHovered = !this.hovered && this.pointerInside && this.views.mode !== 'third' && this.views.mode !== 'walk' && !this.editor.active && this.hitsGhost();
     this.stage.classList.toggle('is-over-person', !!this.over);
     this.stage.classList.toggle('is-hovering', this.editor.hovering && !this.editor.dragging);
     this.stage.classList.toggle('is-holding', !!this.dragged || this.editor.dragging);
@@ -2410,6 +2421,9 @@ export class Game {
       this.overlay.showTooltip(active.displayName, role, this.portraitOf(active), this.project(active));
     } else if (active instanceof Dog) {
       this.overlay.showTooltip(active.name, '',active.portrait, this.project(active));
+    } else if (this.ghostHovered) {
+      const h = this.ghostHead();
+      this.overlay.showTooltip(strings.christian.name, strings.christian.role, null, this.projectPoint(h.x, h.y, h.z), true);
     } else {
       this.overlay.hideTooltip();
     }
