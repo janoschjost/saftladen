@@ -1,3 +1,6 @@
+// the story's typeface (Almendra, OFL): loaded with the intro only, so the same storybook look on every system
+import '@fontsource/almendra/latin-400.css';
+import '@fontsource/almendra/latin-400-italic.css';
 import * as THREE from 'three';
 import { CreditsScene } from '../credits/CreditsScene';
 import { easeInOut, shotPosition, type Shot } from '../render/cameraFly';
