@@ -516,7 +516,7 @@ export class Person extends Walker {
 
   /** Kneeling to stroke a pet: stays where they knelt down. */
   override get steady(): boolean {
-    return this.petting;
+    return this.petting || this.nap > 0; // a sleeper stays on her spot: whoever bumps into her goes round (#308)
   }
 
   /** True while on the way to the meeting, or already in it. */
