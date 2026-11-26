@@ -51,6 +51,8 @@ const looks: Record<string, Look> = {
   'zlatko-pesic': { skin: LIGHT, hair: '#2a2420', style: 'short', beard: 'full', eyebrows: true, top: '#a89a82', bottom: BLACK, strong: true, build: 1.15, heightM: 1.8 },
   'philip-gygax': { skin: LIGHT, hair: '#2a2420', style: 'short', beard: 'stubble', top: '#1f5a58', bottom: '#35507a', heightM: 1.8 },
   'eliana-lipari': { skin: FAIR, hair: '#74492f', style: 'long', glasses: true, tee: true, top: '#c4161f', bottom: JEANS_DARK, heightM: 1.7 },
+  // long dark-blonde hair with lighter ends, dark brows, black turtleneck; trousers and height between Delya's and Nina Bauer's (#309)
+  'livia-in-albon': { skin: FAIR, hair: '#8a6542', streaks: '#c39a64', style: 'long', eyebrows: true, smile: true, top: BLACK, bottom: JEANS_DARK, heightM: 1.7 },
 };
 
 // Zlatko's little son (shows up in his home office)
@@ -198,6 +200,7 @@ const schedules: Record<string, Partial<Schedule>> = {
   'marianne-hofstetter': { arrive: 7.75, leave: 17.25 },
   'nina-bauer': { arrive: 8, leave: 17.75, lunch: 12.25 },
   'julia-renz': { arrive: 8.75, leave: 17.5, lunch: 12.5 },
+  'livia-in-albon': { arrive: 8 + 40 / 60, leave: 17.75, lunch: 12 + 25 / 60 },
   // works remotely: in the office on about one day in eight (configurable: visitChance)
   'zlatko-pesic': { arrive: 9, leave: 17.5, visitChance: 0.12 },
 };
