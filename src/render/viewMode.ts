@@ -11,14 +11,14 @@ export function allowedView(mode: ViewMode, touch: boolean): ViewMode {
 
 /**
  * The deep link of the page: `#iso` `#orbit` `#plan` `#walk` `#walk@x,z,yaw` (game metres, radians). Anything else
- * opens the default view; on a touch screen `#walk` opens Orbit. `at` is where the walk view stands (yaw NaN: not given).
+ * opens the default view (`allowedView` decides whether a touch screen gets it). `at` is where the walk view stands (yaw NaN: not given).
  */
-export function startView(hash: string, touch: boolean): { mode: ViewMode; at: { x: number; z: number; yaw: number } | null } {
+export function startView(hash: string): { mode: ViewMode; at: { x: number; z: number; yaw: number } | null } {
   const [h, place] = hash.replace(/^#/, '').split('@');
   const asked = PICKABLE.includes(h as ViewMode) ? (h as ViewMode) : DEFAULT_MODE;
   const n = (place ?? '').split(',');
   // a missing yaw is NaN: the walk view keeps the way it faces
-  return { mode: allowedView(asked, touch), at: place ? { x: Number(n[0]), z: Number(n[1]), yaw: Number(n[2]) } : null };
+  return { mode: asked, at: place ? { x: Number(n[0]), z: Number(n[1]), yaw: Number(n[2]) } : null };
 }
 
 /** The view button of the phone bar: Iso, Orbit and Grundriss in turn (walk mode is not offered on touch). */

@@ -3,4 +3,4 @@ $tablet: 840px;
 $desktop: 1440px;
 
 // phone layout: narrow, or a touch screen held sideways (low, no hover); the same query as PHONE in src/ui/device.ts
-$phone: '(max-width: 840px), (hover: none) and (max-height: 600px)';
+$phone: '(max-width: #{$tablet}), (hover: none) and (max-height: #{$mobile})';

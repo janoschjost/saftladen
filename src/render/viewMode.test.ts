@@ -3,22 +3,21 @@ import { allowedView, nextView, startView } from './viewMode';
 
 describe('view.deeplinks', () => {
   it('opens the view of the hash, the default for anything else', () => {
-    for (const mode of ['iso', 'orbit', 'plan', 'walk'] as const) expect(startView(`#${mode}`, false)).toEqual({ mode, at: null });
-    for (const hash of ['', '#', '#third', '#welcome', '#nonsense']) expect(startView(hash, false).mode).toBe('orbit');
+    for (const mode of ['iso', 'orbit', 'plan', 'walk'] as const) expect(startView(`#${mode}`)).toEqual({ mode, at: null });
+    for (const hash of ['', '#', '#third', '#welcome', '#nonsense']) expect(startView(hash).mode).toBe('orbit');
   });
 
   it('#walk@x,z,yaw stands the walk view there', () => {
-    expect(startView('#walk@20,7,1.57', false)).toEqual({ mode: 'walk', at: { x: 20, z: 7, yaw: 1.57 } });
-    expect(startView('#walk@20,7', false).at).toMatchObject({ x: 20, z: 7 });
-    expect(startView('#walk@20,7', false).at?.yaw).toBeNaN(); // no yaw: the view keeps its own
+    expect(startView('#walk@20,7,1.57')).toEqual({ mode: 'walk', at: { x: 20, z: 7, yaw: 1.57 } });
+    expect(startView('#walk@20,7').at).toMatchObject({ x: 20, z: 7 });
+    expect(startView('#walk@20,7').at?.yaw).toBeNaN(); // no yaw: the view keeps its own
   });
 });
 
 describe('view.walk', () => {
   it('a touch screen gets Orbit instead of the walk view, whatever asks for it', () => {
     expect(allowedView('walk', true)).toBe('orbit');
-    expect(startView('#walk', true).mode).toBe('orbit');
-    expect(startView('#walk@20,7,1.57', true).mode).toBe('orbit');
+    expect(allowedView(startView('#walk@20,7,1.57').mode, true)).toBe('orbit');
     // the other views stay, and a mouse keeps the walk view
     for (const mode of ['iso', 'orbit', 'plan', 'third'] as const) expect(allowedView(mode, true)).toBe(mode);
     expect(allowedView('walk', false)).toBe('walk');

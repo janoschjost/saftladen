@@ -5,8 +5,9 @@ const ISO_ELEVATION = Math.atan(1 / Math.SQRT2); // 35.264°, true isometric
 /** screen right and screen down, on the floor */
 const RIGHT = new THREE.Vector3(1, 0, -1).normalize();
 const DOWN = new THREE.Vector3(1, 0, 1).normalize();
-/** added to the path of a pinch, so lifting the fingers never counts as a tap */
-const CLICK_GUARD = 100;
+/** how far out and in the view zooms (wheel, pinch, a restored view) */
+const MIN_ZOOM = 0.6;
+const MAX_ZOOM = 5;
 
 /** Orthographic isometric camera with drag-pan and wheel-zoom; on a touch screen one finger pans, two pinch and pan. */
 export class IsoCamera {
@@ -53,7 +54,7 @@ export class IsoCamera {
     this.target.x = s.x;
     this.target.z = s.z;
     this.clampTarget();
-    this.zoomGoal = this.zoom = THREE.MathUtils.clamp(s.zoom, 0.6, 5);
+    this.zoomGoal = this.zoom = THREE.MathUtils.clamp(s.zoom, MIN_ZOOM, MAX_ZOOM);
   }
 
   /** Eases the view centre towards a floor point (used while a person is steered). */
@@ -106,15 +107,19 @@ export class IsoCamera {
     });
     on(this.el, 'pointermove', (e: PointerEvent) => {
       if (!this.dragging) return;
-      if (this.touches.has(e.pointerId)) this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const finger = this.touches.get(e.pointerId);
+      if (finger) {
+        finger.x = e.clientX;
+        finger.y = e.clientY;
+      }
       const at = this.centre(e);
       const dx = at.x - this.last.x;
       const dy = at.y - this.last.y;
       this.moved += Math.abs(dx) + Math.abs(dy);
       this.last = at;
       if (this.pinch && this.pinch.dist > 0) {
-        this.zoomGoal = this.zoom = THREE.MathUtils.clamp((this.pinch.zoom * this.spread()) / this.pinch.dist, 0.6, 5);
-        this.moved += CLICK_GUARD; // a pinch is never a tap
+        this.zoomGoal = this.zoom = THREE.MathUtils.clamp((this.pinch.zoom * this.spread()) / this.pinch.dist, MIN_ZOOM, MAX_ZOOM);
+        this.moved = Infinity; // a pinch is never a tap
       }
       this.pan(dx, dy);
     });
@@ -137,7 +142,7 @@ export class IsoCamera {
       (e: WheelEvent) => {
         if (!this.enabled) return;
         e.preventDefault();
-        this.zoomGoal = THREE.MathUtils.clamp(this.zoomGoal * Math.exp(-e.deltaY * 0.0015), 0.6, 5);
+        this.zoomGoal = THREE.MathUtils.clamp(this.zoomGoal * Math.exp(-e.deltaY * 0.0015), MIN_ZOOM, MAX_ZOOM);
       },
       { passive: false },
     );
@@ -165,7 +170,9 @@ export class IsoCamera {
 
   /** Distance between the first two fingers (px). */
   private spread(): number {
-    const [a, b] = [...this.touches.values()];
+    const it = this.touches.values();
+    const a = it.next().value;
+    const b = it.next().value;
     return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
   }
 

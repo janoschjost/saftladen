@@ -231,7 +231,7 @@ export class Views {
     document.getElementById('cycle-view')?.addEventListener('click', () => this.setMode(nextView(this.mode)));
     this.bind();
     // deep link: #orbit | #plan | #walk | #walk@x,z,yaw (game metres, radians); a touch screen gets Orbit for #walk
-    const start = startView(location.hash, isTouch());
+    const start = startView(location.hash);
     if (start.at) {
       this.walkPos.set(start.at.x, EYE, start.at.z);
       if (!Number.isNaN(start.at.yaw)) this.yaw = start.at.yaw;
@@ -538,9 +538,8 @@ export class Views {
     window.addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLElement && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
       this.keys.add(e.code);
-      const modes: ViewMode[] = ['iso', 'orbit', 'plan', 'walk'];
       const i = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(e.code);
-      if (i >= 0) this.setMode(modes[i]);
+      if (i >= 0) this.setMode(PICKABLE[i]);
       if (e.code === 'Escape' && this.mode === 'walk') this.setMode(DEFAULT_MODE);
       if (this.mode === 'walk' && e.code.startsWith('Arrow')) e.preventDefault();
       if (this.mode === 'walk' && e.code === 'Space') {
