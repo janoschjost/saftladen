@@ -106,7 +106,7 @@ export class IsoCamera {
       this.el.classList.add('is-dragging');
     });
     on(this.el, 'pointermove', (e: PointerEvent) => {
-      if (!this.dragging) return;
+      if (!this.dragging || !this.enabled) return;
       const finger = this.touches.get(e.pointerId);
       if (finger) {
         finger.x = e.clientX;
@@ -136,6 +136,7 @@ export class IsoCamera {
     };
     on(this.el, 'pointerup', end);
     on(this.el, 'pointercancel', end);
+    on(this.el, 'lostpointercapture', end); // a finger whose up never came must not stay in the pinch
     on(
       this.el,
       'wheel',
