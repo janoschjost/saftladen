@@ -5,6 +5,8 @@ import { Popover } from '../ui/Popover';
 import { walkFree, type WalkColliders } from '../game/walkCollision';
 import { blendShot, easeInOut, FLY_TIME, INTRO_TIME, introShot, shotFrom, shotPosition, TRAIL, type Shot } from './cameraFly';
 import { IsoCamera } from './IsoCamera';
+import { allowedView, DEFAULT_MODE, nextView, PICKABLE, startView } from './viewMode';
+import { isTouch } from '../ui/device';
 import { ax, az } from './officeModel';
 import { WORLD } from './World';
 
@@ -126,7 +128,6 @@ function hintGroup(g: HintGroup): HTMLLIElement {
   return li;
 }
 
-const DEFAULT_MODE: ViewMode = 'orbit';
 const EYE = 1.65;
 const WALK_SPEED = 2.2;
 const RUN_SPEED = 5;
@@ -226,16 +227,16 @@ export class Views {
     // the ? button next to the sun and gear opens the controls list of the current view
     if (help) new Popover(help, document.getElementById('open-help') as HTMLButtonElement, { close: document.getElementById('help-close') });
     document.getElementById('walk-exit')?.addEventListener('click', () => this.setMode(DEFAULT_MODE));
+    // phone bar: one button steps through Iso, Orbit and Grundriss
+    document.getElementById('cycle-view')?.addEventListener('click', () => this.setMode(nextView(this.mode)));
     this.bind();
-    // deep link: #orbit | #plan | #walk | #walk@x,z,yaw (game metres, radians)
-    const [h, at] = location.hash.slice(1).split('@');
-    const start = h as ViewMode;
-    if (at) {
-      const [x, z, yaw] = at.split(',').map(Number);
-      this.walkPos.set(x, EYE, z);
-      if (!Number.isNaN(yaw)) this.yaw = yaw;
+    // deep link: #orbit | #plan | #walk | #walk@x,z,yaw (game metres, radians); a touch screen gets Orbit for #walk
+    const start = startView(location.hash, isTouch());
+    if (start.at) {
+      this.walkPos.set(start.at.x, EYE, start.at.z);
+      if (!Number.isNaN(start.at.yaw)) this.yaw = start.at.yaw;
     }
-    this.setMode(['iso', 'orbit', 'plan', 'walk'].includes(start) ? start : DEFAULT_MODE);
+    this.setMode(start.mode);
   }
 
   get camera(): THREE.Camera {
@@ -273,7 +274,7 @@ export class Views {
       this.ortho.updateProjectionMatrix();
       this.planCtl.update();
     }
-    if (withMode && s.mode && s.mode !== this.mode && ['iso', 'orbit', 'plan', 'walk'].includes(s.mode)) this.setMode(s.mode, true);
+    if (withMode && s.mode && s.mode !== this.mode && PICKABLE.includes(s.mode)) this.setMode(s.mode, true);
   }
 
   /** Where the walk-mode eye is (floor metres) and which way it looks (unit vector on the floor). */
@@ -286,8 +287,9 @@ export class Views {
     return this.moved > CLICK_SLOP;
   }
 
-  /** `keepCamera`: the orbit camera stays where `restore` put it instead of jumping back to the default spot. */
-  setMode(mode: ViewMode, keepCamera = false): void {
+  /** `keepCamera`: the orbit camera stays where `restore` put it instead of jumping back to the default spot. Walk mode on a touch screen: Orbit. */
+  setMode(asked: ViewMode, keepCamera = false): void {
+    const mode = allowedView(asked, isTouch());
     this.mode = mode;
     this.iso.enabled = mode === 'iso';
     this.orbit.enabled = mode === 'orbit';

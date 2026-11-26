@@ -4,6 +4,7 @@ import type { RoomItem } from '../render/roomItem';
 import { tint } from '../render/tint';
 import { newBlockages, type Blockage } from './placement';
 import { EditorPanel } from '../ui/EditorPanel';
+import { isTouch } from '../ui/device';
 import { savedStateIgnored, storage } from './storage';
 
 const KEY = 'saftladen.layout';
@@ -105,7 +106,9 @@ export class RoomEditor {
     return this.drag?.blocking ?? null;
   }
 
+  /** On a touch screen the editor stays shut: it needs a mouse and keys. */
   setActive(on: boolean): void {
+    if (on && isTouch()) return;
     this.active = on;
     if (!on) {
       this.drop();
