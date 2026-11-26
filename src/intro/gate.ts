@@ -59,6 +59,7 @@ export function installIntro(game: Game): void {
   const onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Tab') return;
     e.stopImmediatePropagation();
+    if (e.metaKey || e.ctrlKey || e.altKey || /^F\d+$/.test(e.key)) return; // the browser's own keys (reload, dev tools) still work
     e.preventDefault();
     if (e.key === 'Enter' || e.key === 'Escape') stop();
   };
