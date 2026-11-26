@@ -3612,8 +3612,8 @@
 
     @media (orientation: portrait) {
         :root {
-            --dock-top: 7.75rem;
-            --dock-height: calc(100dvh - 29rem);
+            --dock-top: 8.75rem;
+            --dock-height: calc(100dvh - 30rem);
         }
     }
 
@@ -3691,7 +3691,7 @@
         }
     }
 
-    /* the bar: Ansicht, Wetter, Einstellungen and Aktionen in one pill, bottom centre */
+    /* the bar: Wetter, Figuren, Einstellungen, Ansicht and Aktionen in one pill, bottom centre */
     .m-hud-tools {
         bottom: 0.75rem;
         left: var(--centre-x);

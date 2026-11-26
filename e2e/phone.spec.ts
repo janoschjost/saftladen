@@ -129,10 +129,10 @@ for (const phone of PHONES) {
       });
     }
 
-    test('hud.phone: one bar holds Ansicht, Wetter, Einstellungen and Aktionen, each a 44 px target', async ({ page }) => {
+    test('hud.phone: one bar holds Ansicht, Wetter, Figuren, Einstellungen and Aktionen, each a 44 px target', async ({ page }) => {
       const errors = await openGame(page);
       const bar = (await page.locator('.m-hud-tools').boundingBox())!;
-      for (const id of ['#cycle-view', '#open-env', '#open-settings', '#open-actions']) {
+      for (const id of ['#cycle-view', '#open-env', '#open-picker', '#open-settings', '#open-actions']) {
         const b = (await page.locator(id).boundingBox())!;
         expect(b.height, id).toBeGreaterThanOrEqual(44);
         expect(b.width, id).toBeGreaterThanOrEqual(44);
@@ -164,8 +164,7 @@ for (const phone of PHONES) {
     test('hud.phone: the dev panel is a bottom sheet on the screen, its × in reach', async ({ page }) => {
       const errors = await openGame(page);
       const { width, height } = page.viewportSize()!;
-      await page.locator('#open-settings').click();
-      await page.locator('#open-dev').click();
+      await page.keyboard.press('`'); // the dev panel has no link in the settings any more (#325)
       await expect(page.locator('#dev')).toBeVisible();
       const dev = (await page.locator('#dev').boundingBox())!;
       expect(dev.x >= 0 && dev.y >= 0 && dev.x + dev.width <= width && Math.round(dev.y + dev.height) <= height).toBe(true);
