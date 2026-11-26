@@ -23,9 +23,13 @@ try {
   // ?test (e2e): time stands still (&live: it follows the wall clock) and the office is not drawn (&draw draws it)
   const query = new URLSearchParams(location.search);
   const test = dev && query.has('test');
+  // every load starts at the real time of day; a seeded or test page keeps the fixed start so that it replays the same
+  const now = new Date();
+  const startHour = test || (dev && query.has('seed')) ? undefined : now.getHours() + now.getMinutes() / 60;
   const game = new Game(document.getElementById('stage') as HTMLElement, {
     time: test && !query.has('live') ? stillTime : wallTime(),
     drawer: test && !query.has('draw') ? blindDrawer() : screenDrawer(),
+    startHour,
     paced: !test, // under ?test every refresh runs a frame: time stands still there anyway
   });
   if (dev) void import('./game/debugParams').then((m) => m.applyDebugParams(game));

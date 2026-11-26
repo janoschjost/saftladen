@@ -58,7 +58,7 @@ import { Person } from './Person';
 import { strings } from '../i18n/strings';
 import { RoomEditor } from './RoomEditor';
 import { HIP_HEIGHT, LEG_ORDER, petPose, poseFrame, SIT_POSE, smooth } from './petPose';
-import { applySky, type SkyRig } from './TimeOfDay';
+import { applySky, cycleOf, type SkyRig } from './TimeOfDay';
 import { MAX_FRAME, type Drawer, type FrameTime } from './seams';
 import { FramePacer, type FrameState } from './framePacer';
 import { Sim } from './Sim';
@@ -223,11 +223,12 @@ export class Game {
 
   /**
    * `time` says how much time a frame adds, `drawer` puts it on the screen (`seams.ts`): the wall clock and WebGL for
-   * players; the e2e tests take time that stands still and a drawer that draws nothing.
+   * players; the e2e tests take time that stands still and a drawer that draws nothing. `startHour`: the clock hour the game
+   * starts at (the real time of day, set by `main.ts`); without it the saved time, else 10:00.
    */
   constructor(
     private stage: HTMLElement,
-    { time, drawer, paced = true }: { time: FrameTime; drawer: Drawer; paced?: boolean },
+    { time, drawer, paced = true, startHour }: { time: FrameTime; drawer: Drawer; paced?: boolean; startHour?: number },
   ) {
     this.time = time;
     this.drawer = drawer;
@@ -249,7 +250,7 @@ export class Game {
     this.restoreSeats();
     this.sim = new Sim({
       scene: this.scene,
-      cycle: typeof saved.cycle === 'number' && Number.isFinite(saved.cycle) ? saved.cycle : undefined,
+      cycle: startHour !== undefined ? cycleOf(startHour) : typeof saved.cycle === 'number' && Number.isFinite(saved.cycle) ? saved.cycle : undefined,
       seats: this.savedSeats,
       homes: location.hash.includes('homes'),
       // the editor puts the furniture where the saved layout wants it, before anything is derived from its position
@@ -312,9 +313,6 @@ export class Game {
 
     this.settings = new Settings({
       onChange: (state) => {
-        model.rowLabels.visible = state.tables;
-        model.roomLabels.visible = state.rooms;
-        this.seats.setLabelsVisible(state.seats);
         // with Christmas mode on it snows instead of raining (the other chips stay as they are)
         this.sim.weather.mode = state.xmas && (state.weather === 'auto' || state.weather === 'rain') ? 'sun' : state.weather;
         this.sim.weather.season = resolveSeason(state.season);
@@ -362,7 +360,15 @@ export class Game {
       window.dev.removed = () => this.sim.removedIds;
     }
     this.registerViewEvents();
-    new DevPanel(this.sim.events);
+    // the labels (row, room and seat numbers) have their switches in the dev panel and are off at every start
+    model.rowLabels.visible = false;
+    model.roomLabels.visible = false;
+    this.seats.setLabelsVisible(false);
+    new DevPanel(this.sim.events, {
+      tables: (on) => (model.rowLabels.visible = on),
+      seats: (on) => this.seats.setLabelsVisible(on),
+      rooms: (on) => (model.roomLabels.visible = on),
+    });
     this.now = new NowChip(
       () => this.toggleActionFollow(),
       () => this.endAction(true),
