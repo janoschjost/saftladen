@@ -31,7 +31,7 @@ export const strings = {
     skip: 'Überspringen',
     lines: [
       { de: 'Es waren einmal zwei Entwickler.', en: 'Once upon a time, there were two devs.' },
-      { de: 'Sie träumten davon, VITAMIN 2 als Simulation zu erschaffen.', en: 'They dreamed of bringing VITAMIN 2 to life as a simulation.' },
+      { de: 'Sie träumten davon, VITAMIN\u00a02 als Simulation zu erschaffen.', en: 'They dreamed of bringing VITAMIN\u00a02 to life as a simulation.' },
       { de: 'Mit all ihren liebenswerten Kolleginnen und Kollegen und all deren Eigenheiten.', en: 'With all their beloved co-workers and every one of their quirks.' },
       { de: 'Vor langer Zeit, als Lehrling bei DACHCOM, war der Ältere an solch dunkler Magie gescheitert.', en: 'Long ago, as an apprentice at DACHCOM, the elder had failed at such dark magic.' },
       { de: 'Der Jüngere aber war ein mächtiger Magier, der das Viben beherrschte.', en: 'But the younger was a mighty wizard who had mastered the art of vibing.' },

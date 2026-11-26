@@ -9,10 +9,10 @@ export interface Line {
 }
 
 /** seconds before the first sentence */
-const LEAD = 1.2;
+const LEAD = 4;
 /** a sentence stays this long, plus this much per character of the German line */
-const BASE = 1.8;
-const PER_CHAR = 0.038;
+const BASE = 2.6;
+const PER_CHAR = 0.06;
 /** seconds the camera takes into the blueprint after the last sentence, and the crossfade to the office that follows */
 export const PUSH = 2.6;
 export const FADE = 1;
@@ -69,15 +69,14 @@ export function blueprintLevel(tl: Timeline, t: number): number {
 }
 
 /** What the scene shows at `t` (the fields of `StoryStage` in `CreditsScene`): the acting of each sentence, the summoning and the blueprint. */
-export function stageAt(tl: Timeline, t: number): { slump: number; wizard: number; sparks: number; oath: number; puff: number; clawd: boolean; sword: number; built: number; pad: number } {
+export function stageAt(tl: Timeline, t: number): { slump: number; wizard: number; sparks: number; oath: number; puff: number; clawd: boolean; built: number; pad: number } {
   return {
     slump: during(tl, t, 3), // "… war der Ältere an solch dunkler Magie gescheitert."
     wizard: during(tl, t, 4), // "Der Jüngere aber war ein mächtiger Magier …"
-    sparks: during(tl, t, 4, 0.6, 6), // "… Er lehrte den Älteren alles, was er wusste."
+    sparks: during(tl, t, 5), // "Er lehrte den Älteren alles, was er wusste."
     oath: during(tl, t, 6), // "… und schworen einen Eid …"
     puff: span(t, tl.summon, tl.summon + 1.4),
     clawd: t >= tl.summon + 0.35,
-    sword: Math.min(span(t, tl.summon + 0.5, tl.summon + 0.9), 1 - span(t, tl.summon + 3.2, tl.summon + 3.7)), // he holds it up, then sets to work
     built: blueprintLevel(tl, t),
     pad: span(t, tl.summon + 0.3, tl.summon + 1.3),
   };

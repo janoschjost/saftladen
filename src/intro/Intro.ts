@@ -25,10 +25,10 @@ interface Pose {
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 /** the two devs at their desks, drifting closer while the story is told */
 // (they look below the desks, so the scene sits in the upper part of the picture and the story has the lower part)
-const NEAR_FROM = { pos: v(2.0, 2.3, 6.2), target: v(0, 0.45, 0.5) };
-const NEAR_TO = { pos: v(1.0, 1.8, 4.9), target: v(0, 0.45, 0.5) };
+const NEAR_FROM = { pos: v(2.6, 2.85, 7.9), target: v(0, 0.45, 0.5) };
+const NEAR_TO = { pos: v(1.5, 2.45, 7.1), target: v(0, 0.45, 0.5) };
 /** the whole scene: the desks, the blueprint in front of them and Clawd beside it */
-const WIDE = { pos: v(3.3, 3.5, 8.9), target: v(0.6, 0, 2.7) };
+const WIDE = { pos: v(3.7, 4.0, 9.8), target: v(0.6, 0, 2.7) };
 /** the camera pulls back to the wide shot around the summoning: this long before it .. this long after */
 const PULL = { before: 1.2, after: 1.6 };
 

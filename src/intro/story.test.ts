@@ -21,7 +21,7 @@ describe('intro.story', () => {
     });
     expect(tl.starts[4] - tl.starts[3]).toBeGreaterThan(tl.starts[1] - tl.starts[0]); // the DACHCOM sentence against "Es waren einmal …"
     expect(lineAt(tl, tl.end)).toBe(lines.length - 1);
-    expect(tl.end).toBeLessThan(60);
+    expect(tl.end).toBeLessThan(90);
   });
 
   it('intro.story: after the last sentence the camera moves in, then the picture fades to the office', () => {
@@ -32,9 +32,7 @@ describe('intro.story', () => {
 
   it('intro.story: no Clawd and no blueprint before the summoning, both from then on, the blueprint complete before the fade', () => {
     const before = stageAt(tl, tl.summon - 0.01);
-    expect(before).toMatchObject({ clawd: false, sword: 0, built: 0, pad: 0, puff: 0 });
-    expect(stageAt(tl, tl.summon + 2).sword).toBe(1); // Clawd holds his sword up
-    expect(stageAt(tl, tl.summon + 4).sword).toBe(0); // and sets to work
+    expect(before).toMatchObject({ clawd: false, built: 0, pad: 0, puff: 0 });
     const puffing = stageAt(tl, tl.summon + 0.7);
     expect(puffing.clawd).toBe(true);
     expect(puffing.puff).toBeGreaterThan(0);
@@ -48,7 +46,7 @@ describe('intro.story', () => {
   it('intro.story: each bit of acting belongs to its sentence', () => {
     const mid = (i: number) => (tl.starts[i] + (tl.starts[i + 1] ?? tl.push)) / 2;
     expect(stageAt(tl, mid(3))).toMatchObject({ slump: 1, wizard: 0, oath: 0 });
-    expect(stageAt(tl, mid(4))).toMatchObject({ slump: 0, wizard: 1, sparks: 1 });
+    expect(stageAt(tl, mid(4))).toMatchObject({ slump: 0, wizard: 1, sparks: 0 });
     expect(stageAt(tl, mid(5))).toMatchObject({ wizard: 0, sparks: 1 });
     expect(stageAt(tl, mid(6))).toMatchObject({ sparks: 0, oath: 1 });
     expect(stageAt(tl, mid(8))).toMatchObject({ slump: 0, wizard: 0, sparks: 0, oath: 0 });

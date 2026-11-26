@@ -159,8 +159,6 @@ export interface StoryStage {
   /** the puff of fog Clawd appears in: 0 none yet .. 1 gone */
   puff: number;
   clawd: boolean;
-  /** Clawd holds his sword up */
-  sword: number;
   /** how far the blueprint is built, and how bright its pad is */
   built: number;
   pad: number;
@@ -291,13 +289,6 @@ function wizardHat(color: string): THREE.Object3D {
   return hat;
 }
 
-/** Clawd's sword, for the right stub arm: it points along the arm, so a raised arm holds it up. */
-function sword(): THREE.Mesh {
-  const m = new THREE.Mesh(merge([box(0.022, 0.3, 0.01, 0, -0.3, 0, '#eef4ff'), box(0.11, 0.02, 0.03, 0, -0.14, 0, '#e3b341'), box(0.02, 0.05, 0.02, 0, -0.11, 0, '#7a4a21')]), glowing);
-  m.position.x = 0.035;
-  return m;
-}
-
 /** A candle on the desk: `flame` flickers. */
 function candle(x: number, z: number): { root: THREE.Group; flame: THREE.Mesh; light: THREE.PointLight } {
   const root = new THREE.Group();
@@ -368,7 +359,7 @@ function storyFx(): { root: THREE.Group; set(t: number, puff: number, sparks: nu
 
 /**
  * Marco and Janosch coding side by side, Clawd at his own little desk east of the blueprint, Ellie at their feet and a miniature Kurt asleep against the desk's front leg, in an endless room.
- * As the stage of the origin-story intro (`story`, #322) it starts without Clawd, the blueprint and Kurt, and shows what `stage()` asks for.
+ * As the stage of the origin-story intro (`story`, #322) it starts without Clawd and the blueprint, Kurt sleeps through it, and shows what `stage()` asks for.
  */
 export class CreditsScene {
   readonly scene = new THREE.Scene();
@@ -389,8 +380,6 @@ export class CreditsScene {
   private dogPlan: DogStep[] = [];
   private dog = { x: HOME.x, z: HOME.z, yaw: HOME_YAW, lie: 1, stepT: 0, gait: 0, bow: 0, sniff: 0 };
   private readonly story: boolean;
-  private sword: THREE.Mesh | null = null;
-  private swordUp = 0;
   private fx: ReturnType<typeof storyFx> | null = null;
   /** where the blueprint's office coordinates start in the scene, and its scale: a point of the office is `origin + p * scale` */
   readonly blueprintFrame = { x: HOLO.x - (WORLD.width * HOLO.scale) / 2, y: HOLO.lift, z: HOLO.z - (WORLD.depth * HOLO.scale) / 2, scale: HOLO.scale };
@@ -459,7 +448,7 @@ export class CreditsScene {
     kurtGroup.add(kurtRig.root);
     kurtGroup.scale.setScalar(MINI);
     kurtGroup.position.set(KURT_AT.x, KURT_AT.y, KURT_AT.z);
-    if (!story) scene.add(kurtGroup);
+    scene.add(kurtGroup);
     this.kurt = { rig: kurtRig, ...typingPoses(kurtRig), phase: 3.1, stand: 0, x: 0, z: 0, yaw: 0, gait: 0, y: 0, air: 0, moving: false, drop: 0.7, kneeSit: 0.15, sleep: 1, raise: 0 };
     const zTex = zTexture();
     for (let i = 0; i < 3; i++) {
@@ -485,17 +474,15 @@ export class CreditsScene {
 
     if (story) {
       this.dogPlan = [{ kind: 'rest', d: Infinity }]; // Ellie sleeps through it
-      // two wizards and their familiar: pointed hats, a sword for Clawd
-      [marco, janosch].forEach((w, i) => {
-        const hat = wizardHat(i ? '#4b2a7a' : '#27357f');
+      // wizards: pointed hats for the two and for Kurt (who sleeps through it too)
+      [marco.typing.rig, janosch.typing.rig, kurtRig].forEach((rig, i) => {
+        const hat = wizardHat(i === 1 ? '#4b2a7a' : '#27357f');
         hat.position.y = HAT_Y;
-        w.typing.rig.body.add(hat);
+        rig.body.add(hat);
       });
-      this.sword = sword();
-      this.clawd.rig.armR.add(this.sword);
       this.fx = storyFx();
       scene.add(this.fx.root);
-      this.stage({ slump: 0, wizard: 0, sparks: 0, oath: 0, puff: 0, clawd: false, sword: 0, built: 0, pad: 0 });
+      this.stage({ slump: 0, wizard: 0, sparks: 0, oath: 0, puff: 0, clawd: false, built: 0, pad: 0 });
     }
   }
 
@@ -506,7 +493,6 @@ export class CreditsScene {
     marco.raise = s.oath;
     janosch.raise = Math.max(s.wizard, s.oath);
     this.clawd.group.visible = this.clawd.rig.root.visible = s.clawd;
-    this.swordUp = s.sword;
     this.blueprint.root.visible = s.pad > 0;
     this.blueprint.show(s.built, s.pad);
     this.fx?.set(this.clock, s.puff, s.sparks);
@@ -690,10 +676,6 @@ export class CreditsScene {
     rig.root.position.set(st.x, st.y, st.z);
     rig.root.rotation.y = st.yaw;
     poseClawd(rig, st.look, t, { moving: st.moving, air: st.air });
-    if (this.sword) {
-      this.sword.visible = this.swordUp > 0.02;
-      rig.armR.rotation.x = THREE.MathUtils.lerp(rig.armR.rotation.x, -2.9 + Math.sin(t * 6) * 0.06, this.swordUp);
-    }
     this.clawd.tickFx(t, st.look === 'sit' && st.phase === 'work');
   }
 
@@ -811,7 +793,8 @@ export class CreditsScene {
   tick(dt: number): void {
     this.clock += dt;
     const t = this.clock;
-    if (!this.story) this.tickKurt(dt, t);
+    if (this.story) this.tickZees(t, 1);
+    else this.tickKurt(dt, t);
     if (this.clawd.rig.root.visible) this.tickClawd(dt, t);
     for (const c of this.coders) this.pose(c, t);
     this.pose(this.kurt, t);
