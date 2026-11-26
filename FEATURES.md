@@ -269,7 +269,7 @@ Rules:
 ## Day mode ("Ein Tag im Leben")
 - `day.menu` Menu: playable people on pedestals, chosen steps forward, figures look at the cursor, idle gestures, name tags, pets; keys `Esc`, `←→`/`A D`, `Enter`/`Space` — `src/ui/DayMenu.ts`, e2e: `e2e/modes.spec.ts` (#34)
 - `day.characters` Playable: Jan Hasler (SnackHunt → PhoneRush), Jeerapat Wang (HideGameboy), Sandro Hagen (no story yet) — `src/data/dayCharacters.ts`, `src/data/dayStories.ts`
-- `day.flow` Start brings the person in if away, third-person camera; leaving restores the previous view; desk tasks clear the person's own desk — `src/game/Game.ts`, e2e: `e2e/modes.spec.ts`, url: `/?day` (#34, #38)
+- `day.flow` Start brings the person in if away, third-person camera; leaving restores the previous view; desk tasks clear the person's own desk; somebody without a story (`?day=<id>` for anybody in the team) is walked around freely instead of the day ending at once — `src/game/Game.ts`, e2e: `e2e/modes.spec.ts`, `e2e/feature-urls.spec.ts`, url: `/?day` (#34, #38, #309)
 - `day.hud` HUD: name, status, stopwatch (waits during task setup), task list, target marker / edge arrow with metres, meter with traffic-light mood, exit — `src/ui/DayHud.ts`, `src/game/Day.ts`, url: `/?day` (#38)
 - `day.result` Result card with splits, total, best time (localStorage), new record; fail card with reason and retry; scene freezes on fail — `src/ui/DayHud.ts`, `src/game/Game.ts`
 - `day.snack-hunt` "Snacks besorgen": 8 spinning chip bags under green beams, grab within 0.7 m, eat + quip — `src/game/tasks/SnackHunt.ts`, url: `/?day=jan-hasler` (#38)
