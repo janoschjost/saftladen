@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUBBLE, bubbleWorldHeight, easeLift, popScale, stackBubbles, stepOpacity, type BubbleRect } from './bubbleLayout';
+import { BUBBLE, bubbleWorldHeight, dimmedOpacity, easeLift, maxLift, popScale, shiftIntoView, stackBubbles, stepDim, stepOpacity, type BubbleRect } from './bubbleLayout';
 
 const overlaps = (a: BubbleRect, la: number, b: BubbleRect, lb: number) =>
   Math.abs(a.x - b.x) < (a.w + b.w) / 2 && a.y - la - a.h < b.y - lb && a.y - la > b.y - lb - b.h;
@@ -81,5 +81,45 @@ describe('social.bubbles', () => {
     expect(l).toBeGreaterThan(0);
     expect(l).toBeLessThan(40);
     expect(easeLift(0, 40, 1)).toBe(40);
+  });
+});
+
+describe('social.bubbles: inside the view and faded when hidden', () => {
+  const screen = { width: 800, height: 600 };
+  const view = { left: 8, top: 8, right: 792 };
+  const rect = (x: number, y = 300, w = 100, h = 40): BubbleRect => ({ id: 'a', x, y, w, h });
+
+  it('social.bubbles: a bubble that fits stays, one over the edge is pushed back in', () => {
+    expect(shiftIntoView(rect(400), view, screen)).toBe(0);
+    expect(shiftIntoView(rect(20), view, screen)).toBe(8 + 50 - 20);
+    expect(shiftIntoView(rect(790), view, screen)).toBe(792 - 50 - 790);
+  });
+
+  it('social.bubbles: a speaker outside the screen gets no bubble dragged in', () => {
+    expect(shiftIntoView(rect(-30), view, screen)).toBe(0);
+    expect(shiftIntoView(rect(900), view, screen)).toBe(0);
+    expect(shiftIntoView(rect(400, 700), view, screen)).toBe(0);
+  });
+
+  it('social.bubbles: a bubble wider than the view is centred', () => {
+    expect(shiftIntoView(rect(100, 300, 2000), view, screen)).toBe(400 - 100);
+  });
+
+  it('social.bubbles: a lift never takes the bubble past the top of the view', () => {
+    expect(maxLift(rect(400, 300, 100, 40), view)).toBe(300 - 40 - 8);
+    expect(maxLift(rect(400, 20, 100, 40), view)).toBe(0);
+  });
+
+  it('social.bubbles: a hidden speaker fades the bubble to the hidden opacity and back, smoothly', () => {
+    expect(dimmedOpacity(1, 0)).toBe(1);
+    expect(dimmedOpacity(1, 1)).toBeCloseTo(BUBBLE.hiddenOpacity);
+    expect(dimmedOpacity(0, 1)).toBe(0);
+    let d = 0;
+    let frames = 0;
+    for (; d < 1 && frames < 600; frames++) d = stepDim(d, true, 1 / 60);
+    expect(frames).toBeGreaterThan(3); // a fade, not a jump
+    expect(frames).toBeLessThan(60);
+    expect(stepDim(d, false, 1 / 60)).toBeLessThan(1);
+    expect(stepDim(0, false, 1)).toBe(0);
   });
 });

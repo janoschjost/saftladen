@@ -17,6 +17,11 @@ export const BUBBLE = {
   fadeOut: 0.3,
   /** seconds of the pop when a new line starts */
   pop: 0.28,
+  /** px kept free between a bubble and the edge of the view */
+  edge: 8,
+  /** opacity of a bubble whose speaker the scene hides from the camera, and the rate (per second) it fades there and back */
+  hiddenOpacity: 0.35,
+  dimRate: 6,
 };
 
 export type BubbleConfig = typeof BUBBLE;
@@ -63,6 +68,42 @@ export function stackBubbles(rects: readonly BubbleRect[], spacing = BUBBLE.spac
     lifts.set(r.id, lift);
   }
   return lifts;
+}
+
+/** The part of the screen (px) a bubble may fill. */
+export interface BubbleView {
+  left: number;
+  top: number;
+  right: number;
+}
+
+/**
+ * How far (px, sideways) a bubble has to move to stay inside `view`: 0 when it fits or when its tail tip is outside the
+ * screen altogether (a speaker that is not shown gets no bubble dragged in from the edge). A bubble wider than the view
+ * is centred.
+ */
+export function shiftIntoView(r: BubbleRect, view: BubbleView, screen: { width: number; height: number }): number {
+  if (r.x < 0 || r.x > screen.width || r.y < 0 || r.y > screen.height) return 0;
+  const lo = view.left + r.w / 2;
+  const hi = view.right - r.w / 2;
+  if (lo > hi) return (view.left + view.right) / 2 - r.x;
+  return clamp(r.x, lo, hi) - r.x;
+}
+
+/** The most (px, upwards) a stacked bubble may be lifted without its top leaving `view`. */
+export function maxLift(r: BubbleRect, view: BubbleView): number {
+  return Math.max(0, r.y - r.h - view.top);
+}
+
+/** Opacity of a bubble `dim` (0..1) of the way into the hidden state: 1 when its speaker is seen, `hiddenOpacity` when not. */
+export function dimmedOpacity(opacity: number, dim: number, c: BubbleConfig = BUBBLE): number {
+  return opacity * (1 - (1 - c.hiddenOpacity) * dim);
+}
+
+/** Eases `dim` towards 1 (the speaker is hidden) or 0 (seen). */
+export function stepDim(dim: number, hidden: boolean, dt: number, c: BubbleConfig = BUBBLE): number {
+  const step = c.dimRate * dt;
+  return hidden ? Math.min(1, dim + step) : Math.max(0, dim - step);
 }
 
 /** Opacity after `dt` seconds of fading in (`on`) or out. */
