@@ -1,9 +1,12 @@
 import * as THREE from 'three';
 import { WORLD } from './World';
 import { fxRandom } from '../game/rng';
+import { outerSpot, SKY } from './cityWeather';
 
-const DROPS = 1400;
-const TOP = 16;
+const DROPS = 12000; // twice as many: they start twice as high, and the density near the ground stays
+/** About one drop in four falls over the office (the same density as before); the rest over the city around it, much thinner. */
+const core = (i: number): boolean => (i * 7) % 13 < 3;
+const TOP = SKY;
 const ROOF_Y = 3.3; // drops that fall over the building stop at roof height
 const MARGIN = 7;
 const FALL = 17; // m/s
@@ -32,6 +35,14 @@ export class RainFx {
   }
 
   private respawn(i: number, scatter: boolean): void {
+    if (!core(i)) {
+      const o = outerSpot(MARGIN);
+      this.x[i] = o.x;
+      this.z[i] = o.z;
+      this.floor[i] = o.floor;
+      this.y[i] = scatter ? o.floor + fxRandom() * TOP : o.floor + TOP + fxRandom() * 2;
+      return;
+    }
     const x = -MARGIN + fxRandom() * (WORLD.width + MARGIN * 2);
     const z = -MARGIN + fxRandom() * (WORLD.depth + MARGIN * 2);
     const inside = x > 0 && x < WORLD.width && z > 0 && z < WORLD.depth;
@@ -52,8 +63,10 @@ export class RainFx {
     for (let i = 0; i < live; i++) {
       this.y[i] -= fall * dt;
       this.x[i] -= fall * dt * SLANT * (1 + storm);
-      const inside = this.x[i] > 0 && this.x[i] < WORLD.width && this.z[i] > 0 && this.z[i] < WORLD.depth;
-      this.floor[i] = inside ? ROOF_Y : 0;
+      if (core(i)) {
+        const inside = this.x[i] > 0 && this.x[i] < WORLD.width && this.z[i] > 0 && this.z[i] < WORLD.depth;
+        this.floor[i] = inside ? ROOF_Y : 0;
+      }
       if (this.y[i] < this.floor[i]) this.respawn(i, false);
       const o = i * 6;
       this.pos[o] = this.x[i];
