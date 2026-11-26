@@ -133,6 +133,27 @@ describe('livia.lines: Livia says a line in Walliser Deutsch now and then', () =
     expect(sim.events.trigger('livia-line')).toMatch(/nicht möglich$/);
   });
 
+  it('livia.lines: not off duty, when she was called back after her shift', () => {
+    const sim = office({ cycle: cycleOf(19) });
+    only(sim, [LIVIA]);
+    sim.scenario.put(LIVIA, 'desk');
+    expect(sim.tod.night).toBe(false);
+    sim.livia.nextIn = 0;
+    expect(lines(sim, 2 * GAME_HOUR)).toEqual([]);
+  });
+
+  it('livia.event: a call in the phone booth is cleared for the line (actions.force)', () => {
+    const sim = office();
+    only(sim, [LIVIA]);
+    sim.scenario.put(LIVIA, 'desk', 'stay');
+    const p = sim.person(LIVIA);
+    expect(sim.phoneBooth.start(p, sim.nav)).toBeTruthy();
+    expect(run(sim, 60, () => p.boothCall)).toBe(true);
+    expect(sim.events.trigger('livia-line')).toMatch(/^Livia: /);
+    expect(p.boothCall).toBe(false);
+    expect(sim.livia.text).not.toBeNull();
+  });
+
   it('livia.event: a meeting she sits in is cleared for the line (actions.force)', () => {
     const sim = office();
     only(sim, [LIVIA, GROUP[0]]);

@@ -194,7 +194,7 @@ describe('presence.remote-greet', () => {
       for (const w of walkers) {
         const t = took.get(w.id);
         expect(t, `seed ${seed}: ${w.id} got there`).toBeDefined();
-        expect(t!, `seed ${seed}: ${w.id}`).toBeLessThan(longWay.has(w.id) ? 10 : 8); // 5 s; the long way round 20 m or more
+        expect(t!, `seed ${seed}: ${w.id}`).toBeLessThan(longWay.has(w.id) ? 10 : 8); // 5 s; more on a long way round
         expect(gap.get(w.id)!).toBeLessThan(1.6);
       }
     }

@@ -40,16 +40,22 @@ export class LiviaLines {
     return this.text !== null && this.livia.inOffice ? [{ who: this.livia, text: this.text }] : [];
   }
 
-  /** In the office, not steered by the player or held, not in a meeting or a talk: what she needs to say anything. A scene or an event that walks her (`scripted`) does not count as steering. */
+  /**
+   * In the office, not steered by the player or held, not in a meeting, a talk or the phone booth: what she needs to say
+   * anything. A scene or an event that walks her (`scripted`) does not count as steering.
+   */
   private get free(): boolean {
     const p = this.livia;
-    return p.inOffice && !p.held && !(p.controlled && !p.scripted) && !p.inMeeting && !p.talk && !p.playerChat;
+    return p.inOffice && !p.held && !(p.controlled && !p.scripted) && !p.inMeeting && !p.talk && !p.playerChat && !p.boothCall;
   }
 
-  /** The moment for a line of her own: free and off the phone, at her desk or walking, and not at night. */
+  /**
+   * The moment for a line of her own: free, off the phone and on her shift, at her desk or walking on her own (a scene
+   * that walks her has its own bubbles; one that only keeps her on her chair does not count), and not at night.
+   */
   private get canSpeak(): boolean {
     const p = this.livia;
-    return this.free && !p.phoneJob && !this.sim.tod.night && (p.working || p.state === 'walk');
+    return this.free && !p.phoneJob && p.playerCall <= 0 && (!p.scripted || p.scripted.sit) && !this.sim.tod.night && this.sim.presence.onShift(p) && (p.working || p.state === 'walk');
   }
 
   /**

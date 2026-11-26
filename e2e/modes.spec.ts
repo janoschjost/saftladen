@@ -34,6 +34,15 @@ test('day.menu + day.flow: play a day as Jan', async ({ page }) => {
   expect(await read(page, (g) => g.views.mode)).toBe('orbit');
 });
 
+test('day.flow: a day as somebody without a story (Livia) goes on, steered, instead of ending at once', async ({ page }) => {
+  const errors = await openGame(page, '', 11, 'day=livia-in-albon', 4);
+  await until(page, (g) => g.day?.state === 'playing', undefined, 45_000);
+  await read(page, (g) => g.advance(5));
+  expect(await read(page, (g) => g.day?.person.id)).toBe('livia-in-albon');
+  expect(await read(page, (g) => g.views.mode)).toBe('third');
+  expect(errors).toEqual([]);
+});
+
 test('xmas.mode', async ({ page }) => {
   await openGame(page);
   const start = await read(page, (g) => g.xmas.on);

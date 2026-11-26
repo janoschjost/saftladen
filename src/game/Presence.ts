@@ -223,6 +223,11 @@ export class Presence {
     return 'duty';
   }
 
+  /** Within their working hours today (`off`: not arrived yet by the plan, or done for the day, also when called back by hand). */
+  onShift(p: Person): boolean {
+    return this.duty(p, this.workHour) !== 'off';
+  }
+
   /** The colleagues who work remotely and only visit (`visitChance` in the team data). */
   get remoteWorkers(): Person[] {
     return this.people.filter((p) => p.member.schedule.visitChance !== undefined);
