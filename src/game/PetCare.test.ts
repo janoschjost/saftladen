@@ -38,6 +38,7 @@ describe('pet.petting', () => {
     for (let i = 0; i < 60 * 15; i++) {
       if (i % 30 === 0) {
         const target = (i / 30) % 2 ? cat : owner; // drops the passer-by right onto one of them
+        sim.drop(other); // a passer-by, not somebody who sits down at a desk next to them meanwhile
         other.pos = { x: target.pos.x + 0.05, z: target.pos.z };
       }
       const near = Math.min(Math.hypot(other.pos.x - cat.pos.x, other.pos.z - cat.pos.z), Math.hypot(other.pos.x - owner.pos.x, other.pos.z - owner.pos.z));

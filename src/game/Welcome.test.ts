@@ -177,11 +177,14 @@ describe('presence.remote-greet', () => {
       expect(greeted, `seed ${seed}`).toBe(true);
       const walkers = sim.people.filter((p) => p.scripted && !p.scripted.arrived);
       expect(walkers.length, `seed ${seed}`).toBeGreaterThan(0);
-      const behindGlass = new Set(walkers.filter((w) => w.pos.x < 4.5).map((w) => w.id)); // the glass door is a long way round from there
+      // the glass door is a long way round from there, and so is a way round a wall of 15 m or more (it runs, but a run is capped)
+      const way = (w: (typeof walkers)[number]) => w.path.reduce((sum, q, i) => sum + Math.hypot(q.x - (i ? w.path[i - 1] : w.pos).x, q.z - (i ? w.path[i - 1] : w.pos).z), 0);
+      const longWay = new Set(walkers.filter((w) => w.pos.x < 4.5).map((w) => w.id));
       const took = new Map<string, number>();
       const gap = new Map<string, number>(); // how far from him when they got there
       for (let j = 0; j < 12 * 60; j++) {
         sim.step(1 / 60);
+        if (j === 0) for (const w of walkers) if (way(w) >= 15) longWay.add(w.id); // the route is planned in the first step
         for (const w of walkers) if (w.scripted?.arrived && !took.has(w.id)) {
             took.set(w.id, j / 60);
             gap.set(w.id, Math.hypot(w.pos.x - v.pos.x, w.pos.z - v.pos.z));
@@ -190,7 +193,7 @@ describe('presence.remote-greet', () => {
       for (const w of walkers) {
         const t = took.get(w.id);
         expect(t, `seed ${seed}: ${w.id} got there`).toBeDefined();
-        expect(t!, `seed ${seed}: ${w.id}`).toBeLessThan(behindGlass.has(w.id) ? 10 : 8); // 5 s; from behind the glass the way round is 20 m or more, and a run is capped
+        expect(t!, `seed ${seed}: ${w.id}`).toBeLessThan(longWay.has(w.id) ? 10 : 8); // 5 s; from behind the glass the way round is 20 m or more, and a run is capped
         expect(gap.get(w.id)!).toBeLessThan(1.6);
       }
     }
