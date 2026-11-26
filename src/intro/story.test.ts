@@ -32,7 +32,9 @@ describe('intro.story', () => {
 
   it('intro.story: no Clawd and no blueprint before the summoning, both from then on, the blueprint complete before the fade', () => {
     const before = stageAt(tl, tl.summon - 0.01);
-    expect(before).toMatchObject({ clawd: false, built: 0, pad: 0, puff: 0 });
+    expect(before).toMatchObject({ clawd: false, sword: 0, built: 0, pad: 0, puff: 0 });
+    expect(stageAt(tl, tl.summon + 2).sword).toBe(1); // Clawd holds his sword up
+    expect(stageAt(tl, tl.summon + 4).sword).toBe(0); // and sets to work
     const puffing = stageAt(tl, tl.summon + 0.7);
     expect(puffing.clawd).toBe(true);
     expect(puffing.puff).toBeGreaterThan(0);

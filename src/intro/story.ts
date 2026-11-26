@@ -69,7 +69,7 @@ export function blueprintLevel(tl: Timeline, t: number): number {
 }
 
 /** What the scene shows at `t` (the fields of `StoryStage` in `CreditsScene`): the acting of each sentence, the summoning and the blueprint. */
-export function stageAt(tl: Timeline, t: number): { slump: number; wizard: number; sparks: number; oath: number; puff: number; clawd: boolean; built: number; pad: number } {
+export function stageAt(tl: Timeline, t: number): { slump: number; wizard: number; sparks: number; oath: number; puff: number; clawd: boolean; sword: number; built: number; pad: number } {
   return {
     slump: during(tl, t, 3), // "… war der Ältere an solch dunkler Magie gescheitert."
     wizard: during(tl, t, 4), // "Der Jüngere aber war ein mächtiger Magier …"
@@ -77,6 +77,7 @@ export function stageAt(tl: Timeline, t: number): { slump: number; wizard: numbe
     oath: during(tl, t, 6), // "… und schworen einen Eid …"
     puff: span(t, tl.summon, tl.summon + 1.4),
     clawd: t >= tl.summon + 0.35,
+    sword: Math.min(span(t, tl.summon + 0.5, tl.summon + 0.9), 1 - span(t, tl.summon + 3.2, tl.summon + 3.7)), // he holds it up, then sets to work
     built: blueprintLevel(tl, t),
     pad: span(t, tl.summon + 0.3, tl.summon + 1.3),
   };
