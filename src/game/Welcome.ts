@@ -61,7 +61,7 @@ export class Welcome {
         o.pinTo({ at: { x: v.pos.x - (dx / d) * WELCOME.stand, z: v.pos.z - (dz / d) * WELCOME.stand }, yaw: Math.atan2(dx, dz), walk: true, arriveIn: WELCOME.quick + (WELCOME.slow - WELCOME.quick) * (d / WELCOME.reach) });
         this.walkers.push({ p: o, to: v, pin: o.scripted, t: WELCOME.timeout, cheered: false });
       } else {
-        o.talkTo(v.pos, WELCOME.hold); // turns to the visitor unless tied to a desk
+        o.talkTo(v.pos, WELCOME.hold, false); // turns to the visitor unless tied to a desk (a worker at the desk keeps working: only the player's talk gets an answer from the chair)
         o.welcome(gesture(), 0.2 + random() * 0.8, WELCOME.hold);
       }
     }

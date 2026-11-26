@@ -1626,6 +1626,7 @@ export class Game {
     if (w instanceof Person) {
       const r = w.rig;
       const sit = w.sit;
+      w.task?.desk.turnChair(w.task.phase === 'work' ? w.root.rotation.y : null); // the chair swivels with whoever works on it
       // reset, the two halves, the pet pose between them and the hip hinge: `poseFrame` (petPose.ts) keeps each frame off the last one's pose
       poseFrame(w, r, this.clock, () => {
         // standing: walk cycle (knees bend while a leg swings forward); sitting: thighs flat, shins down
