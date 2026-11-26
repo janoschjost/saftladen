@@ -131,7 +131,9 @@ export class Feeds {
   tiles(): Array<FeedTile & { id: string }> {
     if (this.root.hidden || this.root.parentElement?.closest('[hidden]')) return []; // the "Leute" dock is closed
     const out: Array<FeedTile & { id: string }> = [];
-    const box = this.root.getBoundingClientRect();
+    const root = this.root.getBoundingClientRect();
+    const g = this.grid.getBoundingClientRect(); // tiles scrolled under the title are cut off at the grid's edge
+    const box = new DOMRect(root.left, Math.max(root.top, g.top), root.width, Math.max(0, Math.min(root.bottom, g.bottom) - Math.max(root.top, g.top)));
     for (const [id, t] of this.tilesEls) {
       const rect = t.el.getBoundingClientRect();
       if (rect.width < 4 || rect.height < 4) continue;
