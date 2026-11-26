@@ -2,8 +2,13 @@ import * as THREE from 'three';
 import { WORLD } from './World';
 
 const ISO_ELEVATION = Math.atan(1 / Math.SQRT2); // 35.264°, true isometric
+/** screen right and screen down, on the floor */
+const RIGHT = new THREE.Vector3(1, 0, -1).normalize();
+const DOWN = new THREE.Vector3(1, 0, 1).normalize();
+/** added to the path of a pinch, so lifting the fingers never counts as a tap */
+const CLICK_GUARD = 100;
 
-/** Orthographic isometric camera with drag-pan and wheel-zoom. */
+/** Orthographic isometric camera with drag-pan and wheel-zoom; on a touch screen one finger pans, two pinch and pan. */
 export class IsoCamera {
   readonly camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -100, 200);
   /** false while another view mode owns the pointer */
@@ -15,6 +20,9 @@ export class IsoCamera {
   private aspect = 1;
   private dragging = false;
   private last = { x: 0, y: 0 };
+  /** fingers on the screen (touch): two of them pinch to zoom and pan with their midpoint */
+  private touches = new Map<number, { x: number; y: number }>();
+  private pinch: { dist: number; zoom: number } | null = null;
   private moved = 0;
   private disposers: Array<() => void> = [];
 
@@ -88,30 +96,37 @@ export class IsoCamera {
 
     on(this.el, 'pointerdown', (e: PointerEvent) => {
       if (!this.enabled) return;
+      if (e.pointerType === 'touch') this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
       this.dragging = true;
       this.moved = 0;
-      this.last = { x: e.clientX, y: e.clientY };
+      this.last = this.centre(e);
+      this.pinch = this.touches.size >= 2 ? { dist: this.spread(), zoom: this.zoomGoal } : null;
       this.el.setPointerCapture(e.pointerId);
       this.el.classList.add('is-dragging');
     });
     on(this.el, 'pointermove', (e: PointerEvent) => {
       if (!this.dragging) return;
-      const dx = e.clientX - this.last.x;
-      const dy = e.clientY - this.last.y;
+      if (this.touches.has(e.pointerId)) this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const at = this.centre(e);
+      const dx = at.x - this.last.x;
+      const dy = at.y - this.last.y;
       this.moved += Math.abs(dx) + Math.abs(dy);
-      this.last = { x: e.clientX, y: e.clientY };
-      // pixels -> world units on the ground plane
-      const h = this.viewHeight / this.zoom;
-      const unit = h / this.el.clientHeight;
-      const right = new THREE.Vector3(1, 0, -1).normalize();
-      const down = new THREE.Vector3(1, 0, 1).normalize();
-      this.target.addScaledVector(right, -dx * unit);
-      this.target.addScaledVector(down, (-dy * unit) / Math.sin(ISO_ELEVATION));
-      this.clampTarget();
+      this.last = at;
+      if (this.pinch && this.pinch.dist > 0) {
+        this.zoomGoal = this.zoom = THREE.MathUtils.clamp((this.pinch.zoom * this.spread()) / this.pinch.dist, 0.6, 5);
+        this.moved += CLICK_GUARD; // a pinch is never a tap
+      }
+      this.pan(dx, dy);
     });
     const end = (e: PointerEvent) => {
-      this.dragging = false;
-      this.el.classList.remove('is-dragging');
+      this.touches.delete(e.pointerId);
+      this.pinch = null;
+      // one finger left of a pinch: it pans on from where it is, without a jump
+      if (this.touches.size) this.last = this.centre(e);
+      else {
+        this.dragging = false;
+        this.el.classList.remove('is-dragging');
+      }
       if (this.el.hasPointerCapture(e.pointerId)) this.el.releasePointerCapture(e.pointerId);
     };
     on(this.el, 'pointerup', end);
@@ -126,6 +141,32 @@ export class IsoCamera {
       },
       { passive: false },
     );
+  }
+
+  /** Moves the view centre by a drag of (dx, dy) pixels: the floor stays under the pointer. */
+  private pan(dx: number, dy: number): void {
+    const unit = this.viewHeight / this.zoom / this.el.clientHeight;
+    this.target.addScaledVector(RIGHT, -dx * unit);
+    this.target.addScaledVector(DOWN, (-dy * unit) / Math.sin(ISO_ELEVATION));
+    this.clampTarget();
+  }
+
+  /** Where the gesture is: the pointer, or the midpoint of the fingers on the screen. */
+  private centre(e: PointerEvent): { x: number; y: number } {
+    if (!this.touches.size) return { x: e.clientX, y: e.clientY };
+    let x = 0;
+    let y = 0;
+    for (const t of this.touches.values()) {
+      x += t.x / this.touches.size;
+      y += t.y / this.touches.size;
+    }
+    return { x, y };
+  }
+
+  /** Distance between the first two fingers (px). */
+  private spread(): number {
+    const [a, b] = [...this.touches.values()];
+    return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
   }
 
   private clampTarget(): void {

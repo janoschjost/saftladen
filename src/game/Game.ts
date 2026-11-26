@@ -74,6 +74,7 @@ import { savedStateIgnored, storage } from './storage';
 
 const STEP = 1 / 60; // fixed simulation step
 const NEAR_PX = 20; // a click that hits nobody still picks whoever is this close on screen
+const NEAR_TOUCH_PX = 36; // the same for a tap: a fingertip covers more than a mouse pointer
 const OFF_SCREEN = Object.freeze({ x: -9999, y: -9999 }); // `projectPoint` of a point outside the camera's depth range
 const TALK_REACH = 2.6; // metres: how far the player can be from somebody to talk to them
 const ANSWERS = ['Hoi!', 'Na, alles klar?', 'Gerade viel los…', 'Kaffee später?', 'Schönen Tag!', 'Ha, du hier?', 'Moment, bin gleich bei dir.', 'Hast du das Meeting gesehen?', 'Mir fehlt Kaffee.', 'Läuft!'];
@@ -195,6 +196,8 @@ export class Game {
   private shift = false;
   private dragOffset = new THREE.Vector2();
   private dragMoved = false;
+  /** the last press was a finger: a tap picks within `NEAR_TOUCH_PX` */
+  private touchPress = false;
   private fwd = new THREE.Vector3();
   private scratch = new THREE.Vector3();
   private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -459,7 +462,10 @@ export class Game {
       (e) => {
         this.pressed = null;
         this.dragMoved = false;
+        this.touchPress = e.pointerType === 'touch';
         if (this.views.mode === 'walk' || this.views.mode === 'third') return; // dragging looks around instead
+        // a finger always moves the camera (one turns or pans, two pinch): a tap still selects, nobody is carried
+        if (this.touchPress) return;
         if (this.editor.active) {
           // furniture instead of people; a click on anything else still moves the camera
           const g = this.groundAt(this.toNdc(e));
@@ -469,7 +475,7 @@ export class Game {
           return;
         }
         // only the hit volume: a press just beside somebody still moves the camera (its click still picks them)
-        const hit = this.pick(this.toNdc(e), false);
+        const hit = this.pick(this.toNdc(e), 0);
         if (!hit) return;
         const g = this.groundAt(this.toNdc(e));
         if (!g) return;
@@ -603,7 +609,7 @@ export class Game {
       // pick at the click itself: the hover state may be a frame behind (or empty on touch)
       if (this.views.mode === 'walk') return this.interact();
       if (this.views.mode === 'third') return;
-      const hit = this.pick(this.toNdc(e));
+      const hit = this.pick(this.toNdc(e), this.touchPress ? NEAR_TOUCH_PX : NEAR_PX);
       if (hit) {
         this.easter.click(hit);
         this.handBack(); // selecting by hand: the selection's follow takes over
@@ -2322,10 +2328,10 @@ export class Game {
   }
 
   /**
-   * Who is under the pointer: of the generous upright volumes around each body, the one nearest to the camera; with
-   * `near`, else whoever is within `NEAR_PX` on screen. Thin arms, legs and a walking body are hard to hit otherwise.
+   * Who is under the pointer: of the generous upright volumes around each body, the one nearest to the camera, else
+   * whoever is within `near` px on screen (0: nobody). Thin arms, legs and a walking body are hard to hit otherwise.
    */
-  private pick(ndc: THREE.Vector2, near = true): Walker | null {
+  private pick(ndc: THREE.Vector2, near = NEAR_PX): Walker | null {
     if (this.editor.active) return null; // the room editor owns the pointer
     this.raycaster.setFromCamera(ndc, this.views.camera);
     const here = this.sim.walkers.filter((w) => !w.away);
@@ -2345,7 +2351,7 @@ export class Game {
       if (feet === OFF_SCREEN || head === OFF_SCREEN || edge === OFF_SCREEN) return { feet: OFF_SCREEN, head: OFF_SCREEN, r: 0 }; // partly behind the camera: not by screen distance
       return { feet, head, r: Math.hypot(edge.x - feet.x, edge.y - feet.y) };
     });
-    const j = nearestOnScreen(pointer, bodies, NEAR_PX);
+    const j = nearestOnScreen(pointer, bodies, near);
     return j >= 0 ? here[j] : null;
   }
 
@@ -2367,7 +2373,7 @@ export class Game {
   }
 
   private updateHover(): void {
-    this.hovered = this.dragged ?? (this.pointerInside && this.views.mode !== 'third' ? this.pick(this.pointer, this.views.mode !== 'walk') : null);
+    this.hovered = this.dragged ?? (this.pointerInside && this.views.mode !== 'third' ? this.pick(this.pointer, this.views.mode !== 'walk' ? NEAR_PX : 0) : null);
     // who a click would select: hand cursor and a ring on the floor (`updateOverlay`); not in walk mode, nor the editor (pick is null there)
     this.over = this.hovered && !this.dragged && this.views.mode !== 'walk' ? this.hovered : null;
     this.ghostHovered = !this.hovered && this.pointerInside && this.views.mode !== 'third' && this.views.mode !== 'walk' && !this.editor.active && this.hitsGhost();
