@@ -682,6 +682,18 @@ export function registerSimEvents(sim: Sim): void {
       return `${first(sandro)} schwärmt von KI`;
     },
   });
+  // Livia says a line in Walliser Deutsch at once (#309); away, in a meeting or a talk, the way is cleared (actions.force)
+  events.register({
+    id: 'livia-line',
+    group: 'Aktionen',
+    label: 'Livia sagt etwas auf Walliserdeutsch',
+    run: () => {
+      const line = sim.livia.speak();
+      if (line === null) return null;
+      sim.point(sim.livia.livia);
+      return `${first(sim.livia.livia)}: ${line}`;
+    },
+  });
   events.register({
     id: 'door-lettering',
     group: 'Aktionen',

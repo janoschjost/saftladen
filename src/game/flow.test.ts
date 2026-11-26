@@ -58,6 +58,7 @@ function jams(sim: Sim, seconds: number, untilHour = Infinity): Jams {
       const ago = trail[0];
       const still =
         !p.away &&
+        !p.steady && // holding the spot on purpose (stroking a pet, dozing off) is no jam
         p.state === 'walk' &&
         p.path.length > 0 &&
         trail.length === SECOND &&

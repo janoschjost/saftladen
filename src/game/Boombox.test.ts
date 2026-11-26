@@ -221,6 +221,8 @@ describe('play.boombox', () => {
     expect(boss.boomCarry).toBe(true);
     expect(boss.task?.desk).toBe(desk);
     expect(dj.boomSad).toBeGreaterThan(SAD - 0.5);
+    // the two are alone in the office: no chance chat between them cuts her walk or his slump short (a talk ends both, `slumpEnds`)
+    dj.socialCooldown = boss.socialCooldown = SAD + 30;
     const slumped = dj.speed;
     let sad = 0;
     run(sim, SAD + 1, () => dj.boomSad <= 0, () => {

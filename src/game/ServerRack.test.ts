@@ -11,7 +11,7 @@ installHeadlessDom();
 function breakIt() {
   const sim = office();
   const devs = sim.people.filter((p) => p.member.look.nerf);
-  for (const d of devs) sim.scenario.put(d.id, 'desk', 'free');
+  for (const d of devs) sim.scenario.put(d.id, 'desk', 'stay'); // in for good: a remote dev put in freely may be sent home at once
   expect(sim.events.trigger('server-rack')).toMatch(/^Serverschrank sprüht Funken, \w+ repariert$/);
   const repair = sim.serverRack.current!;
   return { sim, rack: sim.serverRack, repair, p: repair.person, devs };
@@ -93,7 +93,7 @@ describe('place.server-rack', () => {
     for (const d of devs) sim.scenario.put(d.id, 'home', 'stay');
     run(sim, 400);
     expect(sim.serverRack.state).toBe('ok'); // nobody to fix it: it holds out
-    sim.scenario.put(devs[0].id, 'desk', 'free');
+    sim.scenario.put(devs[0].id, 'desk', 'stay'); // in for good (devs[0] may be a remote worker the schedule sends home)
     expect(run(sim, 400, () => sim.serverRack.state === 'broken')).toBe(true);
     expect(run(sim, 120, () => sim.serverRack.state === 'ok')).toBe(true); // and gets fixed again
   });

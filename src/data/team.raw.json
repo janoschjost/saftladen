@@ -226,5 +226,11 @@
     "name": "Eliana Lipari",
     "role": "Praktikantin Beratung Strategie",
     "portrait": "team/eliana-lipari.jpg"
+  },
+  {
+    "id": "livia-in-albon",
+    "name": "Livia In-Albon",
+    "role": "Beratung Strategie",
+    "portrait": "team/livia-in-albon.jpg"
   }
 ]

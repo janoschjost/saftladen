@@ -6,7 +6,7 @@ import { DOOR, DOOR_LANES, fromDoorway } from './Door';
 import type { Person } from './Person';
 import type { Sim } from './Sim';
 import { PORCH } from '../render/officeModel';
-import { DRY_GAP, PORCH_SPOTS, UMBRELLA_CLEAR, UMBRELLA_DIAMETER } from './Smoke';
+import { DRY_GAP, PORCH_SPOTS, UMBRELLA_CLEAR, UMBRELLA_DIAMETER, UMBRELLA_FOLD } from './Smoke';
 import { first } from './simEvents';
 import { cycleOf } from './TimeOfDay';
 
@@ -61,6 +61,7 @@ describe('presence.smoke: smoke breaks on the porch', () => {
     urge(sim, p);
     run(sim, 20, () => false, () => expect(p.awayKind).not.toBe('smoke'));
     p.held = false;
+    atDesks(sim, [JANNIK]); // back at the desk as at the start: an errand the schedule rolled while he was held does not get in first
     urge(sim, p);
     expect(run(sim, 30, () => p.awayKind === 'smoke')).toBe(true);
 
@@ -123,7 +124,9 @@ describe('presence.smoke: smoke breaks on the porch', () => {
       () => smoker.atPorchSpot && walker.presence === 'out',
       () => {
         for (const p of sim.people) {
-          if (p.presence === 'out' || (!p.away && p.outdoors && fromDoorway(p.pos.x, p.pos.z) > 1.5)) {
+          // walking in, the umbrella is shut by the time they would reach the frame: a fast walker folds it further out
+          const clear = UMBRELLA_CLEAR + p.speed * UMBRELLA_FOLD * 1.2 + 0.1;
+          if (p.presence === 'out' || (!p.away && p.outdoors && fromDoorway(p.pos.x, p.pos.z) > Math.max(1.5, clear))) {
             expect(p.umbrella).toBe(true);
             if (!p.away) seenOut++;
           } else if (p.pos.z < DOOR.z - 0.05) expect(p.umbrella).toBe(false);

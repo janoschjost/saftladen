@@ -1284,7 +1284,11 @@ export class Game {
   /** Hands the person to the current task: the player walks them around, or the task sits / pins them itself. False when steering is not possible yet. */
   private beginTask(d: NonNullable<Game['day']>): boolean {
     const task = d.tasks[d.current];
-    if (!task) return true;
+    // somebody without a story of their own (`DAY_STORIES`) is not dropped at once: the player walks them around freely
+    if (!task) {
+      if (this.steered !== d.person) this.toggleSteer(d.person);
+      return this.steered === d.person;
+    }
     d.walking = task.walk !== false;
     if (!d.walking) this.release(d.person);
     else if (this.steered !== d.person) {
@@ -2421,6 +2425,7 @@ export class Game {
         ...this.sim.mail.bubbles.map((b) => say(`mail-${b.who.id}`, b.text, b.who)),
         ...this.sim.tidy.bubbles.map((b) => say(`tidy-${b.who.id}`, b.text, b.who)),
         ...this.sim.sandroAi.bubbles.map((b) => say(`sandro-ai-${b.who.id}`, b.text, b.who)),
+        ...this.sim.livia.bubbles.map((b) => say(`livia-${b.who.id}`, b.text, b.who)),
         ...(rep && !rep.who.away ? [say(`reply-${rep.who.id}`, rep.text, rep.who)] : []),
         ...this.sim.people.filter((p) => p.callText && !p.away).map((p) => say(`call-${p.id}`, p.callText!, p)),
         ...this.sim.social.active.filter((c) => c.phase !== 'gather' && c.text).map((c) => say(c.speaker.id, c.text, c.speaker)),
