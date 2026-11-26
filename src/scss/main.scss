@@ -3573,8 +3573,18 @@
     }
 }
 
-/* touch screens: no walk mode and no room editor (they need a mouse and keys) */
+/* touch screens: no walk mode and no room editor (they need a mouse and keys); panels still scroll, but a pinch
+   never zooms or bounces the page (the office takes it, `.l-stage` has `touch-action: none`) */
 @media (hover: none) {
+    html,
+    body {
+        overscroll-behavior: none;
+    }
+
+    body {
+        touch-action: pan-x pan-y;
+    }
+
     .m-settings__segments--4 {
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
@@ -3616,16 +3626,6 @@
             --centre-x: calc((100vw - var(--dock-width) - 0.75rem) / 2);
             --centre-width: calc(100vw - var(--dock-width) - 2.25rem);
         }
-    }
-
-    html,
-    body {
-        overscroll-behavior: none;
-    }
-
-    /* panels still scroll, but a pinch never zooms the page (the office takes it, `.l-stage` has `touch-action: none`) */
-    body {
-        touch-action: pan-x pan-y;
     }
 
     .l-hud {

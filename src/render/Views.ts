@@ -539,7 +539,8 @@ export class Views {
       if (e.target instanceof HTMLElement && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
       this.keys.add(e.code);
       const i = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(e.code);
-      if (i >= 0) this.setMode(PICKABLE[i]);
+      // `4` on a touch screen (a tablet keyboard): no walk view, and the view stays as it is
+      if (i >= 0 && allowedView(PICKABLE[i], isTouch()) === PICKABLE[i]) this.setMode(PICKABLE[i]);
       if (e.code === 'Escape' && this.mode === 'walk') this.setMode(DEFAULT_MODE);
       if (this.mode === 'walk' && e.code.startsWith('Arrow')) e.preventDefault();
       if (this.mode === 'walk' && e.code === 'Space') {

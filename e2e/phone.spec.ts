@@ -184,8 +184,9 @@ for (const phone of PHONES) {
       await page.locator('#open-settings').click();
       await expect(page.locator('#settings input[value="walk"]').locator('xpath=..')).toBeHidden();
       await page.locator('#settings-close').click();
-      await page.keyboard.press('4'); // a keyboard on a tablet: still no walk view
-      expect(await read(page, (g) => g.views.mode)).toBe('orbit');
+      await page.locator('#cycle-view').click(); // Grundriss
+      await page.keyboard.press('4'); // a keyboard on a tablet: no walk view, the view stays
+      expect(await read(page, (g) => g.views.mode)).toBe('plan');
     });
 
     test('editor.toggle: the room editor is not reachable on a touch screen', async ({ page }) => {
