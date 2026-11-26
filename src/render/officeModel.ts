@@ -103,6 +103,8 @@ export interface OfficeModel {
   walls: THREE.Box3[];
   /** ceiling, beams, clerestory, bunting, string lights (hidden by default) */
   roof: THREE.Group;
+  /** walls and everything built in that never moves, merged: what hides a speaker from the camera (see `BubbleOcclusion`) */
+  world: THREE.Group;
   /** the two wings of the front door, each hinged at its outer jamb and swinging on its own: rotation.y = 0 is closed, negative (left) / positive (right) swings it outwards */
   entrance: { left: THREE.Group; right: THREE.Group };
   /** swinging interior doors */
@@ -2881,7 +2883,7 @@ export function buildOffice(scene: THREE.Scene): OfficeModel {
     }
   };
   setRoofVisible(false); // the roof starts hidden
-  return { desks, items, pendantCords: [...pendantCords.values()], setRoofVisible, coatRacks, blockers: allBlockers, walls: blockers, roof: staticRoof, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter, machine: kitchenMachine, stands: kitchenStands, table: tableSeats }, benches: benchSeats, phoneBooth: { seat: boothSeat, doorPos: { x: ax(23.75), z: az(CZ) } }, toilets: { cabins: toiletCabins, wait: [{ x: ax(3.35), z: az(-3.3) }, { x: ax(0.7), z: az(-3.2) }] }, photoStudio: { stand: studioStand, product: studioProduct, seat: studioSeat, screens: studioScreens, flash: studioFlash }, serverRack: { stand: rackStand, spark: rackSpark, leds: rackLeds }, mess };
+  return { desks, items, pendantCords: [...pendantCords.values()], setRoofVisible, coatRacks, blockers: allBlockers, walls: blockers, roof: staticRoof, world: staticWorld, entrance: door, doors, foosball: foosStands, printer, rowLabels, roomLabels, meeting, pod: { center: podCenter, seats: podSeats }, kitchen: { center: kitchenCenter, machine: kitchenMachine, stands: kitchenStands, table: tableSeats }, benches: benchSeats, phoneBooth: { seat: boothSeat, doorPos: { x: ax(23.75), z: az(CZ) } }, toilets: { cabins: toiletCabins, wait: [{ x: ax(3.35), z: az(-3.3) }, { x: ax(0.7), z: az(-3.2) }] }, photoStudio: { stand: studioStand, product: studioProduct, seat: studioSeat, screens: studioScreens, flash: studioFlash }, serverRack: { stand: rackStand, spark: rackSpark, leds: rackLeds }, mess };
 }
 
 /**

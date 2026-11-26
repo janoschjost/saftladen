@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { GlassSort } from './glassSort';
-import { BUBBLE, bubbleWorldHeight, easeLift, popScale, stackBubbles, stepOpacity, type BubbleRect } from './bubbleLayout';
+import type { BubbleOcclusion } from './bubbleOcclusion';
+import { BUBBLE, bubbleWorldHeight, dimmedOpacity, easeLift, maxLift, popScale, shiftIntoView, stackBubbles, stepDim, stepOpacity, type BubbleRect, type BubbleView } from './bubbleLayout';
 
 /** One speaker this frame: the bubble `id`, its line and the world point on top of the speaker's head. */
 export interface BubbleSpec {
@@ -18,6 +19,9 @@ const TAIL_W = 24;
 const MARGIN = 14; // room for the shadow
 /** cap on the texture scale, so long lines stay well inside the max texture size */
 const MAX_SCALE = 4;
+/** how many bubbles are looked at for a hidden speaker per frame, and how long (s) a look stays good */
+const CHECKS_PER_FRAME = 3;
+const CHECK_EVERY = 0.12;
 
 /**
  * Canvas px per logical unit: enough that the body (BODY_H) has at least as many px as it covers device px at the
@@ -42,24 +46,37 @@ interface Entry {
   /** seconds since the current line started (drives the pop) */
   age: number;
   lift: number;
+  /** sideways shift (px) that keeps it inside the view, eased */
+  shift: number;
+  /** 0 = the speaker is seen, 1 = the scene hides them from the camera (the bubble is faded) */
+  dim: number;
+  hidden: boolean;
+  /** seconds since the speaker was last looked for */
+  sinceCheck: number;
+  /** has the speaker been looked for since this line started? (until then `dim` snaps to the answer instead of fading to it) */
+  seen: boolean;
   head: THREE.Vector3;
   active: boolean;
 }
 
 /**
- * Speech bubbles as sprites in the 3D scene: above the speaker's head with a tail pointing at it, depth-tested (walls
- * and furniture hide them), world-sized within a readable screen-size range, nudged upwards so neighbours don't
- * overlap, fading in and out with a short pop per new line.
+ * Speech bubbles as sprites in the 3D scene: above the speaker's head with a tail pointing at it, drawn over the scene
+ * (a wall never cuts one; one whose speaker the scene hides from the camera is faded instead), world-sized within a
+ * readable screen-size range, kept inside the view, nudged upwards so neighbours don't overlap, fading in and out
+ * with a short pop per new line.
  */
 export class Bubbles {
   private entries = new Map<string, Entry>();
   private v = new THREE.Vector3();
   private w = new THREE.Vector3();
   private up = new THREE.Vector3();
+  private right = new THREE.Vector3();
+  private eye = new THREE.Vector3();
+  private q = new THREE.Quaternion();
   private ink = '';
   private font = '';
 
-  constructor(private scene: THREE.Scene, private glass?: GlassSort) {}
+  constructor(private scene: THREE.Scene, private glass?: GlassSort, private occlusion?: BubbleOcclusion) {}
 
   /** Call once per rendered frame, after the walkers are posed. */
   update(specs: readonly BubbleSpec[], camera: THREE.Camera, width: number, height: number, dt: number): void {
@@ -80,13 +97,22 @@ export class Bubbles {
       } else if (e.res !== res) {
         this.draw(e, s.text, res); // moved to a screen with another pixel ratio: same line, sharper or lighter texture
       }
-      if (e.opacity === 0) e.age = 0;
+      if (e.opacity === 0) {
+        e.age = 0;
+        e.seen = false;
+        e.sinceCheck = CHECK_EVERY; // looked at in the next pass, before the ones that already have an answer
+      }
     }
 
     camera.updateMatrixWorld();
-    this.up.set(0, 1, 0).applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
+    const q = camera.getWorldQuaternion(this.q);
+    this.up.set(0, 1, 0).applyQuaternion(q);
+    this.right.set(1, 0, 0).applyQuaternion(q);
+    this.lookForHidden(camera, dt);
     const rects: BubbleRect[] = [];
     const sizes = new Map<string, { ppm: number; h: number }>();
+    const shifts = new Map<string, number>();
+    const inner: BubbleView = { left: BUBBLE.edge, top: BUBBLE.edge, right: width - BUBBLE.edge };
     for (const [id, e] of this.entries) {
       e.opacity = stepOpacity(e.opacity, e.active, dt);
       e.age += dt;
@@ -102,32 +128,58 @@ export class Bubbles {
       const ppm = Math.hypot((b.x * 0.5 + 0.5) * width - ax, (-b.y * 0.5 + 0.5) * height - ay);
       const h = bubbleWorldHeight(ppm);
       sizes.set(id, { ppm, h });
-      rects.push({ id, x: ax, y: ay, w: h * e.aspect * ppm, h: (h * (BODY_H + TAIL_H)) / BODY_H * ppm });
+      const rect = { id, x: ax, y: ay, w: h * e.aspect * ppm, h: (h * (BODY_H + TAIL_H)) / BODY_H * ppm };
+      shifts.set(id, shiftIntoView(rect, inner, { width, height }));
+      rect.x += shifts.get(id)!;
+      rects.push(rect);
     }
     const lifts = stackBubbles(rects);
+    for (const r of rects) lifts.set(r.id, Math.min(lifts.get(r.id) ?? 0, maxLift(r, inner)));
 
     for (const [id, e] of this.entries) {
       if (!e.sprite.visible) continue;
       const size = sizes.get(id);
       e.lift = easeLift(e.lift, lifts.get(id) ?? 0, dt);
+      e.shift = easeLift(e.shift, shifts.get(id) ?? 0, dt);
+      e.dim = stepDim(e.dim, e.hidden, dt);
       const h = (size?.h ?? BUBBLE.height) * popScale(e.age);
       const total = h / (BODY_H * e.res); // world metres per canvas px
       e.sprite.scale.set(e.canvas.width * total, e.canvas.height * total, 1);
       e.sprite.position.copy(e.head);
       e.sprite.position.y += BUBBLE.gap;
-      if (size && size.ppm > 0) e.sprite.position.addScaledVector(this.up, e.lift / size.ppm);
-      e.material.opacity = e.opacity;
+      if (size && size.ppm > 0) e.sprite.position.addScaledVector(this.up, e.lift / size.ppm).addScaledVector(this.right, e.shift / size.ppm);
+      e.material.opacity = dimmedOpacity(e.opacity, e.dim);
+    }
+  }
+
+  /** Looks for the speakers of a few bubbles per frame, the longest-waiting first: is the scene between them and the camera? */
+  private lookForHidden(camera: THREE.Camera, dt: number): void {
+    if (!this.occlusion) return;
+    const due: Entry[] = [];
+    for (const e of this.entries.values()) {
+      e.sinceCheck += dt;
+      if (e.active && e.sinceCheck >= CHECK_EVERY) due.push(e);
+    }
+    camera.getWorldPosition(this.eye);
+    due.sort((a, b) => b.sinceCheck - a.sinceCheck);
+    for (const e of due.slice(0, CHECKS_PER_FRAME)) {
+      const first = !e.seen;
+      e.seen = true;
+      e.sinceCheck = 0;
+      e.hidden = this.occlusion.blocked(this.eye, this.v.copy(e.head).setY(e.head.y + BUBBLE.gap));
+      if (first) e.dim = e.hidden ? 1 : 0; // a fresh bubble starts in its state, no fade from the wrong one
     }
   }
 
   /** What the bubbles show right now, for the test hook (`__game.bubbles.state`). */
-  get state(): Array<{ id: string; text: string; opacity: number; x: number; y: number; z: number; headY: number; height: number }> {
+  get state(): Array<{ id: string; text: string; opacity: number; dim: number; x: number; y: number; z: number; headY: number; height: number }> {
     return [...this.entries]
       .filter(([, e]) => e.sprite.visible)
       .map(([id, e]) => ({
         id,
         text: e.text,
         opacity: e.opacity,
+        dim: e.dim,
         x: e.sprite.position.x,
         y: e.sprite.position.y,
         z: e.sprite.position.z,
@@ -144,14 +196,14 @@ export class Bubbles {
     // always face the camera, so anisotropic filtering would add nothing)
     texture.generateMipmaps = true;
     texture.minFilter = THREE.LinearMipmapLinearFilter;
-    // depth-tested against the office, but never writes depth, so bubbles don't cut holes into each other
-    const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: true, depthWrite: false, fog: false, toneMapped: false });
+    // drawn over the office (no depth test: a wall never cuts a bubble) and never writes depth, so bubbles don't cut holes into each other
+    const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false });
     const sprite = new THREE.Sprite(material);
     sprite.raycast = () => {}; // not pickable: clicks go to the people below
     sprite.visible = false;
     this.glass?.track(sprite); // in front of glass: drawn after it, clean; behind glass: drawn before it, washed out by it
     this.scene.add(sprite);
-    return { sprite, material, canvas, texture, text: '', res: 1, aspect: 1, opacity: 0, age: 0, lift: 0, head: new THREE.Vector3(), active: false };
+    return { sprite, material, canvas, texture, text: '', res: 1, aspect: 1, opacity: 0, age: 0, lift: 0, shift: 0, dim: 0, hidden: false, sinceCheck: CHECK_EVERY, seen: false, head: new THREE.Vector3(), active: false };
   }
 
   /** Redraws the bubble: a soft rounded body with a subtle shadow and a tail down to the head. */
