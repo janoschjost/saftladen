@@ -2,14 +2,15 @@ import * as THREE from 'three';
 
 /**
  * Glass does not write depth (so what stands behind it stays visible), which leaves the draw order of see-through
- * things to `renderOrder`: everything drawn after a pane is tinted by it. A bubble or lettering in front of a pane
- * has to be drawn after it (clean), one behind a pane before it (washed out by the pane).
+ * things to `renderOrder`: everything drawn after a pane is tinted by it. A lettering in front of a pane has to be
+ * drawn after it (clean), one behind a pane before it (washed out by the pane). Bubbles are not sorted: they always
+ * draw after the glass and its letterings (`GLASS_ORDER + 2`).
  */
 export const GLASS_ORDER = 2;
 const BEHIND = GLASS_ORDER - 1;
 const IN_FRONT = GLASS_ORDER + 1;
 
-const EVERY = 4; // frames between two passes: panes and bubbles move slowly
+const EVERY = 4; // frames between two passes: panes move slowly
 const RESCAN = 15; // passes between two scans of the scene for panes and marked objects
 const NEAR = 0.01; // m: stops the ray just short of the target, so a pane 1 cm behind a lettering never counts
 
@@ -28,8 +29,6 @@ export function markGlassSorted(object: THREE.Object3D): void {
 export class GlassSort {
   private panes: THREE.Mesh[] = [];
   private marked: THREE.Object3D[] = [];
-  private tracked = new Set<THREE.Object3D>();
-  private shown = new WeakSet<THREE.Object3D>();
   private frame = 0;
   private pass = 0;
   private readonly ray = new THREE.Raycaster();
@@ -39,32 +38,18 @@ export class GlassSort {
 
   constructor(private readonly scene: THREE.Object3D) {}
 
-  /** Call once per rendered frame, after the bubbles are placed. */
+  /** Call once per rendered frame, after the scene is placed. */
   update(camera: THREE.Camera): void {
-    const pass = this.frame++ % EVERY === 0;
-    if (pass && this.pass++ % RESCAN === 0) this.scan();
+    if (this.frame++ % EVERY !== 0) return;
+    if (this.pass++ % RESCAN === 0) this.scan();
     camera.updateMatrixWorld();
     camera.getWorldPosition(this.eye);
-    for (const o of this.marked) if (pass && o.visible) this.sort(o);
-    // a bubble that pops up is sorted at once, not up to a few frames later with the order of its last appearance
-    for (const o of this.tracked) {
-      if (!o.visible) this.shown.delete(o);
-      else if (pass || !this.shown.has(o)) {
-        this.shown.add(o);
-        this.sort(o);
-      }
-    }
+    for (const o of this.marked) if (o.visible) this.sort(o);
   }
 
   private sort(o: THREE.Object3D): void {
     o.getWorldPosition(this.at);
     o.renderOrder = this.behindGlass(this.eye, this.at) ? BEHIND : IN_FRONT;
-  }
-
-  /** Sorts an object that comes and goes (a bubble), which a scan of the scene would only find later. */
-  track(object: THREE.Object3D): void {
-    object.renderOrder = IN_FRONT;
-    this.tracked.add(object);
   }
 
   /** Is there a glass pane between `eye` and `target`? */

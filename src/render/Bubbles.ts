@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { GlassSort } from './glassSort';
+import { GLASS_ORDER } from './glassSort';
 import type { BubbleOcclusion } from './bubbleOcclusion';
 import { BUBBLE, bubbleWorldHeight, dimmedOpacity, easeLift, maxLift, popScale, shiftIntoView, stackBubbles, stepDim, stepOpacity, type BubbleRect, type BubbleView } from './bubbleLayout';
 
@@ -76,7 +76,7 @@ export class Bubbles {
   private ink = '';
   private font = '';
 
-  constructor(private scene: THREE.Scene, private glass?: GlassSort, private occlusion?: BubbleOcclusion) {}
+  constructor(private scene: THREE.Scene, private occlusion?: BubbleOcclusion) {}
 
   /** Call once per rendered frame, after the walkers are posed. */
   update(specs: readonly BubbleSpec[], camera: THREE.Camera, width: number, height: number, dt: number): void {
@@ -201,7 +201,7 @@ export class Bubbles {
     const sprite = new THREE.Sprite(material);
     sprite.raycast = () => {}; // not pickable: clicks go to the people below
     sprite.visible = false;
-    this.glass?.track(sprite); // in front of glass: drawn after it, clean; behind glass: drawn before it, washed out by it
+    sprite.renderOrder = GLASS_ORDER + 2; // over glass and the lettering sorted in front of it: whole and readable, never tinted by a pane
     this.scene.add(sprite);
     return { sprite, material, canvas, texture, text: '', res: 1, aspect: 1, opacity: 0, age: 0, lift: 0, shift: 0, dim: 0, hidden: false, sinceCheck: CHECK_EVERY, seen: false, head: new THREE.Vector3(), active: false };
   }

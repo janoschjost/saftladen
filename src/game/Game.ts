@@ -279,7 +279,7 @@ export class Game {
     this.christian = new ChristianModel(this.scene, this.sim.nav);
     this.ghost = new Christian(this.scene, this.sim);
     this.roof = model.roof;
-    this.bubbles = new Bubbles(this.scene, this.glassSort, new BubbleOcclusion([model.world, model.roof]));
+    this.bubbles = new Bubbles(this.scene, new BubbleOcclusion([model.world, model.roof]));
     this.roofCords = model.setRoofVisible;
     this.entrance = model.entrance;
     this.meetingLight = new RoomLight(this.scene, model.meeting.lamp, this.sim.tod, () => this.sim.meetingRoom.occupants(this.sim.people));
