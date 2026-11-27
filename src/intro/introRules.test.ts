@@ -25,18 +25,18 @@ describe('intro.once', () => {
 });
 
 describe('intro.greeting', () => {
-  it('intro.greeting: ?rene greets once, also somebody who has seen the intro; without it nobody is greeted', () => {
-    expect(shouldGreet('?rene', false)).toBe(true);
-    expect(shouldGreet('?rene', true)).toBe(false);
-    expect(shouldGreet('', false)).toBe(false);
-    expect(shouldGreet('?seed=1', false)).toBe(false);
-    expect(shouldPlayIntro('?rene', '', true, false)).toBe(true); // seen the plain intro: plays again, with him
-    expect(shouldPlayIntro('?rene', '', true, true)).toBe(false);
-    expect(shouldPlayIntro('?rene&seed=1', '#plan', true, false)).toBe(true);
+  it('intro.greeting: ?rene greets every time, also somebody who has seen the intro; without it nobody is greeted', () => {
+    expect(shouldGreet('?rene')).toBe(true);
+    expect(shouldGreet('?rene=1&seed=1')).toBe(true);
+    expect(shouldGreet('')).toBe(false);
+    expect(shouldGreet('?seed=1')).toBe(false);
+    expect(shouldPlayIntro('?rene', '', false)).toBe(true);
+    expect(shouldPlayIntro('?rene', '', true)).toBe(true); // seen it: plays again, with him
+    expect(shouldPlayIntro('?rene&seed=1', '#plan', true)).toBe(true);
   });
   it('intro.greeting: a ?test page plays it only with intro=1', () => {
-    expect(shouldPlayIntro('?test&rene', '', false, false)).toBe(false);
-    expect(shouldPlayIntro('?test&intro=1&rene', '', true, false)).toBe(true);
+    expect(shouldPlayIntro('?test&rene', '', false)).toBe(false);
+    expect(shouldPlayIntro('?test&intro=1&rene', '', true)).toBe(true);
   });
   it('intro.greeting: the marker leaves the address, the rest stays as written', () => {
     expect(withoutGreeting('?rene')).toBe('');

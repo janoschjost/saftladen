@@ -5,9 +5,6 @@ import { shouldGreet, shouldPlayIntro, withoutGreeting } from './introRules';
 
 const KEY = 'saftladen.intro';
 
-/** René's mail link (`?rene`, #333) was used in this browser: he greets only once */
-const GREETED = 'saftladen.intro.rene';
-
 const was = (key: string): boolean => {
   try {
     return storage.getItem(key) === '1';
@@ -69,8 +66,7 @@ export function installIntro(game: Game): void {
   const play = (greet = false): void => {
     if (!root.hidden || !welcome.hidden) return; // one at a time: the welcome card holds the game too
     if (greet) {
-      // the marker has done its job: a reload or a passed-on address does not greet again
-      mark(GREETED);
+      // the marker has done its job: a reload or a passed-on address does not greet again, the link itself always does
       history.replaceState(null, '', location.pathname + withoutGreeting(location.search) + location.hash);
     }
     root.hidden = false; // the dark stage covers the office at once, the scene follows
@@ -86,6 +82,5 @@ export function installIntro(game: Game): void {
   skip.addEventListener('click', stop);
   link.addEventListener('click', () => play());
   window.addEventListener('hashchange', () => location.hash === '#intro' && play());
-  const greeted = was(GREETED);
-  if (shouldPlayIntro(location.search, location.hash, was(KEY), greeted)) play(shouldGreet(location.search, greeted));
+  if (shouldPlayIntro(location.search, location.hash, was(KEY))) play(shouldGreet(location.search));
 }

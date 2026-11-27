@@ -49,7 +49,7 @@ test.describe('intro', () => {
     expect(new URL(page.url()).hash).toBe('');
   });
 
-  test('intro.greeting: ?rene plays the intro with René\'s greeting once, also when the intro was seen; the marker leaves the address', async ({ page }) => {
+  test('intro.greeting: ?rene always plays the intro with René\'s greeting, also when the intro was seen; the marker leaves the address', async ({ page }) => {
     // somebody who has seen the plain intro
     await boot(page, FIRST_VISIT);
     await page.keyboard.press('Escape');
@@ -65,8 +65,14 @@ test.describe('intro', () => {
     await expect(page.locator('#intro')).toBeHidden();
     await expect(page.locator('#intro-bubble')).toBeHidden();
     expect(await read(page, (g) => g.paused)).toBe(false);
-    // the link again: he has greeted, the intro was seen
+    // a reload of the address as it is now: no marker, the intro was seen
+    await boot(page, page.url());
+    await expect(page.locator('#intro')).toBeHidden();
+    // the link again: he greets again
     await boot(page, `${FIRST_VISIT}&rene`);
+    await expect(page.locator('#intro')).toBeVisible();
+    await expect(page.locator('#intro-bubble')).toHaveText('herzlich willkommen', { timeout: 30_000 });
+    await page.keyboard.press('Escape');
     await expect(page.locator('#intro')).toBeHidden();
     expect(errors).toEqual([]);
   });
