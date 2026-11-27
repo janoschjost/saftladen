@@ -2965,6 +2965,28 @@
             }
         }
 
+        /* icon button: the label is the tooltip, the key cap sits next to the icon */
+        .m-button--icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.375rem;
+            min-width: 2.75rem;
+            min-height: 2.75rem;
+            padding: 0 0.75rem;
+
+            &[hidden] {
+                display: none;
+            }
+
+            .m-help__key {
+                min-width: 1.25rem;
+                height: 1.25rem;
+                padding: 0 0.25rem 0.125rem;
+                font-size: 0.625rem;
+            }
+        }
+
         .m-button:disabled {
             border-color: rgb(255 255 255 / 0.4); /* dimmed by colour, not opacity: the tooltip hangs on the button and stays bright */
             color: rgb(255 255 255 / 0.4);

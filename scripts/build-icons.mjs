@@ -15,6 +15,7 @@ const MAP = {
   crosshair: 'crosshair',
   day: 'sun',
   drag: 'arrows-out-cardinal',
+  exit: 'sign-out',
   eye: 'eye',
   foosball: 'soccer-ball',
   gamepad: 'game-controller',
