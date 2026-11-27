@@ -12,6 +12,7 @@ import { CLICK_SLOP, Views, type ViewMode } from '../render/Views';
 import { ghostColumn, hitColumn, nearestHit, nearestOnScreen, type Column } from './pick';
 import { christianLook } from '../data/christian';
 import { Bubbles } from '../render/Bubbles';
+import { BubbleOcclusion } from '../render/bubbleOcclusion';
 import { GlassSort } from '../render/glassSort';
 import { DayHud } from '../ui/DayHud';
 import { DAY_STORIES } from '../data/dayStories';
@@ -187,7 +188,7 @@ export class Game {
   private reply: { who: Person; text: string; t: number } | null = null;
   /** speech bubbles in the scene (read by the e2e tests: `__game.bubbles.state`) */
   private glassSort = new GlassSort(this.scene);
-  private bubbles = new Bubbles(this.scene, this.glassSort);
+  private bubbles: Bubbles;
   private bubbleClock = 0;
   /** dev: whose visitor (son, wife) was called into the home office; `HomeOffice.callVisitor` takes it from here */
   private visitorCalls = new Set<string>();
@@ -278,6 +279,7 @@ export class Game {
     this.christian = new ChristianModel(this.scene, this.sim.nav);
     this.ghost = new Christian(this.scene, this.sim);
     this.roof = model.roof;
+    this.bubbles = new Bubbles(this.scene, new BubbleOcclusion([model.world, model.roof]));
     this.roofCords = model.setRoofVisible;
     this.entrance = model.entrance;
     this.meetingLight = new RoomLight(this.scene, model.meeting.lamp, this.sim.tod, () => this.sim.meetingRoom.occupants(this.sim.people));
