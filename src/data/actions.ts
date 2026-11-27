@@ -116,8 +116,8 @@ export const OFFICE_ACTIONS: OfficeAction[] = [
     place: { name: 'Büro', x: 21.5, z: 6.6 },
     angle: -20,
     zoom: 2,
-    caption: 'Nerf-Gefecht im Büro',
-    who: 'Ein Dev und ein Opfer',
+    caption: 'Nerf-Duell im Büro',
+    who: 'Zwei Devs',
   },
   {
     id: 'photo-shoot',

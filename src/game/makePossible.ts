@@ -39,6 +39,7 @@ function* obstacles(sim: Sim): Generator<() => boolean> {
   yield () => pullAll(sim, sim.office.printer?.occupant ? [sim.office.printer.occupant] : []); // the job stops, the paper goes
   yield () => pullAll(sim, sim.office.foosball?.spots.flatMap((s) => (s.occupant ? [s.occupant] : [])) ?? []); // the game stops, both players are free
   yield () => sim.boombox.active && (sim.boombox.abort(), true);
+  yield () => sim.nerf.active && (sim.nerf.abort(), true);
   yield () => sim.bonfire.active && (sim.bonfire.abort(), true);
   yield () => sim.mail.active && (sim.mail.abort((p) => inside(sim, p)), true);
   yield () => sim.tidy.active && (sim.tidy.abort(), true);

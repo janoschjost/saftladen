@@ -466,23 +466,50 @@ describe('dev events on the Sim', () => {
     refused(alone, 'foosball');
   });
 
-  it('play.nerf (nerf): a dev with a gun and the nearest free person: the dev aims at them; a running skirmish is stopped and started again; without a dev in the office one is brought in', () => {
+  it('play.nerf (nerf): two devs with guns duel; a running duel is stopped and started again; missing devs are brought in', () => {
     const sim = office();
-    const dev = sim.people.find((p) => p.member.look.nerf)!;
+    const [d1, d2] = sim.people.filter((p) => p.member.look.nerf);
     const other = sim.people.find((p) => !p.member.look.nerf)!;
-    only(sim, [dev.id, other.id]);
-    expect(sim.events.trigger('nerf')).toBe(`${first(dev)} schiesst auf ${first(other)}`);
+    only(sim, [d1.id, d2.id, other.id]);
+    expect(sim.events.trigger('nerf')).toMatch(/ und .* duellieren sich mit Nerf-Guns/);
     expect(sim.nerf.active).toBe(true);
-    expect(dev.task?.phase).not.toBe('work');
+    expect(d1.task?.phase).not.toBe('work');
+    expect(other.controlled).toBe(false); // only the devs take part
 
-    // nobody with a gun in the office: one of them appears
+    // fewer than two devs in the office: they are called back, the next try starts the duel
     const none = office();
     for (const p of none.people) if (p.member.look.nerf) none.scenario.put(p.id, 'errand', 'free');
     const away = none.people.filter((p) => p.member.look.nerf);
     expect(away.every((p) => p.awayLeft > 0)).toBe(true);
-    expect(none.events.trigger('nerf')).toMatch(/ schiesst auf /);
+    none.events.trigger('nerf');
     expect(away.filter((p) => p.presence === 'in').length).toBeGreaterThanOrEqual(1);
-    expect(none.nerf.active).toBe(true);
+  });
+
+  it('play.nerf (nerf): in the real office the two devs shoot back and forth for 10–20 s, move, then go back to normal life', () => {
+    const sim = office();
+    const [d1, d2] = sim.people.filter((p) => p.member.look.nerf);
+    only(sim, [d1.id, d2.id]);
+    expect(sim.events.trigger('nerf')).toMatch(/duellieren/);
+    const start = { a: { ...d1.pos }, b: { ...d2.pos } };
+    let walked = 0;
+    let shots = 0;
+    let seen = 0;
+    let seconds = 0;
+    while (sim.nerf.active && seconds < 40) {
+      const was = { ...d1.pos };
+      sim.step(1 / 60);
+      seconds += 1 / 60;
+      walked += Math.hypot(d1.pos.x - was.x, d1.pos.z - was.z);
+      shots += Math.max(0, sim.nerf.darts.length - seen);
+      seen = sim.nerf.darts.length;
+    }
+    expect(seconds).toBeGreaterThanOrEqual(10);
+    expect(seconds).toBeLessThanOrEqual(20.5);
+    expect(shots).toBeGreaterThanOrEqual(4);
+    expect(walked).toBeGreaterThan(1);
+    expect(Math.hypot(d1.pos.x - start.a.x, d1.pos.z - start.a.z) + Math.hypot(d2.pos.x - start.b.x, d2.pos.z - start.b.z)).toBeGreaterThan(0);
+    expect(d1.controlled || d2.controlled).toBe(false);
+    expect(d1.nerfOn || d2.nerfOn).toBe(false);
   });
 
   it('play.boombox (boombox): Sandro pulls out the boombox wherever he is, Donata may stay at her desk; a running scene starts over; the two appear when they are away; plays again although she took it today', () => {

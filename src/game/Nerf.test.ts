@@ -2,13 +2,15 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { team } from '../data/team';
 import { NavGrid } from './NavGrid';
-import { DART_SPEED, Dart, GRAVITY, MAX_DARTS, Nerf, reactionTo, solveShot } from './Nerf';
+import { DART_SPEED, Dart, GRAVITY, MAX_DARTS, Nerf, solveShot } from './Nerf';
 import type { Person } from './Person';
 import { setSeed } from './rng';
 
 const STEP = 1 / 60;
 
-/** Just enough of a Person for the skirmish: where they stand, whether they are on a break, and the stop-and-turn. */
+type Pin = { at: { x: number; z: number }; yaw: number; arrived: boolean };
+
+/** Just enough of a Person for the duel: where they stand and walk, whether they are on a break, and the pin. */
 class Stub {
   inOffice = true;
   held = false;
@@ -27,36 +29,51 @@ class Stub {
   sit = 0;
   prev: { x: number; z: number };
   root = { scale: { y: 1 } };
-  playerChat: { t: number; total: number; at: { x: number; z: number } } | null = null;
+  playerChat = null;
+  scripted: Pin | null = null;
   nerfOn = false;
   nerfKind: 'aim' | 'duck' | 'shrug' | 'watch' = 'aim';
   nerfKick = 0;
   speaking = false;
+  /** metres walked in total */
+  walked = 0;
   constructor(
     readonly member: { look: { nerf?: boolean } },
     public pos: { x: number; z: number },
   ) {
     this.prev = { ...pos };
   }
-  talkTo(at: { x: number; z: number }, seconds: number): boolean {
-    this.playerChat = { t: seconds, total: seconds, at };
-    this.nerfOn = false; // like the real one: a chat resets the skirmish flag, the caller sets it again
-    return true;
+  pinTo(s: { at: { x: number; z: number }; yaw: number; walk?: boolean }): void {
+    this.scripted = { at: { ...s.at }, yaw: s.yaw, arrived: !s.walk };
+    this.controlled = true;
+    this.nerfOn = false; // like the real one: a pin resets the skirmish flag, the caller sets it again
+    if (!s.walk) this.pos = { ...s.at };
   }
-  /** the real Person drops the stop when the chat time runs out */
+  faceTo(yaw: number): void {
+    if (this.scripted) this.scripted.yaw = yaw;
+  }
+  unpin(): void {
+    this.scripted = null;
+    this.controlled = false;
+  }
+  /** walks to the pinned spot at 2 m/s */
   tick(dt: number): void {
-    if (!this.playerChat) return;
-    if ((this.playerChat.t -= dt) <= 0) {
-      this.playerChat = null;
-      this.nerfOn = false;
-    }
+    const s = this.scripted;
+    this.prev = { ...this.pos };
+    if (!s || s.arrived) return;
+    const d = Math.hypot(s.at.x - this.pos.x, s.at.z - this.pos.z);
+    const step = Math.min(d, 2 * dt);
+    this.pos = { x: this.pos.x + ((s.at.x - this.pos.x) / (d || 1)) * step, z: this.pos.z + ((s.at.z - this.pos.z) / (d || 1)) * step };
+    this.walked += step;
+    if (d - step < 0.05) s.arrived = true;
   }
 }
 const asPeople = (...p: Stub[]) => p as unknown as Person[];
-const dev = () => new Stub({ look: { nerf: true } }, { x: 5, z: 5 });
+const dev = (x = 5, z = 5) => new Stub({ look: { nerf: true } }, { x, z });
 const other = (x: number, z: number) => new Stub({ look: {} }, { x, z });
+const asP = (s: Stub) => s as unknown as Person;
 
-/** Steps the skirmish. `pool` is who `update` may pick for a new random skirmish (nobody: only the one started by hand). */
+/** Steps the duel for `seconds`. `pool` is who `update` may pick for a new random duel (nobody: only the one started by hand). */
 function run(nerf: Nerf, people: Stub[], seconds: number, pool: Stub[] = []): void {
   const nav = new NavGrid(30, 30);
   for (let t = 0; t < seconds; t += STEP) {
@@ -91,14 +108,6 @@ describe('play.nerf', () => {
     expect(y).toBeCloseTo(to.y, 1);
   });
 
-  it('a hit gets an answer, a miss mostly none; only armed people shoot back', () => {
-    expect(reactionTo(true, true, 0.1)).toBe('back');
-    expect(reactionTo(true, false, 0.1)).toBe('duck');
-    expect(reactionTo(true, false, 0.95)).toBe('ignore');
-    expect(reactionTo(false, false, 0.9)).toBe('ignore');
-    expect(reactionTo(false, true, 0.1)).toBe('back');
-  });
-
   it('a dart lands, lies on the floor a while, then fades away', () => {
     setSeed(3);
     const shot = solveShot({ x: 0, y: 1.2, z: 0 }, { x: 3, y: 0.5, z: 0 });
@@ -121,97 +130,105 @@ describe('play.nerf', () => {
     expect(d.state).toBe('gone');
   });
 
-  it('the shooter stops, fires a dart at the target, and the dart is cleaned up later', () => {
-    setSeed(5);
-    const scene = new THREE.Scene();
-    const nerf = new Nerf(scene);
-    const a = dev();
-    const b = other(9, 5);
-    expect(nerf.start(a as unknown as Person, b as unknown as Person)).toBe(true);
-    expect(a.nerfOn).toBe(true);
-    expect(a.playerChat?.at).toEqual({ x: 9, z: 5 });
-    // the target stops and looks at the shooter, so the dart flies at somebody standing there
-    expect(b.nerfOn).toBe(true);
-    expect(b.playerChat?.at).toEqual({ x: 5, z: 5 });
-    run(nerf, [a, b], 1.2);
-    expect(nerf.darts.length).toBe(1);
-    expect(scene.children.length).toBe(1);
-    run(nerf, [a, b], 70);
-    expect(nerf.darts.length).toBe(0);
-    expect(scene.children.length).toBe(0);
-    expect(nerf.active).toBe(false);
-    expect(a.nerfOn).toBe(false);
-  });
-
-  it('somebody who is hit ducks (or answers, or shrugs it off); everybody is free again afterwards', () => {
-    const outcomes = new Set<string>();
-    for (let seed = 1; seed <= 40; seed++) {
+  it('two devs stop, shoot at each other for 10–20 s, move around between the shots and walk on afterwards', () => {
+    for (let seed = 1; seed <= 20; seed++) {
       setSeed(seed);
-      const nerf = new Nerf(new THREE.Scene());
-      const a = dev();
-      const b = other(9, 5);
-      nerf.start(a as unknown as Person, b as unknown as Person);
-      let ducked = false;
+      const scene = new THREE.Scene();
+      const nerf = new Nerf(scene);
+      const a = dev(5, 5);
+      const b = dev(9, 5);
+      expect(nerf.start(asP(a), asP(b))).toBe(true);
+      expect(a.nerfOn && b.nerfOn).toBe(true);
+      let t = 0;
       let shots = 0;
-      for (let t = 0; t < 30; t += STEP) {
+      let seen = 0;
+      const shooters = new Set<Stub>();
+      const nav = new NavGrid(30, 30);
+      while (nerf.active && t < 40) {
         [a, b].forEach((p) => p.tick(STEP));
-        nerf.update(STEP, [], new NavGrid(30, 30));
-        ducked ||= b.nerfOn && b.nerfKind === 'duck';
-        shots = Math.max(shots, nerf.darts.length);
+        const before = a.nerfKick + b.nerfKick;
+        nerf.update(STEP, [], nav);
+        t += STEP;
+        if (nerf.darts.length > seen) {
+          shots += nerf.darts.length - seen;
+          if (a.nerfKick > 0 && before === 0) shooters.add(a);
+          if (b.nerfKick > 0 && before === 0) shooters.add(b);
+        }
+        seen = nerf.darts.length;
+        a.nerfKick = b.nerfKick = 0;
       }
-      outcomes.add(ducked ? 'duck' : 'ignore');
-      expect(shots).toBe(1); // somebody without a gun never shoots back
-      expect(nerf.active).toBe(false);
+      expect(t).toBeGreaterThanOrEqual(10);
+      expect(t).toBeLessThanOrEqual(20.2);
+      expect(shots).toBeGreaterThanOrEqual(4);
+      expect(shooters.size).toBe(2); // both shoot
+      expect(a.walked).toBeGreaterThan(1); // and they move around
+      expect(b.walked).toBeGreaterThan(1);
+      expect(a.scripted || b.scripted || a.controlled || b.controlled).toBeFalsy();
       expect(a.nerfOn || b.nerfOn).toBe(false);
+      // the darts are cleaned up later
+      run(nerf, [a, b], 70);
+      expect(nerf.darts.length).toBe(0);
+      expect(scene.children.length).toBe(0);
     }
-    expect(outcomes).toEqual(new Set(['duck', 'ignore']));
   });
 
-  it('two devs can shoot back and forth', () => {
-    let exchanged = false;
-    for (let seed = 1; seed <= 40 && !exchanged; seed++) {
-      setSeed(seed);
-      const nerf = new Nerf(new THREE.Scene());
-      const a = dev();
-      const b = dev();
-      b.pos = { x: 9, z: 5 };
-      nerf.start(a as unknown as Person, b as unknown as Person);
-      for (let t = 0; t < 30; t += STEP) {
-        [a, b].forEach((p) => p.tick(STEP));
-        nerf.update(STEP, [], new NavGrid(30, 30));
-        if (nerf.darts.length >= 2) exchanged = true;
-      }
-    }
-    expect(exchanged).toBe(true);
+  it('a duel ends at once when somebody is taken away, or when it is aborted', () => {
+    setSeed(7);
+    const nerf = new Nerf(new THREE.Scene());
+    const a = dev(5, 5);
+    const b = dev(9, 5);
+    nerf.start(asP(a), asP(b));
+    run(nerf, [a, b], 2);
+    b.inOffice = false;
+    run(nerf, [a, b], 0.1);
+    expect(nerf.active).toBe(false);
+    expect(a.controlled).toBe(false);
+    const c = dev(5, 5);
+    const d = dev(9, 5);
+    nerf.start(asP(c), asP(d));
+    nerf.abort();
+    expect(nerf.active).toBe(false);
+    expect(c.controlled || d.controlled).toBe(false);
   });
 
-  it('a random skirmish only picks people on a break, within range and in line of sight', () => {
+  it('nobody is pulled into a duel who is held, steered or away', () => {
+    const nerf = new Nerf(new THREE.Scene());
+    const a = dev(5, 5);
+    const b = dev(9, 5);
+    b.held = true;
+    expect(nerf.start(asP(a), asP(b))).toBe(false);
+    b.held = false;
+    expect(nerf.start(asP(a), asP(a))).toBe(false);
+    expect(a.scripted).toBeNull();
+  });
+
+  it('a random duel only picks two devs on a break, within range and in line of sight', () => {
     setSeed(2);
     const nerf = new Nerf(new THREE.Scene());
     const nav = new NavGrid(30, 30);
     const a = dev();
-    const near = other(6, 5); // 1 m: too close
-    const far = other(25, 5); // 20 m: too far
-    const sitting = other(10, 5);
+    const near = dev(6, 5); // 1 m: too close
+    const far = dev(25, 5); // 20 m: too far
+    const sitting = dev(10, 5);
     sitting.sit = 1;
-    const working = other(10, 6);
+    const working = dev(10, 6);
     (working as unknown as { task: object }).task = {};
     expect(nerf.find(asPeople(a, near, far, sitting, working), nav)).toBeNull();
-    const ok = other(10, 7);
+    const ok = dev(10, 7);
     const pair = nerf.find(asPeople(a, near, far, sitting, working, ok), nav);
-    expect(pair?.[0]).toBe(a);
-    expect(pair?.[1]).toBe(ok);
+    expect(pair?.map((p) => p as unknown)).toEqual(expect.arrayContaining([a, ok]));
     nav.block(7, 4, 1, 4); // a wall in between
     expect(nerf.find(asPeople(a, ok), nav)).toBeNull();
-    // only devs shoot
+    // only devs shoot, and only at devs
+    expect(nerf.find(asPeople(a, other(10, 7)), new NavGrid(30, 30))).toBeNull();
     expect(nerf.find(asPeople(other(5, 5), ok), new NavGrid(30, 30))).toBeNull();
   });
 
-  it('now and then a skirmish starts by itself', () => {
+  it('now and then a duel starts by itself', () => {
     setSeed(4);
     const nerf = new Nerf(new THREE.Scene());
     const a = dev();
-    const b = other(9, 5);
+    const b = dev(9, 5);
     const nav = new NavGrid(30, 30);
     let started = 0;
     let was = false;
@@ -222,7 +239,7 @@ describe('play.nerf', () => {
       was = nerf.active;
     }
     expect(started).toBeGreaterThanOrEqual(2);
-    expect(started).toBeLessThanOrEqual(8); // "now and then", not all the time
+    expect(started).toBeLessThanOrEqual(5); // "now and then", not all the time
   });
 
   it('too many darts on the floor: the oldest fade early', () => {
@@ -230,7 +247,7 @@ describe('play.nerf', () => {
     const scene = new THREE.Scene();
     const nerf = new Nerf(scene);
     const a = dev();
-    const b = other(9, 5);
+    const b = dev(9, 5);
     // fill the floor, then one more shot
     for (let i = 0; i < MAX_DARTS; i++) {
       const d = new Dart({ x: i * 0.1, y: 0.02, z: 0 }, { vx: 0, vy: 0, vz: 0, t: 1 }, false);
@@ -238,9 +255,10 @@ describe('play.nerf', () => {
       nerf.darts.push(d);
       scene.add(d.mesh);
     }
-    nerf.start(a as unknown as Person, b as unknown as Person);
-    run(nerf, [a, b], 1.2);
-    expect(nerf.darts.length).toBeLessThanOrEqual(MAX_DARTS + 1);
+    nerf.start(asP(a), asP(b));
+    run(nerf, [a, b], 1.4);
+    expect(nerf.darts.length).toBeLessThanOrEqual(MAX_DARTS + 2); // both may shoot
+    nerf.abort();
     run(nerf, [a, b], 2);
     expect(nerf.darts.length).toBeLessThanOrEqual(MAX_DARTS);
   });
