@@ -423,6 +423,11 @@ export class Views {
     this.fly = { from: this.orbitShot, to: goal, t: 0, dur: still ? 0 : duration };
   }
 
+  /** Where the fly-in starts and the Orbit camera's field of view: the origin-story intro ends on this picture (#322). */
+  get flyInStart(): { shot: Shot; fov: number } {
+    return { shot: introShot(this.overviewShot()), fov: this.persp.fov };
+  }
+
   /** Reload: jumps to a far, high shot and flies to the neutral overview. Orbit only. */
   flyIn(): void {
     if (this.mode !== 'orbit') return;

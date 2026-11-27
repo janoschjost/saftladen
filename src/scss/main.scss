@@ -3202,6 +3202,125 @@
             }
         }
     }
+    /* origin-story intro on the first visit (#322): its own dark scene over the office, the story below it */
+    .m-intro {
+        position: fixed;
+        inset: 0;
+        z-index: 30;
+        background: #0d0f13;
+        color: white;
+
+        &[hidden] {
+            display: none;
+        }
+
+        // behind the closed clouds the scene is gone: only they are left over the office
+        &.is-clear {
+            background: none;
+
+            > :not(.m-intro__clouds) {
+                visibility: hidden;
+            }
+        }
+
+        // the clouds between the story and the office (src/intro/Intro.ts moves them)
+        &__clouds {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            pointer-events: none;
+
+            &[hidden] {
+                display: none;
+            }
+        }
+
+        &__fog {
+            position: absolute;
+            inset: 0;
+            background: #f4f7fb;
+        }
+
+        &__puff {
+            position: absolute;
+            width: var(--size);
+            height: var(--size);
+            border-radius: 50%;
+            background: radial-gradient(closest-side, #fff 0%, rgba(255, 255, 255, 0.96) 40%, rgba(244, 247, 251, 0) 100%);
+            will-change: transform, opacity;
+        }
+
+        &__stage {
+            position: absolute;
+            inset: 0;
+
+            canvas {
+                display: block;
+            }
+
+            // a storybook vignette
+            &::after {
+                position: absolute;
+                inset: 0;
+                background: radial-gradient(ellipse at 50% 42%, transparent 45%, rgba(8, 6, 14, 0.75));
+                content: '';
+                pointer-events: none;
+            }
+        }
+
+        &__text {
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            display: grid;
+            gap: 0.5rem;
+            padding: 6rem 1.5rem clamp(3.5rem, 10vh, 6rem);
+            background: linear-gradient(to top, rgba(13, 15, 19, 0.9) 35%, rgba(13, 15, 19, 0));
+            text-align: center;
+            text-shadow: 0 0.0625rem 0.75rem rgba(0, 0, 0, 0.9);
+            pointer-events: none;
+        }
+
+        &__line {
+            max-width: 44rem;
+            margin: 0 auto;
+            color: #f6e7c1;
+            // Almendra comes with the intro (src/intro/Intro.ts); until it has loaded, a book serif
+            font-family: 'Almendra', 'Palatino Linotype', 'Book Antiqua', Palatino, 'URW Palladio L', Georgia, serif;
+            font-size: clamp(1.25rem, 2.6vw, 2rem);
+            font-weight: 400;
+            letter-spacing: 0.01em;
+            line-height: 1.3;
+            text-wrap: balance;
+
+            &--en {
+                color: rgba(246, 231, 193, 0.7);
+                font-size: clamp(0.9375rem, 1.7vw, 1.25rem);
+                font-style: italic;
+            }
+        }
+
+        &__skip {
+            position: absolute;
+            right: 1rem;
+            bottom: 1rem;
+            padding: 0.5rem 1rem;
+            border: 0.0625rem solid rgba(255, 255, 255, 0.35);
+            border-radius: 62.5rem;
+            background: rgba(13, 15, 19, 0.6);
+            color: white;
+            font: inherit;
+            font-size: 0.875rem;
+            cursor: pointer;
+
+            &:hover,
+            &:focus-visible {
+                background: rgba(255, 255, 255, 0.16);
+            }
+        }
+    }
+
     /* welcome card for first-time visitors */
     .m-welcome {
         position: fixed;

@@ -694,8 +694,19 @@ export class Game {
     this.pacer.redraw(); // the canvas was cleared: draw it again at once, also while idle
   }
 
-  /** held while a full-screen card (welcome) is up: no game time passes, the scene still renders */
+  /** held while a full-screen card (welcome) or the intro is up: no game time passes, the scene still renders */
   paused = false;
+
+  /** The picture the fly-in starts from, for the intro that ends on it (#322). */
+  get flyInStart(): { shot: Shot; fov: number } {
+    return this.views.flyInStart;
+  }
+
+  /** Starts the fly-in to the overview again (Orbit only): the intro hands over with it. */
+  flyIn(): void {
+    this.views.flyIn();
+    this.pacer.redraw();
+  }
 
   private frame(now: number): void {
     const scale = this.timeScale();

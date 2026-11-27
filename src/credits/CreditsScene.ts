@@ -8,6 +8,7 @@ import { solveArm, type ArmPose } from '../render/homeOffice';
 import { box, cyl, merge, propMaterial } from '../render/geo';
 import { addKurt } from '../render/kurtBuilder';
 import { SIT_DROP } from '../render/officeBuilder';
+import { WORLD } from '../render/World';
 import { buildClawdDesk, poseClawd, type ClawdDesk } from '../render/clawdBuilder';
 import { clawdScreenMaterial, screenMaterial, tickScreens, useScreen } from '../render/screens';
 import { BlueprintOffice } from './BlueprintOffice';
@@ -20,6 +21,8 @@ const DESK_W = 1.7;
 const BG = '#0d0f13';
 /** Kurt is a miniature, a scaled copy of a person: about as big as Ellie. */
 const MINI = 0.34;
+/** the top of a person's head (rig units, in the body group): where the story's wizard hats sit */
+const HAT_Y = 1.74;
 
 const member = (id: string) => {
   const m = team.find((p) => p.id === id);
@@ -139,6 +142,26 @@ interface Typing {
   drop: number;
   kneeSit: number;
   sleep: number;
+  /** 0..1: the right hand raised (an oath, a spell) */
+  raise: number;
+}
+
+/** What the origin-story intro (#322) asks of the scene at one moment; every amount is 0..1. */
+export interface StoryStage {
+  /** the elder (Marco) sinks back, hands in the lap */
+  slump: number;
+  /** the younger (Janosch) raises his hand */
+  wizard: number;
+  /** sparks drift from the younger to the elder */
+  sparks: number;
+  /** both raise their right hand */
+  oath: number;
+  /** the puff of fog Clawd appears in: 0 none yet .. 1 gone */
+  puff: number;
+  clawd: boolean;
+  /** how far the blueprint is built, and how bright its pad is */
+  built: number;
+  pad: number;
 }
 
 /** Arms that reach the keys at this person's size (the body scales with height, the desk doesn't). */
@@ -168,7 +191,7 @@ function workstation(look: Look, o: { variant: number; extra: THREE.BufferGeomet
   rig.kneeL.rotation.x = rig.kneeR.rotation.x = 1.5;
   rig.legL.position.y = rig.legR.position.y = 0.8 - SIT_DROP;
   useScreen(lap.screen, 1);
-  return { group, typing: { rig, ...typingPoses(rig), phase: o.phase, stand: 0, x: 0, z: 0, yaw: 0, gait: 0, y: 0, air: 0, moving: false, drop: SIT_DROP, kneeSit: 1.5, sleep: 0 }, screen: lap.screen };
+  return { group, typing: { rig, ...typingPoses(rig), phase: o.phase, stand: 0, x: 0, z: 0, yaw: 0, gait: 0, y: 0, air: 0, moving: false, drop: SIT_DROP, kneeSit: 1.5, sleep: 0, raise: 0 }, screen: lap.screen };
 }
 
 function floorTexture(): THREE.CanvasTexture {
@@ -252,7 +275,92 @@ function zTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-/** Marco and Janosch coding side by side, Clawd at his own little desk east of the blueprint, Ellie at their feet and a miniature Kurt asleep against the desk's front leg, in an endless room. */
+const glowing = new THREE.MeshBasicMaterial({ vertexColors: true });
+
+/** A pointed wizard hat with a brim and a golden band, its tip bent back a little; sits on a head whose top is the origin. */
+function wizardHat(color: string): THREE.Object3D {
+  const hat = new THREE.Group();
+  hat.add(mesh([cyl(0.4, 0.4, 0.035, 0, 0.02, 0, color, 10), cyl(0.13, 0.26, 0.3, 0, 0.18, 0, color, 8), cyl(0.265, 0.265, 0.06, 0, 0.07, 0, '#e3b341', 8)]));
+  const tip = mesh([cyl(0.012, 0.13, 0.32, 0, 0.16, 0, color, 8)]);
+  tip.position.y = 0.32;
+  tip.rotation.x = -0.35;
+  hat.add(tip);
+  hat.rotation.x = -0.08;
+  return hat;
+}
+
+/** A candle on the desk: `flame` flickers. */
+function candle(x: number, z: number): { root: THREE.Group; flame: THREE.Mesh; light: THREE.PointLight } {
+  const root = new THREE.Group();
+  root.position.set(x, DESK_TOP, z);
+  const flame = new THREE.Mesh(merge([box(0.02, 0.045, 0.02, 0, 0.165, 0, '#ffc46b'), box(0.012, 0.02, 0.012, 0, 0.15, 0, '#fff3d0')]), glowing);
+  const light = new THREE.PointLight('#ffad5c', 1.2, 3.5);
+  light.position.y = 0.3;
+  root.add(mesh([cyl(0.022, 0.022, 0.13, 0, 0.065, 0, '#f1e7d0', 6), cyl(0.05, 0.06, 0.012, 0, 0.006, 0, '#8b6a2f', 6)]), flame, light);
+  return { root, flame, light };
+}
+
+/** The story's fairytale: candles on the desks, golden motes in the air, the puff of fog Clawd appears in and the sparks that drift from Janosch's head to Marco's. */
+function storyFx(): { root: THREE.Group; set(t: number, puff: number, sparks: number): void } {
+  const root = new THREE.Group();
+  const candles = [candle(-0.22, 0.92), candle(0.22, 0.92)];
+  for (const c of candles) root.add(c.root);
+  const MOTES = 60;
+  const seeds = Array.from({ length: MOTES }, (_, i) => ({ a: i * 2.399, r: 0.6 + ((i * 0.618) % 1) * 4.2, y: (i * 0.377) % 1, v: 0.03 + ((i * 0.271) % 1) * 0.05 }));
+  const at = new THREE.BufferAttribute(new Float32Array(MOTES * 3), 3);
+  const moteGeo = new THREE.BufferGeometry();
+  moteGeo.setAttribute('position', at);
+  const motes = new THREE.Points(moteGeo, new THREE.PointsMaterial({ color: '#ffd98a', size: 0.045, transparent: true, opacity: 0.75, depthWrite: false }));
+  motes.frustumCulled = false;
+  root.add(motes);
+  const ball = new THREE.IcosahedronGeometry(0.17, 1);
+  const clouds = Array.from({ length: 10 }, (_, i) => {
+    const m = new THREE.Mesh(ball, new THREE.MeshBasicMaterial({ color: i % 3 ? '#e8eefc' : '#ffd2b0', transparent: true, depthWrite: false }));
+    root.add(m);
+    return m;
+  });
+  const bit = merge([box(0.035, 0.035, 0.035, 0, 0, 0, '#ffffff')]);
+  const stars = Array.from({ length: 7 }, (_, i) => {
+    const m = new THREE.Mesh(bit, new THREE.MeshBasicMaterial({ color: i % 2 ? '#ff9a68' : '#ffd2b0', transparent: true, depthWrite: false }));
+    root.add(m);
+    return m;
+  });
+  return {
+    root,
+    set(t, puff, sparks) {
+      candles.forEach((c, i) => {
+        const flick = 1 + Math.sin(t * 13 + i * 2) * 0.12 + Math.sin(t * 7.3 + i) * 0.1;
+        c.flame.scale.set(1, flick, 1);
+        c.light.intensity = 1.2 * flick;
+      });
+      seeds.forEach((s, i) => {
+        const a = s.a + t * 0.05;
+        at.setXYZ(i, Math.sin(a) * s.r + Math.sin(t * 0.7 + i) * 0.06, ((s.y + t * s.v) % 1) * 3.2, 1.6 + Math.cos(a) * s.r);
+      });
+      at.needsUpdate = true;
+      clouds.forEach((m, i) => {
+        m.visible = puff > 0 && puff < 1;
+        const a = (i / clouds.length) * Math.PI * 2;
+        const r = 0.08 + puff * (0.4 + (i % 3) * 0.12);
+        m.position.set(CLAWD_AT.x + Math.sin(a) * r, 0.3 + (i % 4) * 0.12 + puff * 0.35, CLAWD_AT.z + Math.cos(a) * r);
+        m.scale.setScalar(0.7 + puff * 1.3);
+        m.material.opacity = (1 - puff) ** 1.5 * 0.9;
+      });
+      stars.forEach((m, i) => {
+        m.visible = sparks > 0;
+        const u = (t * 0.45 + i / stars.length) % 1;
+        m.position.set(THREE.MathUtils.lerp(DESK_W / 2, -DESK_W / 2, u), 1.4 + Math.sin(u * Math.PI) * 0.4 + Math.sin(t * 5 + i) * 0.03, 0.12 + Math.sin(i * 2.1) * 0.12);
+        m.rotation.set(t * 2 + i, t * 3, 0);
+        m.material.opacity = sparks * Math.sin(u * Math.PI);
+      });
+    },
+  };
+}
+
+/**
+ * Marco and Janosch coding side by side, Clawd at his own little desk east of the blueprint, Ellie at their feet and a miniature Kurt asleep against the desk's front leg, in an endless room.
+ * As the stage of the origin-story intro (`story`, #322) it starts without Clawd and the blueprint, Kurt sleeps through it, and shows what `stage()` asks for.
+ */
 export class CreditsScene {
   readonly scene = new THREE.Scene();
   /** the point the camera looks at */
@@ -271,8 +379,13 @@ export class CreditsScene {
   private dogOverride: DogOverride | null = null;
   private dogPlan: DogStep[] = [];
   private dog = { x: HOME.x, z: HOME.z, yaw: HOME_YAW, lie: 1, stepT: 0, gait: 0, bow: 0, sniff: 0 };
+  private readonly story: boolean;
+  private fx: ReturnType<typeof storyFx> | null = null;
+  /** where the blueprint's office coordinates start in the scene, and its scale: a point of the office is `origin + p * scale` */
+  readonly blueprintFrame = { x: HOLO.x - (WORLD.width * HOLO.scale) / 2, y: HOLO.lift, z: HOLO.z - (WORLD.depth * HOLO.scale) / 2, scale: HOLO.scale };
 
-  constructor() {
+  constructor({ story = false }: { story?: boolean } = {}) {
+    this.story = story;
     const { scene } = this;
     scene.background = new THREE.Color(BG);
 
@@ -336,7 +449,7 @@ export class CreditsScene {
     kurtGroup.scale.setScalar(MINI);
     kurtGroup.position.set(KURT_AT.x, KURT_AT.y, KURT_AT.z);
     scene.add(kurtGroup);
-    this.kurt = { rig: kurtRig, ...typingPoses(kurtRig), phase: 3.1, stand: 0, x: 0, z: 0, yaw: 0, gait: 0, y: 0, air: 0, moving: false, drop: 0.7, kneeSit: 0.15, sleep: 1 };
+    this.kurt = { rig: kurtRig, ...typingPoses(kurtRig), phase: 3.1, stand: 0, x: 0, z: 0, yaw: 0, gait: 0, y: 0, air: 0, moving: false, drop: 0.7, kneeSit: 0.15, sleep: 1, raise: 0 };
     const zTex = zTexture();
     for (let i = 0; i < 3; i++) {
       const z = new THREE.Sprite(new THREE.SpriteMaterial({ map: zTex, transparent: true, depthWrite: false }));
@@ -358,6 +471,31 @@ export class CreditsScene {
     scene.add(this.blueprint.root);
     this.ellie.root.traverse((o) => ((o as THREE.Mesh).isMesh ? (o.castShadow = true) : undefined));
     scene.add(this.ellie.root);
+
+    if (story) {
+      this.dogPlan = [{ kind: 'rest', d: Infinity }]; // Ellie sleeps through it
+      // wizards: pointed hats for the two and for Kurt (who sleeps through it too)
+      [marco.typing.rig, janosch.typing.rig, kurtRig].forEach((rig, i) => {
+        const hat = wizardHat(i === 1 ? '#4b2a7a' : '#27357f');
+        hat.position.y = HAT_Y;
+        rig.body.add(hat);
+      });
+      this.fx = storyFx();
+      scene.add(this.fx.root);
+      this.stage({ slump: 0, wizard: 0, sparks: 0, oath: 0, puff: 0, clawd: false, built: 0, pad: 0 });
+    }
+  }
+
+  /** The story's moment: who does what, whether Clawd is there yet and how far the blueprint is built. */
+  stage(s: StoryStage): void {
+    const [marco, janosch] = this.coders;
+    marco.sleep = s.slump;
+    marco.raise = s.oath;
+    janosch.raise = Math.max(s.wizard, s.oath);
+    this.clawd.group.visible = this.clawd.rig.root.visible = s.clawd;
+    this.blueprint.root.visible = s.pad > 0;
+    this.blueprint.show(s.built, s.pad);
+    this.fx?.set(this.clock, s.puff, s.sparks);
   }
 
   /** One frame of a person: typing at the desk while `stand` is 0, on their feet and walking as it nears 1. */
@@ -394,6 +532,11 @@ export class CreditsScene {
       rig.armR.rotation.z = L(rig.armR.rotation.z, 0.1, doze);
       rig.elbowL.rotation.x = L(rig.elbowL.rotation.x, -1.0, doze);
       rig.elbowR.rotation.x = L(rig.elbowR.rotation.x, -1.0, doze);
+    }
+    if (p.raise > 0) {
+      rig.armR.rotation.x = L(rig.armR.rotation.x, -2.5, p.raise);
+      rig.armR.rotation.z = L(rig.armR.rotation.z, 0.25, p.raise);
+      rig.elbowR.rotation.set(L(rig.elbowR.rotation.x, -0.2, p.raise), 0, L(rig.elbowR.rotation.z, 0, p.raise));
     }
     rig.root.position.set(p.x, p.y, p.z);
     rig.root.rotation.y = p.yaw;
@@ -650,12 +793,13 @@ export class CreditsScene {
   tick(dt: number): void {
     this.clock += dt;
     const t = this.clock;
-    this.tickKurt(dt, t);
-    this.tickClawd(dt, t);
+    if (this.story) this.tickZees(t, 1);
+    else this.tickKurt(dt, t);
+    if (this.clawd.rig.root.visible) this.tickClawd(dt, t);
     for (const c of this.coders) this.pose(c, t);
     this.pose(this.kurt, t);
     this.tickEllie(dt, t);
-    this.blueprint.tick(dt);
+    if (!this.story) this.blueprint.tick(dt);
     tickScreens(dt, this.screens);
   }
 }
