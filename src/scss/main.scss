@@ -2958,10 +2958,17 @@
                 transition: opacity 0.15s ease-out, transform 0.15s ease-out;
             }
 
-            &:hover::after,
             &:focus-visible::after {
                 opacity: 1;
                 transform: translate(-50%, 0);
+            }
+
+            /* a tap leaves :hover stuck on a touch screen: the pill would hang over the canvas */
+            @media (hover: hover) {
+                &:hover::after {
+                    opacity: 1;
+                    transform: translate(-50%, 0);
+                }
             }
         }
 
