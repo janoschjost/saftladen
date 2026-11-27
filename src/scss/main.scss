@@ -3301,6 +3301,41 @@
             }
         }
 
+        // René's speech bubble over his head (src/intro/Intro.ts places it): the game's bubble look, in the HUD font
+        &__bubble {
+            position: absolute;
+            max-width: min(17rem, calc(100vw - 1rem));
+            margin: 0;
+            padding: 0.5rem 0.875rem;
+            border-radius: 1rem;
+            background: white;
+            box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.45);
+            color: #14161b;
+            font-size: clamp(0.9375rem, 1.5vw, 1.125rem);
+            font-weight: 500;
+            line-height: 1.25;
+            text-align: center;
+            text-wrap: balance;
+            translate: -50% calc(-100% - 0.625rem);
+            pointer-events: none;
+
+            &[hidden] {
+                display: none;
+            }
+
+            // the tail points at him, also when the bubble was pushed back inside the picture
+            &::after {
+                position: absolute;
+                top: 100%;
+                left: clamp(1rem, calc(50% + var(--tail, 0px)), calc(100% - 1rem));
+                border: 0.5rem solid transparent;
+                border-top-color: white;
+                border-bottom-width: 0;
+                content: '';
+                translate: -50% -0.0625rem;
+            }
+        }
+
         &__skip {
             position: absolute;
             right: 1rem;
