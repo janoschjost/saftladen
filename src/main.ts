@@ -7,6 +7,7 @@ import { DayMenu } from './ui/DayMenu';
 import { Welcome } from './ui/Welcome';
 import { installIntro } from './intro/gate';
 import { loaderWaitMs } from './ui/loaderRules';
+import { installIdeaMail } from './ui/ideaMail';
 
 const hideLoader = (): void => {
   const loader = document.getElementById('loader');
@@ -41,6 +42,7 @@ try {
   new DayMenu((id) => game.startDay(id));
   new Welcome((held) => (game.paused = held));
   installIntro(game);
+  installIdeaMail(document.getElementById('idea-link') as HTMLAnchorElement);
 } finally {
   const fontsReady = document.fonts ? document.fonts.ready : Promise.resolve();
   const testPage = (import.meta.env.DEV || import.meta.env.MODE === 'e2e') && new URLSearchParams(location.search).has('test');

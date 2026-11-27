@@ -13,9 +13,26 @@ test('credits.page: /credits shows the 3D scene and the credits, and links back 
 
 test('credits.link: the Credits link in the game opens the credits page', async ({ page }) => {
   await openGame(page);
-  const link = page.locator('.m-credits-link__button');
+  const link = page.locator('.m-credits-link__button[href="credits/"]');
   await expect(link).toContainText('Marco & Janosch');
   await link.click();
   await expect(page).toHaveURL(/\/credits\/$/);
   await expect(page.locator('.m-credits__title')).toHaveText('Credits');
+});
+
+test('ui.ideamail: the Idee senden link is a mailto to both devs with subject and the current game URL in the body', async ({ page }) => {
+  await openGame(page);
+  const link = page.locator('#idea-link');
+  await expect(link).toContainText('Idee senden');
+  // stop the mail client from opening, read where the click would have gone
+  const href = await link.evaluate((a: HTMLAnchorElement) => {
+    a.addEventListener('click', (e) => e.preventDefault());
+    a.click();
+    return a.href;
+  });
+  expect(href.startsWith('mailto:marco.rieser@vitamin2.ch,janosch.jost@vitamin2.ch?')).toBe(true);
+  const q = new URLSearchParams(href.split('?')[1]);
+  expect(q.get('subject')).toBe('Saftladen: Idee / Feature-Wunsch');
+  expect(q.get('body')).toContain('Worum geht es?');
+  expect(q.get('body')).toContain(page.url());
 });
