@@ -13,11 +13,11 @@ async function dialTo(page: Page, hour: number, from?: number): Promise<void> {
   await page.mouse.up();
 }
 
-/** Walks the stepper (− / +) to a speed: 0 = pause, then 1, 10, 25. */
+/** Walks the stepper (− / +) to a speed: 0 = pause, then 0.5, 1, 2, 10, 25. */
 async function speedTo(page: Page, speed: number): Promise<void> {
-  const stops = ['❚❚', '1×', '10×', '25×'];
-  const want = stops.indexOf(speed === 0 ? '❚❚' : `${speed}×`);
-  for (let i = 0; i < 4; i++) {
+  const stops = ['', '0.5×', '1×', '2×', '10×', '25×']; // pause shows an icon, no text
+  const want = stops.indexOf(speed === 0 ? '' : `${speed}×`);
+  for (let i = 0; i < stops.length; i++) {
     const at = stops.indexOf((await page.locator('#clock-rate').textContent())!);
     if (at === want) return;
     await page.locator(at < want ? '#clock-faster' : '#clock-slower').click();
@@ -41,10 +41,10 @@ test.describe('clock', () => {
     expect(errors).toEqual([]);
   });
 
-  test('time.speed: pause, 1x, 10x, 25x run the whole game at that speed and are remembered', async ({ page }) => {
+  test('time.speed: pause, 0.5x, 1x, 2x, 10x, 25x run the whole game at that speed and are remembered', async ({ page }) => {
     await openGame(page);
     expect(await read(page, (g) => g.timeScale)).toBe(1); // ?time pins the clock, the game runs
-    for (const s of [10, 1, 25]) {
+    for (const s of [10, 2, 0.5, 1, 25]) {
       await speedTo(page, s);
       expect(await read(page, (g) => [g.sim.tod.auto, g.sim.tod.speed, g.timeScale])).toEqual([true, s, s]);
       await expect(page.locator('#clock-rate')).toHaveText(`${s}×`);
@@ -59,12 +59,26 @@ test.describe('clock', () => {
     const [simulated, clock] = await run(5);
     expect(simulated).toBeCloseTo(125, 3);
     expect(clock).toBeCloseTo(125, 3);
-    // pause (three steps down from 25x) stops everything; the last speed it passed (1x) stays remembered
+    // the stepper stops at both ends
+    await expect(page.locator('#clock-faster')).toBeDisabled();
+    // pause (five steps down from 25x) stops everything; the last speed it passed (0.5x) stays remembered
     await speedTo(page, 0);
     expect(await read(page, (g) => [g.sim.tod.auto, g.timeScale])).toEqual([false, 0]);
     await expect(page.locator('#time-auto')).not.toBeChecked();
+    await expect(page.locator('#clock-slower')).toBeDisabled();
+    await expect(page.locator('#clock-rate svg')).toBeVisible(); // an icon, announced as paused
+    await expect(page.locator('#clock-rate')).toHaveAttribute('aria-label', 'Pausiert');
     expect(await run(5)).toEqual([0, 0]);
-    expect(await page.evaluate(() => [localStorage.getItem('saftladen.time.auto'), localStorage.getItem('saftladen.time.speed')])).toEqual(['0', '1']);
+    expect(await page.evaluate(() => [localStorage.getItem('saftladen.time.auto'), localStorage.getItem('saftladen.time.speed')])).toEqual(['0', '0.5']);
+  });
+
+  test('time.speed: a remembered 0.5x or 2x is back after a reload, a stored value that is no stop falls back to 1x', async ({ page }) => {
+    for (const [stored, shown] of [['0.5', '0.5×'], ['2', '2×'], ['3', '1×']]) {
+      await page.addInitScript((v) => localStorage.setItem('saftladen.time.speed', v), stored);
+      await openGame(page);
+      await expect(page.locator('#clock-rate')).toHaveText(shown);
+      expect(await read(page, (g) => g.sim.tod.speed)).toBe(Number(shown.replace('×', '')));
+    }
   });
 
   test('time.jump: dragging along the bar jumps the time, light and people follow', async ({ page }) => {

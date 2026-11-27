@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CYCLE_SECONDS, cycleOf, daylight, followedDaylight, hourOf, laptopGlow, lookOf, NIGHT_SECONDS, oppositeDaylight, roomLight, TimeOfDay } from './TimeOfDay';
+import { CYCLE_SECONDS, cycleOf, DEFAULT_SPEED, SPEEDS, daylight, followedDaylight, hourOf, laptopGlow, lookOf, NIGHT_SECONDS, oppositeDaylight, roomLight, TimeOfDay } from './TimeOfDay';
 
 describe('time of day', () => {
   it('time.cycle: cycleOf is the inverse of hourOf', () => {
@@ -20,6 +20,19 @@ describe('time of day', () => {
     const c = p.cycle;
     p.update(100);
     expect(p.cycle).toBe(c);
+  });
+
+  it('time.speed: the stops are 0.5x, 1x, 2x, 10x, 25x, start at 1x, and the scale is the stop (0 while paused)', () => {
+    expect(SPEEDS).toEqual([0.5, 1, 2, 10, 25]);
+    expect(DEFAULT_SPEED).toBe(1);
+    const t = new TimeOfDay();
+    expect(t.scale).toBe(1);
+    for (const s of SPEEDS) {
+      t.speed = s;
+      expect(t.scale).toBe(s);
+    }
+    t.auto = false;
+    expect(t.scale).toBe(0);
   });
 
   it('time.cycle: the night (21:00 to 05:00) takes NIGHT_SECONDS of the cycle at 1x, and the game starts at 10:00', () => {
