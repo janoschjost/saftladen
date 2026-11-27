@@ -1,21 +1,24 @@
 import type { Game } from '../game/Game';
 import { storage } from '../game/storage';
 import { strings } from '../i18n/strings';
-import { shouldPlayIntro } from './introRules';
+import { shouldGreet, shouldPlayIntro, withoutGreeting } from './introRules';
 
 const KEY = 'saftladen.intro';
 
-const wasSeen = (): boolean => {
+/** René's mail link (`?rene`, #333) was used in this browser: he greets only once */
+const GREETED = 'saftladen.intro.rene';
+
+const was = (key: string): boolean => {
   try {
-    return storage.getItem(KEY) === '1';
+    return storage.getItem(key) === '1';
   } catch {
     return false;
   }
 };
 
-const markSeen = (): void => {
+const mark = (key: string): void => {
   try {
-    storage.setItem(KEY, '1');
+    storage.setItem(key, '1');
   } catch {
     /* storage may be unavailable */
   }
@@ -44,7 +47,7 @@ export function installIntro(game: Game): void {
   const ended = (): void => {
     finish = null;
     window.removeEventListener('keydown', onKey, true);
-    markSeen();
+    mark(KEY);
     if (location.hash === '#intro') history.replaceState(null, '', location.pathname + location.search);
   };
   /** Skip, also while the scene is still loading (or could not be loaded: no chunk, no WebGL context): straight to the office. */
@@ -63,20 +66,26 @@ export function installIntro(game: Game): void {
     e.preventDefault();
     if (e.key === 'Enter' || e.key === 'Escape') stop();
   };
-  const play = (): void => {
+  const play = (greet = false): void => {
     if (!root.hidden || !welcome.hidden) return; // one at a time: the welcome card holds the game too
+    if (greet) {
+      // the marker has done its job: a reload or a passed-on address does not greet again
+      mark(GREETED);
+      history.replaceState(null, '', location.pathname + withoutGreeting(location.search) + location.hash);
+    }
     root.hidden = false; // the dark stage covers the office at once, the scene follows
     game.paused = true;
     window.addEventListener('keydown', onKey, true);
     skip.focus();
     import('./Intro')
       .then((m) => {
-        if (!root.hidden) finish = m.playIntro(root, { start: game.flyInStart, handOver: letGo, done: ended }); // not skipped meanwhile
+        if (!root.hidden) finish = m.playIntro(root, { greet, start: game.flyInStart, handOver: letGo, done: ended }); // not skipped meanwhile
       })
       .catch(stop);
   };
   skip.addEventListener('click', stop);
-  link.addEventListener('click', play);
+  link.addEventListener('click', () => play());
   window.addEventListener('hashchange', () => location.hash === '#intro' && play());
-  if (shouldPlayIntro(location.search, location.hash, wasSeen())) play();
+  const greeted = was(GREETED);
+  if (shouldPlayIntro(location.search, location.hash, was(KEY), greeted)) play(shouldGreet(location.search, greeted));
 }
