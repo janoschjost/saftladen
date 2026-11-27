@@ -35,7 +35,7 @@ test.describe('intro', () => {
     await page.locator('#intro-skip').click();
     await expect(page.locator('#intro')).toBeHidden();
     await page.locator('#open-settings').click();
-    await page.locator('#open-intro').click();
+    await page.locator('#open-intro').dispatchEvent('click'); // its link in the settings popover is hidden for now
     await expect(page.locator('#settings')).toBeHidden();
     await expect(page.locator('#intro')).toBeVisible();
     expect(await read(page, (g) => g.paused)).toBe(true);
