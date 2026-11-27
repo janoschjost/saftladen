@@ -19,12 +19,18 @@ export class Actions {
   constructor(onHome: () => void, onOut: () => void, onSteer: () => void, onFollow: () => void, onBack: () => void) {
     this.follow.addEventListener('click', onFollow);
     this.steer.addEventListener('click', onSteer);
-    this.home.textContent = t.home;
-    this.out.textContent = t.errand;
-    this.back.textContent = t.callBack;
+    this.label(this.home, t.home);
+    this.label(this.out, t.errand);
+    this.label(this.back, t.callBack);
     this.back.addEventListener('click', onBack);
     this.home.addEventListener('click', onHome);
     this.out.addEventListener('click', onOut);
+  }
+
+  /** The label of an icon button: its name for screen readers and the tooltip on hover. */
+  private label(b: HTMLButtonElement, text: string): void {
+    b.setAttribute('aria-label', text);
+    b.dataset.tip = text;
   }
 
   /** Says why a click was refused, above the card, for a few seconds (or until another person is selected). */
@@ -56,9 +62,9 @@ export class Actions {
       clearTimeout(this.noteTimer);
     }
     this.follow.setAttribute('aria-pressed', String(following));
-    this.follow.textContent = following ? 'Folgen beenden (F)' : 'Folgen (F)';
+    this.label(this.follow, following ? 'Folgen beenden' : 'Folgen');
     this.steer.setAttribute('aria-pressed', String(steering));
-    this.steer.textContent = steering ? 'Steuern beenden' : 'Steuern (WASD)';
+    this.label(this.steer, steering ? 'Steuern beenden' : 'Steuern (WASD)');
     for (const b of [this.home, this.out]) b.hidden = callable;
     this.steer.hidden = callable && !steering; // steering can always be ended from here
     this.back.hidden = !callable;
@@ -67,12 +73,8 @@ export class Actions {
     this.home.disabled = !inOffice || homeFull;
     // why Homeoffice is greyed out: a tooltip in the game's own style (`data-tip`, see `.m-actions .m-button[data-tip]`), not a browser title
     const tip = inOffice && homeFull ? t.homeFull : '';
-    if (tip) {
-      this.home.dataset.tip = tip;
-      this.home.setAttribute('aria-description', tip);
-    } else {
-      delete this.home.dataset.tip;
-      this.home.removeAttribute('aria-description');
-    }
+    this.home.dataset.tip = tip || t.home;
+    if (tip) this.home.setAttribute('aria-description', tip);
+    else this.home.removeAttribute('aria-description');
   }
 }
