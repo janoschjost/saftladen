@@ -115,7 +115,7 @@ test.describe('hud.settings', () => {
 
     // no label switches and no panel links in the popover; Figuren has its own button next to the gear
     await expect(page.locator('#setting-tables')).toHaveCount(0);
-    await expect(page.locator('#settings .m-settings__link:visible')).toHaveCount(0);
+    await expect(page.locator('#settings .m-settings__link:visible:not(#idea-link)')).toHaveCount(0);
     await page.keyboard.press('Escape');
     await page.locator('#open-picker').click();
     await expect(page.locator('#picker')).toBeVisible();
