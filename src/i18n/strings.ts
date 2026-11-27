@@ -29,6 +29,8 @@ export const strings = {
   intro: {
     label: 'Wie alles begann',
     skip: 'Überspringen',
+    /** René's greeting for whoever comes through his mail link (#333): lowercase, as he writes */
+    greeting: ['herzlich willkommen', 'ich hab nur die mail geschickt', 'ich weiss auch nicht, worum es geht', 'fragt die zwei da hinten'],
     lines: [
       { de: 'Es waren einmal zwei Entwickler.', en: 'Once upon a time, there were two devs.' },
       { de: 'Sie träumten davon, VITAMIN\u00a02 als Simulation zu erschaffen.', en: 'They dreamed of bringing VITAMIN\u00a02 to life as a simulation.' },

@@ -36,8 +36,8 @@ test.describe('intro', () => {
     await expect(page.locator('#intro')).toBeHidden();
     await page.locator('#open-settings').click();
     await page.locator('#open-intro').dispatchEvent('click'); // its link in the settings popover is hidden for now
-    await expect(page.locator('#settings')).toBeHidden();
     await expect(page.locator('#intro')).toBeVisible();
+    await expect(page.locator('#settings')).toBeHidden({ timeout: 30_000 }); // it closes with an animation, which waits while the scene is built
     expect(await read(page, (g) => g.paused)).toBe(true);
     await page.keyboard.press('Enter');
     await expect(page.locator('#intro')).toBeHidden();
@@ -47,6 +47,46 @@ test.describe('intro', () => {
     await page.keyboard.press('Escape');
     await expect(page.locator('#intro')).toBeHidden();
     expect(new URL(page.url()).hash).toBe('');
+  });
+
+  test('intro.greeting: ?rene plays the intro with René\'s greeting, also when the intro was seen; the marker leaves the address', async ({ page }) => {
+    test.slow(); // two loads and his walk in wall time: a CI runner needs most of the usual minute
+    // somebody who has seen the plain intro
+    await boot(page, FIRST_VISIT);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#intro')).toBeHidden();
+    const errors = await boot(page, `${FIRST_VISIT}&rene`);
+    await expect(page.locator('#intro')).toBeVisible();
+    expect(new URL(page.url()).search).toBe('?test&intro=1&seed=1&time=11');
+    // in wall time: the intro is not part of the game's clock
+    await expect(page.locator('#intro-bubble')).toHaveText('herzlich willkommen', { timeout: 30_000 });
+    await expect(page.locator('#intro-bubble')).toBeInViewport({ ratio: 1 });
+    await expect(page.locator('#intro-de')).toHaveText(''); // the story waits for him
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#intro')).toBeHidden();
+    await expect(page.locator('#intro-bubble')).toBeHidden();
+    expect(await read(page, (g) => g.paused)).toBe(false);
+    expect(errors).toEqual([]);
+  });
+
+  test('intro.greeting: the link greets every time, a reload of the address it leaves behind does not', async ({ page }) => {
+    test.slow(); // three loads
+    await boot(page, `${FIRST_VISIT}&rene`);
+    await expect(page.locator('#intro')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#intro')).toBeHidden();
+    // the address as it is now: no marker, the intro was seen
+    await boot(page, page.url());
+    await expect(page.locator('#intro')).toBeHidden();
+    // the link again
+    await boot(page, `${FIRST_VISIT}&rene`);
+    await expect(page.locator('#intro')).toBeVisible();
+  });
+
+  test('intro.greeting: without ?rene nobody greets', async ({ page }) => {
+    await boot(page, FIRST_VISIT);
+    await expect(page.locator('#intro-de')).toHaveText('Es waren einmal zwei Entwickler.', { timeout: 30_000 });
+    await expect(page.locator('#intro-bubble')).toBeHidden();
   });
 
   test('intro.once: plain ?test never plays it', async ({ page }) => {

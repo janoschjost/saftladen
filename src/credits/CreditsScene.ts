@@ -164,6 +164,18 @@ export interface StoryStage {
   pad: number;
 }
 
+/** René, who greets in front of the story (#333): where he is on the floor (world metres), which way he faces, what he does. */
+export interface Greeter {
+  x: number;
+  z: number;
+  yaw: number;
+  moving: boolean;
+  /** 0..1: both forearms up, hands out ("no idea") */
+  shrug: number;
+  /** 0..1: the right arm stretched out ahead ("those two") */
+  point: number;
+}
+
 /** Arms that reach the keys at this person's size (the body scales with height, the desk doesn't). */
 function typingPoses(rig: CharacterRig): { typeL: ArmPose; typeR: ArmPose } {
   const h = rig.root.scale.y;
@@ -381,10 +393,11 @@ export class CreditsScene {
   private dog = { x: HOME.x, z: HOME.z, yaw: HOME_YAW, lie: 1, stepT: 0, gait: 0, bow: 0, sniff: 0 };
   private readonly story: boolean;
   private fx: ReturnType<typeof storyFx> | null = null;
+  private rene: (Typing & { shrug: number; point: number }) | null = null;
   /** where the blueprint's office coordinates start in the scene, and its scale: a point of the office is `origin + p * scale` */
   readonly blueprintFrame = { x: HOLO.x - (WORLD.width * HOLO.scale) / 2, y: HOLO.lift, z: HOLO.z - (WORLD.depth * HOLO.scale) / 2, scale: HOLO.scale };
 
-  constructor({ story = false }: { story?: boolean } = {}) {
+  constructor({ story = false, greeter = false }: { story?: boolean; greeter?: boolean } = {}) {
     this.story = story;
     const { scene } = this;
     scene.background = new THREE.Color(BG);
@@ -482,8 +495,33 @@ export class CreditsScene {
       });
       this.fx = storyFx();
       scene.add(this.fx.root);
+      if (greeter) {
+        const rig = buildCharacter(member('rene-kappeler').look);
+        rig.root.traverse((o) => ((o as THREE.Mesh).isMesh ? (o.castShadow = true) : undefined));
+        rig.root.visible = false;
+        // the room is lit at the desk only: his own soft light, ahead of him and above, so his face shows wherever he stands
+        const glow = new THREE.PointLight('#fff0dc', 9, 7);
+        glow.position.set(0.5, 2.5, 1.5);
+        rig.root.add(glow);
+        scene.add(rig.root);
+        this.rene = { rig, ...typingPoses(rig), phase: 0.6, stand: 1, x: 0, z: 0, yaw: 0, gait: 0, y: 0, air: 0, moving: false, drop: 0, kneeSit: 0.05, sleep: 0, raise: 0, shrug: 0, point: 0 };
+      }
       this.stage({ slump: 0, wizard: 0, sparks: 0, oath: 0, puff: 0, clawd: false, built: 0, pad: 0 });
     }
+  }
+
+  /** René's moment in front of the story; `null`: he is gone. */
+  greet(g: Greeter | null): void {
+    const r = this.rene;
+    if (!r) return;
+    r.rig.root.visible = !!g;
+    if (g) Object.assign(r, g);
+  }
+
+  /** Where a speech bubble over René's head hangs (world), while he is there. */
+  greeterHead(): THREE.Vector3 | null {
+    const r = this.rene;
+    return r?.rig.root.visible ? new THREE.Vector3(r.x, HAT_Y * r.rig.root.scale.y + 0.14, r.z) : null;
   }
 
   /** The story's moment: who does what, whether Clawd is there yet and how far the blueprint is built. */
@@ -541,6 +579,26 @@ export class CreditsScene {
     rig.root.position.set(p.x, p.y, p.z);
     rig.root.rotation.y = p.yaw;
     if (rig.tail) rig.tail.rotation.y = Math.sin(t * (walking ? 9 : 3) + phase) * 0.45;
+  }
+
+  /** René on his feet: walking, standing, shrugging, pointing. */
+  private tickGreeter(dt: number, t: number): void {
+    const r = this.rene;
+    if (!r?.rig.root.visible) return;
+    if (r.moving) r.gait += dt * 8.5;
+    this.pose(r, t);
+    const { rig } = r;
+    const L = THREE.MathUtils.lerp;
+    if (r.shrug > 0) {
+      rig.armL.rotation.set(L(rig.armL.rotation.x, -0.25, r.shrug), 0, L(rig.armL.rotation.z, -0.45, r.shrug));
+      rig.armR.rotation.set(L(rig.armR.rotation.x, -0.25, r.shrug), 0, L(rig.armR.rotation.z, 0.45, r.shrug));
+      rig.elbowL.rotation.x = L(rig.elbowL.rotation.x, -1.5, r.shrug);
+      rig.elbowR.rotation.x = L(rig.elbowR.rotation.x, -1.5, r.shrug);
+    }
+    if (r.point > 0) {
+      rig.armR.rotation.x = L(rig.armR.rotation.x, -1.45, r.point);
+      rig.elbowR.rotation.x = L(rig.elbowR.rotation.x, -0.05, r.point);
+    }
   }
 
   /** Puts Kurt at a world position (his rig is scaled; its origin is where he sleeps, on the floor). */
@@ -798,6 +856,7 @@ export class CreditsScene {
     if (this.clawd.rig.root.visible) this.tickClawd(dt, t);
     for (const c of this.coders) this.pose(c, t);
     this.pose(this.kurt, t);
+    this.tickGreeter(dt, t);
     this.tickEllie(dt, t);
     if (!this.story) this.blueprint.tick(dt);
     tickScreens(dt, this.screens);
