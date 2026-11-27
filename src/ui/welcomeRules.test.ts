@@ -25,17 +25,19 @@ describe('ui.welcome', () => {
     expect(pickGreeter([{ role: 'Beratung', portrait: 'x.jpg' }], seeded(1))).toBeNull();
   });
 
-  it('ui.welcome: first visit shows, returning visitor does not', () => {
-    expect(shouldShowWelcome('', '', false)).toBe(true);
+  it('ui.welcome: off by default, on the first visit too', () => {
+    expect(shouldShowWelcome('', '', false)).toBe(false);
     expect(shouldShowWelcome('', '', true)).toBe(false);
+    expect(shouldShowWelcome('?seed=1&time=11', '', false)).toBe(false);
   });
   it('ui.welcome: #welcome always shows, even when seen or in test mode', () => {
     expect(shouldShowWelcome('', '#welcome', true)).toBe(true);
     expect(shouldShowWelcome('?test', '#welcome', true)).toBe(true);
   });
-  it('ui.welcome: ?test and ?welcome=0 never show; ?welcome=1 does not force it, ?test&welcome=1 opts the spec in', () => {
+  it('ui.welcome: ?test and ?welcome=0 never show; ?welcome=1 opts in to the first-visit card, with ?test too', () => {
     expect(shouldShowWelcome('?test&seed=1', '', false)).toBe(false);
     expect(shouldShowWelcome('?welcome=0', '', false)).toBe(false);
+    expect(shouldShowWelcome('?welcome=1', '', false)).toBe(true);
     expect(shouldShowWelcome('?welcome=1', '', true)).toBe(false);
     expect(shouldShowWelcome('?test&welcome=1', '', false)).toBe(true);
     expect(shouldShowWelcome('?test&welcome=1', '', true)).toBe(false);

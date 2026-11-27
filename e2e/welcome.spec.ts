@@ -1,6 +1,6 @@
 import { boot, expect, openGame, read, test } from './game';
 
-/** `?test` keeps the card away from every other spec; `welcome=1` opts this one in, as a first-time visitor. */
+/** The card is off by default (#319); `welcome=1` opts this spec in, as a first-time visitor. */
 const FIRST_VISIT = '/?test&welcome=1&seed=1&time=11';
 
 test.describe('ui.welcome', () => {
