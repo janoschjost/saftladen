@@ -26,7 +26,7 @@ const MAP = {
   night: 'moon',
   mouse: 'mouse-simple',
   package: 'package',
-  pause: 'pause',
+  pause: 'pause-thin',
   person: 'user',
   phone: 'phone',
   pointer: 'cursor',

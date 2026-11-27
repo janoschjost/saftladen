@@ -26,7 +26,9 @@ const ANCHORS: ReadonlyArray<readonly [number, number]> = (() => {
 const START = cycleOf(10);
 
 /** Clock speeds the player can pick: 1x = one day in `CYCLE_SECONDS`. */
-export const SPEEDS = [1, 10, 25] as const;
+export const SPEEDS = [0.5, 1, 2, 10, 25] as const;
+/** the speed a fresh game (and a stored value that is no stop) starts at */
+export const DEFAULT_SPEED: Speed = 1;
 export type Speed = (typeof SPEEDS)[number];
 /** Days of the week, Monday first (`TimeOfDay.weekday` indexes this). */
 export const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'] as const;
@@ -119,7 +121,7 @@ export class TimeOfDay {
   /** dev URLs (`?time=`): the clock stands still at the given hour while the game runs on; a click on a speed button lets it go */
   pinned = false;
   /** how fast the game runs while `auto` (one of SPEEDS); `Game` scales the time it hands to `update` and the simulation by it */
-  speed: Speed = 1;
+  speed: Speed = DEFAULT_SPEED;
   /** game seconds per real second: 0 while paused, else `speed` */
   get scale(): number {
     return this.auto ? this.speed : 0;

@@ -1,5 +1,6 @@
 import { storage } from '../game/storage';
-import { cycleOf, SPEEDS, type Speed, type TimeOfDay } from '../game/TimeOfDay';
+import { icon } from './icons';
+import { cycleOf, DEFAULT_SPEED, SPEEDS, type Speed, type TimeOfDay } from '../game/TimeOfDay';
 import { stepHour, trackHour } from './clockDial';
 
 const KEY = 'saftladen.time.auto';
@@ -20,7 +21,7 @@ const store = (key: string, value: string) => {
 
 /**
  * The clock: a progress pill in the HUD: day or night icon, the time, and a bar as wide as the day, coloured like the sky
- * it has passed (press or drag it to jump to a time, arrow keys step 15 min); a stepper (− 1× +) walks through pause, 1x, 10x, 25x;
+ * it has passed (press or drag it to jump to a time, arrow keys step 15 min); a stepper (− 1× +) walks through pause, 0.5x, 1x, 2x, 10x, 25x;
  * plus the time slider and auto switch in the environment popover,
  * whose track is painted like the sky with hour ticks under it. Pause and speed act on the whole game and are remembered
  * (`saftladen.time.auto`, `saftladen.time.speed`).
@@ -48,7 +49,7 @@ export class TimeControl {
     try {
       this.auto.checked = storage.getItem(KEY) !== '0';
       const speed = Number(storage.getItem(SPEED_KEY));
-      if ((SPEEDS as readonly number[]).includes(speed)) tod.speed = speed as Speed;
+      tod.speed = (SPEEDS as readonly number[]).includes(speed) ? (speed as Speed) : DEFAULT_SPEED;
     } catch {
       /* storage may be unavailable */
     }
@@ -93,11 +94,11 @@ export class TimeControl {
     store(SPEED_KEY, String(s));
   }
 
-  /** The stepper: one stop slower or faster along pause, 1x, 10x, 25x. */
+  /** The stepper: one stop slower or faster along pause, 0.5x, 1x, 2x, 10x, 25x. */
   private stepSpeed(by: number): void {
     const stops = [0, ...SPEEDS];
     const at = stops.indexOf(this.tod.scale);
-    const s = stops[Math.min(stops.length - 1, Math.max(0, (at < 0 ? 1 : at) + by))];
+    const s = stops[Math.min(stops.length - 1, Math.max(0, (at < 0 ? stops.indexOf(DEFAULT_SPEED) : at) + by))];
     if (s !== 0) this.setSpeed(s as Speed);
     this.tod.pinned = false;
     this.setAuto(s !== 0);
@@ -170,7 +171,13 @@ export class TimeControl {
     if (state !== this.shownState) {
       this.shownState = state;
       this.auto.checked = tod.auto;
-      this.rate.textContent = tod.scale === 0 ? '❚❚' : `${tod.scale}×`;
+      if (tod.scale === 0) {
+        this.rate.innerHTML = icon('pause', 14, 'm-clock__pause');
+        this.rate.setAttribute('aria-label', 'Pausiert');
+      } else {
+        this.rate.textContent = `${tod.scale}×`;
+        this.rate.removeAttribute('aria-label');
+      }
       this.slower.disabled = tod.scale === 0;
       this.faster.disabled = tod.scale === SPEEDS[SPEEDS.length - 1];
       this.pill.classList.toggle('is-night', tod.night);
