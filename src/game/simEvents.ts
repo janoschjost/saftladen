@@ -544,24 +544,22 @@ export function registerSimEvents(sim: Sim): void {
     label: 'Nerf-Gefecht',
     run: () => {
       if (sim.nerf.active) return null;
-      const shooter = free()
-        .filter((o) => o.member.look.nerf)
-        .sort(() => random() - 0.5)[0];
-      if (!shooter) {
-        // only the devs carry guns: call one back, the next try (e.g. `?event=nerf` retries) starts the fight
-        const away = people.find((o) => o.member.look.nerf && o.presence === 'out');
-        if (away) presence.callBack(away);
+      const devs = free().filter((o) => o.member.look.nerf);
+      if (devs.length < 2) {
+        // only the devs carry guns: call back as many as are missing, the next try (e.g. `?event=nerf` retries) starts the duel
+        const away = people.filter((o) => o.member.look.nerf && o.presence === 'out').sort(() => random() - 0.5);
+        for (const o of away.slice(0, 2 - devs.length)) presence.callBack(o);
         return null;
       }
-      const target = free()
+      const shooter = devs.sort(() => random() - 0.5)[0];
+      const target = devs
         .filter((o) => o !== shooter)
         .sort((x, y) => Math.hypot(x.pos.x - shooter.pos.x, x.pos.z - shooter.pos.z) - Math.hypot(y.pos.x - shooter.pos.x, y.pos.z - shooter.pos.z))[0];
-      if (!target) return null;
       drop(shooter);
       drop(target);
       if (!sim.nerf.start(shooter, target)) return null;
       sim.point(shooter);
-      return `${first(shooter)} schiesst auf ${first(target)}`;
+      return `${first(shooter)} und ${first(target)} duellieren sich mit Nerf-Guns`;
     },
   });
   events.register({

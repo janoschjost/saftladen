@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { NavGrid } from './NavGrid';
+import type { NavGrid, Vec2 } from './NavGrid';
 import type { Person } from './Person';
 import { onBreak } from './PetCare';
 // own stream (`fxRandom`): a skirmish never shifts the simulation's numbers, so a seed replays everything else as before
@@ -13,12 +13,15 @@ const FLOOR = 0.02;
 const MUZZLE = 1.2;
 const CHEST = 1.15;
 
-const AIM = 0.9; // seconds from stopping to pulling the trigger
+const AIM = { min: 0.6, max: 0.9 }; // seconds from stopping to pulling the trigger
+const COOL = { min: 0.4, max: 1.1 }; // seconds somebody stands there after a shot
 const DUCK = 1.1; // seconds somebody stays ducked after a hit
-const AFTER = 1.0; // seconds everybody stands there after the last dart before they walk on
+const DUEL = { min: 10, max: 20 }; // seconds a duel lasts
+const MOVE_MAX = 2.2; // seconds to get to the next spot at the longest
+const SIDESTEP = { min: 1, max: 2.2 }; // metres to the next spot
 const HIT_CHANCE = 0.6;
-const MAX_SHOTS = 4; // darts in one skirmish, however much they shoot back
-const RANGE = { min: 2.5, max: 9 }; // metres between shooter and target for a random skirmish
+const FLINCH = 0.7; // a hit makes the target duck this often
+const RANGE = { min: 2.5, max: 9 }; // metres between the two fighters
 const GAP = { min: 45, max: 120 }; // seconds between two random skirmishes
 const RETRY = 5; // seconds before looking for a pair again when nobody was on a break
 const REST = { min: 20, max: 40 }; // seconds a dart lies on the floor
@@ -42,21 +45,6 @@ export function solveShot(from: { x: number; y: number; z: number }, to: { x: nu
   const d = Math.max(0.05, Math.hypot(dx, dz));
   const t = d / speed;
   return { vx: dx / t, vz: dz / t, vy: (to.y - from.y + 0.5 * g * t * t) / t, t };
-}
-
-export type Reaction = 'back' | 'duck' | 'ignore';
-
-/**
- * What somebody does when a dart arrives (`roll` in [0, 1)). A hit gets a reaction most of the time; a miss is
- * mostly shrugged off. Only people with a gun of their own (`armed`) shoot back.
- */
-export function reactionTo(hit: boolean, armed: boolean, roll: number): Reaction {
-  if (hit) {
-    if (armed && roll < 0.5) return 'back';
-    return roll < 0.85 ? 'duck' : 'ignore';
-  }
-  if (armed && roll < 0.3) return 'back';
-  return roll < 0.6 ? 'duck' : 'ignore';
 }
 
 // one dart: an orange foam body with a suction cup on the tip, lying along z
@@ -141,60 +129,79 @@ export class Dart {
   }
 }
 
-interface Fight {
-  shooter: Person;
-  target: Person;
-  stage: 'aim' | 'fly' | 'react';
+type Stage = 'move' | 'aim' | 'cool' | 'duck';
+
+/** One of the two in a duel: they walk to a spot, stand and aim, shoot, stand a moment, and walk on. */
+interface Fighter {
+  p: Person;
+  foe: Person;
+  stage: Stage;
   t: number;
-  /** seconds from the shot to the dart arriving, and whether it will hit */
-  flight: number;
+  /** seconds the stage lasts */
+  len: number;
+  /** their pin: the walk and the stand; a different one means somebody else took them */
+  pin: Person['scripted'];
+}
+
+/** a dart in the air that will strike `target` */
+interface Flight {
+  target: Fighter;
+  left: number;
   hit: boolean;
-  shots: number;
-  /** how long the reaction lasts before the fight is over / the target's answer starts */
-  react: Reaction;
+}
+
+interface Duel {
+  fighters: [Fighter, Fighter];
+  flights: Flight[];
+  /** seconds since it began, and how long it lasts */
+  clock: number;
+  length: number;
 }
 
 /**
- * Nerf skirmishes: the devs carry foam dart guns and, now and then, shoot at somebody on their break. The target
- * ducks, shoots back (if they carry a gun too) or ignores it. Darts land on the floor, lie there a while and fade.
- * Only people on a break take part (no desk, talk, meeting or errand), see `onBreak`.
+ * Nerf duels: the two devs carry foam dart guns and, now and then, two of them on a break shoot at each other for
+ * 10–20 seconds: both stand and aim, shoot, move to another spot and shoot again. A hit sometimes makes the target
+ * duck. Darts land on the floor, lie there a while and fade. Only people on a break take part (no desk, talk,
+ * meeting or errand), see `onBreak`.
  */
 export class Nerf {
   readonly darts: Dart[] = [];
-  private fights: Fight[] = [];
+  private duel: Duel | null = null;
   private timer = between(GAP) / 2;
 
   constructor(private scene: THREE.Scene) {}
 
-  /** a skirmish is running */
+  /** a duel is running */
   get active(): boolean {
-    return this.fights.length > 0;
+    return this.duel !== null;
   }
 
-  /** `a` stops, aims at `b` and shoots; false when `a` cannot stop right now. Does not check range or who is on a break. */
+  /** `a` and `b` stop what they do and start shooting at each other; false when one of them cannot. Does not check range or who is on a break. */
   start(a: Person, b: Person): boolean {
-    if (a === b || this.fights.some((f) => f.shooter === a || f.target === a || f.shooter === b || f.target === b)) return false;
-    if (!this.aim(a, b, AIM + 1)) return false;
-    // the target notices and stands still, facing the shooter, so the dart really flies at them
-    if (!this.watch(b, a, AIM + 1.5)) {
-      this.stop(a);
-      return false;
-    }
-    this.fights.push({ shooter: a, target: b, stage: 'aim', t: 0, flight: 0, hit: false, shots: 0, react: 'ignore' });
+    if (this.duel || a === b || !a.inOffice || !b.inOffice || a.held || b.held || a.controlled || b.controlled || a.talk || b.talk) return false;
+    const mk = (p: Person, foe: Person, len: number): Fighter => ({ p, foe, stage: 'aim', t: 0, len, pin: null });
+    const fa = mk(a, b, between(AIM));
+    const fb = mk(b, a, between(AIM) + 0.3); // not at the same moment
+    this.stand(fa, 'aim');
+    this.stand(fb, 'aim');
+    this.duel = { fighters: [fa, fb], flights: [], clock: 0, length: between(DUEL) };
     return true;
   }
 
-  /** Looks for a shooter and a target on a break within range, in line of sight. */
+  /** Ends a running duel at once: everybody walks on. */
+  abort(): void {
+    if (this.duel) this.end(this.duel);
+  }
+
+  /** Looks for two devs on a break within range, in line of sight. */
   find(people: readonly Person[], nav: NavGrid): [Person, Person] | null {
     const shooters = people.filter((p) => p.member.look.nerf && onBreak(p) && p.sit < 0.05).sort(() => random() - 0.5);
     for (const s of shooters) {
-      const targets = people
-        .filter((t) => {
-          const d = Math.hypot(t.pos.x - s.pos.x, t.pos.z - s.pos.z);
-          return t !== s && onBreak(t) && t.sit < 0.05 && d >= RANGE.min && d <= RANGE.max && nav.lineClear(s.pos, t.pos);
-        })
-        .sort(() => random() - 0.5);
-      if (targets.length) return [s, targets[0]];
+      const foes = shooters.filter((t) => {
+        const d = Math.hypot(t.pos.x - s.pos.x, t.pos.z - s.pos.z);
+        return t !== s && d >= RANGE.min && d <= RANGE.max && nav.lineClear(s.pos, t.pos);
+      });
+      if (foes.length) return [s, foes[0]];
     }
     return null;
   }
@@ -206,8 +213,10 @@ export class Nerf {
       this.scene.remove(this.darts[i].mesh);
       this.darts.splice(i, 1);
     }
-    this.fights = this.fights.filter((f) => this.advance(f, dt));
-    if (this.fights.length) return;
+    if (this.duel) {
+      if (!this.advance(this.duel, dt, nav)) this.end(this.duel);
+      return;
+    }
     if ((this.timer -= dt) > 0) return;
     const pair = this.find(people, nav);
     if (!pair || !this.start(...pair)) {
@@ -217,57 +226,89 @@ export class Nerf {
     this.timer = between(GAP);
   }
 
-  /** `p` stops and looks at `from`, no pose (a skirmish target waiting for the dart). */
-  private watch(p: Person, from: Person, seconds: number): boolean {
-    if (!p.talkTo({ x: from.pos.x, z: from.pos.z }, seconds, false)) return false;
-    p.nerfKind = 'watch';
+  /** Stops `f.p` where they are, facing the other, in the pose of `stage`. */
+  private stand(f: Fighter, stage: 'aim' | 'cool' | 'duck'): void {
+    const { p, foe } = f;
+    p.pinTo({ at: { x: p.pos.x, z: p.pos.z }, yaw: Math.atan2(foe.pos.x - p.pos.x, foe.pos.z - p.pos.z), turn: 6 });
+    p.nerfKind = stage === 'duck' ? 'duck' : 'aim';
     p.nerfOn = true;
-    p.speaking = false;
-    return true;
+    f.pin = p.scripted;
+    f.stage = stage;
+    f.t = 0;
   }
 
-  private stop(p: Person): void {
-    p.playerChat = null;
-    p.nerfOn = false;
+  /** `f` walks to another spot nearby, still with a clear line to the other one. */
+  private sidestep(f: Fighter, nav: NavGrid): void {
+    const { p, foe } = f;
+    f.stage = 'move';
+    f.t = 0;
+    // a spot with a clear line to the other one if there is one, else any spot within range (darts fly over desks)
+    let any: Vec2 | null = null;
+    let clear: Vec2 | null = null;
+    for (let i = 0; i < 10 && !clear; i++) {
+      const a = random() * Math.PI * 2;
+      const r = between(SIDESTEP);
+      const spot = nav.nearestWalkable({ x: p.pos.x + Math.sin(a) * r, z: p.pos.z + Math.cos(a) * r }, 2);
+      if (!spot || Math.hypot(spot.x - p.pos.x, spot.z - p.pos.z) < 0.5) continue;
+      const d = Math.hypot(spot.x - foe.pos.x, spot.z - foe.pos.z);
+      if (d < RANGE.min - 0.5 || d > RANGE.max) continue;
+      if (nav.lineClear(spot, foe.pos)) clear = spot;
+      else any ??= spot;
+    }
+    const spot = clear ?? any;
+    if (!spot) {
+      this.stand(f, 'aim'); // nowhere to go: shoots from here
+      f.len = between(AIM);
+      return;
+    }
+    p.pinTo({ at: spot, yaw: Math.atan2(foe.pos.x - spot.x, foe.pos.z - spot.z), walk: true, turn: 6, arriveIn: 1.2 });
+    p.nerfKind = 'aim';
+    p.nerfOn = true;
+    f.pin = p.scripted;
   }
 
-  /** Stops `a`, turns them to `b` and raises the gun. */
-  private aim(a: Person, b: Person, seconds: number): boolean {
-    if (!a.talkTo({ x: b.pos.x, z: b.pos.z }, seconds, false)) return false;
-    a.nerfKind = 'aim';
-    a.nerfOn = true;
-    a.speaking = false;
-    return true;
-  }
-
-  /** One step of a fight; false when it is over. */
-  private advance(f: Fight, dt: number): boolean {
-    const { shooter: s, target: t } = f;
-    if (!s.playerChat || !s.nerfOn || s.held || s.controlled || (f.stage === 'aim' && (!t.inOffice || t.held))) return this.end(f);
-    f.t += dt;
-    if (f.stage === 'aim') {
-      s.playerChat.at = { x: t.pos.x, z: t.pos.z }; // keeps the target in the sights
-      s.playerChat.t = Math.max(s.playerChat.t, 0.5);
-      if (t.nerfOn && t.playerChat) t.playerChat.t = Math.max(t.playerChat.t, 0.5); // the one who just shot back keeps standing
-      if (f.t >= AIM) this.fire(f);
-    } else if (f.stage === 'fly') {
-      if (f.t >= f.flight) this.arrive(f);
-    } else if (f.t >= (f.react === 'back' ? 0.35 : f.react === 'duck' ? DUCK : AFTER)) {
-      if (f.react === 'back') {
-        // the target pulls out their own gun: roles swap
-        f.shooter = t;
-        f.target = s;
-        f.stage = 'aim';
-        f.t = 0;
-        return true;
+  /** One step of the duel; false when it is over. */
+  private advance(d: Duel, dt: number, nav: NavGrid): boolean {
+    d.clock += dt;
+    for (const f of d.fighters) {
+      const { p } = f;
+      if (!p.inOffice || p.held || p.scripted !== f.pin) return false; // somebody took them away
+    }
+    for (const fl of d.flights) fl.left -= dt;
+    for (const fl of d.flights.filter((x) => x.left <= 0)) this.arrive(fl);
+    d.flights = d.flights.filter((x) => x.left > 0);
+    if (d.clock >= d.length) return false;
+    for (const f of d.fighters) {
+      const { p, foe } = f;
+      f.t += dt;
+      if (f.stage !== 'move') p.faceTo(Math.atan2(foe.pos.x - p.pos.x, foe.pos.z - p.pos.z));
+      switch (f.stage) {
+        case 'move':
+          if (p.scripted?.arrived || f.t >= MOVE_MAX) {
+            this.stand(f, 'aim');
+            f.len = between(AIM);
+          }
+          break;
+        case 'aim':
+          if (f.t >= f.len) {
+            this.fire(d, f);
+            this.stand(f, 'cool');
+            f.len = between(COOL);
+          }
+          break;
+        case 'cool':
+          if (f.t >= f.len) this.sidestep(f, nav);
+          break;
+        case 'duck':
+          if (f.t >= DUCK) this.sidestep(f, nav);
+          break;
       }
-      return this.end(f);
     }
     return true;
   }
 
-  private fire(f: Fight): void {
-    const { shooter: s, target: t } = f;
+  private fire(d: Duel, f: Fighter): void {
+    const { p: s, foe: t } = f;
     const dx = t.pos.x - s.pos.x;
     const dz = t.pos.z - s.pos.z;
     const yaw = Math.atan2(dx, dz);
@@ -275,55 +316,34 @@ export class Nerf {
     // aim where the target will be when the dart gets there
     const lead = Math.hypot(dx, dz) / DART_SPEED;
     const aim = { x: t.pos.x + (t.pos.x - t.prev.x) * 60 * lead, z: t.pos.z + (t.pos.z - t.prev.z) * 60 * lead };
-    f.hit = random() < HIT_CHANCE;
-    if (!f.hit) {
+    const hit = random() < HIT_CHANCE;
+    if (!hit) {
       // sails past to the side
       const side = (random() < 0.5 ? -1 : 1) * (0.5 + random() * 0.5);
       aim.x += Math.cos(yaw) * side;
       aim.z -= Math.sin(yaw) * side;
     }
     const shot = solveShot(from, { x: aim.x, y: CHEST * t.root.scale.y, z: aim.z });
-    const dart = new Dart(from, shot, f.hit);
+    const dart = new Dart(from, shot, hit);
     this.darts.push(dart);
     this.scene.add(dart.mesh);
-    if (this.darts.length > MAX_DARTS) this.darts.find((d) => d.state === 'rest')?.retire();
+    if (this.darts.length > MAX_DARTS) this.darts.find((x) => x.state === 'rest')?.retire();
     s.nerfKick = 1;
-    f.shots++;
-    f.flight = shot.t;
-    f.stage = 'fly';
-    f.t = 0;
-    if (s.playerChat) s.playerChat.t = Math.max(s.playerChat.t, shot.t + AFTER);
-    if (t.nerfOn && t.playerChat) t.playerChat.t = Math.max(t.playerChat.t, shot.t + 0.5);
+    const target = d.fighters.find((x) => x.p === t)!;
+    d.flights.push({ target, left: shot.t, hit });
   }
 
-  /** The dart reaches its target: ducks, answers or shrugs it off. */
-  private arrive(f: Fight): void {
-    const { shooter: s, target: t } = f;
-    const armed = !!t.member.look.nerf && f.shots < MAX_SHOTS;
-    f.react = reactionTo(f.hit, armed, random());
-    f.stage = 'react';
-    f.t = 0;
-    if (f.react === 'back') {
-      if (!this.aim(t, s, AIM + 1)) f.react = 'ignore';
-    } else if (f.react === 'ignore') {
-      // a visible shrug
-      if (t.talkTo({ x: s.pos.x, z: s.pos.z }, AFTER + 0.4, false)) {
-        t.nerfKind = 'shrug';
-        t.nerfOn = true;
-        t.speaking = false;
-      }
-    } else if (f.react === 'duck') {
-      if (t.talkTo({ x: s.pos.x, z: s.pos.z }, DUCK + 0.4, false)) {
-        t.nerfKind = 'duck';
-        t.nerfOn = true;
-        t.speaking = false;
-      } else f.react = 'ignore';
-    }
+  /** The dart reaches its target: a hit makes them duck now and then (and skip a shot). */
+  private arrive(fl: Flight): void {
+    const f = fl.target;
+    if (!fl.hit || f.stage === 'duck' || random() >= FLINCH) return;
+    this.stand(f, 'duck');
   }
 
-  /** Lets both walk on (their stop ends in a moment); always false. */
-  private end(f: Fight): boolean {
-    for (const p of [f.shooter, f.target]) if (p.playerChat && p.nerfOn) p.playerChat.t = Math.min(p.playerChat.t, 0.3);
-    return false;
+  /** Lets both walk on. */
+  private end(d: Duel): void {
+    for (const f of d.fighters) if (f.p.scripted && f.p.scripted === f.pin) f.p.unpin();
+    for (const f of d.fighters) f.p.nerfOn = false;
+    this.duel = null;
   }
 }
