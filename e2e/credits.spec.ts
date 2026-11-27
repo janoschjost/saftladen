@@ -26,11 +26,11 @@ test('ui.ideamail: the Idee senden link in the settings is a mailto to both devs
   const link = page.locator('#idea-link');
   await expect(link).toContainText('Idee senden');
   // stop the mail client from opening, read where the click would have gone
-  const href = await link.evaluate((a: HTMLAnchorElement) => {
-    a.addEventListener('click', (e) => e.preventDefault());
-    a.click();
-    return a.href;
-  });
+  await link.evaluate((a) => a.addEventListener('click', (e) => e.preventDefault()));
+  await link.click();
+  // the popover makes room, like after the other links
+  await expect(page.locator('#settings')).toBeHidden();
+  const href = (await link.getAttribute('href')) ?? '';
   expect(href.startsWith('mailto:marco.rieser@vitamin2.ch,janosch.jost@vitamin2.ch?')).toBe(true);
   const q = new URLSearchParams(href.split('?')[1]);
   expect(q.get('subject')).toBe('Saftladen: Idee / Feature-Wunsch');

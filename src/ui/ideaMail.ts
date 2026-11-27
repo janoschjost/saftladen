@@ -25,7 +25,7 @@ export function ideaMailBody(gameUrl: string): string {
     '',
     '',
     'Danke und liebe Grüsse',
-  ].join('\n');
+  ].join('\r\n'); // RFC 6068: mail bodies break lines with CRLF
 }
 
 export function ideaMailHref(gameUrl: string): string {
