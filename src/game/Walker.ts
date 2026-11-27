@@ -344,7 +344,10 @@ export abstract class Walker {
     if (this.blockedTime > REPLAN && !this.replanned && this.path.length) {
       this.replanned = true;
       this.goTo(nav, this.target, 12);
-      if (this.path.length) return;
+      if (this.path.length) {
+        this.vel = last; // no step this time: the next one measures its progress against the last one, so the wait goes on (and ends at GIVE_UP)
+        return;
+      }
     }
     if (this.blockedTime > GIVE_UP) {
       this.blockedTime = 0;
