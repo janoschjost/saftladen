@@ -1487,6 +1487,11 @@
             width: 1.5rem;
             height: 1.5rem;
         }
+
+        /* steps through the views: only in the phone bar (the settings have the segments) */
+        &--view {
+            display: none;
+        }
     }
 
     /* quiet credits link under the logo; lifts and tilts its icon on hover */
@@ -3471,38 +3476,8 @@
         width: calc(100vw - 1.5rem);
     }
 
-    .m-hud-title__name {
-        font-size: 1.5rem;
-    }
-
-    .m-hud-title__mark {
-        width: 1.75rem;
-    }
-
-    .m-clock {
-        gap: 0.5rem;
-        padding: 0.5rem 0.5rem 0.5rem 0.75rem;
-
-        &__body {
-            width: 6.5rem;
-        }
-
-        &__time {
-            font-size: 1.25rem;
-        }
-    }
-
     .m-help {
         display: none;
-    }
-
-    .m-away {
-        width: 12rem;
-    }
-
-    .l-dock {
-        right: 0.75rem;
-        bottom: 5rem;
     }
 
     .m-seats {
@@ -3515,14 +3490,6 @@
         top: 5rem;
         left: 0.75rem;
         width: 16rem;
-    }
-
-    .m-feeds {
-        width: calc(100vw - 0.5rem);
-
-        &__grid {
-            grid-template-columns: minmax(0, 1fr);
-        }
     }
 
     .m-picker {
@@ -3606,11 +3573,266 @@
     }
 }
 
-@media screen and (max-width: vars.$tablet) {
+/* touch screens: no walk mode and no room editor (they need a mouse and keys); panels still scroll, but a pinch
+   never zooms or bounces the page (the office takes it, `.l-stage` has `touch-action: none`) */
+@media (hover: none) {
+    html,
+    body {
+        overscroll-behavior: none;
+    }
+
+    body {
+        touch-action: pan-x pan-y;
+    }
+
+    .m-settings__segments--4 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .m-settings__segment:has(input[value='walk']),
+    #actions-steer,
+    #open-editor,
+    .m-editor {
+        display: none;
+    }
+}
+
+/* phones (portrait, and touch screens held sideways): one compact bar of controls, the dock under the title row */
+@media #{vars.$phone} {
+    /* upright: the dock spans the width and leaves the bottom to the bar, the action chip and the person card.
+       --dock-height is what one open panel may take: the other one stays folded under it (3.5rem) */
+    :root {
+        --dock-top: 5.5rem;
+        --dock-fold: 17rem;
+        --dock-width: calc(100vw - 1.5rem);
+        --dock-height: calc(100dvh - 23.5rem);
+        --centre-x: 50%;
+        --centre-width: calc(100vw - 1.5rem);
+    }
+
+    @media (orientation: portrait) {
+        :root {
+            --dock-top: 8.75rem;
+            --dock-height: calc(100dvh - 30rem);
+        }
+    }
+
+    /* sideways: the dock is a column on the right, the chip and the card centre in the room left of it */
+    @media (orientation: landscape) {
+        :root {
+            --dock-top: 5rem;
+            --dock-width: var(--dock-fold);
+            --dock-height: calc(100dvh - 9.25rem);
+            --centre-x: calc((100vw - var(--dock-width) - 0.75rem) / 2);
+            --centre-width: calc(100vw - var(--dock-width) - 2.25rem);
+        }
+    }
+
     .l-hud {
         top: 0.75rem;
         left: 0.75rem;
         right: 0.75rem;
+        gap: 0.5rem;
+    }
+
+    .m-hud-title__name {
+        font-size: 1.5rem;
+    }
+
+    .m-hud-title__mark {
+        width: 1.75rem;
+    }
+
+    .m-clock {
+        gap: 0.5rem;
+        padding: 0.375rem 0.375rem 0.375rem 0.75rem;
+
+        &__body {
+            width: 6rem;
+        }
+
+        &__time {
+            font-size: 1.25rem;
+        }
+
+        &__step {
+            width: 2.75rem;
+            height: 2.75rem;
+        }
+
+        &__rate {
+            min-width: 1.75rem;
+        }
+    }
+
+    /* upright, the title leaves no room for a long clock: the speed goes under the time */
+    @media (orientation: portrait) {
+        .m-clock {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr);
+            gap: 0.375rem 0.5rem;
+            padding: 0.5rem;
+            border-radius: 1.5rem;
+
+            &__icon {
+                grid-area: 1 / 1;
+                padding-left: 0.25rem;
+            }
+
+            &__body {
+                grid-area: 1 / 2;
+                width: 5.5rem;
+            }
+
+            &__speed {
+                grid-column: 1 / -1;
+                justify-content: space-between;
+            }
+        }
+    }
+
+    /* the bar: Wetter, Figuren, Einstellungen, Ansicht and Aktionen in one pill, bottom centre */
+    .m-hud-tools {
+        bottom: 0.75rem;
+        left: var(--centre-x);
+        gap: 0.25rem;
+        padding: 0.25rem;
+        border-radius: 999px;
+        background: var(--color-ink);
+        box-shadow: var(--shadow-card);
+        transform: translateX(-50%);
+
+        .m-gear {
+            width: 2.75rem;
+            height: 2.75rem;
+            background: transparent;
+            box-shadow: none;
+
+            &[aria-expanded='true'] {
+                background: var(--color-accent);
+            }
+        }
+
+        .m-gear--view {
+            display: grid;
+        }
+
+        .m-action-button {
+            position: static;
+            height: 2.75rem;
+            padding: 0 1rem 0 0.75rem;
+            background: var(--color-ink-soft);
+            box-shadow: none;
+            font-size: 0.875rem;
+            transform: none;
+        }
+    }
+
+    [data-view='walk'],
+    [data-view='third'],
+    .is-day {
+        .m-hud-tools {
+            display: none;
+        }
+    }
+
+    /* "Gerade passiert" and the person card stack above the bar, clear of the dock on the right */
+    .m-now {
+        top: auto;
+        bottom: 4.5rem;
+        left: var(--centre-x);
+        max-width: var(--centre-width);
+    }
+
+    .m-actions {
+        bottom: 8.5rem;
+        left: var(--centre-x);
+        gap: 0.375rem;
+        width: max-content;
+        max-width: var(--centre-width);
+        padding: 0.5rem;
+        border-radius: 1.75rem;
+
+        &__name {
+            flex-basis: 100%;
+            margin: 0;
+            font-size: 1rem;
+            text-align: center;
+        }
+
+        .m-button {
+            min-height: 2.75rem;
+            padding: 0 0.875rem;
+            font-size: 0.8125rem;
+        }
+    }
+
+    .has-open-sheet .m-now {
+        display: none;
+    }
+
+    /* the dock sits under the title row and grows downwards: its titles (and their chevrons) stay where they are */
+    .l-dock {
+        top: var(--dock-top);
+        right: 0.75rem;
+        bottom: auto;
+        gap: 0.5rem;
+    }
+
+    .m-away {
+        width: var(--dock-fold);
+        max-height: var(--dock-height);
+    }
+
+    .m-away__list {
+        max-height: none;
+    }
+
+    .m-feeds {
+        width: var(--dock-width);
+        max-height: var(--dock-height);
+        // the shadow room of the title ends at the screen edge
+        margin: 0 -0.75rem -0.75rem 0;
+        padding: 0 0.75rem 0.75rem 0;
+
+        &.is-collapsed {
+            width: var(--dock-fold);
+        }
+    }
+
+    .m-feeds__grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.5rem;
+    }
+
+    .m-dev {
+        top: auto;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        width: auto;
+        max-height: 70vh;
+        border-radius: 1.5rem 1.5rem 0 0;
+
+        &__close {
+            width: 2.75rem;
+            height: 2.75rem;
+        }
+    }
+
+    .m-welcome {
+        padding: 0.75rem;
+
+        &__card {
+            max-height: calc(100vh - 1.5rem);
+            max-height: calc(100dvh - 1.5rem);
+        }
+
+        /* a low screen scrolls the card: "Los geht's" stays in reach */
+        &__start {
+            position: sticky;
+            bottom: 0;
+        }
     }
 
     .m-settings {
@@ -3660,29 +3882,6 @@
 
     .m-time {
         --thumb: 2rem;
-    }
-
-    .m-action-button {
-        bottom: 0.75rem;
-    }
-
-    /* four round buttons no longer fit beside the Aktionen pill: they sit in a row above it */
-    .m-hud-tools {
-        bottom: 4.5rem;
-        left: 0.75rem;
-    }
-
-    .m-now {
-        top: auto;
-        bottom: 8.25rem;
-    }
-
-    .m-actions {
-        bottom: 11.75rem;
-    }
-
-    .has-open-sheet .m-now {
-        display: none;
     }
 
     .m-sheet {
