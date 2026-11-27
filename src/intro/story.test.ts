@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { strings } from '../i18n/strings';
-import { blueprintLevel, during, FADE, lineAt, PUSH, stageAt, SUMMON_LINE, timeline } from './story';
+import { blueprintLevel, cloudsAt, CLOUDS, during, FADE, HOLD, lineAt, PUSH, stageAt, SUMMON_LINE, timeline } from './story';
 
 const lines = strings.intro.lines;
 const tl = timeline(lines);
@@ -24,10 +24,15 @@ describe('intro.story', () => {
     expect(tl.end).toBeLessThan(90);
   });
 
-  it('intro.story: after the last sentence the camera moves in, then the picture fades to the office', () => {
+  it('intro.story: after the last sentence the camera moves in, clouds close over the scene, stay white, then part over the office', () => {
     expect(tl.push).toBeGreaterThan(tl.starts[lines.length - 1]);
     expect(tl.fade).toBeCloseTo(tl.push + PUSH);
-    expect(tl.end).toBeCloseTo(tl.fade + FADE);
+    expect(tl.clear).toBeCloseTo(tl.fade + HOLD);
+    expect(tl.end).toBeCloseTo(tl.clear + FADE);
+    expect(cloudsAt(tl, tl.fade - CLOUDS)).toEqual({ closed: 0, parted: 0 }); // no cloud while the story is told
+    expect(cloudsAt(tl, tl.fade)).toEqual({ closed: 1, parted: 0 });
+    expect(cloudsAt(tl, tl.clear)).toEqual({ closed: 1, parted: 0 }); // still white when the game takes over
+    expect(cloudsAt(tl, tl.end)).toEqual({ closed: 1, parted: 1 });
   });
 
   it('intro.story: no Clawd and no blueprint before the summoning, both from then on, the blueprint complete before the fade', () => {

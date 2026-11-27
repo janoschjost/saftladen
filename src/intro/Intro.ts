@@ -5,12 +5,12 @@ import * as THREE from 'three';
 import { CreditsScene } from '../credits/CreditsScene';
 import { easeInOut, shotPosition, type Shot } from '../render/cameraFly';
 import { strings } from '../i18n/strings';
-import { lineAt, span, stageAt, timeline } from './story';
+import { cloudsAt, lineAt, span, stageAt, timeline } from './story';
 
 export interface IntroHost {
   /** the picture the game's fly-in starts from: the intro's camera ends on it, on the blueprint */
   start: { shot: Shot; fov: number };
-  /** the picture starts to fade to the office: the game is let go and flies in */
+  /** the clouds start to part over the office: the game is let go and flies in */
   handOver(): void;
   /** the intro is gone */
   done(): void;
@@ -32,12 +32,15 @@ const WIDE = { pos: v(3.7, 4.0, 9.8), target: v(0.6, 0, 2.7) };
 /** the camera pulls back to the wide shot around the summoning: this long before it .. this long after */
 const PULL = { before: 1.2, after: 1.6 };
 
+/** how many puffs of cloud close over the picture */
+const PUFFS = 22;
+
 const mix = (a: Pose, b: Pose, u: number): Pose => ({ pos: a.pos.clone().lerp(b.pos, u), target: a.target.clone().lerp(b.target, u), fov: a.fov + (b.fov - a.fov) * u });
 
 /**
  * The origin-story intro (#322): Marco and Janosch at their desks in the credits' room, the story sentence by sentence,
- * Claudius summoned in a puff, the blueprint building up, then the camera moves into the blueprint and the picture
- * fades to the real office, which flies in from the same framing. The camera is scripted: no input reaches the scene.
+ * Claudius summoned in a puff, the blueprint building up, then the camera moves into the blueprint, clouds close over
+ * the picture and part again over the real office, which flies in. The camera is scripted: no input reaches the scene.
  * Returns what ends it at once (skip).
  */
 export function playIntro(root: HTMLElement, host: IntroHost): () => void {
@@ -91,6 +94,40 @@ export function playIntro(root: HTMLElement, host: IntroHost): () => void {
     if (!still && i >= 0) text.animate([{ opacity: 0, transform: 'translateY(0.4rem)' }, { opacity: 1, transform: 'none' }], { duration: 600, easing: 'ease-out' });
   };
 
+  // the clouds between the story and the office: puffs spread over the picture in a spiral, each a little later than the last
+  const sky = root.querySelector<HTMLElement>('#intro-clouds')!;
+  const fog = document.createElement('i');
+  fog.className = 'm-intro__fog';
+  const puffs = Array.from({ length: PUFFS }, (_, i) => {
+    const el = document.createElement('i');
+    el.className = 'm-intro__puff';
+    const a = i * 2.4; // the golden angle: no two puffs in a row
+    const r = Math.sqrt((i + 0.5) / PUFFS);
+    const dx = Math.cos(a) * r;
+    const dy = Math.sin(a) * r;
+    el.style.left = `${50 + dx * 55}%`;
+    el.style.top = `${50 + dy * 45}%`;
+    el.style.setProperty('--size', `${34 + (i % 5) * 9}vmax`);
+    return { el, dx, dy, late: (i % 6) / 6 };
+  });
+  sky.replaceChildren(fog, ...puffs.map((p) => p.el));
+  let clouded = '';
+  const showClouds = (closed: number, parted: number): void => {
+    const key = `${closed.toFixed(3)}|${parted.toFixed(3)}`;
+    if (key === clouded) return;
+    clouded = key;
+    sky.hidden = closed === 0;
+    fog.style.opacity = String(span(closed, 0.55, 1) * (1 - span(parted, 0, 0.45)));
+    for (const p of puffs) {
+      const u = easeInOut(span(closed, p.late * 0.35, p.late * 0.35 + 0.65)); // rolls in from its side of the picture
+      const w = easeInOut(span(parted, p.late * 0.3, p.late * 0.3 + 0.7)); // and past us, as we fall through
+      const off = (1 - u) * 60 + w * 90;
+      p.el.style.transform = `translate(-50%, -50%) translate(${p.dx * off}vw, ${p.dy * off}vh) scale(${0.5 + 0.5 * u + 2.2 * w})`;
+      p.el.style.opacity = String(u * (1 - w));
+    }
+  };
+  showClouds(0, 0);
+
   let t = 0;
   let handed = false;
   let over = false;
@@ -109,8 +146,10 @@ export function playIntro(root: HTMLElement, host: IntroHost): () => void {
     renderer.forceContextLoss();
     renderer.domElement.remove();
     showLine(-1);
+    sky.replaceChildren();
     root.hidden = true;
-    root.style.opacity = text.style.opacity = '';
+    root.classList.remove('is-clear');
+    text.style.opacity = '';
     host.done();
   };
   let before = performance.now();
@@ -121,10 +160,14 @@ export function playIntro(root: HTMLElement, host: IntroHost): () => void {
     t += dt;
     // reduced motion: no flight into the blueprint and no crossfade, the office cuts in after the last sentence
     if (t >= (still ? tl.push : tl.end)) return finish();
-    if (t >= tl.fade) handOver();
+    if (t >= tl.clear) handOver();
     showLine(lineAt(tl, t));
     text.style.opacity = String(1 - span(t, tl.push, tl.push + 0.8));
-    root.style.opacity = String(1 - span(t, tl.fade, tl.end));
+    const c = cloudsAt(tl, t);
+    showClouds(c.closed, c.parted);
+    // all white: the scene behind the clouds is gone, the office waits under them
+    root.classList.toggle('is-clear', t >= tl.fade);
+    if (t >= tl.fade) return;
     world.stage(stageAt(tl, t));
     world.tick(dt);
     const p = poseAt(t);

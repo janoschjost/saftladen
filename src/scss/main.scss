@@ -3214,6 +3214,42 @@
             display: none;
         }
 
+        // behind the closed clouds the scene is gone: only they are left over the office
+        &.is-clear {
+            background: none;
+
+            > :not(.m-intro__clouds) {
+                visibility: hidden;
+            }
+        }
+
+        // the clouds between the story and the office (src/intro/Intro.ts moves them)
+        &__clouds {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            pointer-events: none;
+
+            &[hidden] {
+                display: none;
+            }
+        }
+
+        &__fog {
+            position: absolute;
+            inset: 0;
+            background: #f4f7fb;
+        }
+
+        &__puff {
+            position: absolute;
+            width: var(--size);
+            height: var(--size);
+            border-radius: 50%;
+            background: radial-gradient(closest-side, #fff 0%, rgba(255, 255, 255, 0.96) 40%, rgba(244, 247, 251, 0) 100%);
+            will-change: transform, opacity;
+        }
+
         &__stage {
             position: absolute;
             inset: 0;

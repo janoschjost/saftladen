@@ -13,9 +13,12 @@ const LEAD = 4;
 /** a sentence stays this long, plus this much per character of the German line */
 const BASE = 2.6;
 const PER_CHAR = 0.06;
-/** seconds the camera takes into the blueprint after the last sentence, and the crossfade to the office that follows */
+/** seconds the camera takes into the blueprint after the last sentence; clouds roll in over the last `CLOUDS` of them */
 export const PUSH = 2.6;
-export const FADE = 1;
+export const CLOUDS = 1.5;
+/** the picture stays white this long, then the clouds part over the office for `FADE` seconds */
+export const HOLD = 0.4;
+export const FADE = 1.8;
 /** the sentence that summons Claudius: Clawd and the blueprint appear with it */
 export const SUMMON_LINE = 7;
 
@@ -26,8 +29,10 @@ export interface Timeline {
   summon: number;
   /** the last sentence is over: the camera moves into the blueprint */
   push: number;
-  /** the camera has arrived: the picture fades to the office, the game takes over */
+  /** the camera has arrived and the clouds have closed: all white, the scene behind them is gone */
   fade: number;
+  /** the clouds start to part over the office: the game takes over and flies in */
+  clear: number;
   end: number;
 }
 
@@ -38,7 +43,7 @@ export function timeline(lines: readonly Line[]): Timeline {
     starts.push(t);
     t += BASE + PER_CHAR * line.de.length;
   }
-  return { starts, summon: starts[Math.min(SUMMON_LINE, starts.length - 1)], push: t, fade: t + PUSH, end: t + PUSH + FADE };
+  return { starts, summon: starts[Math.min(SUMMON_LINE, starts.length - 1)], push: t, fade: t + PUSH, clear: t + PUSH + HOLD, end: t + PUSH + HOLD + FADE };
 }
 
 /** The sentence on screen at `t`: -1 before the first one; the last one stays until the end. */
@@ -80,4 +85,9 @@ export function stageAt(tl: Timeline, t: number): { slump: number; wizard: numbe
     built: blueprintLevel(tl, t),
     pad: span(t, tl.summon + 0.3, tl.summon + 1.3),
   };
+}
+
+/** The clouds between the story and the office at `t`: how far they have rolled in (1 = all white) and how far they have parted again. */
+export function cloudsAt(tl: Timeline, t: number): { closed: number; parted: number } {
+  return { closed: span(t, tl.fade - CLOUDS, tl.fade), parted: span(t, tl.clear, tl.end) };
 }
