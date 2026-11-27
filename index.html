@@ -2,7 +2,8 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#0d0f13" />
     <title>Saftladen</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preload" href="/fonts/ApercuBold.woff2" as="font" type="font/woff2" crossorigin />
@@ -20,15 +21,19 @@
         font-display: swap;
       }
       :root {
-        --loader-bg: white;
-        --loader-ink: black;
+        --loader-bg: #0d0f13;
+        --loader-ink: #ffffff;
+        --loader-soft: #9aa3b5;
+        --loader-track: #1e222b;
         --loader-accent: #84d0ff;
-        --loader-accent-mid: #5fd8a8;
-        --loader-accent-deep: #34b085;
-        --loader-accent-soft: #d4fbe9;
-              }
+      }
+      html:has(body.is-loading) {
+        background: var(--loader-bg);
+      }
       body.is-loading {
         background: var(--loader-bg);
+        overflow: hidden;
+        touch-action: none;
       }
       body.is-loading > :not(.m-loader):not(script) {
         visibility: hidden;
@@ -41,221 +46,78 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 1.25rem;
+        gap: 1rem;
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
         background: var(--loader-bg);
         color: var(--loader-ink);
         font-family: 'Apercu', system-ui, -apple-system, 'Segoe UI', sans-serif;
-        transition: opacity 0.5s ease-out;
+        touch-action: none;
+        transition: opacity 0.6s ease-in-out;
       }
       .m-loader.is-done {
         opacity: 0;
         pointer-events: none;
-      }
-      .m-loader__scene {
-        width: min(32rem, 90vw);
-        height: auto;
-        overflow: visible;
-      }
-      .m-loader__scene polygon {
-        stroke-width: 0.3;
-        stroke-linejoin: round;
-      }
-      .m-loader__roof { fill: none; stroke: var(--loader-accent-deep); stroke-width: 0.6; stroke-linejoin: round; opacity: 0.8; }
-      .m-loader__floor-t { fill: #e9e9ef; stroke: #e9e9ef; }
-      .m-loader__floor-l { fill: #cfcfd8; stroke: #cfcfd8; }
-      .m-loader__floor-r { fill: #bdbdc8; stroke: #bdbdc8; }
-      .m-loader__wall-t { fill: white; stroke: white; }
-      .m-loader__wall-l { fill: #fafafc; stroke: #d6d6de; }
-      .m-loader__wall-r { fill: #eeeef3; stroke: #d6d6de; }
-      .m-loader__pink-t { fill: var(--loader-accent); stroke: var(--loader-accent); }
-      .m-loader__pink-l { fill: var(--loader-accent-mid); stroke: var(--loader-accent-mid); }
-      .m-loader__pink-r { fill: var(--loader-accent-deep); stroke: var(--loader-accent-deep); }
-      .m-loader__desk-t { fill: #b9b9bd; stroke: #b9b9bd; }
-      .m-loader__desk-l { fill: #9e9ea4; stroke: #9e9ea4; }
-      .m-loader__desk-r { fill: #8a8a90; stroke: #8a8a90; }
-      .m-loader__glass-t { fill: #c9e6ee; stroke: none; fill-opacity: 0.55; }
-      .m-loader__glass-l { fill: #b4d8e2; stroke: none; fill-opacity: 0.4; }
-      .m-loader__glass-r { fill: #a2cad6; stroke: none; fill-opacity: 0.4; }
-      .m-loader__dark-t { fill: #b4b4be; stroke: #b4b4be; }
-      .m-loader__dark-l { fill: #a2a2ac; stroke: #a2a2ac; }
-      .m-loader__dark-r { fill: #92929c; stroke: #92929c; }
-      .m-loader__screen-t,
-      .m-loader__screen-l,
-      .m-loader__screen-r { fill: #1c1c1e; stroke: #1c1c1e; }
-      .m-loader__bar {
-        width: 12rem;
-        height: 0.375rem;
-        margin-top: 0.5rem;
-        overflow: hidden;
-        border-radius: 0.1875rem;
-        background: #e6e6ec;
-      }
-      .m-loader__bar-fill {
-        width: 100%;
-        height: 100%;
-        border-radius: inherit;
-        background: var(--loader-accent-mid);
-        transform: scaleX(var(--loader-progress, 0));
-        transform-origin: 0 50%;
+        transition-delay: 0.3s; /* the bar fills first */
       }
       .m-loader.is-done .m-loader__bar-fill {
         transform: scaleX(1);
         transition: transform 0.3s ease-out;
       }
+      .m-loader__mark {
+        width: 4.5rem;
+        max-width: 40vw;
+        height: auto;
+        fill: var(--loader-ink);
+      }
+      .m-loader__text {
+        margin: 0;
+        font-size: 0.875rem;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        color: var(--loader-soft);
+      }
+      .m-loader__text-dots {
+        animation: loader-pulse 1.4s ease-in-out infinite;
+      }
+      @keyframes loader-pulse {
+        50% { opacity: 0.3; }
+      }
+      .m-loader__bar {
+        width: min(12rem, 70vw);
+        height: 0.25rem;
+        overflow: hidden;
+        border-radius: 0.125rem;
+        background: var(--loader-track);
+      }
+      .m-loader__bar-fill {
+        width: 100%;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--loader-accent);
+        transform: scaleX(var(--loader-progress, 0));
+        transform-origin: 0 50%;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .m-loader, .m-loader__bar-fill { transition: none !important; }
+        .m-loader__text-dots { animation: none; }
+      }
     </style>
   </head>
   <body class="is-loading">
     <div class="m-loader" id="loader" role="status" aria-live="polite">
-      <svg class="m-loader__scene" id="loader-scene" viewBox="-62 -30 196 140" aria-hidden="true"></svg>
-<div class="m-loader__bar" id="loader-bar" role="progressbar" aria-label="Laden" aria-valuemin="0" aria-valuemax="100"><div class="m-loader__bar-fill"></div></div>
+      <svg class="m-loader__mark" viewBox="0 0 31 25" aria-hidden="true"><path d="M27.3 0H7C6 0 5 0.4 4.3 1.1C3.6 1.7 3.2 2.7 3.2 3.6V17.1L0 25L8.1 21.8H27.3C28.3 21.8 29.2 21.4 29.9 20.7C30.6 20 31 19.1 31 18.1V3.6C31 3.1 30.9 2.7 30.7 2.2C30.5 1.8 30.2 1.4 29.9 1C29.6 0.7 29.1 0.4 28.7 0.2C28.3 0.1 27.8 0 27.3 0ZM21.1 16.6H12.7V14L17.3 9.9C17.8 9.5 18.4 9 18.4 8.3C18.4 8.1 18.34 7.91 18.3 7.8C18.2 7.6 18.1 7.5 18 7.4C17.9 7.3 17.7 7.19 17.5 7.1C17.26 6.99 17.1 7 17 7C16.8 7 16.6 7 16.4 7.1C16.2 7.2 16 7.3 15.9 7.4C15.8 7.5 15.65 7.69 15.6 7.9C15.54 8.13 15.5 8.3 15.5 8.5L13 8.3C13 6 14.7 4.8 17 4.8C19.2 4.8 20.8 6 20.8 8.3C20.8 8.9 20.7 9.5 20.4 10C20.1 10.5 19.7 11 19.2 11.4L15.6 14.4H21V16.6H21.1Z"/></svg>
+      <p class="m-loader__text">Lädt<span class="m-loader__text-dots"> …</span></p>
+      <div class="m-loader__bar" id="loader-bar" role="progressbar" aria-label="Laden" aria-valuemin="0" aria-valuemax="100"><div class="m-loader__bar-fill"></div></div>
     </div>
     <script>
-      // Loader: the real office plan builds itself up in iso (floor, outer walls, core rooms, annex, desk clusters,
-      // sawtooth roof), then starts over. Plan coordinates are the office model's, shifted so the back corner is 0/0.
+      // no real progress to read: the bar eases towards 90 % and only moves forward; main.ts fills it (.is-done)
       (function () {
-        var svg = document.getElementById('loader-scene');
-        if (!svg) return;
-        var L = 42, W = 15, T = 0.3, S = 3.2, H = 3.3, LOOP = 3200;
-        var X = 0.866 * S, Y = 0.5 * S;
-        var pt = function (x, z, h) { return ((x - z) * X).toFixed(1) + ',' + ((x + z) * Y - h * S).toFixed(1); };
-        var poly = function (cls, pts) {
-          return '<polygon class="m-loader__' + cls + '" points="' + pts.map(function (p) { return pt(p[0], p[1], p[2]); }).join(' ') + '"/>';
-        };
-        // a box seen from the front corner: top, face at z1 (left), face at x1 (right)
-        var box = function (set, x0, z0, x1, z1, h0, h1) {
-          if (h1 - h0 < 0.01 || x1 - x0 < 0.001 || z1 - z0 < 0.001) return '';
-          return poly(set + '-l', [[x0, z1, h0], [x1, z1, h0], [x1, z1, h1], [x0, z1, h1]]) +
-            poly(set + '-r', [[x1, z0, h0], [x1, z1, h0], [x1, z1, h1], [x1, z0, h1]]) +
-            poly(set + '-t', [[x0, z0, h1], [x1, z0, h1], [x1, z1, h1], [x0, z1, h1]]);
-        };
-        var clamp = function (v) { return v < 0 ? 0 : v > 1 ? 1 : v; };
-        var prog = function (p, start, dur) { return clamp((p - start) / dur); };
-        var outCubic = function (t) { return 1 - Math.pow(1 - t, 3); };
-        var outBounce = function (t) {
-          var n = 7.5625, d = 2.75;
-          if (t < 1 / d) return n * t * t;
-          if (t < 2 / d) { t -= 1.5 / d; return n * t * t + 0.75; }
-          if (t < 2.5 / d) { t -= 2.25 / d; return n * t * t + 0.9375; }
-          t -= 2.625 / d; return n * t * t + 0.984375;
-        };
-        var outBack = function (t) { var c = 1.9; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
-
-        // everything after the floor and the two outer back walls, drawn in painter order (key = x0 + z0)
-        var parts = [];
-        var part = function (set, x0, z0, x1, z1, h0, h1, start, dur, ease, key) {
-          var q = { set: set, x0: x0, z0: z0, x1: x1, z1: z1, h0: h0, h1: h1, start: start, dur: dur, ease: ease || outCubic, key: key === undefined ? x0 + z0 : key };
-          parts.push(q);
-          return q;
-        };
-        var CUT = 1.5; // interior walls stop here so the camera sees into every room
-        var n = 0;
-        // axis-aligned wall between two model points (metres, as in officeModel.ts); the loader shifts them to 0/0
-        var wm = function (xa, za, xb, zb, set, h, start, thick) {
-          var t = (thick || 0.25) / 2, x0 = xa + 9.5, x1 = xb + 9.5, z0 = za + 5.5, z1 = zb + 5.5;
-          if (za === zb) { z0 -= t; z1 += t; } else { x0 -= t; x1 += t; }
-          part(set || 'wall', x0, z0, x1, z1, 0, h || CUT, (start || 0.26) + (n++ % 9) * 0.012, 0.07);
-        };
-        // floors of the dark rooms (storage, washroom, photo studio)
-        [[-4.9, -5.4, -0.1, -1.07], [0.05, -5.35, 3.95, -1.07], [18.56, -5.35, 26, -1.07]].forEach(function (f, i) {
-          part('dark', f[0] + 9.5, f[1] + 5.5, f[2] + 9.5, f[3] + 5.5, 0, 0.04, 0.16 + i * 0.02, 0.05, outCubic, -5 + i);
-        });
-        // core: hallway wall (z -1) with its doorways, room walls, photo studio, photo booth
-        [[-5, -3], [-2, 2.5], [3.4, 4.9], [5.8, 6.2], [9.5, 14.4], [15.3, 18.56], [23, 23.25], [24.25, 24.56]].forEach(function (s) { wm(s[0], -1, s[1], -1, 'wall', CUT, 0.3); });
-        [0, 4, 10.5, 18.5].forEach(function (x) { wm(x, -5.5, x, -1, 'wall', CUT, 0.28); });
-        wm(23, -2.2, 23, -1, 'wall', CUT, 0.34); wm(24.5, -2.2, 24.5, -1, 'wall', CUT, 0.34); wm(23, -2.2, 24.5, -2.2, 'wall', CUT, 0.34);
-        wm(26, -5.35, 26, -1, 'screen', 1.2, 0.34, 0.12); // black studio curtain
-        // west end: glass wall to the lounge, entrance partition, glass wall to the annex, annex
-        wm(-5, -5.5, -5, -1, 'wall', 3.3, 0.22);
-        wm(-5, -1, -5, 9.5, 'glass', CUT, 0.22);
-        wm(-5, 9.5, -5, 13, 'wall', 3.3, 0.3);
-        wm(-5, 2.2, -0.5, 2.2, 'wall', CUT, 0.3);
-        wm(-9.5, 9.5, -9.5, 13, 'wall', 3.3, 0.3);
-        // glass meeting room (x 19.5..26.5): frosted glass walls, solid wall to the hallway with its door
-        wm(19.5, 2.2, 19.5, 9.5, 'glass', CUT, 0.4);
-        wm(26.5, 2.2, 26.5, 9.5, 'glass', CUT, 0.4);
-        [[19.5, 20.2], [21.1, 26.5]].forEach(function (s) { wm(s[0], 2.2, s[1], 2.2, 'wall', CUT, 0.4); });
-        // front edges (window walls) stay low so the plan stays open: south with the two entrance doorways, east, annex
-        [[-9.5, -6.7], [-5.6, -4.3], [-2.3, 7.5]].forEach(function (s, i) { part('wall', s[0] + 9.5, 14.85, s[1] + 9.5, 15.15, 0, 0.5, 0.42 + i * 0.03, 0.07, outCubic, 1000 + i); });
-        part('glass', 17, 14.85, 42, 15.15, 0, 1.0, 0.46, 0.07, outCubic, 1004);
-        part('glass', 41.85, 0.3, 42.15, 14.85, 0, 1.0, 0.48, 0.07, outCubic, 1005);
-        part('wall', 0, 18.35, 4.8, 18.65, 0, 0.5, 0.44, 0.07, outCubic, 1006);
-        // open office: simple tables in clusters (rows along z), plus the two groups by the east windows
-        var desks = [];
-        var rowZ = function (cx, zs, w) { zs.forEach(function (zc) { desks.push({ x0: cx - 0.4, z0: zc - w / 2, x1: cx + 0.4, z1: zc + w / 2 }); }); };
-        var rowW = 6.4 / 3, zsRow = [8.4 + rowW / 2, 8.4 + rowW * 1.5, 8.4 + rowW * 2.5];
-        rowZ(15.5, zsRow, rowW - 0.2);
-        rowZ(18.2, zsRow, rowW - 0.2); rowZ(19.0, zsRow, rowW - 0.2);
-        rowZ(24.97, zsRow, rowW - 0.2); rowZ(25.8, zsRow, rowW - 0.2);
-        [9.7, 13.1].forEach(function (zc) {
-          desks.push({ x0: 39.05, z0: zc - 0.81, x1: 40.85, z1: zc - 0.01 });
-          desks.push({ x0: 39.05, z0: zc + 0.01, x1: 40.85, z1: zc + 0.81 });
-          desks.push({ x0: 38.25, z0: zc - 0.8, x1: 39.0, z1: zc + 0.8 });
-        });
-        desks.sort(function (a, b) { return a.x0 + a.z0 - b.x0 - b.z0; });
-        desks.forEach(function (d, i) {
-          part('desk', d.x0, d.z0, d.x1, d.z1, 0, 0.75, 0.5 + i * 0.011, 0.1, outBounce).drop = true;
-        });
-        parts.sort(function (a, b) { return a.key - b.key; });
-
-        // sawtooth roof as a pink outline: fold lines at the model's TEETH, low end 3.8, high end 5.5
-        var TEETH = [4.5, 10.8, 17.4, 24, 30.6, 37.2, 42], LO = 3.8, HI = 5.5, ZB = 12.2;
-        var roof = function (k) {
-          var out = '', prof = [];
-          for (var i = 0; i < TEETH.length - 1; i++) { prof.push([TEETH[i], LO], [TEETH[i + 1], HI]); }
-          var upto = 4.5 + (42 - 4.5) * k;
-          var line = function (z) {
-            var pts = [];
-            prof.forEach(function (q, i) { if (q[0] <= upto) pts.push(pt(q[0], z, q[1])); else if (i && prof[i - 1][0] < upto) pts.push(pt(upto, z, prof[i - 1][1] + (q[1] - prof[i - 1][1]) * (upto - prof[i - 1][0]) / (q[0] - prof[i - 1][0]))); });
-            return pts.length > 1 ? '<polyline class="m-loader__roof" points="' + pts.join(' ') + '"/>' : '';
-          };
-          out += line(0) + line(ZB);
-          for (var j = 0; j < TEETH.length; j++) {
-            if (TEETH[j] > upto) break;
-            [LO, HI].forEach(function (h) { out += '<line class="m-loader__roof" x1="' + pt(TEETH[j], 0, h).split(',')[0] + '" y1="' + pt(TEETH[j], 0, h).split(',')[1] + '" x2="' + pt(TEETH[j], ZB, h).split(',')[0] + '" y2="' + pt(TEETH[j], ZB, h).split(',')[1] + '"/>'; });
-          }
-          return out;
-        };
-
-        var frame = function (p) {
-          var f = outCubic(prog(p, 0, 0.16));
-          var out = box('floor', 0, 0, L * f, W * f, -0.45, 0);
-          out += box('floor', 0, W, 4.8 * f, W + 3.5 * f, -0.45, 0);
-          var wx = outCubic(prog(p, 0.14, 0.14)), wz = outCubic(prog(p, 0.18, 0.14));
-          out += box('wall', 0, 0, L * wx, T, 0, H * wx);
-          out += box('wall', 0, 0, T, W * wz, 0, H * wz);
-          parts.forEach(function (q) {
-            var t = prog(p, q.start, q.dur);
-            if (q.drop) {
-              if (t <= 0) return;
-              var off = (1 - q.ease(t)) * 5;
-              out += box(q.set, q.x0, q.z0, q.x1, q.z1, q.h0 + off, q.h1 + off);
-              return;
-            }
-            var k = q.ease(t);
-            if (k <= 0) return;
-            out += box(q.set, q.x0, q.z0, q.x1, q.z1, q.h0, q.h0 + (q.h1 - q.h0) * k);
-          });
-          var rk = prog(p, 0.8, 0.12);
-          if (rk > 0) out += roof(rk);
-          svg.innerHTML = out;
-          svg.style.opacity = p > 0.94 ? String(clamp(1 - (p - 0.94) / 0.05)) : '1';
-        };
-
         var loader = document.getElementById('loader');
-        // no real progress to read: ease towards 90 % and let main.ts finish it (.is-done)
-        var setBar = function (t) { if (loader) loader.style.setProperty('--loader-progress', (0.9 * (1 - Math.exp(-t / 2500))).toFixed(3)); };
-        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-          frame(0.92);
-          setBar(2500);
-          return;
-        }
-        var t0 = performance.now(), last = -1;
+        if (!loader) return;
+        var t0 = performance.now();
         var tick = function (now) {
-          if (!svg.isConnected) return;
-          var p = ((now - t0) % LOOP) / LOOP;
-          var key = Math.round(p * 240);
-          if (key !== last) { last = key; frame(p); }
-          setBar(now - t0);
+          if (!loader.isConnected || loader.classList.contains('is-done')) return;
+          loader.style.setProperty('--loader-progress', (0.9 * (1 - Math.exp(-(now - t0) / 900))).toFixed(3));
           requestAnimationFrame(tick);
         };
         requestAnimationFrame(tick);

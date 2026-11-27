@@ -6,14 +6,16 @@ import { CharacterPicker } from './ui/CharacterPicker';
 import { DayMenu } from './ui/DayMenu';
 import { Welcome } from './ui/Welcome';
 import { installIntro } from './intro/gate';
+import { loaderWaitMs } from './ui/loaderRules';
 
 const hideLoader = (): void => {
   const loader = document.getElementById('loader');
   document.body.classList.remove('is-loading');
   if (!loader) return;
   loader.classList.add('is-done');
-  loader.addEventListener('transitionend', () => loader.remove(), { once: true });
-  window.setTimeout(() => loader.remove(), 800);
+  loader.querySelector('[role=progressbar]')?.setAttribute('aria-valuenow', '100');
+  // the bar fills (0.3 s), then the cross-fade (0.6 s)
+  window.setTimeout(() => loader.remove(), 1200);
 };
 
 // dev server, and the bundle the e2e tests run against (`vite build --mode e2e`): never the production bundle
@@ -41,5 +43,10 @@ try {
   installIntro(game);
 } finally {
   const fontsReady = document.fonts ? document.fonts.ready : Promise.resolve();
-  void fontsReady.then(() => requestAnimationFrame(() => requestAnimationFrame(hideLoader)));
+  const testPage = (import.meta.env.DEV || import.meta.env.MODE === 'e2e') && new URLSearchParams(location.search).has('test');
+  void fontsReady.then(() =>
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => window.setTimeout(hideLoader, loaderWaitMs(performance.now(), testPage))),
+    ),
+  );
 }
