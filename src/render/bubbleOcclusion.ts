@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 
 /**
- * Tells whether the scene hides a point from the camera: the walls, the furniture built in and the roof (when it is on).
- * Glass does not count, people neither. Used to fade a bubble whose speaker nobody can see.
+ * Tells whether the scene hides a point from the camera: the walls, the furniture built in, glass panes and the roof (when it is on).
+ * The see-through ghost of the walls above the cut and people do not count. Used to fade a bubble whose speaker nobody can see.
  */
 export class BubbleOcclusion {
   private readonly ray = new THREE.Raycaster();
@@ -24,7 +24,7 @@ export class BubbleOcclusion {
       for (const hit of this.ray.intersectObject(root, true)) {
         const o = hit.object;
         if (!(o instanceof THREE.Mesh)) continue; // cords, lines and points have no body to hide behind
-        if (!Array.isArray(o.material) && !o.material.transparent) return true;
+        if (!Array.isArray(o.material) && (!o.material.transparent || o.material.userData.glass)) return true;
       }
     }
     return false;

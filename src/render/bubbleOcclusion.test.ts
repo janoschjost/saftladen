@@ -1,9 +1,14 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { BubbleOcclusion } from './bubbleOcclusion';
+import { markGlass } from './glassSort';
 
 // a wall across z = 0 (four metres wide, three high); the camera stands at z = 10
-const mesh = (transparent = false) => new THREE.Mesh(new THREE.BoxGeometry(4, 3, 0.3), new THREE.MeshBasicMaterial({ transparent }));
+const mesh = (transparent = false, glass = false) => {
+  const material = new THREE.MeshBasicMaterial({ transparent });
+  if (glass) markGlass(material);
+  return new THREE.Mesh(new THREE.BoxGeometry(4, 3, 0.3), material);
+};
 const group = (...m: THREE.Mesh[]) => {
   const g = new THREE.Group();
   g.add(...m);
@@ -20,7 +25,8 @@ describe('social.bubbles: hidden speaker', () => {
     expect(o.blocked(eye, new THREE.Vector3(6, 1.5, -2))).toBe(false); // past the wall's end
   });
 
-  it('social.bubbles: glass does not hide anybody', () => {
+  it('social.bubbles: a glass pane hides the speaker like a wall, the see-through ghost of a wall does not', () => {
+    expect(new BubbleOcclusion([group(mesh(true, true))]).blocked(eye, new THREE.Vector3(0, 1.5, -2))).toBe(true);
     expect(new BubbleOcclusion([group(mesh(true))]).blocked(eye, new THREE.Vector3(0, 1.5, -2))).toBe(false);
   });
 
