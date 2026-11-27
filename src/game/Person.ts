@@ -737,6 +737,22 @@ export class Person extends Walker {
           this.abortLeaving();
           return false;
         }
+        const chat = this.playerChat;
+        if (chat) {
+          chat.t -= dt;
+          if (chat.t <= 0 || this.controlled || this.talk) {
+            this.playerChat = null;
+            this.speaking = false;
+            this.presenceRetry = 0; // on to the door right away
+          } else {
+            this.state = 'idle';
+            this.speaking = chat.total - chat.t < 2.6; // answers first, then listens
+            this.sit = Math.max(0, this.sit - dt * 4);
+            this.moving += (0 - this.moving) * Math.min(1, dt * 8);
+            this.turnTo(Math.atan2(chat.at.x - this.pos.x, chat.at.z - this.pos.z), dt);
+            return true;
+          }
+        }
         if (this.sit > 0.01) {
           // stand up first, only then walk to the door
           this.sit = Math.max(0, this.sit - dt * 4);
@@ -1617,16 +1633,18 @@ export class Person extends Walker {
    * The player talks to this person: they drop their walk and turn around. Somebody working at their desk answers
    * from the chair (swivels towards the player, then works on); callers that need them on their feet (`stayAtDesk`
    * false: petting, the boombox, nerf) find them busy. False when they are too busy to stop: in a talk or a meeting,
-   * at the printer, the foosball table or the coffee machine, held, steered, away.
+   * at the printer, the foosball table or the coffee machine, held, steered, away. Somebody still inside on the way
+   * out stops for the chat and goes on leaving after it.
    */
   talkTo(at: Vec2, seconds: number, stayAtDesk = true): boolean {
     const seated = stayAtDesk && this.task?.phase === 'work' && !this.run && !this.printJob && !this.foosJob && !this.coffeeJob && !this.meetJob && !this.pendingMeet;
-    if ((this.fixed && !seated) || this.held || this.controlled || this.talk || this.presence !== 'in') return false;
+    const leaving = this.beforeDoor; // still inside on the way out: stops for the chat and goes on after it
+    if ((this.fixed && !seated) || this.held || this.controlled || this.talk || (this.presence !== 'in' && !leaving)) return false;
     if (seated) {
       // swivel the chair towards the player instead of standing up
       this.phoneJob = null;
       this.vapeJob = null;
-    } else this.interrupt();
+    } else if (!leaving) this.interrupt();
     this.path = [];
     this.state = 'idle';
     this.playerChat = { t: seconds, total: seconds, at };
