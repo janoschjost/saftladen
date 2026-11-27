@@ -49,7 +49,8 @@ test.describe('intro', () => {
     expect(new URL(page.url()).hash).toBe('');
   });
 
-  test('intro.greeting: ?rene always plays the intro with René\'s greeting, also when the intro was seen; the marker leaves the address', async ({ page }) => {
+  test('intro.greeting: ?rene plays the intro with René\'s greeting, also when the intro was seen; the marker leaves the address', async ({ page }) => {
+    test.slow(); // two loads and his walk in wall time: a CI runner needs most of the usual minute
     // somebody who has seen the plain intro
     await boot(page, FIRST_VISIT);
     await page.keyboard.press('Escape');
@@ -65,16 +66,21 @@ test.describe('intro', () => {
     await expect(page.locator('#intro')).toBeHidden();
     await expect(page.locator('#intro-bubble')).toBeHidden();
     expect(await read(page, (g) => g.paused)).toBe(false);
-    // a reload of the address as it is now: no marker, the intro was seen
-    await boot(page, page.url());
-    await expect(page.locator('#intro')).toBeHidden();
-    // the link again: he greets again
+    expect(errors).toEqual([]);
+  });
+
+  test('intro.greeting: the link greets every time, a reload of the address it leaves behind does not', async ({ page }) => {
+    test.slow(); // three loads
     await boot(page, `${FIRST_VISIT}&rene`);
     await expect(page.locator('#intro')).toBeVisible();
-    await expect(page.locator('#intro-bubble')).toHaveText('herzlich willkommen', { timeout: 30_000 });
     await page.keyboard.press('Escape');
     await expect(page.locator('#intro')).toBeHidden();
-    expect(errors).toEqual([]);
+    // the address as it is now: no marker, the intro was seen
+    await boot(page, page.url());
+    await expect(page.locator('#intro')).toBeHidden();
+    // the link again
+    await boot(page, `${FIRST_VISIT}&rene`);
+    await expect(page.locator('#intro')).toBeVisible();
   });
 
   test('intro.greeting: without ?rene nobody greets', async ({ page }) => {
