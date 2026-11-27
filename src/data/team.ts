@@ -51,8 +51,8 @@ const looks: Record<string, Look> = {
   'zlatko-pesic': { skin: LIGHT, hair: '#2a2420', style: 'short', beard: 'full', eyebrows: true, top: '#a89a82', bottom: BLACK, strong: true, build: 1.15, heightM: 1.8 },
   'philip-gygax': { skin: LIGHT, hair: '#2a2420', style: 'short', beard: 'stubble', top: '#1f5a58', bottom: '#35507a', heightM: 1.8 },
   'eliana-lipari': { skin: FAIR, hair: '#74492f', style: 'long', glasses: true, tee: true, top: '#c4161f', bottom: JEANS_DARK, heightM: 1.7 },
-  // long brown hair, dark brows, black turtleneck; trousers and height between Delya's and Nina Bauer's (#309)
-  'livia-in-albon': { skin: FAIR, hair: '#5a3d28', style: 'long', eyebrows: true, smile: true, top: BLACK, bottom: JEANS_DARK, heightM: 1.7 },
+  // long straight dark brown hair, thick brows, a big smile, dark brown knit sweater and trousers, silver necklace (from her picture, #309)
+  'livia-in-albon': { skin: LIGHT, hair: '#46291e', style: 'long', eyebrows: 'thick', smile: true, top: '#2b211d', bottom: '#33211e', necklace: ['#c9ced6', '#dfe2e8', '#c9ced6'], heightM: 1.7 },
 };
 
 // Zlatko's little son (shows up in his home office)
